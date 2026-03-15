@@ -115,6 +115,8 @@ export default function Profile({
   const [isLoadingFriendRows, setIsLoadingFriendRows] = useState(true);
   const [activeFriendUserId, setActiveFriendUserId] = useState<string | null>(null);
   const [activeIncomingRequestId, setActiveIncomingRequestId] = useState<string | null>(null);
+  const [removingFriendId, setRemovingFriendId] = useState<string | null>(null);
+  const [confirmedDeleteFriendId, setConfirmedDeleteFriendId] = useState<string | null>(null);
   const [isProfilePictureEditorOpen, setIsProfilePictureEditorOpen] = useState(false);
   const [localProfileImageUrl, setLocalProfileImageUrl] = useState<string | null>(profileImageUrl);
   const [statusMessage, setStatusMessage] = useState("");
@@ -285,6 +287,37 @@ export default function Profile({
       setStatusMessage(error instanceof Error ? error.message : "Failed to respond to request.");
     } finally {
       setActiveIncomingRequestId(null);
+    }
+  };
+
+  const onRemoveFriend = async (friendId: string) => {
+    if (removingFriendId) {
+      return;
+    }
+
+    if (confirmedDeleteFriendId !== friendId) {
+      setConfirmedDeleteFriendId(friendId);
+      return;
+    }
+
+    setRemovingFriendId(friendId);
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/friend-remove", {
+        friend_id: friendId,
+      });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+
+      setConfirmedDeleteFriendId(null);
+      await Promise.all([loadFriendRows(), runFriendSearch(friendSearchQuery)]);
+      setStatusMessage("Friend removed.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to remove friend.");
+    } finally {
+      setRemovingFriendId(null);
     }
   };
 
@@ -470,6 +503,7 @@ export default function Profile({
 
         {isFriendsExpanded ? (
           <div className="mt-3 space-y-3">
+            <p className="text-xs font-semibold text-accent-2">Search for users to add as friends</p>
             <div className="flex items-center gap-2">
               <UserSearch
                 value={friendSearchQuery}
@@ -570,13 +604,31 @@ export default function Profile({
                   </div>
                 ))}
 
+                <p className="mb-1 text-xs font-semibold text-accent-2">Your friends ({acceptedFriends.length})</p>
+                <div className="space-y-2" />
                 {acceptedFriends.map((friend) => (
                   <div
                     key={friend.id}
-                    className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2"
+                    className="rounded-lg border border-accent-1 bg-primary-background px-3 py-1 flex items-center"
                   >
                     <p className="text-sm text-foreground">{friend.username}</p>
-                    <p className="text-xs text-accent-2">{friend.email ?? "No email"}</p>
+                    <p className="text-xs text-accent-2 justify-self-end ml-auto mr-2">{friend.email ?? "No email"}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void onRemoveFriend(friend.id);
+                      }}
+                      disabled={removingFriendId === friend.id}
+                      className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground"
+                      style={{ color: confirmedDeleteFriendId === friend.id ? "red" : undefined }}
+                    >
+                      <Trash2 className="h-4 w-4" />{" "}
+                      {removingFriendId === friend.id
+                        ? "Removing..."
+                        : confirmedDeleteFriendId === friend.id
+                          ? "Confirm Delete"
+                          : ""}
+                    </button>
                   </div>
                 ))}
               </div>
