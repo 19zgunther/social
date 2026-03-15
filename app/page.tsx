@@ -24,7 +24,8 @@ type ApiError = {
 
 const AUTH_TOKEN_KEY = "auth_token";
 const MOBILE_FRAME_STYLE: CSSProperties = {
-  width: "clamp(25dvh, 100vw, 50dvh)",
+  width: "100vw",
+  maxWidth: "32rem",
 };
 const APP_VIEWPORT_STYLE: CSSProperties = {
   height: "100dvh",

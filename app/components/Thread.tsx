@@ -1,7 +1,8 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
-import { Camera, Circle, RotateCcw, X } from "lucide-react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { Camera } from "lucide-react";
+import CameraModal from "@/app/components/Camera";
 import { prepareImageForUpload } from "@/app/components/client_file_storage_utils";
 
 export type ThreadItem = {
@@ -26,14 +27,18 @@ type ThreadMessage = {
   parent_id: string | null;
   image_id: string | null;
   image_url: string | null;
+  data: MessageData | null;
   direct_reply_count: number;
   username: string;
 };
 
-type PendingImageUpload = {
-  base64Data: string;
-  mimeType: string;
-  previewDataUrl: string;
+type ImageOverlayData = {
+  text: string;
+  y_ratio: number;
+};
+
+type MessageData = {
+  image_overlay?: ImageOverlayData;
 };
 
 type ThreadMember = {
@@ -106,11 +111,38 @@ const mergeMessagesById = (
   });
 };
 
+const clampOverlayYRatio = (value: number): number => {
+  if (Number.isNaN(value)) {
+    return 0.5;
+  }
+  return Math.min(0.9, Math.max(0.1, value));
+};
+
+const toImageOverlayData = (data: MessageData | null | undefined): ImageOverlayData | null => {
+  if (!data || typeof data !== "object" || !data.image_overlay) {
+    return null;
+  }
+
+  const overlay = data.image_overlay;
+  if (!overlay || typeof overlay.text !== "string" || typeof overlay.y_ratio !== "number") {
+    return null;
+  }
+
+  const trimmedText = overlay.text.trim();
+  if (!trimmedText) {
+    return null;
+  }
+
+  return {
+    text: trimmedText,
+    y_ratio: clampOverlayYRatio(overlay.y_ratio),
+  };
+};
+
 export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const [activeThread, setActiveThread] = useState<ThreadItem>(thread);
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [messageDraft, setMessageDraft] = useState("");
-  const [pendingImageUpload, setPendingImageUpload] = useState<PendingImageUpload | null>(null);
   const [memberIdentifier, setMemberIdentifier] = useState("");
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
@@ -125,33 +157,14 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const [statusMessage, setStatusMessage] = useState("");
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
-  const [isStartingCamera, setIsStartingCamera] = useState(false);
-  const [cameraErrorMessage, setCameraErrorMessage] = useState("");
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
   const [replyTargetMessageId, setReplyTargetMessageId] = useState<string | null>(null);
   const [editTargetMessageId, setEditTargetMessageId] = useState<string | null>(null);
   const [activeOptionsMessageId, setActiveOptionsMessageId] = useState<string | null>(null);
   const [expandedReplyRootIds, setExpandedReplyRootIds] = useState<string[]>([]);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
-  const imagePickerInputRef = useRef<HTMLInputElement | null>(null);
-  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
-  const cameraStreamRef = useRef<MediaStream | null>(null);
   const pendingBottomScrollRef = useRef<ScrollBehavior | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const stopCameraStream = () => {
-    const stream = cameraStreamRef.current;
-    if (stream) {
-      for (const track of stream.getTracks()) {
-        track.stop();
-      }
-      cameraStreamRef.current = null;
-    }
-
-    if (cameraVideoRef.current) {
-      cameraVideoRef.current.srcObject = null;
-    }
-  };
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -187,7 +200,6 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
       if (pressTimerRef.current) {
         clearTimeout(pressTimerRef.current);
       }
-      stopCameraStream();
     };
   }, []);
 
@@ -196,7 +208,6 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     setMessages([]);
     setMembers([]);
     setMessageDraft("");
-    setPendingImageUpload(null);
     setMemberIdentifier("");
     setIsSettingsOpen(false);
     setStatusMessage("");
@@ -206,9 +217,6 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     setOldestLoadedMessageId(null);
     setIsLoadingOlderMessages(false);
     setIsCameraModalOpen(false);
-    setIsStartingCamera(false);
-    setCameraErrorMessage("");
-    stopCameraStream();
 
     const loadThread = async () => {
       setIsLoadingMessages(true);
@@ -413,50 +421,69 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     };
   }, [activeThread.id, currentUserId]);
 
-  const onSendMessage = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!messageDraft.trim() && !pendingImageUpload) {
-      return;
-    }
-
-    if (editTargetMessageId) {
-      await onEditMessage();
-      return;
-    }
-
+  const sendThreadMessage = async ({
+    text,
+    imageBase64Data,
+    imageMimeType,
+    imagePreviewDataUrl,
+    imageOverlay,
+    clearDraftOnSuccess,
+  }: {
+    text: string;
+    imageBase64Data?: string;
+    imageMimeType?: string;
+    imagePreviewDataUrl?: string;
+    imageOverlay?: ImageOverlayData;
+    clearDraftOnSuccess?: boolean;
+  }): Promise<void> => {
     setIsSendingMessage(true);
     setStatusMessage("");
-    const pendingImagePreviewUrl = pendingImageUpload?.previewDataUrl ?? null;
+
+    const trimmedText = text.trim();
+    const messageData = imageOverlay
+      ? {
+          image_overlay: {
+            text: imageOverlay.text.trim(),
+            y_ratio: clampOverlayYRatio(imageOverlay.y_ratio),
+          },
+        }
+      : undefined;
 
     try {
       const response = await postWithAuth("/api/thread-send", {
         thread_id: activeThread.id,
-        text: messageDraft.trim(),
+        text: trimmedText,
         ...(replyTargetMessageId ? { reply_to_message_id: replyTargetMessageId } : {}),
-        ...(pendingImageUpload
+        ...(imageBase64Data && imageMimeType
           ? {
-              image_base64_data: pendingImageUpload.base64Data,
-              image_mime_type: pendingImageUpload.mimeType,
+              image_base64_data: imageBase64Data,
+              image_mime_type: imageMimeType,
             }
           : {}),
+        ...(messageData ? { message_data: messageData } : {}),
       });
+
       if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
-        return;
+        throw new Error(await readErrorMessage(response));
       }
 
       const payload = (await response.json()) as { message: ThreadMessage };
       const newMessage = {
         ...payload.message,
-        image_url: payload.message.image_url ?? pendingImagePreviewUrl,
+        image_url: payload.message.image_url ?? imagePreviewDataUrl ?? null,
+        data: payload.message.data ?? messageData ?? null,
         direct_reply_count: 0,
       };
+
       setMessages((previous) => [...previous, newMessage]);
       if (!oldestLoadedMessageId) {
         setOldestLoadedMessageId(payload.message.id);
       }
-      setMessageDraft("");
-      setPendingImageUpload(null);
+
+      if (clearDraftOnSuccess) {
+        setMessageDraft("");
+      }
+
       setShowNewMessagesButton(false);
       if (replyTargetMessageId) {
         const rootMessageId = getRootMessageIdForMessage(replyTargetMessageId);
@@ -468,10 +495,29 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
       }
       setReplyTargetMessageId(null);
       pendingBottomScrollRef.current = "smooth";
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to send message.");
     } finally {
       setIsSendingMessage(false);
+    }
+  };
+
+  const onSendMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!messageDraft.trim()) {
+      return;
+    }
+
+    if (editTargetMessageId) {
+      await onEditMessage();
+      return;
+    }
+
+    try {
+      await sendThreadMessage({
+        text: messageDraft,
+        clearDraftOnSuccess: true,
+      });
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to send message.");
     }
   };
 
@@ -512,112 +558,36 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     }
   };
 
-  const onPhotoInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    try {
-      const preparedImage = await prepareImageForUpload(file);
-      setPendingImageUpload(preparedImage);
-      setStatusMessage("");
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to prepare image.");
-    } finally {
-      event.target.value = "";
-    }
-  };
-
-  const closeCameraModal = () => {
-    setIsCameraModalOpen(false);
-    setCameraErrorMessage("");
-    stopCameraStream();
-  };
-
-  const openCameraModal = async () => {
+  const openCameraModal = () => {
     if (editTargetMessageId) {
       return;
     }
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      imagePickerInputRef.current?.click();
-      return;
-    }
-
-    setIsStartingCamera(true);
-    setCameraErrorMessage("");
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
-      stopCameraStream();
-      cameraStreamRef.current = stream;
-      setIsCameraModalOpen(true);
-    } catch {
-      setStatusMessage("Camera access unavailable. Opened photo picker instead.");
-      imagePickerInputRef.current?.click();
-    } finally {
-      setIsStartingCamera(false);
-    }
+    setIsCameraModalOpen(true);
   };
 
-  useEffect(() => {
-    if (!isCameraModalOpen) {
-      return;
-    }
-
-    const videoElement = cameraVideoRef.current;
-    const stream = cameraStreamRef.current;
-    if (!videoElement || !stream) {
-      return;
-    }
-
-    videoElement.srcObject = stream;
-    void videoElement.play().catch(() => {
-      setCameraErrorMessage("Could not start camera preview.");
-    });
-  }, [isCameraModalOpen]);
-
-  const onCaptureCameraPhoto = async () => {
-    const videoElement = cameraVideoRef.current;
-    if (!videoElement || videoElement.videoWidth <= 0 || videoElement.videoHeight <= 0) {
-      setCameraErrorMessage("Camera is still warming up. Try again.");
-      return;
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = videoElement.videoWidth;
-    canvas.height = videoElement.videoHeight;
-    const context = canvas.getContext("2d");
-    if (!context) {
-      setCameraErrorMessage("Unable to access camera frame.");
-      return;
-    }
-
-    context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-    const imageBlob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", 0.92);
-    });
-
-    if (!imageBlob) {
-      setCameraErrorMessage("Failed to capture photo.");
-      return;
-    }
-
+  const onSendPhotoFromCamera = async (payload: {
+    file: File;
+    overlayText: string;
+    overlayYRatio: number;
+  }) => {
     try {
-      const capturedFile = new File([imageBlob], `capture-${Date.now()}.jpg`, {
-        type: "image/jpeg",
+      const preparedImage = await prepareImageForUpload(payload.file);
+      await sendThreadMessage({
+        text: "",
+        imageBase64Data: preparedImage.base64Data,
+        imageMimeType: preparedImage.mimeType,
+        imagePreviewDataUrl: preparedImage.previewDataUrl,
+        imageOverlay: payload.overlayText.trim()
+          ? {
+              text: payload.overlayText.trim(),
+              y_ratio: payload.overlayYRatio,
+            }
+          : undefined,
+        clearDraftOnSuccess: false,
       });
-      const preparedImage = await prepareImageForUpload(capturedFile);
-      setPendingImageUpload(preparedImage);
-      setIsComposerFocused(true);
-      setStatusMessage("");
-      closeCameraModal();
     } catch (error) {
-      setCameraErrorMessage(error instanceof Error ? error.message : "Failed to prepare image.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to send photo.");
+      throw error;
     }
   };
 
@@ -736,6 +706,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     const hasText = message.text.trim().length > 0;
     const hasImage = Boolean(message.image_url);
     const isImageOnly = hasImage && !hasText;
+    const messageImageOverlay = toImageOverlayData(message.data);
     const rootMessageId = getRootMessageIdForMessage(message.id);
     const children = childMessagesByParentId.get(message.id) ?? [];
     const isRootMessage = rootMessageId === message.id;
@@ -776,12 +747,22 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
             </>
           ) : null}
           {message.image_url ? (
-            <img
-              src={message.image_url}
-              alt="Thread message attachment"
-              className={`max-h-56 w-full rounded-xl object-cover ${!isImageOnly ? "mt-1" : ""}`}
-              loading="lazy"
-            />
+            <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
+              <img
+                src={message.image_url}
+                alt="Thread message attachment"
+                className="max-h-56 w-full rounded-xl object-cover"
+                loading="lazy"
+              />
+              {messageImageOverlay ? (
+                <div
+                  className="absolute left-0 right-0 -translate-y-1/2 bg-black/45 px-3 py-2 text-center text-sm font-semibold text-white"
+                  style={{ top: `${messageImageOverlay.y_ratio * 100}%` }}
+                >
+                  {messageImageOverlay.text}
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
@@ -808,7 +789,6 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const isComposerExpanded =
     isComposerFocused ||
     Boolean(editTargetMessageId) ||
-    Boolean(pendingImageUpload) ||
     messageDraft.trim().length > 0;
 
   return (
@@ -1027,82 +1007,12 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
         </div>
       ) : null}
 
-      {pendingImageUpload ? (
-        <div className="mx-2 mb-1 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs text-accent-2">
-          <p className="mb-2">Ready to send photo</p>
-          <img
-            src={pendingImageUpload.previewDataUrl}
-            alt="Pending upload preview"
-            className="max-h-44 w-full rounded-lg object-cover"
-          />
-          <button
-            type="button"
-            onClick={() => setPendingImageUpload(null)}
-            className="mt-2 underline underline-offset-2 hover:text-foreground"
-          >
-            Remove photo
-          </button>
-        </div>
-      ) : null}
-
-      {isCameraModalOpen ? (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black">
-          <div className="flex items-center justify-between px-4 py-3">
-            <button
-              type="button"
-              onClick={closeCameraModal}
-              className="rounded-full border border-white/30 bg-black/40 p-2 text-white"
-              aria-label="Close camera"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                closeCameraModal();
-                imagePickerInputRef.current?.click();
-              }}
-              className="rounded-full border border-white/30 bg-black/40 px-3 py-1.5 text-xs font-medium text-white"
-            >
-              Upload
-            </button>
-          </div>
-
-          <div className="relative flex-1 overflow-hidden">
-            <video
-              ref={cameraVideoRef}
-              className="h-full w-full object-cover"
-              autoPlay
-              muted
-              playsInline
-            />
-            {cameraErrorMessage ? (
-              <div className="absolute inset-x-4 top-4 rounded-lg bg-black/60 px-3 py-2 text-center text-xs text-white">
-                {cameraErrorMessage}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="flex items-center justify-center gap-4 px-6 py-6">
-            <button
-              type="button"
-              onClick={onCaptureCameraPhoto}
-              className="rounded-full border border-white/30 bg-white/10 p-3 text-white transition hover:bg-white/20"
-              aria-label="Capture photo"
-            >
-              <Circle className="h-12 w-12" />
-            </button>
-            {/* <button
-              type="button"
-              onClick={openCameraModal}
-              className="rounded-full border border-white/30 bg-white/10 p-3 text-white transition hover:bg-white/20"
-              aria-label="Restart camera"
-            >
-              <RotateCcw className="h-6 w-6" />
-            </button> */}
-          </div>
-        </div>
-      ) : null}
+      <CameraModal
+        isOpen={isCameraModalOpen}
+        onClose={() => setIsCameraModalOpen(false)}
+        onSendPhoto={onSendPhotoFromCamera}
+        isSending={isSendingMessage}
+      />
 
       <form onSubmit={onSendMessage} className="mx-2 mb-2 mt-1 flex items-center gap-2">
         <input
@@ -1114,35 +1024,27 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
           onChange={(event) => setMessageDraft(event.target.value)}
           onFocus={() => setIsComposerFocused(true)}
           onBlur={() => {
-            if (!messageDraft.trim() && !pendingImageUpload && !editTargetMessageId) {
+            if (!messageDraft.trim() && !editTargetMessageId) {
               setIsComposerFocused(false);
             }
           }}
-        />
-        <input
-          ref={imagePickerInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={onPhotoInputChange}
-          className="hidden"
         />
         {!isComposerExpanded ? (
           <button
             type="button"
             onClick={() => {
-              void openCameraModal();
+              openCameraModal();
             }}
-            disabled={Boolean(editTargetMessageId) || isStartingCamera}
+            disabled={Boolean(editTargetMessageId)}
             className="flex-1 rounded-full border border-accent-1 px-3 py-2 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
             aria-label="Take photo"
           >
-            {isStartingCamera ? "Opening..." : <Camera className="mx-auto h-4 w-4" />}
+            <Camera className="mx-auto h-4 w-4" />
           </button>
         ) : (
           <button
             type="submit"
-            disabled={isSendingMessage || (!messageDraft.trim() && !pendingImageUpload)}
+            disabled={isSendingMessage || !messageDraft.trim()}
             className="rounded-full bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
           >
             {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}

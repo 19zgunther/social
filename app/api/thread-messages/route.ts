@@ -72,6 +72,7 @@ export async function POST(request: Request) {
         created_by: true,
         parent_id: true,
         image_id: true,
+        data: true,
         users: {
           select: {
             username: true,
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
           created_by: true,
           parent_id: true,
           image_id: true,
+          data: true,
           users: {
             select: {
               username: true,
@@ -167,6 +169,7 @@ export async function POST(request: Request) {
           parent_id: message.parent_id,
           image_id: message.image_id,
           image_url: imageUrlByMessageId.get(message.id) ?? null,
+          data: message.data,
           direct_reply_count: directReplyCountByParentId.get(message.id) ?? 0,
           username: message.users.username,
         })),

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { Prisma } from "@/app/generated/prisma/client";
 import { publishThreadMessagePosted } from "@/app/lib/sync";
 import {
   getSignedMainBucketImageUrl,
@@ -14,6 +15,44 @@ type ThreadSendBody = {
   reply_to_message_id?: string;
   image_base64_data?: string;
   image_mime_type?: string;
+  message_data?: unknown;
+};
+
+type MessageData = {
+  image_overlay?: {
+    text?: unknown;
+    y_ratio?: unknown;
+  };
+};
+
+const clampOverlayYRatio = (value: number): number => Math.min(0.9, Math.max(0.1, value));
+
+const sanitizeMessageData = (rawData: unknown): Prisma.InputJsonValue | undefined => {
+  if (!rawData || typeof rawData !== "object") {
+    return undefined;
+  }
+
+  const parsedData = rawData as MessageData;
+  const overlay = parsedData.image_overlay;
+  if (!overlay || typeof overlay !== "object") {
+    return undefined;
+  }
+
+  if (typeof overlay.text !== "string" || typeof overlay.y_ratio !== "number") {
+    return undefined;
+  }
+
+  const trimmedText = overlay.text.trim();
+  if (!trimmedText) {
+    return undefined;
+  }
+
+  return {
+    image_overlay: {
+      text: trimmedText,
+      y_ratio: clampOverlayYRatio(overlay.y_ratio),
+    },
+  } as Prisma.InputJsonValue;
 };
 
 export async function POST(request: Request) {
@@ -30,6 +69,7 @@ export async function POST(request: Request) {
     const replyToMessageId = body.reply_to_message_id?.trim();
     const imageBase64Data = body.image_base64_data?.trim();
     const imageMimeType = body.image_mime_type?.trim();
+    const messageData = sanitizeMessageData(body.message_data);
 
     if (!threadId || (!text && !imageBase64Data)) {
       return NextResponse.json(
@@ -143,6 +183,7 @@ export async function POST(request: Request) {
         parent_id: parentMessageId,
         text: text ?? null,
         image_id: imageId,
+        ...(messageData ? { data: messageData } : {}),
       },
       select: {
         id: true,
@@ -151,11 +192,15 @@ export async function POST(request: Request) {
         created_by: true,
         parent_id: true,
         image_id: true,
-        users: {
-          select: {
-            username: true,
-          },
-        },
+        data: true,
+      },
+    });
+    const messageAuthor = await prisma.users.findFirst({
+      where: {
+        id: message.created_by,
+      },
+      select: {
+        username: true,
       },
     });
 
@@ -189,7 +234,8 @@ export async function POST(request: Request) {
           parent_id: message.parent_id,
           image_id: message.image_id,
           image_url: imageUrl,
-          username: message.users.username,
+          data: message.data,
+          username: messageAuthor?.username ?? "unknown",
         },
       },
       { status: 200 },
