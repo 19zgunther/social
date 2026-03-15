@@ -10,6 +10,7 @@ type AuthUser = {
   user_id: string;
   username: string;
   email: string | null;
+  profile_image_url: string | null;
   minted_at: number;
 };
 
@@ -292,6 +293,12 @@ export default function Home() {
                 userId={authUser.user_id}
                 username={authUser.username}
                 email={authUser.email}
+                profileImageUrl={authUser.profile_image_url}
+                onProfileImageUpdated={(profileImageUrl) => {
+                  setAuthUser((previous) =>
+                    previous ? { ...previous, profile_image_url: profileImageUrl } : previous,
+                  );
+                }}
                 onLogout={onLogout}
               />
             )}

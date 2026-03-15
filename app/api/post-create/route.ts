@@ -73,6 +73,26 @@ export async function POST(request: Request) {
       imageId: post.image_id ?? "",
     });
 
+    const author = await prisma.users.findFirst({
+      where: {
+        id: authResult.user_id,
+      },
+      select: {
+        profile_image_id: true,
+      },
+    });
+    let authorProfileImageUrl: string | null = null;
+    if (author?.profile_image_id) {
+      try {
+        authorProfileImageUrl = await getSignedMainBucketImageUrl({
+          userId: authResult.user_id,
+          imageId: author.profile_image_id,
+        });
+      } catch (error) {
+        console.error("post_create_author_profile_image_sign_failed", authResult.user_id, error);
+      }
+    }
+
     return NextResponse.json(
       {
         post: {
@@ -83,8 +103,11 @@ export async function POST(request: Request) {
           image_url: imageUrl,
           text: post.text ?? "",
           data: post.data,
+          like_count: 0,
+          is_liked_by_viewer: false,
           username: authResult.username,
           email: authResult.email,
+          author_profile_image_url: authorProfileImageUrl,
         },
       },
       { status: 200 },

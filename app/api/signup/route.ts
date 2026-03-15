@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { hashPassword, mintUserToken } from "@/app/api/auth_utils";
+import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
 
 type SignupBody = {
   username?: string;
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
         id: true,
         username: true,
         email: true,
+        profile_image_id: true,
       },
     });
 
@@ -66,6 +68,18 @@ export async function POST(request: Request) {
       user_email: createdUser.email,
     });
 
+    let profileImageUrl: string | null = null;
+    if (createdUser.profile_image_id) {
+      try {
+        profileImageUrl = await getSignedMainBucketImageUrl({
+          userId: createdUser.id,
+          imageId: createdUser.profile_image_id,
+        });
+      } catch (error) {
+        console.error("signup_profile_image_sign_failed", createdUser.id, error);
+      }
+    }
+
     const response = NextResponse.json(
       {
         token,
@@ -73,6 +87,7 @@ export async function POST(request: Request) {
           user_id: createdUser.id,
           username: createdUser.username,
           email: createdUser.email,
+          profile_image_url: profileImageUrl,
         },
       },
       { status: 200 },

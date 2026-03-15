@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Heart, ChevronDown } from "lucide-react";
+import { Heart, ChevronDown, CircleUserRound } from "lucide-react";
 
 export type PostCommentNode = {
   username: string;
@@ -23,8 +23,11 @@ export type PostItem = {
   image_url: string | null;
   text: string;
   data: PostData | null;
+  like_count?: number;
+  is_liked_by_viewer?: boolean;
   username: string;
   email: string | null;
+  author_profile_image_url?: string | null;
 };
 
 type PostSectionProps = {
@@ -87,24 +90,10 @@ export default function PostSection({ post, showComments = true, className }: Po
   }, [post.data, post.id]);
 
   useEffect(() => {
-    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-    const payloadPart = token?.split(".")[1];
-    let viewerUserId = "";
-    if (payloadPart) {
-      try {
-        const decoded = JSON.parse(atob(payloadPart.replace(/-/g, "+").replace(/_/g, "/"))) as {
-          user_id?: string;
-        };
-        viewerUserId = decoded.user_id ?? "";
-      } catch {
-        viewerUserId = "";
-      }
-    }
-
-    const nextLikeCount = Object.values(initialLikes).filter(Boolean).length;
-    setLikeCount(nextLikeCount);
-    setIsLikedByViewer(Boolean(viewerUserId && initialLikes[viewerUserId]));
-  }, [initialLikes]);
+    const fallbackLikeCount = Object.values(initialLikes).filter(Boolean).length;
+    setLikeCount(post.like_count ?? fallbackLikeCount);
+    setIsLikedByViewer(Boolean(post.is_liked_by_viewer));
+  }, [initialLikes, post.is_liked_by_viewer, post.like_count]);
 
   const onToggleLike = async () => {
     if (isUpdatingLike) {
@@ -291,9 +280,23 @@ export default function PostSection({ post, showComments = true, className }: Po
 
   return (
     <article className={`w-full border-t border-accent-1 bg-primary-background mb-10 ${className ?? ""}`}>
-      <header className="px-3 py-2">
-        <p className="text-sm font-semibold text-foreground">{post.username}</p>
-        <p className="text-[11px] text-accent-2">{formatPostDate(post.created_at)}</p>
+      <header className="px-2 py-2">
+        <div className="flex items-center gap-2">
+          {post.author_profile_image_url ? (
+            <img
+              src={post.author_profile_image_url}
+              alt={`${post.username} profile`}
+              className="h-10 w-10 rounded-full border border-accent-1 object-cover"
+            />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-1 bg-secondary-background">
+              <CircleUserRound className="h-4 w-4 text-accent-2" />
+            </div>
+          )}
+          <p className="text-sm font-semibold text-foreground">{post.username}</p>
+          <p className="text-[11px] text-accent-2">{formatPostDate(post.created_at)}</p>
+        </div>
+        
       </header>
       {post.image_url ? (
         <img src={post.image_url} alt="Post attachment" className="w-full aspect-square overflow-hidden border-y border-accent-1 object-cover" />

@@ -1,15 +1,18 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, CircleUserRound, LogOut, Plus } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, CircleUserRound, LogOut, Plus, Trash2 } from "lucide-react";
 import PostSection, { PostItem } from "@/app/components/PostSection";
 import { prepareImageForUpload } from "@/app/components/client_file_storage_utils";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
+import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 
 type ProfileProps = {
   userId: string;
   username: string;
   email: string | null;
+  profileImageUrl: string | null;
+  onProfileImageUpdated: (profileImageUrl: string | null) => void;
   onLogout: () => void;
 };
 
@@ -84,7 +87,14 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   }
 };
 
-export default function Profile({ userId, username, email, onLogout }: ProfileProps) {
+export default function Profile({
+  userId,
+  username,
+  email,
+  profileImageUrl,
+  onProfileImageUpdated,
+  onLogout,
+}: ProfileProps) {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
@@ -105,11 +115,17 @@ export default function Profile({ userId, username, email, onLogout }: ProfilePr
   const [isLoadingFriendRows, setIsLoadingFriendRows] = useState(true);
   const [activeFriendUserId, setActiveFriendUserId] = useState<string | null>(null);
   const [activeIncomingRequestId, setActiveIncomingRequestId] = useState<string | null>(null);
+  const [isProfilePictureEditorOpen, setIsProfilePictureEditorOpen] = useState(false);
+  const [localProfileImageUrl, setLocalProfileImageUrl] = useState<string | null>(profileImageUrl);
   const [statusMessage, setStatusMessage] = useState("");
   const createInputRef = useRef<HTMLInputElement | null>(null);
   const pendingOutgoingRequests = outgoingRequests.filter((row) => row.accepted === null);
 
   const selectedPost = selectedPostId ? posts.find((post) => post.id === selectedPostId) ?? null : null;
+
+  useEffect(() => {
+    setLocalProfileImageUrl(profileImageUrl);
+  }, [profileImageUrl]);
 
   const loadPosts = async (cursorPostId?: string) => {
     if (cursorPostId) {
@@ -321,37 +337,105 @@ export default function Profile({ userId, username, email, onLogout }: ProfilePr
     }
   };
 
+  const [confirmedDeletePost, setConfirmedDeletePost] = useState(false);
+  useEffect(() => { setConfirmedDeletePost(false); }, [selectedPost]);
+
+  const onDeleteSelectedPost = async () => {
+    if (!selectedPost) {
+      return;
+    }
+    if (!confirmedDeletePost) {
+      setConfirmedDeletePost(true);
+      return;
+    }
+    setConfirmedDeletePost(false);
+
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/post-delete", {
+        post_id: selectedPost.id,
+      });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+
+      setPosts((previousPosts) =>
+        previousPosts.filter((existingPost) => existingPost.id !== selectedPost.id),
+      );
+      setSelectedPostId(null);
+      setStatusMessage("Post deleted.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to delete post.");
+    }
+  };
+
   if (selectedPost) {
     return (
       <div className="flex h-full min-h-0 w-full flex-col bg-primary-background">
-        <div className="border-b border-accent-1 px-3 py-2">
+        <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
           <button
             type="button"
             onClick={() => setSelectedPostId(null)}
-            className="rounded-full border border-accent-1 bg-secondary-background px-3 py-1 text-xs text-accent-2 hover:text-foreground"
+            className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs text-accent-2 hover:text-foreground"
           >
-            Back
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+          <button
+            type="button"
+            onClick={() => { void onDeleteSelectedPost(); }}
+            className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs hover:text-foreground"
+            style={{ color: confirmedDeletePost ? "red" : undefined }}
+          >
+            <Trash2 className="h-4 w-4" /> {confirmedDeletePost && "Confirm Delete"}
           </button>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
           <PostSection post={selectedPost} showComments />
         </div>
+        {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
       </div>
     );
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain touch-pan-y bg-primary-background">
+      <ProfilePictureEditor
+        isOpen={isProfilePictureEditorOpen}
+        onClose={() => setIsProfilePictureEditorOpen(false)}
+        onSaved={(nextProfileImageUrl) => {
+          setLocalProfileImageUrl(nextProfileImageUrl);
+          onProfileImageUpdated(nextProfileImageUrl);
+          setStatusMessage(nextProfileImageUrl ? "Profile image updated." : "Profile image removed.");
+        }}
+      />
       <div className="border-b border-accent-1 px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-          <div className="rounded-full border border-accent-1 bg-secondary-background p-2">
-            <CircleUserRound className="h-14 w-14 text-accent-2" />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-lg font-semibold text-foreground">{username}</p>
-            <p className="truncate text-xs text-accent-2">{email ?? "No email"}</p>
-          </div>
+            <button
+              type="button"
+              onClick={() => setIsProfilePictureEditorOpen(true)}
+              className="overflow-hidden rounded-full border border-accent-1 bg-secondary-background"
+              aria-label="Edit profile picture"
+            >
+              {localProfileImageUrl ? (
+                <img
+                  src={localProfileImageUrl}
+                  alt="Profile picture"
+                  className="h-16 w-16 object-cover"
+                />
+              ) : (
+                <div className="p-2 text-xs">
+                  <CircleUserRound className="h-14 w-14 text-accent-2" />
+                  <p className="text-accent-2">Click to add</p>
+                </div>
+                
+              )}
+            </button>
+            <div className="min-w-0">
+              <p className="truncate text-lg font-semibold text-foreground">{username}</p>
+              <p className="truncate text-xs text-accent-2">{email ?? "No email"}</p>
+            </div>
           </div>
           <button
             type="button"

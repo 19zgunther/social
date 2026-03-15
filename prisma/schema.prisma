@@ -82,6 +82,7 @@ model users {
   password_hash                          String?
   email_verified_at                      DateTime?                  @db.Timestamptz(6)
   created_at                             DateTime?                  @db.Timestamptz(6)
+  profile_image_id                       String?                    @db.Uuid
   friends_friends_other_userTousers      friends[]                  @relation("friends_other_userTousers")
   friends_friends_requesting_userTousers friends[]                  @relation("friends_requesting_userTousers")
   posts                                  posts[]
