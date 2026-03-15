@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Camera } from "lucide-react";
 import CameraModal from "@/app/components/Camera";
 import { prepareImageForUpload } from "@/app/components/client_file_storage_utils";
+import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 
 export type ThreadItem = {
   id: string;
@@ -46,6 +47,12 @@ type ThreadMember = {
   username: string;
   email: string | null;
   is_owner: boolean;
+};
+
+type FriendSearchResult = {
+  id: string;
+  username: string;
+  email: string | null;
 };
 
 type ApiError = {
@@ -614,6 +621,25 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     }
   };
 
+  const searchThreadMemberOptions = useCallback(
+    async (query: string): Promise<UserSearchOption[]> => {
+      const response = await postWithAuth("/api/friend-search", { query });
+      if (!response.ok) {
+        return [];
+      }
+
+      const payload = (await response.json()) as {
+        users: Array<FriendSearchResult & { relation?: unknown }>;
+      };
+      return payload.users.map((user) => ({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+      }));
+    },
+    [],
+  );
+
   const messageById = new Map(messages.map((message) => [message.id, message]));
   const rootMessages = messages.filter((message) => message.parent_id === activeThread.id);
   const childMessagesByParentId = new Map<string, ThreadMessage[]>();
@@ -819,17 +845,23 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
           <div className="space-y-3">
             <form onSubmit={onAddMember} className="flex items-center gap-2">
               <div className="flex-1">
-                <input
-                  className="w-full rounded-xl border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-                  placeholder="Username or email"
+                <UserSearch
                   value={memberIdentifier}
-                  onChange={(event) => {
-                    setMemberIdentifier(event.target.value);
+                  onValueChange={(value) => {
+                    setMemberIdentifier(value);
                     if (memberFormError) {
                       setMemberFormError("");
                     }
                   }}
-                  required
+                  onSelect={(option) => {
+                    setMemberIdentifier(option.username);
+                    if (memberFormError) {
+                      setMemberFormError("");
+                    }
+                  }}
+                  searchUsers={searchThreadMemberOptions}
+                  placeholder="Username or email"
+                  inputClassName="w-full rounded-xl border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
                 />
                 {memberFormError ? (
                   <p className="mt-1 text-xs text-accent-2">{memberFormError}</p>

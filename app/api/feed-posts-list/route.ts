@@ -19,8 +19,41 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as FeedPostsBody;
     const cursorPostId = body.cursor_post_id?.trim();
+    const acceptedFriendRows = await prisma.friends.findMany({
+      where: {
+        accepted: true,
+        OR: [{ requesting_user: authResult.user_id }, { other_user: authResult.user_id }],
+      },
+      select: {
+        requesting_user: true,
+        other_user: true,
+      },
+    });
+    const friendUserIds = Array.from(
+      new Set(
+        acceptedFriendRows.map((row) =>
+          row.requesting_user === authResult.user_id ? row.other_user : row.requesting_user,
+        ),
+      ),
+    );
+    const visibleUserIds = Array.from(new Set([authResult.user_id, ...friendUserIds]));
+    if (visibleUserIds.length === 0) {
+      return NextResponse.json(
+        {
+          has_more: false,
+          next_cursor_post_id: null,
+          posts: [],
+        },
+        { status: 200 },
+      );
+    }
 
     const postsDesc = await prisma.posts.findMany({
+      where: {
+        created_by: {
+          in: visibleUserIds,
+        },
+      },
       ...(cursorPostId
         ? {
             cursor: {

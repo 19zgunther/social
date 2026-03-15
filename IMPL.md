@@ -77,8 +77,12 @@ User Profile & Posts:
 
 Feed
 - In the feed the users should see full-width PostSections of their friends posts. 
-- For now, just show everyones posts newest to oldest.
+- Only show posts to users by their friends...
 - Show in order newest at top to oldest, and the user should be able to scroll down to see & load more posts.
 
 PostSection
 - Comments should be stored in the post.data: json blob.
+
+Friends & Friending:
+- In the profile section, users can search by username/email to request to follow other people. Other people in their profile section can approve/reject follow requests. Users only can see the feed/posts their freinds/accepted made. Note: if accepted, the the requesting_user should be able to see the other user's feed, and vice versa too. Also, you shouldn't be able to send a friend request to a user you're already friends with, or who has rejected your friend request. In general, for any 2 users, there should at most be 1 row in the friends table.
+

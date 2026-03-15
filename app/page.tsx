@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { House, UserRound, Users } from "lucide-react";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
@@ -40,6 +40,8 @@ export default function Home() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("feed");
   const [statusMessage, setStatusMessage] = useState<string>("");
+  const [groupsUnreadCount, setGroupsUnreadCount] = useState(0);
+  const [profileIncomingRequestCount, setProfileIncomingRequestCount] = useState(0);
   const [identifier, setIdentifier] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -91,8 +93,111 @@ export default function Home() {
     document.cookie = "auth_token=; Max-Age=0; path=/";
     setAuthUser(null);
     setActiveTab("feed");
+    setGroupsUnreadCount(0);
+    setProfileIncomingRequestCount(0);
     setStatusMessage("Logged out.");
   };
+
+  const refreshGroupsUnreadCount = useCallback(async () => {
+    try {
+      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+      if (!token) {
+        return;
+      }
+
+      const response = await fetch("/api/groups-unread-count", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as {
+        unread_threads_count?: number;
+      };
+      setGroupsUnreadCount(payload.unread_threads_count ?? 0);
+    } catch {
+      // Silent failure keeps last known unread count.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) {
+      setGroupsUnreadCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      if (cancelled) {
+        return;
+      }
+      await refreshGroupsUnreadCount();
+    };
+
+    void run();
+    const intervalId = window.setInterval(() => {
+      void run();
+    }, 5_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [authUser, refreshGroupsUnreadCount]);
+
+  useEffect(() => {
+    if (!authUser) {
+      setProfileIncomingRequestCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+        if (!token) {
+          return;
+        }
+
+        const response = await fetch("/api/friend-requests-list", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          incoming_requests?: Array<unknown>;
+        };
+        if (!cancelled) {
+          setProfileIncomingRequestCount(payload.incoming_requests?.length ?? 0);
+        }
+      } catch {
+        // Silent failure: nav badge can remain stale until next refresh.
+      }
+    };
+
+    void run();
+    const intervalId = window.setInterval(() => {
+      void run();
+    }, 12_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [authUser]);
 
   const submitLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -164,34 +269,30 @@ export default function Home() {
       <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0">
         <section
           style={MOBILE_FRAME_STYLE}
-          className="flex h-full max-h-dvh flex-col overflow-hidden border border-accent-1 bg-secondary-background shadow-xl shadow-black/25"
+          className="flex h-full max-h-dvh flex-col overflow-hidden border border-accent-1 shadow-xl shadow-black/25"
         >
-          {activeTab === "feed" && <header className="flex items-center justify-between border-b border-accent-1 px-4 py-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-accent-2">Logged in</p>
-              <h1 className="text-lg font-semibold text-foreground">
-                {activeTab === "feed" ? "Feed" : "Groups"}
-              </h1>
-            </div>
-            <button
-              type="button"
-              onClick={onLogout}
-              className="rounded-lg bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110"
-            >
-              Log out
-            </button>
-          </header>}
+          {activeTab === "feed" ? (
+            <header className="border-b border-accent-1 px-4 py-3">
+              <h1 className="text-sm font-semibold text-foreground text-center w-full">Your friends posted...</h1>
+            </header>
+          ) : null}
 
           <div className="flex-1 min-h-0 overflow-hidden px-0 py-0">
             {activeTab === "feed" ? (
               <Feed />
             ) : activeTab === "groups" ? (
-              <Groups currentUserId={authUser.user_id} />
+              <Groups
+                currentUserId={authUser.user_id}
+                onThreadRead={() => {
+                  void refreshGroupsUnreadCount();
+                }}
+              />
             ) : (
               <Profile
                 userId={authUser.user_id}
                 username={authUser.username}
                 email={authUser.email}
+                onLogout={onLogout}
               />
             )}
           </div>
@@ -219,7 +320,7 @@ export default function Home() {
               }`}
             >
               <Users aria-hidden className="h-4 w-4" />
-              <span>Groups</span>
+              <span>{`Groups (${groupsUnreadCount})`}</span>
             </button>
             <button
               type="button"
@@ -231,7 +332,7 @@ export default function Home() {
               }`}
             >
               <UserRound aria-hidden className="h-4 w-4" />
-              <span>Profile</span>
+              <span>{`Profile (${profileIncomingRequestCount})`}</span>
             </button>
           </nav>
         </section>

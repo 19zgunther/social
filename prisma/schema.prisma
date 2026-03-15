@@ -8,6 +8,18 @@ datasource db {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model friends {
+  id                                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requesting_user                      String    @db.Uuid
+  requested_at                         DateTime  @db.Timestamptz(6)
+  other_user                           String    @db.Uuid
+  accepted                             Boolean?
+  accepted_at                          DateTime? @db.Timestamptz(6)
+  users_friends_other_userTousers      users     @relation("friends_other_userTousers", fields: [other_user], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_friends_requesting_userTousers users     @relation("friends_requesting_userTousers", fields: [requesting_user], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model posts {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at DateTime @default(now()) @db.Timestamptz(6)
@@ -33,12 +45,13 @@ model thread_messages {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model threads {
-  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at         DateTime             @default(now()) @db.Timestamptz(6)
-  owner              String               @db.Uuid
-  name               String
-  users              users                @relation(fields: [owner], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user_thread_access user_thread_access[]
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  owner                    String                     @db.Uuid
+  name                     String
+  users                    users                      @relation(fields: [owner], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_thread_access       user_thread_access[]
+  user_thread_last_read_at user_thread_last_read_at[]
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -52,15 +65,28 @@ model user_thread_access {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_thread_last_read_at {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  thread_id    String   @db.Uuid
+  user_id      String   @db.Uuid
+  last_read_at DateTime @db.Timestamptz(6)
+  threads      threads  @relation(fields: [thread_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users        users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model users {
-  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  username           String
-  email              String?
-  password_hash      String?
-  email_verified_at  DateTime?            @db.Timestamptz(6)
-  created_at         DateTime?            @db.Timestamptz(6)
-  posts              posts[]
-  thread_messages    thread_messages[]
-  threads            threads[]
-  user_thread_access user_thread_access[]
+  id                                     String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username                               String
+  email                                  String?
+  password_hash                          String?
+  email_verified_at                      DateTime?                  @db.Timestamptz(6)
+  created_at                             DateTime?                  @db.Timestamptz(6)
+  friends_friends_other_userTousers      friends[]                  @relation("friends_other_userTousers")
+  friends_friends_requesting_userTousers friends[]                  @relation("friends_requesting_userTousers")
+  posts                                  posts[]
+  thread_messages                        thread_messages[]
+  threads                                threads[]
+  user_thread_access                     user_thread_access[]
+  user_thread_last_read_at               user_thread_last_read_at[]
 }

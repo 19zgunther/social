@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import Thread, { ThreadItem } from "@/app/components/Thread";
 
 type GroupsProps = {
   currentUserId: string;
+  onThreadRead?: () => void;
 };
 
 type ApiError = {
@@ -32,9 +33,10 @@ const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   });
 };
 
-export default function Groups({ currentUserId }: GroupsProps) {
+export default function Groups({ currentUserId, onThreadRead }: GroupsProps) {
   const [threads, setThreads] = useState<ThreadItem[]>([]);
   const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
+  const [unreadThreadIds, setUnreadThreadIds] = useState<Set<string>>(new Set());
   const [threadName, setThreadName] = useState("");
   const [isLoadingThreads, setIsLoadingThreads] = useState(true);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
@@ -48,6 +50,20 @@ export default function Groups({ currentUserId }: GroupsProps) {
       return "Request failed.";
     }
   };
+
+  const loadUnreadThreads = useCallback(async () => {
+    try {
+      const response = await postWithAuth("/api/groups-unread-count", {});
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { unread_thread_ids?: string[] };
+      setUnreadThreadIds(new Set(payload.unread_thread_ids ?? []));
+    } catch {
+      // Keep old unread indications on transient failures.
+    }
+  }, []);
 
   useEffect(() => {
     const run = async () => {
@@ -64,6 +80,7 @@ export default function Groups({ currentUserId }: GroupsProps) {
 
         const payload = (await response.json()) as { threads: ThreadItem[] };
         setThreads(payload.threads);
+        void loadUnreadThreads();
       } catch (error) {
         setStatusMessage(error instanceof Error ? error.message : "Failed to load groups.");
         setThreads([]);
@@ -73,7 +90,31 @@ export default function Groups({ currentUserId }: GroupsProps) {
     };
 
     void run();
-  }, []);
+  }, [loadUnreadThreads]);
+
+  useEffect(() => {
+    if (selectedThread) {
+      return;
+    }
+
+    let cancelled = false;
+    const refreshUnread = async () => {
+      if (cancelled) {
+        return;
+      }
+      await loadUnreadThreads();
+    };
+
+    void refreshUnread();
+    const intervalId = window.setInterval(() => {
+      void refreshUnread();
+    }, 5_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [loadUnreadThreads, selectedThread]);
 
   const onCreateThread = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -101,6 +142,18 @@ export default function Groups({ currentUserId }: GroupsProps) {
     }
   };
 
+  const onOpenThread = (thread: ThreadItem) => {
+    setSelectedThread(thread);
+    setUnreadThreadIds((previous) => {
+      const next = new Set(previous);
+      next.delete(thread.id);
+      return next;
+    });
+    void postWithAuth("/api/thread-mark-read", { thread_id: thread.id }).finally(() => {
+      onThreadRead?.();
+    });
+  };
+
   if (selectedThread) {
     return (
       <Thread
@@ -109,6 +162,7 @@ export default function Groups({ currentUserId }: GroupsProps) {
         onBack={() => {
           setSelectedThread(null);
           setStatusMessage("");
+          void loadUnreadThreads();
         }}
       />
     );
@@ -159,11 +213,22 @@ export default function Groups({ currentUserId }: GroupsProps) {
             key={thread.id}
             type="button"
             onClick={() => {
-              setSelectedThread(thread);
+              onOpenThread(thread);
             }}
-            className="w-full rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-left transition hover:border-accent-2"
+            className={`w-full rounded-xl border px-4 py-3 text-left transition ${
+              unreadThreadIds.has(thread.id)
+                ? "border-accent-3 bg-secondary-background"
+                : "border-accent-1 bg-primary-background hover:border-accent-2"
+            }`}
           >
-            <p className="text-sm font-medium text-foreground">{thread.name}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-foreground">{thread.name}</p>
+              {unreadThreadIds.has(thread.id) ? (
+                <span className="rounded-full border border-accent-3 px-2 py-0.5 text-[10px] font-semibold text-accent-3">
+                  New
+                </span>
+              ) : null}
+            </div>
             <p className="mt-1 text-xs text-accent-2">Owner: {thread.owner_username}</p>
           </button>
         ))}
