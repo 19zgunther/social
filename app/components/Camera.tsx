@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, PointerEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Circle, RotateCcw, Send, Undo2, X } from "lucide-react";
 
 type CameraFacingMode = "environment" | "user";
@@ -36,7 +36,7 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
 
-  const stopCameraStream = () => {
+  const stopCameraStream = useCallback(() => {
     const stream = cameraStreamRef.current;
     if (stream) {
       for (const track of stream.getTracks()) {
@@ -48,9 +48,9 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
     if (cameraVideoRef.current) {
       cameraVideoRef.current.srcObject = null;
     }
-  };
+  }, []);
 
-  const attachCameraStreamToVideo = async (stream: MediaStream) => {
+  const attachCameraStreamToVideo = useCallback(async (stream: MediaStream) => {
     const videoElement = cameraVideoRef.current;
     if (!videoElement) {
       return;
@@ -62,48 +62,51 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
     } catch {
       setCameraErrorMessage("Could not start camera preview.");
     }
-  };
+  }, []);
 
-  const startCameraStream = async (facingMode: CameraFacingMode): Promise<boolean> => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraErrorMessage("Camera not supported on this device/browser.");
-      return false;
-    }
-
-    const tryGetStream = async (
-      mode: CameraFacingMode,
-      useExactConstraint: boolean,
-    ): Promise<MediaStream> => {
-      const facingModeConstraint = useExactConstraint ? { exact: mode } : { ideal: mode };
-      return navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingModeConstraint },
-        audio: false,
-      });
-    };
-
-    const fallbackMode: CameraFacingMode = facingMode === "environment" ? "user" : "environment";
-    const attempts: Array<{ mode: CameraFacingMode; exact: boolean }> = [
-      { mode: facingMode, exact: true },
-      { mode: facingMode, exact: false },
-      { mode: fallbackMode, exact: false },
-    ];
-
-    for (const attempt of attempts) {
-      try {
-        stopCameraStream();
-        const stream = await tryGetStream(attempt.mode, attempt.exact);
-        cameraStreamRef.current = stream;
-        await attachCameraStreamToVideo(stream);
-        setCameraErrorMessage("");
-        return true;
-      } catch {
-        continue;
+  const startCameraStream = useCallback(
+    async (facingMode: CameraFacingMode): Promise<boolean> => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraErrorMessage("Camera not supported on this device/browser.");
+        return false;
       }
-    }
 
-    setCameraErrorMessage("Unable to access camera.");
-    return false;
-  };
+      const tryGetStream = async (
+        mode: CameraFacingMode,
+        useExactConstraint: boolean,
+      ): Promise<MediaStream> => {
+        const facingModeConstraint = useExactConstraint ? { exact: mode } : { ideal: mode };
+        return navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facingModeConstraint },
+          audio: false,
+        });
+      };
+
+      const fallbackMode: CameraFacingMode = facingMode === "environment" ? "user" : "environment";
+      const attempts: Array<{ mode: CameraFacingMode; exact: boolean }> = [
+        { mode: facingMode, exact: true },
+        { mode: facingMode, exact: false },
+        { mode: fallbackMode, exact: false },
+      ];
+
+      for (const attempt of attempts) {
+        try {
+          stopCameraStream();
+          const stream = await tryGetStream(attempt.mode, attempt.exact);
+          cameraStreamRef.current = stream;
+          await attachCameraStreamToVideo(stream);
+          setCameraErrorMessage("");
+          return true;
+        } catch {
+          continue;
+        }
+      }
+
+      setCameraErrorMessage("Unable to access camera.");
+      return false;
+    },
+    [attachCameraStreamToVideo, stopCameraStream],
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -141,7 +144,7 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
       cancelled = true;
       stopCameraStream();
     };
-  }, [capturedPhotoFile, isOpen]);
+  }, [cameraFacingMode, capturedPhotoFile, isOpen, startCameraStream, stopCameraStream]);
 
   const onFlipCamera = async () => {
     if (isStartingCamera) {

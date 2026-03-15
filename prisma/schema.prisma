@@ -8,6 +8,17 @@ datasource db {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model posts {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  created_by String   @db.Uuid
+  image_id   String?  @db.Uuid
+  text       String?
+  data       Json?    @db.Json
+  users      users    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model thread_messages {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at DateTime  @default(now()) @db.Timestamptz(6)
@@ -48,6 +59,7 @@ model users {
   password_hash      String?
   email_verified_at  DateTime?            @db.Timestamptz(6)
   created_at         DateTime?            @db.Timestamptz(6)
+  posts              posts[]
   thread_messages    thread_messages[]
   threads            threads[]
   user_thread_access user_thread_access[]

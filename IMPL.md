@@ -66,3 +66,19 @@ STORAGE:
 - I setup a supabase storage bucket called 'main'. 
 - Please add an app/api/server_file_storage_utils.ts and app/components/client_file_storage_utils.ts. I want to put all of the logic regarding file storage in these files.
 - I want to be able to send photos in a thread
+
+User Profile & Posts:
+- At top of profile page, user should see their username and email. Below, they should see their posts.
+- In a profile the user should see all of their 'posts' in a grid. 3 posts per row, as many rows as necessary. Grid full width, small 1px borders between posts.
+- The first post cell (top-most left-most) should be a 'create post button'
+- Posts should be ordered created_by top being the most recent to bottom oldest
+- A post should consist of an image and an optional caption
+- When a user tabs on a single post of theirs they should see just that post full-width with the caption and comments below, and not see anything else besides a back button. We'll call this the 'PostSection'
+
+Feed
+- In the feed the users should see full-width PostSections of their friends posts. 
+- For now, just show everyones posts newest to oldest.
+- Show in order newest at top to oldest, and the user should be able to scroll down to see & load more posts.
+
+PostSection
+- Comments should be stored in the post.data: json blob.

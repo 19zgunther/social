@@ -1,9 +1,10 @@
 "use client";
 
 import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
-import { House, Users } from "lucide-react";
+import { House, UserRound, Users } from "lucide-react";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
+import Profile from "@/app/components/Profile";
 
 type AuthUser = {
   user_id: string;
@@ -13,7 +14,7 @@ type AuthUser = {
 };
 
 type Mode = "login" | "signup";
-type AppTab = "feed" | "groups";
+type AppTab = "feed" | "groups" | "profile";
 
 type ApiError = {
   error?: {
@@ -183,13 +184,19 @@ export default function Home() {
 
           <div className="flex-1 min-h-0 overflow-hidden px-0 py-0">
             {activeTab === "feed" ? (
-              <Feed username={authUser.username} />
-            ) : (
+              <Feed />
+            ) : activeTab === "groups" ? (
               <Groups currentUserId={authUser.user_id} />
+            ) : (
+              <Profile
+                userId={authUser.user_id}
+                username={authUser.username}
+                email={authUser.email}
+              />
             )}
           </div>
 
-          <nav className="grid grid-cols-2 border-t border-accent-1 bg-primary-background">
+          <nav className="grid grid-cols-3 border-t border-accent-1 bg-primary-background">
             <button
               type="button"
               onClick={() => setActiveTab("feed")}
@@ -213,6 +220,18 @@ export default function Home() {
             >
               <Users aria-hidden className="h-4 w-4" />
               <span>Groups</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("profile")}
+              className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${
+                activeTab === "profile"
+                  ? "text-accent-3"
+                  : "text-accent-2 hover:text-foreground"
+              }`}
+            >
+              <UserRound aria-hidden className="h-4 w-4" />
+              <span>Profile</span>
             </button>
           </nav>
         </section>
