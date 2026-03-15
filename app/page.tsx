@@ -35,15 +35,16 @@ const APP_VIEWPORT_STYLE: CSSProperties = {
   minHeight: "100svh",
 };
 
-const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
+const urlBase64ToArrayBuffer = (base64String: string): ArrayBuffer => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
+  const outputBuffer = new ArrayBuffer(rawData.length);
+  const outputArray = new Uint8Array(outputBuffer);
   for (let index = 0; index < rawData.length; index += 1) {
     outputArray[index] = rawData.charCodeAt(index);
   }
-  return outputArray;
+  return outputBuffer;
 };
 
 const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | null } => {
@@ -351,7 +352,7 @@ export default function Home() {
 
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(keyPayload.vapid_public_key),
+          applicationServerKey: urlBase64ToArrayBuffer(keyPayload.vapid_public_key),
         });
       }
 
