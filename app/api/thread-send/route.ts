@@ -4,6 +4,7 @@ import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@/app/generated/prisma/client";
 import { publishThreadMessagePosted } from "@/app/lib/sync";
+import { sendPushToUsers } from "@/app/lib/push_notifications";
 import {
   getSignedMainBucketImageUrl,
   uploadImageToMainBucket,
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
       },
       select: {
         id: true,
+        name: true,
         owner: true,
         user_thread_access: {
           select: {
@@ -210,6 +212,23 @@ export async function POST(request: Request) {
         ...thread.user_thread_access.map((accessRow) => accessRow.user_id),
       ]),
     );
+
+    const recipientUserIds = threadMemberUserIds.filter((userId) => userId !== authResult.user_id);
+    if (recipientUserIds.length > 0) {
+      const previewText = text?.trim() || (imageId ? "Sent a photo" : "Sent a message");
+      void sendPushToUsers({
+        recipientUserIds,
+        payload: {
+          title: `${authResult.username} in ${thread.name}`,
+          body: previewText,
+          url: `/?tab=groups&thread_id=${encodeURIComponent(thread.id)}`,
+          thread_id: thread.id,
+        },
+      }).catch((error) => {
+        console.error("thread_send_push_dispatch_failed", error);
+      });
+    }
+
     publishThreadMessagePosted(threadMemberUserIds, {
       thread_id: thread.id,
       message_id: message.id,

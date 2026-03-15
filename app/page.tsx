@@ -25,6 +25,7 @@ type ApiError = {
 };
 
 const AUTH_TOKEN_KEY = "auth_token";
+const PUSH_PROMPT_DISMISSED_KEY = "push_prompt_dismissed";
 const MOBILE_FRAME_STYLE: CSSProperties = {
   width: "100vw",
   maxWidth: "32rem",
@@ -34,13 +35,43 @@ const APP_VIEWPORT_STYLE: CSSProperties = {
   minHeight: "100svh",
 };
 
+const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let index = 0; index < rawData.length; index += 1) {
+    outputArray[index] = rawData.charCodeAt(index);
+  }
+  return outputArray;
+};
+
+const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | null } => {
+  const params = new URLSearchParams(window.location.search);
+  const tabParam = params.get("tab");
+  const threadIdParam = params.get("thread_id");
+  let tab: AppTab | null =
+    tabParam === "feed" || tabParam === "groups" || tabParam === "profile" ? tabParam : null;
+  if (!tab && threadIdParam) {
+    tab = "groups";
+  }
+
+  return {
+    tab,
+    threadId: threadIdParam?.trim() || null,
+  };
+};
+
 export default function Home() {
   const [mode, setMode] = useState<Mode>("login");
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("feed");
+  const [pendingDeepLinkThreadId, setPendingDeepLinkThreadId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>("");
+  const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
+  const [isEnablingNotifications, setIsEnablingNotifications] = useState(false);
   const [groupsUnreadCount, setGroupsUnreadCount] = useState(0);
   const [profileIncomingRequestCount, setProfileIncomingRequestCount] = useState(0);
   const [identifier, setIdentifier] = useState("");
@@ -80,6 +111,24 @@ export default function Home() {
     void runAuthCheck();
   }, []);
 
+  useEffect(() => {
+    const applyDeepLinkState = () => {
+      const deepLink = parseDeepLinkFromLocation();
+      if (deepLink.tab) {
+        setActiveTab(deepLink.tab);
+      }
+      if (deepLink.threadId) {
+        setPendingDeepLinkThreadId(deepLink.threadId);
+      }
+    };
+
+    applyDeepLinkState();
+    window.addEventListener("popstate", applyDeepLinkState);
+    return () => {
+      window.removeEventListener("popstate", applyDeepLinkState);
+    };
+  }, []);
+
   const readApiError = async (response: Response): Promise<string> => {
     try {
       const body = (await response.json()) as ApiError;
@@ -90,10 +139,39 @@ export default function Home() {
   };
 
   const onLogout = () => {
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    if (token && "serviceWorker" in navigator) {
+      void (async () => {
+        try {
+          const registration =
+            (await navigator.serviceWorker.getRegistration("/sw.js")) ??
+            (await navigator.serviceWorker.getRegistration());
+          const subscription = await registration?.pushManager.getSubscription();
+          if (subscription) {
+            await fetch("/api/push-unsubscribe", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                endpoint: subscription.endpoint,
+              }),
+            });
+            await subscription.unsubscribe();
+          }
+        } catch {
+          // Silent cleanup failure: logout still proceeds.
+        }
+      })();
+    }
+
     window.localStorage.removeItem(AUTH_TOKEN_KEY);
     document.cookie = "auth_token=; Max-Age=0; path=/";
     setAuthUser(null);
     setActiveTab("feed");
+    setPendingDeepLinkThreadId(null);
+    setShowNotificationsPrompt(false);
     setGroupsUnreadCount(0);
     setProfileIncomingRequestCount(0);
     setStatusMessage("Logged out.");
@@ -200,6 +278,136 @@ export default function Home() {
     };
   }, [authUser]);
 
+  const ensurePushSubscription = useCallback(async (options?: { requestPermission?: boolean }) => {
+    try {
+      if (
+        !("serviceWorker" in navigator) ||
+        !("PushManager" in window) ||
+        !("Notification" in window)
+      ) {
+        return;
+      }
+
+      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+      if (!token) {
+        return;
+      }
+
+      const isStandalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+      if (!isStandalone) {
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.register("/sw.js");
+
+      let permission = Notification.permission;
+      if (permission === "default" && options?.requestPermission) {
+        permission = await Notification.requestPermission();
+      }
+
+      if (permission === "default") {
+        return;
+      }
+
+      if (permission !== "granted") {
+        const existingSubscription = await registration.pushManager.getSubscription();
+        if (existingSubscription) {
+          await fetch("/api/push-unsubscribe", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              endpoint: existingSubscription.endpoint,
+            }),
+          });
+          await existingSubscription.unsubscribe();
+        }
+        window.localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, "1");
+        setShowNotificationsPrompt(false);
+        return;
+      }
+
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        const keyResponse = await fetch("/api/push-public-key", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({}),
+        });
+        if (!keyResponse.ok) {
+          return;
+        }
+        const keyPayload = (await keyResponse.json()) as { vapid_public_key?: string };
+        if (!keyPayload.vapid_public_key) {
+          return;
+        }
+
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(keyPayload.vapid_public_key),
+        });
+      }
+
+      const serializedSubscription = subscription.toJSON();
+      if (!serializedSubscription.endpoint || !serializedSubscription.keys?.p256dh || !serializedSubscription.keys.auth) {
+        return;
+      }
+
+      await fetch("/api/push-subscribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          endpoint: serializedSubscription.endpoint,
+          keys: {
+            p256dh: serializedSubscription.keys.p256dh,
+            auth: serializedSubscription.keys.auth,
+          },
+        }),
+      });
+      window.localStorage.removeItem(PUSH_PROMPT_DISMISSED_KEY);
+      setShowNotificationsPrompt(false);
+    } catch (error) {
+      console.error("push_setup_failed", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+    void ensurePushSubscription();
+  }, [authUser, ensurePushSubscription]);
+
+  useEffect(() => {
+    if (!authUser) {
+      setShowNotificationsPrompt(false);
+      return;
+    }
+
+    if (!("Notification" in window)) {
+      setShowNotificationsPrompt(false);
+      return;
+    }
+
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+    const wasDismissed = window.localStorage.getItem(PUSH_PROMPT_DISMISSED_KEY) === "1";
+    const shouldShow =
+      isStandalone && Notification.permission === "default" && !wasDismissed;
+    setShowNotificationsPrompt(shouldShow);
+  }, [authUser]);
+
   const submitLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setStatusMessage("");
@@ -252,6 +460,23 @@ export default function Home() {
     }
   };
 
+  const onEnableNotifications = async () => {
+    setIsEnablingNotifications(true);
+    try {
+      await ensurePushSubscription({ requestPermission: true });
+    } finally {
+      setIsEnablingNotifications(false);
+      const shouldStillShow =
+        "Notification" in window && Notification.permission === "default";
+      setShowNotificationsPrompt(shouldStillShow);
+    }
+  };
+
+  const onDismissNotificationsPrompt = () => {
+    window.localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, "1");
+    setShowNotificationsPrompt(false);
+  };
+
   if (isCheckingSession) {
     return (
       <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0">
@@ -278,12 +503,52 @@ export default function Home() {
             </header>
           ) : null}
 
+          {showNotificationsPrompt ? (
+            <div className="border-b border-accent-1 bg-secondary-background px-3 py-2">
+              <p className="text-xs text-accent-2">
+                Enable notifications to get new thread message alerts.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void onEnableNotifications();
+                  }}
+                  disabled={isEnablingNotifications}
+                  className="rounded-lg bg-accent-3 px-3 py-1.5 text-xs font-semibold text-primary-background disabled:opacity-60"
+                >
+                  {isEnablingNotifications ? "Enabling..." : "Enable notifications"}
+                </button>
+                <button
+                  type="button"
+                  onClick={onDismissNotificationsPrompt}
+                  className="rounded-lg border border-accent-1 px-3 py-1.5 text-xs text-accent-2 hover:text-foreground"
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex-1 min-h-0 overflow-hidden px-0 py-0">
             {activeTab === "feed" ? (
               <Feed />
             ) : activeTab === "groups" ? (
               <Groups
                 currentUserId={authUser.user_id}
+                deepLinkThreadId={pendingDeepLinkThreadId}
+                onDeepLinkThreadHandled={() => {
+                  setPendingDeepLinkThreadId(null);
+                  const nextParams = new URLSearchParams(window.location.search);
+                  nextParams.delete("thread_id");
+                  nextParams.set("tab", "groups");
+                  const nextQuery = nextParams.toString();
+                  window.history.replaceState(
+                    null,
+                    "",
+                    `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`,
+                  );
+                }}
                 onThreadRead={() => {
                   void refreshGroupsUnreadCount();
                 }}

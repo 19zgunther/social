@@ -6,6 +6,8 @@ import Thread, { ThreadItem } from "@/app/components/Thread";
 type GroupsProps = {
   currentUserId: string;
   onThreadRead?: () => void;
+  deepLinkThreadId?: string | null;
+  onDeepLinkThreadHandled?: () => void;
 };
 
 type ApiError = {
@@ -33,7 +35,12 @@ const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   });
 };
 
-export default function Groups({ currentUserId, onThreadRead }: GroupsProps) {
+export default function Groups({
+  currentUserId,
+  onThreadRead,
+  deepLinkThreadId,
+  onDeepLinkThreadHandled,
+}: GroupsProps) {
   const [threads, setThreads] = useState<ThreadItem[]>([]);
   const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
   const [unreadThreadIds, setUnreadThreadIds] = useState<Set<string>>(new Set());
@@ -142,7 +149,7 @@ export default function Groups({ currentUserId, onThreadRead }: GroupsProps) {
     }
   };
 
-  const onOpenThread = (thread: ThreadItem) => {
+  const onOpenThread = useCallback((thread: ThreadItem) => {
     setSelectedThread(thread);
     setUnreadThreadIds((previous) => {
       const next = new Set(previous);
@@ -152,7 +159,21 @@ export default function Groups({ currentUserId, onThreadRead }: GroupsProps) {
     void postWithAuth("/api/thread-mark-read", { thread_id: thread.id }).finally(() => {
       onThreadRead?.();
     });
-  };
+  }, [onThreadRead]);
+
+  useEffect(() => {
+    if (!deepLinkThreadId || isLoadingThreads || selectedThread) {
+      return;
+    }
+
+    const match = threads.find((thread) => thread.id === deepLinkThreadId);
+    if (!match) {
+      return;
+    }
+
+    onOpenThread(match);
+    onDeepLinkThreadHandled?.();
+  }, [deepLinkThreadId, isLoadingThreads, onDeepLinkThreadHandled, onOpenThread, selectedThread, threads]);
 
   if (selectedThread) {
     return (
