@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model thread_messages {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @db.Timestamptz(6)
+  created_by String    @db.Uuid
+  parent_id  String?   @db.Uuid
+  text       String?
+  image_id   String?   @db.Uuid
+  data       Json?     @db.Json
+  users      users     @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model threads {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at         DateTime             @default(now()) @db.Timestamptz(6)
+  owner              String               @db.Uuid
+  name               String
+  users              users                @relation(fields: [owner], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_thread_access user_thread_access[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_thread_access {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  thread_id  String   @db.Uuid
+  user_id    String   @db.Uuid
+  created_at DateTime @db.Timestamptz(6)
+  threads    threads  @relation(fields: [thread_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model users {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username           String
+  email              String?
+  password_hash      String?
+  email_verified_at  DateTime?            @db.Timestamptz(6)
+  created_at         DateTime?            @db.Timestamptz(6)
+  thread_messages    thread_messages[]
+  threads            threads[]
+  user_thread_access user_thread_access[]
+}
