@@ -1,12 +1,13 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CircleUserRound, Image } from "lucide-react";
+import { Camera, CircleUserRound, Image, Video } from "lucide-react";
 import CameraModal from "@/app/components/Camera";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ThreadSettings from "@/app/components/ThreadSettings";
+import VideoCall from "@/app/components/VideoCall";
 import {
   ApiError,
   FriendSearchResponse,
@@ -118,6 +119,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const [isUpdatingMembers, setIsUpdatingMembers] = useState(false);
   const [members, setMembers] = useState<ThreadMember[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
   const [memberFormError, setMemberFormError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [isComposerFocused, setIsComposerFocused] = useState(false);
@@ -833,6 +835,16 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const isComposerExpanded =
     isComposerFocused || Boolean(editTargetMessageId) || messageDraft.trim().length > 0;
 
+  if (isVideoCallOpen) {
+    return (
+      <VideoCall
+        threadId={activeThread.id}
+        currentUserId={currentUserId}
+        onBack={() => setIsVideoCallOpen(false)}
+      />
+    );
+  }
+
   if (isSettingsOpen) {
     return (
       <ThreadSettings
@@ -895,7 +907,10 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     >
       <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
         <BackButton onBack={onBack} backLabel="Groups" />
-        <div className="min-w-0 text-center flex items-center gap-2" onClick={() => setIsSettingsOpen((previous) => !previous)}>
+        <div
+          className="min-w-0 text-center flex items-center gap-2"
+          onClick={() => setIsSettingsOpen((previous) => !previous)}
+        >
            {activeThread.image_url ? (
             <CachedImage
               signedUrl={activeThread.image_url}
@@ -910,9 +925,14 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
           )}
           <p className="truncate text-sm font-semibold text-foreground">{activeThread.name}</p>
         </div>
-        <div className="h-4 w-4 text-accent-2" >
-          {/* TODO: Add video call icon here */}
-        </div>
+        <button
+          type="button"
+          aria-label="Start video call"
+          onClick={() => setIsVideoCallOpen(true)}
+          className="flex h-8 w-8 items-center justify-center rounded-full text-accent-2 hover:bg-accent-1/30 hover:text-foreground"
+        >
+          <Video className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="relative flex-1 min-h-0">

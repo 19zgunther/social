@@ -57,8 +57,11 @@ export type ImageOverlayData = {
   y_ratio: number;
 };
 
+import type { VideoCallSignal } from "@/app/components/utils/webrtcVideoCall";
+
 export type MessageData = {
   image_overlay?: ImageOverlayData;
+  video_call_signal?: VideoCallSignal;
 };
 
 export type ThreadMessage = {
