@@ -660,9 +660,18 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   );
 
   const messageById = new Map(messages.map((message) => [message.id, message]));
-  const rootMessages = messages.filter((message) => message.parent_id === activeThread.id);
+
+  const visibleMessages = messages.filter((message) => {
+    const hasText = message.text.trim().length > 0;
+    const hasImage = Boolean(message.image_url);
+    const hasOverlay = Boolean(toImageOverlayData(message.data));
+    // Hide pure signaling / data-only messages (e.g., video call signals) from the chat UI.
+    return hasText || hasImage || hasOverlay;
+  });
+
+  const rootMessages = visibleMessages.filter((message) => message.parent_id === activeThread.id);
   const childMessagesByParentId = new Map<string, ThreadMessage[]>();
-  for (const message of messages) {
+  for (const message of visibleMessages) {
     if (!message.parent_id || message.parent_id === activeThread.id) {
       continue;
     }

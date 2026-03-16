@@ -16,6 +16,8 @@ type RawMessageData = {
     text?: unknown;
     y_ratio?: unknown;
   };
+  // Allow additional structured fields like video_call_signal without stripping them.
+  video_call_signal?: unknown;
 };
 
 const clampOverlayYRatio = (value: number): number => Math.min(0.9, Math.max(0.1, value));
@@ -26,26 +28,31 @@ const sanitizeMessageData = (rawData: unknown): Prisma.InputJsonValue | undefine
   }
 
   const parsedData = rawData as RawMessageData;
+  const result: Record<string, unknown> = {};
+
   const overlay = parsedData.image_overlay;
-  if (!overlay || typeof overlay !== "object") {
+  if (overlay && typeof overlay === "object") {
+    if (typeof overlay.text === "string" && typeof overlay.y_ratio === "number") {
+      const trimmedText = overlay.text.trim();
+      if (trimmedText) {
+        result.image_overlay = {
+          text: trimmedText,
+          y_ratio: clampOverlayYRatio(overlay.y_ratio),
+        };
+      }
+    }
+  }
+
+  // Pass through video_call_signal (and potentially other structured fields) without modification.
+  if (parsedData.video_call_signal !== undefined) {
+    result.video_call_signal = parsedData.video_call_signal;
+  }
+
+  if (Object.keys(result).length === 0) {
     return undefined;
   }
 
-  if (typeof overlay.text !== "string" || typeof overlay.y_ratio !== "number") {
-    return undefined;
-  }
-
-  const trimmedText = overlay.text.trim();
-  if (!trimmedText) {
-    return undefined;
-  }
-
-  return {
-    image_overlay: {
-      text: trimmedText,
-      y_ratio: clampOverlayYRatio(overlay.y_ratio),
-    },
-  } as Prisma.InputJsonValue;
+  return result as Prisma.InputJsonValue;
 };
 
 export async function POST(request: Request) {
@@ -64,12 +71,12 @@ export async function POST(request: Request) {
     const imageMimeType = body.image_mime_type?.trim();
     const messageData = sanitizeMessageData(body.message_data);
 
-    if (!threadId || (!text && !imageBase64Data)) {
+    if (!threadId || (!text && !imageBase64Data && !messageData)) {
       return NextResponse.json(
         {
           error: {
             code: "invalid_request",
-            message: "thread_id and either text or image are required.",
+            message: "thread_id and at least one of text, image, or message_data are required.",
           },
         },
         { status: 400 },
@@ -206,7 +213,8 @@ export async function POST(request: Request) {
     );
 
     const recipientUserIds = threadMemberUserIds.filter((userId) => userId !== authResult.user_id);
-    if (recipientUserIds.length > 0) {
+    const shouldSendPush = Boolean(text || imageId);
+    if (recipientUserIds.length > 0 && shouldSendPush) {
       const previewText = text?.trim() || (imageId ? "Sent a photo" : "Sent a message");
       void sendPushToUsers({
         recipientUserIds,
