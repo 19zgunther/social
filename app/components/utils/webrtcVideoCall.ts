@@ -46,6 +46,7 @@ export const createVideoCallController = (
   let peerConnection: RTCPeerConnection | null = null;
   let localStream: MediaStream | null = null;
   let hasRemoteDescription = false;
+  const pendingRemoteIceCandidates: RTCIceCandidateInit[] = [];
 
   const updateStatus = (status: VideoCallStatus, detail?: string) => {
     if (config.onStatusChange) {
@@ -152,6 +153,21 @@ export const createVideoCallController = (
         await pc.setRemoteDescription(remoteDesc);
         hasRemoteDescription = true;
 
+        // Flush any ICE candidates that arrived before the remote description was set.
+        if (pendingRemoteIceCandidates.length > 0) {
+          for (const candidate of pendingRemoteIceCandidates.splice(0)) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (error) {
+              updateStatus(
+                "error",
+                error instanceof Error ? error.message : "Failed to add buffered ICE candidate.",
+              );
+              return;
+            }
+          }
+        }
+
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
@@ -177,6 +193,20 @@ export const createVideoCallController = (
           const remoteDesc = new RTCSessionDescription(signal.sdp);
           await pc.setRemoteDescription(remoteDesc);
           hasRemoteDescription = true;
+
+          if (pendingRemoteIceCandidates.length > 0) {
+            for (const candidate of pendingRemoteIceCandidates.splice(0)) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+              } catch (error) {
+                updateStatus(
+                  "error",
+                  error instanceof Error ? error.message : "Failed to add buffered ICE candidate.",
+                );
+                return;
+              }
+            }
+          }
           updateStatus("connecting");
         } catch (error) {
           updateStatus(
@@ -194,7 +224,8 @@ export const createVideoCallController = (
       }
 
       if (!hasRemoteDescription) {
-        // Buffering candidates would be more robust, but for now we just ignore until remote is set.
+        // Buffer ICE candidates until a remote description is set, then flush them.
+        pendingRemoteIceCandidates.push(signal.candidate);
         return;
       }
 

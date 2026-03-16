@@ -23,7 +23,7 @@ const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   });
 };
 
-const VIDEO_SIGNAL_POLL_INTERVAL_MS = 25_000;
+const VIDEO_SIGNAL_POLL_INTERVAL_MS = 5_000;
 
 export default function VideoCall({ threadId, currentUserId, onBack }: VideoCallProps) {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -148,6 +148,36 @@ export default function VideoCall({ threadId, currentUserId, onBack }: VideoCall
     }
     try {
       await controllerRef.current.startCall();
+      // Proactively fetch any newly arrived signals right after starting the call
+      // to speed up initial negotiation.
+      void (async () => {
+        try {
+          const latestResponse = await postWithAuth("/api/thread-messages", {
+            thread_id: threadId,
+          });
+          if (!latestResponse.ok) {
+            return;
+          }
+          const latestPayload = (await latestResponse.json()) as {
+            messages: Array<{
+              id: string;
+              data: { video_call_signal?: VideoCallSignal } | null;
+            }>;
+          };
+          for (const message of latestPayload.messages) {
+            if (!message.data?.video_call_signal) {
+              continue;
+            }
+            if (processedMessageIdsRef.current.has(message.id)) {
+              continue;
+            }
+            processedMessageIdsRef.current.add(message.id);
+            await controllerRef.current?.handleRemoteSignal(message.data.video_call_signal);
+          }
+        } catch {
+          // Best-effort fast path; regular polling will still run.
+        }
+      })();
     } catch {
       // Error state is handled by controller's status callback.
     }
