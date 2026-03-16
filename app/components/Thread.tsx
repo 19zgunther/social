@@ -1,11 +1,12 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Camera } from "lucide-react";
+import { Camera, CircleUserRound, Image } from "lucide-react";
 import CameraModal from "@/app/components/Camera";
-import CachedImage from "@/app/components/CachedImage";
-import { prepareImageForUpload } from "@/app/components/client_file_storage_utils";
+import CachedImage from "@/app/components/utils/CachedImage";
+import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
+import ThreadSettings from "@/app/components/ThreadSettings";
 import {
   ApiError,
   FriendSearchResponse,
@@ -21,6 +22,8 @@ import {
   ThreadSendResponse,
 } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
+import { useStateCached } from "./useStateCached";
+import BackButton from "./utils/BackButton";
 
 type ThreadProps = {
   thread: ThreadItem;
@@ -28,7 +31,6 @@ type ThreadProps = {
   onBack: () => void;
 };
 
-const AUTH_TOKEN_KEY = "auth_token";
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const BOTTOM_FOLLOW_THRESHOLD_PX = 80;
 
@@ -41,17 +43,9 @@ type ThreadMessagesCachePayload = ThreadMessagesResponse & {
 const isNearBottom = (element: HTMLDivElement): boolean =>
   element.scrollHeight - element.scrollTop - element.clientHeight < BOTTOM_FOLLOW_THRESHOLD_PX;
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
-  const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) {
-    throw new Error("Not authenticated.");
-  }
-
   return fetch(path, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json"},
     body: JSON.stringify(body),
   });
 };
@@ -136,6 +130,8 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const pendingBottomScrollRef = useRef<ScrollBehavior | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const swipeStartXRef = useRef<number | null>(null);
+  const swipeStartYRef = useRef<number | null>(null);
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -835,105 +831,89 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
 
   const isOwner = activeThread.owner_user_id === currentUserId;
   const isComposerExpanded =
-    isComposerFocused ||
-    Boolean(editTargetMessageId) ||
-    messageDraft.trim().length > 0;
+    isComposerFocused || Boolean(editTargetMessageId) || messageDraft.trim().length > 0;
+
+  if (isSettingsOpen) {
+    return (
+      <ThreadSettings
+        thread={activeThread}
+        currentUserId={currentUserId}
+        onBack={() => setIsSettingsOpen(false)}
+        onThreadImageUpdated={(imageId, imageUrl) => {
+          setActiveThread((previous) => ({
+            ...previous,
+            image_id: imageId,
+            image_url: imageUrl,
+          }));
+        }}
+        onThreadRenamed={(name) => {
+          setActiveThread((previous) => ({
+            ...previous,
+            name,
+          }));
+        }}
+      />
+    );
+  }
+
+  const onTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+    swipeStartXRef.current = touch.clientX;
+    swipeStartYRef.current = touch.clientY;
+  };
+
+  const onTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const startX = swipeStartXRef.current;
+    const startY = swipeStartYRef.current;
+    swipeStartXRef.current = null;
+    swipeStartYRef.current = null;
+
+    const touch = event.changedTouches[0];
+    if (!touch || startX === null || startY === null) {
+      return;
+    }
+
+    const deltaX = touch.clientX - startX;
+    const deltaY = Math.abs(touch.clientY - startY);
+
+    const HORIZONTAL_THRESHOLD = 60;
+    const VERTICAL_TOLERANCE = 40;
+
+    if (deltaX > HORIZONTAL_THRESHOLD && deltaY < VERTICAL_TOLERANCE) {
+      onBack();
+    }
+  };
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background">
+    <div
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-full border border-accent-1 bg-primary-background px-3 py-1.5 text-xs font-medium text-accent-2 transition hover:text-foreground"
-        >
-          {"<"}
-        </button>
-        <div className="min-w-0 text-center">
+        <BackButton onBack={onBack} backLabel="Groups" />
+        <div className="min-w-0 text-center flex items-center gap-2" onClick={() => setIsSettingsOpen((previous) => !previous)}>
+           {activeThread.image_url ? (
+            <CachedImage
+              signedUrl={activeThread.image_url}
+              imageId={activeThread.image_id ?? null}
+              alt="Group photo"
+              className="h-10 w-10 rounded-full border border-accent-1 object-cover"
+            />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center">
+              <Image className="h-10 w-10 text-accent-2" />
+            </div>
+          )}
           <p className="truncate text-sm font-semibold text-foreground">{activeThread.name}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsSettingsOpen((previous) => !previous)}
-          disabled={!isOwner}
-          className="rounded-full border border-accent-1 bg-primary-background px-3 py-1.5 text-xs font-medium text-accent-2 transition hover:text-foreground disabled:opacity-50"
-        >
-          Settings
-        </button>
+        <div className="h-4 w-4 text-accent-2" >
+          {/* TODO: Add video call icon here */}
+        </div>
       </div>
-
-      {isOwner && isSettingsOpen ? (
-        <section className="mx-2 mt-2 rounded-xl border border-accent-1 bg-secondary-background p-3">
-          <div className="space-y-3">
-            <form onSubmit={onAddMember} className="flex items-center gap-2">
-              <div className="flex-1">
-                <UserSearch
-                  value={memberIdentifier}
-                  onValueChange={(value) => {
-                    setMemberIdentifier(value);
-                    if (memberFormError) {
-                      setMemberFormError("");
-                    }
-                  }}
-                  onSelect={(option) => {
-                    setMemberIdentifier(option.username);
-                    if (memberFormError) {
-                      setMemberFormError("");
-                    }
-                  }}
-                  searchUsers={searchThreadMemberOptions}
-                  placeholder="Username or email"
-                  inputClassName="w-full rounded-xl border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-                />
-                {memberFormError ? (
-                  <p className="mt-1 text-xs text-accent-2">{memberFormError}</p>
-                ) : null}
-              </div>
-              <button
-                type="submit"
-                disabled={isUpdatingMembers}
-                className="rounded-xl bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
-              >
-                Add
-              </button>
-            </form>
-
-            <div className="space-y-2">
-              {isLoadingMembers ? <p className="text-xs text-accent-2">Loading members...</p> : null}
-
-              {!isLoadingMembers && members.length === 0 ? (
-                <p className="text-xs text-accent-2">No members found.</p>
-              ) : null}
-
-              {members.map((member) => (
-                <div
-                  key={member.user_id}
-                  className="flex items-center justify-between rounded-lg border border-accent-1 bg-secondary-background px-3 py-2"
-                >
-                  <div>
-                    <p className="text-sm text-foreground">
-                      {member.username} {member.is_owner ? "(owner)" : ""}
-                    </p>
-                    <p className="text-xs text-accent-2">{member.email ?? "No email"}</p>
-                  </div>
-                  {!member.is_owner ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void onRemoveMember(member.user_id);
-                      }}
-                      disabled={isUpdatingMembers}
-                      className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 transition hover:text-foreground disabled:opacity-60"
-                    >
-                      Remove
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
 
       <div className="relative flex-1 min-h-0">
         <div

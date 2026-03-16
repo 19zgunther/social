@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Heart, ChevronDown, CircleUserRound } from "lucide-react";
-import CachedImage from "@/app/components/CachedImage";
+import CachedImage from "@/app/components/utils/CachedImage";
 import { ApiError, PostCommentNode, PostData, PostItem } from "@/app/types/interfaces";
 
 type PostSectionProps = {
@@ -11,7 +11,6 @@ type PostSectionProps = {
   className?: string;
 };
 
-const AUTH_TOKEN_KEY = "auth_token";
 const COMMENT_PATH_SEPARATOR = ">";
 
 const formatPostDate = (value: string): string => {
@@ -77,17 +76,9 @@ export default function PostSection({ post, showComments = true, className }: Po
     setIsUpdatingLike(true);
 
     try {
-      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-      if (!token) {
-        throw new Error("Not authenticated.");
-      }
-
       const response = await fetch("/api/feed-post-like", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json"},
         body: JSON.stringify({
           post_id: post.id,
           like: nextLikedState,
@@ -126,17 +117,9 @@ export default function PostSection({ post, showComments = true, className }: Po
 
     setIsSubmittingComment(true);
     try {
-      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-      if (!token) {
-        throw new Error("Not authenticated.");
-      }
-
       const response = await fetch("/api/feed-post-comment", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json"},
         body: JSON.stringify({
           post_id: post.id,
           parent_path: parentPath,

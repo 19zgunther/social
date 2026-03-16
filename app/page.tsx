@@ -16,7 +16,6 @@ import {
 type Mode = "login" | "signup";
 type AppTab = "feed" | "groups" | "profile";
 
-const AUTH_TOKEN_KEY = "auth_token";
 const PUSH_PROMPT_DISMISSED_KEY = "push_prompt_dismissed";
 const MOBILE_FRAME_STYLE: CSSProperties = {
   width: "100vw",
@@ -76,22 +75,14 @@ export default function Home() {
 
   useEffect(() => {
     const runAuthCheck = async () => {
-      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-      if (!token) {
-        setIsCheckingSession(false);
-        return;
-      }
-
       const response = await fetch("/api/auth-check", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
       });
 
       if (!response.ok) {
-        window.localStorage.removeItem(AUTH_TOKEN_KEY);
         setIsCheckingSession(false);
         return;
       }
@@ -132,8 +123,8 @@ export default function Home() {
   };
 
   const onLogout = () => {
-    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-    if (token && "serviceWorker" in navigator) {
+    const token = undefined;
+    if ("serviceWorker" in navigator) {
       void (async () => {
         try {
           const registration =
@@ -145,7 +136,6 @@ export default function Home() {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
                 endpoint: subscription.endpoint,
@@ -159,7 +149,6 @@ export default function Home() {
       })();
     }
 
-    window.localStorage.removeItem(AUTH_TOKEN_KEY);
     document.cookie = "auth_token=; Max-Age=0; path=/";
     setAuthUser(null);
     setActiveTab("feed");
@@ -172,16 +161,10 @@ export default function Home() {
 
   const refreshGroupsUnreadCount = useCallback(async () => {
     try {
-      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-      if (!token) {
-        return;
-      }
-
       const response = await fetch("/api/groups-unread-count", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({}),
       });
@@ -232,16 +215,10 @@ export default function Home() {
     let cancelled = false;
     const run = async () => {
       try {
-        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-        if (!token) {
-          return;
-        }
-
         const response = await fetch("/api/friend-requests-list", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({}),
         });
@@ -281,11 +258,6 @@ export default function Home() {
         return;
       }
 
-      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-      if (!token) {
-        return;
-      }
-
       const isStandalone =
         window.matchMedia("(display-mode: standalone)").matches ||
         Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
@@ -309,10 +281,7 @@ export default function Home() {
         if (existingSubscription) {
           await fetch("/api/push-unsubscribe", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { "Content-Type": "application/json"},
             body: JSON.stringify({
               endpoint: existingSubscription.endpoint,
             }),
@@ -328,10 +297,7 @@ export default function Home() {
       if (!subscription) {
         const keyResponse = await fetch("/api/push-public-key", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json"},
           body: JSON.stringify({}),
         });
         if (!keyResponse.ok) {
@@ -357,7 +323,6 @@ export default function Home() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           endpoint: serializedSubscription.endpoint,
@@ -419,7 +384,6 @@ export default function Home() {
       }
 
       const payload = (await response.json()) as LoginResponse;
-      window.localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
       setAuthUser(payload.user);
       setStatusMessage("");
     } finally {
@@ -445,7 +409,6 @@ export default function Home() {
       }
 
       const payload = (await response.json()) as SignupResponse;
-      window.localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
       setAuthUser(payload.user);
       setStatusMessage("");
     } finally {
@@ -490,11 +453,6 @@ export default function Home() {
           style={MOBILE_FRAME_STYLE}
           className="flex h-full max-h-dvh flex-col overflow-hidden border border-accent-1 shadow-xl shadow-black/25"
         >
-          {/* {activeTab === "feed" ? (
-            <header className="border-b border-accent-1 px-4 py-3">
-              <h1 className="text-sm font-semibold text-foreground text-center w-full">Your friends posted...</h1>
-            </header>
-          ) : null} */}
 
           {showNotificationsPrompt ? (
             <div className="border-b border-accent-1 bg-secondary-background px-3 py-2">

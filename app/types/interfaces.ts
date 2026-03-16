@@ -48,6 +48,8 @@ export type ThreadItem = {
   created_at: string;
   owner_user_id: string;
   owner_username: string;
+  image_id?: string | null;
+  image_url?: string | null;
 };
 
 export type ImageOverlayData = {
@@ -165,6 +167,8 @@ export type ThreadMessagesResponse = {
     id: string;
     name: string;
     owner_user_id: string;
+    image_id?: string | null;
+    image_url?: string | null;
   };
   viewer_user_id: string;
   has_more_older: boolean;
@@ -211,4 +215,16 @@ export type ProfileImageSetResponse = {
 export type ProfileImageRemoveResponse = {
   profile_image_id: null;
   profile_image_url: null;
+};
+
+export type ThreadImageSetResponse = {
+  thread_id: string;
+  image_id: string;
+  image_url: string;
+};
+
+export type ThreadImageRemoveResponse = {
+  thread_id: string;
+  image_id: null;
+  image_url: null;
 };

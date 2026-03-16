@@ -1,22 +1,24 @@
 "use client";
 
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ProfileImageRemoveResponse, ProfileImageSetResponse } from "@/app/types/interfaces";
+import { ThreadImageRemoveResponse, ThreadImageSetResponse } from "@/app/types/interfaces";
 
-type ProfilePictureEditorProps = {
+type ThreadPictureEditorProps = {
+  threadId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSaved: (profileImageId: string | null, profileImageUrl: string | null) => void;
+  onSaved: (imageId: string | null, imageUrl: string | null) => void;
 };
 
 const PREVIEW_SIZE_PX = 280;
 const OUTPUT_SIZE_PX = 256;
 
-export default function ProfilePictureEditor({
+export default function ThreadPictureEditor({
+  threadId,
   isOpen,
   onClose,
   onSaved,
-}: ProfilePictureEditorProps) {
+}: ThreadPictureEditorProps) {
   const [sourceDataUrl, setSourceDataUrl] = useState<string | null>(null);
   const [imageElement, setImageElement] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -37,28 +39,6 @@ export default function ProfilePictureEditor({
     return Math.max(PREVIEW_SIZE_PX / imageElement.naturalWidth, PREVIEW_SIZE_PX / imageElement.naturalHeight);
   }, [imageElement]);
 
-  const displayedSize = useMemo(() => {
-    if (!imageElement) {
-      return { width: PREVIEW_SIZE_PX, height: PREVIEW_SIZE_PX };
-    }
-    return {
-      width: imageElement.naturalWidth * baseScale * zoom,
-      height: imageElement.naturalHeight * baseScale * zoom,
-    };
-  }, [baseScale, imageElement, zoom]);
-
-  const clampOffsets = useCallback(
-    (nextX: number, nextY: number): { x: number; y: number } => {
-      const maxX = Math.max(0, (displayedSize.width - PREVIEW_SIZE_PX) / 2);
-      const maxY = Math.max(0, (displayedSize.height - PREVIEW_SIZE_PX) / 2);
-      return {
-        x: Math.max(-maxX, Math.min(maxX, nextX)),
-        y: Math.max(-maxY, Math.min(maxY, nextY)),
-      };
-    },
-    [displayedSize.height, displayedSize.width],
-  );
-
   useEffect(() => {
     if (!isOpen) {
       setSourceDataUrl(null);
@@ -71,6 +51,20 @@ export default function ProfilePictureEditor({
       setStatusMessage("");
     }
   }, [isOpen]);
+
+  const clampOffsets = useCallback(
+    (nextX: number, nextY: number): { x: number; y: number } => {
+      const displayedWidth = imageElement ? imageElement.naturalWidth * baseScale * zoom : PREVIEW_SIZE_PX;
+      const displayedHeight = imageElement ? imageElement.naturalHeight * baseScale * zoom : PREVIEW_SIZE_PX;
+      const maxX = Math.max(0, (displayedWidth - PREVIEW_SIZE_PX) / 2);
+      const maxY = Math.max(0, (displayedHeight - PREVIEW_SIZE_PX) / 2);
+      return {
+        x: Math.max(-maxX, Math.min(maxX, nextX)),
+        y: Math.max(-maxY, Math.min(maxY, nextY)),
+      };
+    },
+    [baseScale, imageElement, zoom],
+  );
 
   useEffect(() => {
     const clamped = clampOffsets(offsetX, offsetY);
@@ -141,7 +135,7 @@ export default function ProfilePictureEditor({
     dragStartRef.current = null;
   };
 
-  const onSaveProfilePicture = async () => {
+  const onSaveThreadPicture = async () => {
     if (!imageElement) {
       return;
     }
@@ -164,7 +158,7 @@ export default function ProfilePictureEditor({
       canvas.height = OUTPUT_SIZE_PX;
       const context = canvas.getContext("2d");
       if (!context) {
-        setStatusMessage("Failed to prepare profile image.");
+        setStatusMessage("Failed to prepare group image.");
         return;
       }
       context.drawImage(imageElement, drawX, drawY, drawWidth, drawHeight);
@@ -172,59 +166,55 @@ export default function ProfilePictureEditor({
       const outputDataUrl = canvas.toDataURL("image/jpeg", 0.9);
       const base64Data = outputDataUrl.split(",")[1];
       if (!base64Data) {
-        setStatusMessage("Failed to encode profile image.");
+        setStatusMessage("Failed to encode group image.");
         return;
       }
 
-      const response = await fetch("/api/profile-image-set", {
+      const response = await fetch("/api/thread-image-set", {
         method: "POST",
         headers: { "Content-Type": "application/json"},
         body: JSON.stringify({
+          thread_id: threadId,
           image_base64_data: base64Data,
           image_mime_type: "image/jpeg",
         }),
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-        setStatusMessage(body.error?.message ?? "Failed to save profile image.");
+        setStatusMessage(body.error?.message ?? "Failed to save group image.");
         return;
       }
 
-      const payload = (await response.json()) as Partial<ProfileImageSetResponse>;
-      if (!payload.profile_image_id || !payload.profile_image_url) {
-        setStatusMessage("Profile image saved but URL was missing.");
-        return;
-      }
-
-      onSaved(payload.profile_image_id, payload.profile_image_url);
+      const payload = (await response.json()) as ThreadImageSetResponse;
+      onSaved(payload.image_id, payload.image_url);
       onClose();
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to save profile image.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to save group image.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const onRemoveProfilePicture = async () => {
+  const onRemoveThreadPicture = async () => {
     setIsSaving(true);
     setStatusMessage("");
     try {
-      const response = await fetch("/api/profile-image-remove", {
+      const response = await fetch("/api/thread-image-remove", {
         method: "POST",
         headers: { "Content-Type": "application/json"},
-        body: JSON.stringify({}),
+        body: JSON.stringify({ thread_id: threadId }),
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-        setStatusMessage(body.error?.message ?? "Failed to remove profile image.");
+        setStatusMessage(body.error?.message ?? "Failed to remove group image.");
         return;
       }
 
-      const payload = (await response.json()) as ProfileImageRemoveResponse;
-      onSaved(payload.profile_image_id, payload.profile_image_url);
+      const payload = (await response.json()) as ThreadImageRemoveResponse;
+      onSaved(payload.image_id, payload.image_url);
       onClose();
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to remove profile image.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to remove group image.");
     } finally {
       setIsSaving(false);
     }
@@ -238,7 +228,7 @@ export default function ProfilePictureEditor({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm rounded-xl border border-accent-1 bg-secondary-background p-3 shadow-xl shadow-black/35">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Edit Profile Picture</h2>
+          <h2 className="text-sm font-semibold text-foreground">Edit Group Photo</h2>
           <button
             type="button"
             onClick={onClose}
@@ -261,19 +251,19 @@ export default function ProfilePictureEditor({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full h-20 rounded-lg border border-accent-1 bg-primary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
+              className="h-20 w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
             >
               Select image
             </button>
             <button
               type="button"
               onClick={() => {
-                void onRemoveProfilePicture();
+                void onRemoveThreadPicture();
               }}
               disabled={isSaving}
-              className="w-full h-20 rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
+              className="h-20 w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
             >
-              {isSaving ? "Removing..." : "Remove Profile Picture"}
+              {isSaving ? "Removing..." : "Remove Group Photo"}
             </button>
           </div>
         ) : (
@@ -288,12 +278,16 @@ export default function ProfilePictureEditor({
             >
               <img
                 src={sourceDataUrl}
-                alt="Profile picture crop preview"
+                alt="Group photo crop preview"
                 draggable={false}
                 className="pointer-events-none absolute left-1/2 top-1/2 max-w-none select-none"
                 style={{
-                  width: `${imageElement ? imageElement.naturalWidth * baseScale * zoom : PREVIEW_SIZE_PX}px`,
-                  height: `${imageElement ? imageElement.naturalHeight * baseScale * zoom : PREVIEW_SIZE_PX}px`,
+                  width: `${
+                    imageElement ? imageElement.naturalWidth * baseScale * zoom : PREVIEW_SIZE_PX
+                  }px`,
+                  height: `${
+                    imageElement ? imageElement.naturalHeight * baseScale * zoom : PREVIEW_SIZE_PX
+                  }px`,
                   transform: `translate(-50%, -50%) translate(${offsetX}px, ${offsetY}px)`,
                 }}
               />
@@ -323,7 +317,7 @@ export default function ProfilePictureEditor({
               <button
                 type="button"
                 onClick={() => {
-                  void onSaveProfilePicture();
+                  void onSaveThreadPicture();
                 }}
                 disabled={isSaving}
                 className="rounded-lg bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background disabled:opacity-50"
@@ -339,3 +333,4 @@ export default function ProfilePictureEditor({
     </div>
   );
 }
+

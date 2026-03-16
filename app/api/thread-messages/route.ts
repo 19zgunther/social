@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
+import { getSignedMainBucketImageUrl, getSignedMainBucketThreadImageUrl } from "@/app/api/server_file_storage_utils";
 import { MessageData, ThreadMessagesRequest, ThreadMessagesResponse } from "@/app/types/interfaces";
 
 const PAGE_SIZE = 100;
@@ -37,6 +37,7 @@ export async function POST(request: Request) {
         id: true,
         name: true,
         owner: true,
+        image_id: true,
       },
     });
 
@@ -127,6 +128,20 @@ export async function POST(request: Request) {
       );
     }
 
+    const threadImageUrl = thread.image_id
+      ? await (async () => {
+          try {
+            return await getSignedMainBucketThreadImageUrl({
+              threadId: thread.id,
+              imageId: thread.image_id!,
+            });
+          } catch (error) {
+            console.error("thread_image_sign_failed", thread.id, error);
+            return null;
+          }
+        })()
+      : null;
+
     const signedUrlEntries = await Promise.all(
       allMessages.map(async (message) => {
         if (!message.image_id) {
@@ -152,6 +167,8 @@ export async function POST(request: Request) {
         id: thread.id,
         name: thread.name,
         owner_user_id: thread.owner,
+        image_id: thread.image_id ?? null,
+        image_url: threadImageUrl,
       },
       viewer_user_id: authResult.user_id,
       has_more_older: hasMoreOlder,

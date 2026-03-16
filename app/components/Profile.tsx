@@ -2,9 +2,9 @@
 
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronRight, CircleUserRound, LogOut, Plus, Trash2 } from "lucide-react";
-import CachedImage from "@/app/components/CachedImage";
+import CachedImage from "@/app/components/utils/CachedImage";
 import PostSection from "@/app/components/PostSection";
-import { prepareImageForUpload } from "@/app/components/client_file_storage_utils";
+import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 import {
@@ -19,6 +19,7 @@ import {
   PostItem,
   ProfilePostsListResponse,
 } from "@/app/types/interfaces";
+import { useStateCached } from "./useStateCached";
 
 type ProfileProps = {
   userId: string;
@@ -30,20 +31,11 @@ type ProfileProps = {
   onLogout: () => void;
 };
 
-const AUTH_TOKEN_KEY = "auth_token";
 
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
-  const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) {
-    throw new Error("Not authenticated.");
-  }
-
   return fetch(path, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json"},
     body: JSON.stringify(body),
   });
 };
@@ -66,7 +58,7 @@ export default function Profile({
   onProfileImageUpdated,
   onLogout,
 }: ProfileProps) {
-  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [posts, setPosts] = useStateCached<PostItem[]>([], 'user_profile_posts_cache_v1');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [hasMorePosts, setHasMorePosts] = useState(false);
@@ -417,7 +409,7 @@ export default function Profile({
             <button
               type="button"
               onClick={() => setIsProfilePictureEditorOpen(true)}
-              className="overflow-hidden rounded-full border border-accent-1 bg-secondary-background"
+              className="overflow-hidden rounded-full border border-accent-1 bg-secondary-background cursor-pointer"
               aria-label="Edit profile picture"
             >
               {localProfileImageUrl ? (

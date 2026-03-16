@@ -64,7 +64,7 @@ Thread Message:
 
 STORAGE:
 - I setup a supabase storage bucket called 'main'. 
-- Please add an app/api/server_file_storage_utils.ts and app/components/client_file_storage_utils.ts. I want to put all of the logic regarding file storage in these files.
+- Please add an app/api/server_file_storage_utils.ts and app/components/utils/client_file_storage_utils.ts. I want to put all of the logic regarding file storage in these files.
 - I want to be able to send photos in a thread
 
 User Profile & Posts:

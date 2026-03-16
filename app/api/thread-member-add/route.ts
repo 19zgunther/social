@@ -29,7 +29,10 @@ export async function POST(request: Request) {
     const thread = await prisma.threads.findFirst({
       where: {
         id: threadId,
-        owner: authResult.user_id,
+        OR: [
+          { owner: authResult.user_id },
+          { user_thread_access: { some: { user_id: authResult.user_id } } },
+        ],
       },
       select: {
         id: true,
@@ -39,7 +42,7 @@ export async function POST(request: Request) {
 
     if (!thread) {
       return NextResponse.json(
-        { error: { code: "forbidden", message: "Only the thread owner can add users." } },
+        { error: { code: "forbidden", message: "You must be a member of the thread to add users." } },
         { status: 403 },
       );
     }

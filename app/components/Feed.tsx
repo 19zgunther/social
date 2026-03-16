@@ -3,31 +3,20 @@
 import { TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState } from "react";
 import PostSection from "@/app/components/PostSection";
 import { ApiError, FeedPostsListResponse, PostItem } from "@/app/types/interfaces";
-
-const AUTH_TOKEN_KEY = "auth_token";
+import { useStateCached } from "./useStateCached";
 const FEED_CACHE_KEY = "feed_cache_v1";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
 
-type FeedCachePayload = FeedPostsListResponse & {
-  cached_at: number;
-};
 
-const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
-  const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) {
-    throw new Error("Not authenticated.");
-  }
-
-  return fetch(path, {
+const postWithAuth = async (path: string, body: unknown): Promise<Response> =>
+  fetch(path, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
   });
-};
 
 const readErrorMessage = async (response: Response): Promise<string> => {
   try {
@@ -38,46 +27,9 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   }
 };
 
-const readFeedCache = (): FeedCachePayload | null => {
-  try {
-    const raw = window.localStorage.getItem(FEED_CACHE_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as Partial<FeedCachePayload>;
-    if (
-      !parsed ||
-      !Array.isArray(parsed.posts) ||
-      typeof parsed.has_more !== "boolean" ||
-      (typeof parsed.next_cursor_post_id !== "string" && parsed.next_cursor_post_id !== null)
-    ) {
-      return null;
-    }
-    return {
-      posts: parsed.posts as PostItem[],
-      has_more: parsed.has_more,
-      next_cursor_post_id: parsed.next_cursor_post_id,
-      cached_at: typeof parsed.cached_at === "number" ? parsed.cached_at : Date.now(),
-    };
-  } catch {
-    return null;
-  }
-};
-
-const writeFeedCache = (payload: FeedPostsListResponse): void => {
-  try {
-    const cachePayload: FeedCachePayload = {
-      ...payload,
-      cached_at: Date.now(),
-    };
-    window.localStorage.setItem(FEED_CACHE_KEY, JSON.stringify(cachePayload));
-  } catch {
-    // Best effort cache write only.
-  }
-};
 
 export default function Feed() {
-  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [posts, setPosts] = useStateCached<PostItem[]>([], FEED_CACHE_KEY);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshingLatest, setIsRefreshingLatest] = useState(false);
@@ -125,16 +77,10 @@ export default function Feed() {
         if (cursorPostId) {
           setPosts((previousPosts) => {
             const mergedPosts = [...previousPosts, ...payload.posts];
-            writeFeedCache({
-              posts: mergedPosts,
-              has_more: payload.has_more,
-              next_cursor_post_id: payload.next_cursor_post_id,
-            });
             return mergedPosts;
           });
         } else {
           setPosts(payload.posts);
-          writeFeedCache(payload);
         }
       } catch (error) {
         setStatusMessage(error instanceof Error ? error.message : "Failed to load feed.");
@@ -201,19 +147,12 @@ export default function Feed() {
     }
   };
 
+  // Initial load of feed
   useEffect(() => {
-    const cached = readFeedCache();
-    if (cached) {
-      setPosts(cached.posts);
-      setHasMore(cached.has_more);
-      setNextCursorPostId(cached.next_cursor_post_id);
-      setIsLoading(false);
-      setDidHydrateFromCache(true);
-    }
 
     void loadPosts({
-      showLoadingState: !cached,
-      showRefreshIndicator: Boolean(cached),
+      showLoadingState: true,
+      showRefreshIndicator: true,
     });
   }, [loadPosts]);
 

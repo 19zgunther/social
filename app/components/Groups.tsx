@@ -4,6 +4,8 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Thread from "@/app/components/Thread";
 import { ApiError, GroupsListResponse, ThreadItem } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
+import CachedImage from "./utils/CachedImage";
+import { Image } from "lucide-react";
 
 type GroupsProps = {
   currentUserId: string;
@@ -12,7 +14,6 @@ type GroupsProps = {
   onDeepLinkThreadHandled?: () => void;
 };
 
-const AUTH_TOKEN_KEY = "auth_token";
 const GROUPS_CACHE_KEY = "groups_list_v1";
 
 type GroupsCachePayload = {
@@ -21,17 +22,10 @@ type GroupsCachePayload = {
 };
 
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
-  const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-  if (!token) {
-    throw new Error("Not authenticated.");
-  }
 
   return fetch(path, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 };
@@ -267,14 +261,27 @@ export default function Groups({
             onClick={() => {
               onOpenThread(thread);
             }}
-            className={`w-full rounded-xl border px-4 py-3 text-left transition ${
-              unreadThreadIds.has(thread.id)
-                ? "border-accent-3 bg-secondary-background"
-                : "border-accent-1 bg-primary-background hover:border-accent-2"
-            }`}
+            className={`w-full rounded-xl border px-4 py-3 text-left transition ${unreadThreadIds.has(thread.id)
+              ? "border-accent-3 bg-secondary-background"
+              : "border-accent-1 bg-primary-background hover:border-accent-2"
+              }`}
           >
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {thread.image_url ? (
+                <CachedImage
+                  signedUrl={thread.image_url}
+                  imageId={thread.image_id ?? null}
+                  alt="Group photo"
+                  className="h-10 w-10 rounded-full border border-accent-1 object-cover"
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center">
+                  <Image className="h-10 w-10 text-accent-2" />
+                </div>
+              )}
+
               <p className="text-sm font-medium text-foreground">{thread.name}</p>
+
               {unreadThreadIds.has(thread.id) ? (
                 <span className="rounded-full border border-accent-3 px-2 py-0.5 text-[10px] font-semibold text-accent-3">
                   New
