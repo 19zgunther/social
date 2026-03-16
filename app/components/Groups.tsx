@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import Thread, { ThreadItem } from "@/app/components/Thread";
+import Thread from "@/app/components/Thread";
+import { ApiError, GroupsListResponse, ThreadItem } from "@/app/types/interfaces";
+import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 
 type GroupsProps = {
   currentUserId: string;
@@ -10,14 +12,13 @@ type GroupsProps = {
   onDeepLinkThreadHandled?: () => void;
 };
 
-type ApiError = {
-  error?: {
-    code?: string;
-    message?: string;
-  };
-};
-
 const AUTH_TOKEN_KEY = "auth_token";
+const GROUPS_CACHE_KEY = "groups_list_v1";
+
+type GroupsCachePayload = {
+  threads: ThreadItem[];
+  cached_at: number;
+};
 
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
@@ -58,6 +59,29 @@ export default function Groups({
     }
   };
 
+  const readGroupsCache = useCallback(async (): Promise<GroupsCachePayload | null> => {
+    try {
+      const cached = await readCacheValue<GroupsCachePayload>(GROUPS_CACHE_KEY);
+      if (!cached || !Array.isArray(cached.threads)) {
+        return null;
+      }
+      return cached;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const writeGroupsCache = useCallback(async (threadsToCache: ThreadItem[]): Promise<void> => {
+    try {
+      await writeCacheValue(GROUPS_CACHE_KEY, {
+        threads: threadsToCache,
+        cached_at: Date.now(),
+      } satisfies GroupsCachePayload);
+    } catch {
+      // Best effort only.
+    }
+  }, []);
+
   const loadUnreadThreads = useCallback(async () => {
     try {
       const response = await postWithAuth("/api/groups-unread-count", {});
@@ -78,6 +102,12 @@ export default function Groups({
       setStatusMessage("");
 
       try {
+        const cached = await readGroupsCache();
+        if (cached) {
+          setThreads(cached.threads);
+          setIsLoadingThreads(false);
+        }
+
         const response = await postWithAuth("/api/groups-list", {});
         if (!response.ok) {
           setStatusMessage(await readErrorMessage(response));
@@ -85,8 +115,9 @@ export default function Groups({
           return;
         }
 
-        const payload = (await response.json()) as { threads: ThreadItem[] };
+        const payload = (await response.json()) as GroupsListResponse;
         setThreads(payload.threads);
+        void writeGroupsCache(payload.threads);
         void loadUnreadThreads();
       } catch (error) {
         setStatusMessage(error instanceof Error ? error.message : "Failed to load groups.");
@@ -97,7 +128,7 @@ export default function Groups({
     };
 
     void run();
-  }, [loadUnreadThreads]);
+  }, [loadUnreadThreads, readGroupsCache, writeGroupsCache]);
 
   useEffect(() => {
     if (selectedThread) {
@@ -214,17 +245,17 @@ export default function Groups({
         </button>
       </form>
 
-      <div className="flex-1 min-h-0 space-y-2 overflow-y-auto overscroll-contain pr-1 touch-pan-y">
-        {isLoadingThreads ? (
-          <div className="flex items-center gap-2 rounded-xl border border-accent-1 bg-primary-background px-3 py-2">
-            <span
-              aria-hidden
-              className="h-3 w-3 animate-spin rounded-full border-2 border-accent-2 border-t-transparent"
-            />
-            <p className="text-xs text-accent-2">Loading threads...</p>
-          </div>
-        ) : null}
+      {isLoadingThreads ? (
+        <div className="flex items-center gap-2 rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-xs text-accent-2">
+          <span
+            aria-hidden
+            className="h-3 w-3 animate-spin rounded-full border-2 border-accent-2 border-t-transparent"
+          />
+          <span>Loading threads...</span>
+        </div>
+      ) : null}
 
+      <div className="flex-1 min-h-0 space-y-2 overflow-y-auto overscroll-contain pr-1 touch-pan-y">
         {!isLoadingThreads && threads.length === 0 ? (
           <p className="text-xs text-accent-2">No threads yet. Create your first one.</p>
         ) : null}

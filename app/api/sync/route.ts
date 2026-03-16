@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { waitForUserSyncEvents } from "@/app/lib/sync";
-
-type SyncBody = {
-  timeout_ms?: number;
-  max_events?: number;
-};
+import { SyncRequest, SyncResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -15,7 +11,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json().catch(() => ({}))) as SyncBody;
+    const body = (await request.json().catch(() => ({}))) as SyncRequest;
     const timeoutMs = Math.max(1_000, Math.min(body.timeout_ms ?? 25_000, 30_000));
     const maxEvents = Math.max(1, Math.min(body.max_events ?? 20, 50));
 
@@ -24,7 +20,8 @@ export async function POST(request: Request) {
       maxEvents,
     });
 
-    return NextResponse.json({ events }, { status: 200 });
+    const payload: SyncResponse = { events };
+    return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("sync_failed", error);
     return NextResponse.json(

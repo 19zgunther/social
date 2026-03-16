@@ -2,16 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { hashPassword, mintUserToken } from "@/app/api/auth_utils";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
-
-type SignupBody = {
-  username?: string;
-  email?: string;
-  password?: string;
-};
+import { SignupRequest, SignupResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as SignupBody;
+    const body = (await request.json()) as SignupRequest;
     const username = body.username?.trim();
     const email = body.email?.trim().toLowerCase() ?? "";
     const password = body.password ?? "";
@@ -80,18 +75,18 @@ export async function POST(request: Request) {
       }
     }
 
-    const response = NextResponse.json(
-      {
-        token,
-        user: {
-          user_id: createdUser.id,
-          username: createdUser.username,
-          email: createdUser.email,
-          profile_image_url: profileImageUrl,
-        },
+    const payload: SignupResponse = {
+      token,
+      user: {
+        user_id: createdUser.id,
+        username: createdUser.username,
+        email: createdUser.email,
+        profile_image_id: createdUser.profile_image_id,
+        profile_image_url: profileImageUrl,
+        minted_at: Date.now(),
       },
-      { status: 200 },
-    );
+    };
+    const response = NextResponse.json(payload, { status: 200 });
 
     response.cookies.set("auth_token", token, {
       httpOnly: true,

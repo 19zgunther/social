@@ -5,24 +5,16 @@ import { House, UserRound, Users } from "lucide-react";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
 import Profile from "@/app/components/Profile";
-
-type AuthUser = {
-  user_id: string;
-  username: string;
-  email: string | null;
-  profile_image_url: string | null;
-  minted_at: number;
-};
+import {
+  ApiError,
+  AuthCheckResponse,
+  AuthUser,
+  LoginResponse,
+  SignupResponse,
+} from "@/app/types/interfaces";
 
 type Mode = "login" | "signup";
 type AppTab = "feed" | "groups" | "profile";
-
-type ApiError = {
-  error?: {
-    code?: string;
-    message?: string;
-  };
-};
 
 const AUTH_TOKEN_KEY = "auth_token";
 const PUSH_PROMPT_DISMISSED_KEY = "push_prompt_dismissed";
@@ -104,7 +96,7 @@ export default function Home() {
         return;
       }
 
-      const sessionUser = (await response.json()) as AuthUser;
+      const sessionUser = (await response.json()) as AuthCheckResponse;
       setAuthUser(sessionUser);
       setIsCheckingSession(false);
     };
@@ -426,7 +418,7 @@ export default function Home() {
         return;
       }
 
-      const payload = (await response.json()) as { token: string; user: AuthUser };
+      const payload = (await response.json()) as LoginResponse;
       window.localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
       setAuthUser(payload.user);
       setStatusMessage("");
@@ -452,7 +444,7 @@ export default function Home() {
         return;
       }
 
-      const payload = (await response.json()) as { token: string; user: AuthUser };
+      const payload = (await response.json()) as SignupResponse;
       window.localStorage.setItem(AUTH_TOKEN_KEY, payload.token);
       setAuthUser(payload.user);
       setStatusMessage("");
@@ -498,11 +490,11 @@ export default function Home() {
           style={MOBILE_FRAME_STYLE}
           className="flex h-full max-h-dvh flex-col overflow-hidden border border-accent-1 shadow-xl shadow-black/25"
         >
-          {activeTab === "feed" ? (
+          {/* {activeTab === "feed" ? (
             <header className="border-b border-accent-1 px-4 py-3">
               <h1 className="text-sm font-semibold text-foreground text-center w-full">Your friends posted...</h1>
             </header>
-          ) : null}
+          ) : null} */}
 
           {showNotificationsPrompt ? (
             <div className="border-b border-accent-1 bg-secondary-background px-3 py-2">
@@ -559,10 +551,17 @@ export default function Home() {
                 userId={authUser.user_id}
                 username={authUser.username}
                 email={authUser.email}
+                profileImageId={authUser.profile_image_id}
                 profileImageUrl={authUser.profile_image_url}
-                onProfileImageUpdated={(profileImageUrl) => {
+                onProfileImageUpdated={(profileImageId, profileImageUrl) => {
                   setAuthUser((previous) =>
-                    previous ? { ...previous, profile_image_url: profileImageUrl } : previous,
+                    previous
+                      ? {
+                          ...previous,
+                          profile_image_id: profileImageId,
+                          profile_image_url: profileImageUrl,
+                        }
+                      : previous,
                   );
                 }}
                 onLogout={onLogout}

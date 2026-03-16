@@ -7,13 +7,7 @@ import {
   getSignedMainBucketImageUrl,
   uploadImageToMainBucket,
 } from "@/app/api/server_file_storage_utils";
-
-type PostCreateBody = {
-  text?: string;
-  image_base64_data?: string;
-  image_mime_type?: string;
-  data?: unknown;
-};
+import { PostCreateRequest, PostCreateResponse, PostData } from "@/app/types/interfaces";
 
 const sanitizePostData = (rawData: unknown): Prisma.InputJsonValue | undefined => {
   if (!rawData || typeof rawData !== "object") {
@@ -30,7 +24,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as PostCreateBody;
+    const body = (await request.json()) as PostCreateRequest;
     const text = body.text?.trim();
     const imageBase64Data = body.image_base64_data?.trim();
     const imageMimeType = body.image_mime_type?.trim();
@@ -93,25 +87,24 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json(
-      {
-        post: {
-          id: post.id,
-          created_at: post.created_at,
-          created_by: post.created_by,
-          image_id: post.image_id,
-          image_url: imageUrl,
-          text: post.text ?? "",
-          data: post.data,
-          like_count: 0,
-          is_liked_by_viewer: false,
-          username: authResult.username,
-          email: authResult.email,
-          author_profile_image_url: authorProfileImageUrl,
-        },
+    const payload: PostCreateResponse = {
+      post: {
+        id: post.id,
+        created_at: post.created_at.toISOString(),
+        created_by: post.created_by,
+        image_id: post.image_id,
+        image_url: imageUrl,
+        text: post.text ?? "",
+        data: post.data as PostData | null,
+        like_count: 0,
+        is_liked_by_viewer: false,
+        username: authResult.username,
+        email: authResult.email,
+        author_profile_image_id: author?.profile_image_id ?? null,
+        author_profile_image_url: authorProfileImageUrl,
       },
-      { status: 200 },
-    );
+    };
+    return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("post_create_failed", error);
     return NextResponse.json(

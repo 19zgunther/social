@@ -2,16 +2,13 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
-
-type ProfilePostsBody = {
-  cursor_post_id?: string;
-};
+import {
+  PostData,
+  ProfilePostsListRequest,
+  ProfilePostsListResponse,
+} from "@/app/types/interfaces";
 
 const PAGE_SIZE = 24;
-
-type PostData = {
-  likes?: Record<string, boolean>;
-};
 
 const getLikesInfo = (rawData: unknown, viewerUserId: string): { likeCount: number; isLikedByViewer: boolean } => {
   const data = rawData && typeof rawData === "object" && !Array.isArray(rawData) ? (rawData as PostData) : {};
@@ -29,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as ProfilePostsBody;
+    const body = (await request.json()) as ProfilePostsListRequest;
     const cursorPostId = body.cursor_post_id?.trim();
 
     const postsDesc = await prisma.posts.findMany({
@@ -104,32 +101,31 @@ export async function POST(request: Request) {
     );
     const authorProfileImageUrlByPostId = new Map(authorProfileImageUrlEntries);
 
-    return NextResponse.json(
-      {
-        has_more: hasMore,
-        next_cursor_post_id: pagedPosts.length > 0 ? pagedPosts[pagedPosts.length - 1].id : null,
-        posts: pagedPosts.map((post) => ({
-          ...(() => {
-            const likesInfo = getLikesInfo(post.data, authResult.user_id);
-            return {
-              like_count: likesInfo.likeCount,
-              is_liked_by_viewer: likesInfo.isLikedByViewer,
-            };
-          })(),
-          id: post.id,
-          created_at: post.created_at,
-          created_by: post.created_by,
-          image_id: post.image_id,
-          image_url: imageUrlByPostId.get(post.id) ?? null,
-          text: post.text ?? "",
-          data: post.data,
-          username: post.users.username,
-          email: post.users.email,
-          author_profile_image_url: authorProfileImageUrlByPostId.get(post.id) ?? null,
-        })),
-      },
-      { status: 200 },
-    );
+    const payload: ProfilePostsListResponse = {
+      has_more: hasMore,
+      next_cursor_post_id: pagedPosts.length > 0 ? pagedPosts[pagedPosts.length - 1].id : null,
+      posts: pagedPosts.map((post) => ({
+        ...(() => {
+          const likesInfo = getLikesInfo(post.data, authResult.user_id);
+          return {
+            like_count: likesInfo.likeCount,
+            is_liked_by_viewer: likesInfo.isLikedByViewer,
+          };
+        })(),
+        id: post.id,
+        created_at: post.created_at.toISOString(),
+        created_by: post.created_by,
+        image_id: post.image_id,
+        image_url: imageUrlByPostId.get(post.id) ?? null,
+        text: post.text ?? "",
+        data: post.data as PostData | null,
+        username: post.users.username,
+        email: post.users.email,
+        author_profile_image_id: post.users.profile_image_id,
+        author_profile_image_url: authorProfileImageUrlByPostId.get(post.id) ?? null,
+      })),
+    };
+    return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("profile_posts_failed", error);
     return NextResponse.json(

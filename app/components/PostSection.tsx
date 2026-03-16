@@ -2,44 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Heart, ChevronDown, CircleUserRound } from "lucide-react";
-
-export type PostCommentNode = {
-  username: string;
-  user_id: string;
-  text: string;
-  replies: Record<string, PostCommentNode>;
-};
-
-export type PostData = {
-  comments?: Record<string, PostCommentNode>;
-  likes?: Record<string, boolean>;
-};
-
-export type PostItem = {
-  id: string;
-  created_at: string;
-  created_by: string;
-  image_id: string | null;
-  image_url: string | null;
-  text: string;
-  data: PostData | null;
-  like_count?: number;
-  is_liked_by_viewer?: boolean;
-  username: string;
-  email: string | null;
-  author_profile_image_url?: string | null;
-};
+import CachedImage from "@/app/components/CachedImage";
+import { ApiError, PostCommentNode, PostData, PostItem } from "@/app/types/interfaces";
 
 type PostSectionProps = {
   post: PostItem;
   showComments?: boolean;
   className?: string;
-};
-
-type ApiError = {
-  error?: {
-    message?: string;
-  };
 };
 
 const AUTH_TOKEN_KEY = "auth_token";
@@ -283,8 +252,9 @@ export default function PostSection({ post, showComments = true, className }: Po
       <header className="px-2 py-2">
         <div className="flex items-center gap-2">
           {post.author_profile_image_url ? (
-            <img
-              src={post.author_profile_image_url}
+            <CachedImage
+              signedUrl={post.author_profile_image_url}
+              imageId={post.author_profile_image_id ?? null}
               alt={`${post.username} profile`}
               className="h-10 w-10 rounded-full border border-accent-1 object-cover"
             />
@@ -299,7 +269,12 @@ export default function PostSection({ post, showComments = true, className }: Po
         
       </header>
       {post.image_url ? (
-        <img src={post.image_url} alt="Post attachment" className="w-full aspect-square overflow-hidden border-y border-accent-1 object-cover" />
+        <CachedImage
+          signedUrl={post.image_url}
+          imageId={post.image_id}
+          alt="Post attachment"
+          className="w-full aspect-square overflow-hidden border-y border-accent-1 object-cover"
+        />
       ) : (
         <div className="h-40 w-full border-y border-accent-1 bg-secondary-background" />
       )}

@@ -1,11 +1,12 @@
 "use client";
 
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ProfileImageRemoveResponse, ProfileImageSetResponse } from "@/app/types/interfaces";
 
 type ProfilePictureEditorProps = {
   isOpen: boolean;
   onClose: () => void;
-  onSaved: (profileImageUrl: string | null) => void;
+  onSaved: (profileImageId: string | null, profileImageUrl: string | null) => void;
 };
 
 const AUTH_TOKEN_KEY = "auth_token";
@@ -199,13 +200,13 @@ export default function ProfilePictureEditor({
         return;
       }
 
-      const payload = (await response.json()) as { profile_image_url?: string };
-      if (!payload.profile_image_url) {
+      const payload = (await response.json()) as Partial<ProfileImageSetResponse>;
+      if (!payload.profile_image_id || !payload.profile_image_url) {
         setStatusMessage("Profile image saved but URL was missing.");
         return;
       }
 
-      onSaved(payload.profile_image_url);
+      onSaved(payload.profile_image_id, payload.profile_image_url);
       onClose();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to save profile image.");
@@ -238,7 +239,8 @@ export default function ProfilePictureEditor({
         return;
       }
 
-      onSaved(null);
+      const payload = (await response.json()) as ProfileImageRemoveResponse;
+      onSaved(payload.profile_image_id, payload.profile_image_url);
       onClose();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to remove profile image.");

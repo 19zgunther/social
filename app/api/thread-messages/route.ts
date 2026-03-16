@@ -2,11 +2,7 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
-
-type ThreadMessagesBody = {
-  thread_id?: string;
-  cursor_message_id?: string;
-};
+import { MessageData, ThreadMessagesRequest, ThreadMessagesResponse } from "@/app/types/interfaces";
 
 const PAGE_SIZE = 100;
 
@@ -18,7 +14,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as ThreadMessagesBody;
+    const body = (await request.json()) as ThreadMessagesRequest;
     const threadId = body.thread_id?.trim();
     const cursorMessageId = body.cursor_message_id?.trim();
 
@@ -151,31 +147,29 @@ export async function POST(request: Request) {
     );
     const imageUrlByMessageId = new Map(signedUrlEntries);
 
-    return NextResponse.json(
-      {
-        thread: {
-          id: thread.id,
-          name: thread.name,
-          owner_user_id: thread.owner,
-        },
-        viewer_user_id: authResult.user_id,
-        has_more_older: hasMoreOlder,
-        next_cursor_message_id: pagedRootMessages.length > 0 ? pagedRootMessages[0].id : null,
-        messages: allMessages.map((message) => ({
-          id: message.id,
-          text: message.text ?? "",
-          created_at: message.created_at,
-          created_by: message.created_by,
-          parent_id: message.parent_id,
-          image_id: message.image_id,
-          image_url: imageUrlByMessageId.get(message.id) ?? null,
-          data: message.data,
-          direct_reply_count: directReplyCountByParentId.get(message.id) ?? 0,
-          username: message.users.username,
-        })),
+    const payload: ThreadMessagesResponse = {
+      thread: {
+        id: thread.id,
+        name: thread.name,
+        owner_user_id: thread.owner,
       },
-      { status: 200 },
-    );
+      viewer_user_id: authResult.user_id,
+      has_more_older: hasMoreOlder,
+      next_cursor_message_id: pagedRootMessages.length > 0 ? pagedRootMessages[0].id : null,
+      messages: allMessages.map((message) => ({
+        id: message.id,
+        text: message.text ?? "",
+        created_at: message.created_at.toISOString(),
+        created_by: message.created_by,
+        parent_id: message.parent_id,
+        image_id: message.image_id,
+        image_url: imageUrlByMessageId.get(message.id) ?? null,
+        data: message.data as MessageData | null,
+        direct_reply_count: directReplyCountByParentId.get(message.id) ?? 0,
+        username: message.users.username,
+      })),
+    };
+    return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("thread_messages_failed", error);
     return NextResponse.json(

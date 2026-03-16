@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { GroupsListResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -31,18 +32,16 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(
-      {
-        threads: threads.map((thread) => ({
-          id: thread.id,
-          name: thread.name,
-          created_at: thread.created_at,
-          owner_user_id: thread.owner,
-          owner_username: thread.users.username,
-        })),
-      },
-      { status: 200 },
-    );
+    const payload: GroupsListResponse = {
+      threads: threads.map((thread) => ({
+        id: thread.id,
+        name: thread.name,
+        created_at: thread.created_at.toISOString(),
+        owner_user_id: thread.owner,
+        owner_username: thread.users.username,
+      })),
+    };
+    return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("groups_list_failed", error);
     return NextResponse.json(

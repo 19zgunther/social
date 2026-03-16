@@ -9,17 +9,9 @@ import {
   getSignedMainBucketImageUrl,
   uploadImageToMainBucket,
 } from "@/app/api/server_file_storage_utils";
+import { MessageData, ThreadSendRequest, ThreadSendResponse } from "@/app/types/interfaces";
 
-type ThreadSendBody = {
-  thread_id?: string;
-  text?: string;
-  reply_to_message_id?: string;
-  image_base64_data?: string;
-  image_mime_type?: string;
-  message_data?: unknown;
-};
-
-type MessageData = {
+type RawMessageData = {
   image_overlay?: {
     text?: unknown;
     y_ratio?: unknown;
@@ -33,7 +25,7 @@ const sanitizeMessageData = (rawData: unknown): Prisma.InputJsonValue | undefine
     return undefined;
   }
 
-  const parsedData = rawData as MessageData;
+  const parsedData = rawData as RawMessageData;
   const overlay = parsedData.image_overlay;
   if (!overlay || typeof overlay !== "object") {
     return undefined;
@@ -64,7 +56,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as ThreadSendBody;
+    const body = (await request.json()) as ThreadSendRequest;
     const threadId = body.thread_id?.trim();
     const text = body.text?.trim();
     const replyToMessageId = body.reply_to_message_id?.trim();
@@ -243,22 +235,21 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json(
-      {
-        message: {
-          id: message.id,
-          text: message.text ?? "",
-          created_at: message.created_at,
-          created_by: message.created_by,
-          parent_id: message.parent_id,
-          image_id: message.image_id,
-          image_url: imageUrl,
-          data: message.data,
-          username: messageAuthor?.username ?? "unknown",
-        },
+    const payload: ThreadSendResponse = {
+      message: {
+        id: message.id,
+        text: message.text ?? "",
+        created_at: message.created_at.toISOString(),
+        created_by: message.created_by,
+        parent_id: message.parent_id,
+        image_id: message.image_id,
+        image_url: imageUrl,
+        data: message.data as MessageData | null,
+        direct_reply_count: 0,
+        username: messageAuthor?.username ?? "unknown",
       },
-      { status: 200 },
-    );
+    };
+    return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("thread_send_failed", error);
     return NextResponse.json(

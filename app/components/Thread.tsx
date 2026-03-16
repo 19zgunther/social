@@ -3,16 +3,24 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Camera } from "lucide-react";
 import CameraModal from "@/app/components/Camera";
+import CachedImage from "@/app/components/CachedImage";
 import { prepareImageForUpload } from "@/app/components/client_file_storage_utils";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
-
-export type ThreadItem = {
-  id: string;
-  name: string;
-  created_at: string;
-  owner_user_id: string;
-  owner_username: string;
-};
+import {
+  ApiError,
+  FriendSearchResponse,
+  ImageOverlayData,
+  MessageData,
+  SyncEvent,
+  SyncResponse,
+  ThreadItem,
+  ThreadMember,
+  ThreadMembersResponse,
+  ThreadMessage,
+  ThreadMessagesResponse,
+  ThreadSendResponse,
+} from "@/app/types/interfaces";
+import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 
 type ThreadProps = {
   thread: ThreadItem;
@@ -20,59 +28,15 @@ type ThreadProps = {
   onBack: () => void;
 };
 
-type ThreadMessage = {
-  id: string;
-  text: string;
-  created_at: string;
-  created_by: string;
-  parent_id: string | null;
-  image_id: string | null;
-  image_url: string | null;
-  data: MessageData | null;
-  direct_reply_count: number;
-  username: string;
-};
-
-type ImageOverlayData = {
-  text: string;
-  y_ratio: number;
-};
-
-type MessageData = {
-  image_overlay?: ImageOverlayData;
-};
-
-type ThreadMember = {
-  user_id: string;
-  username: string;
-  email: string | null;
-  is_owner: boolean;
-};
-
-type FriendSearchResult = {
-  id: string;
-  username: string;
-  email: string | null;
-};
-
-type ApiError = {
-  error?: {
-    code?: string;
-    message?: string;
-  };
-};
-
-type SyncEvent = {
-  id: string;
-  type: "thread_message_posted" | "thread_message_updated";
-  thread_id: string;
-  message_id: string;
-  created_by: string;
-};
-
 const AUTH_TOKEN_KEY = "auth_token";
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const BOTTOM_FOLLOW_THRESHOLD_PX = 80;
+
+const THREAD_MESSAGES_CACHE_KEY_PREFIX = "thread_messages_v1_";
+
+type ThreadMessagesCachePayload = ThreadMessagesResponse & {
+  cached_at: number;
+};
 
 const isNearBottom = (element: HTMLDivElement): boolean =>
   element.scrollHeight - element.scrollTop - element.clientHeight < BOTTOM_FOLLOW_THRESHOLD_PX;
@@ -182,6 +146,38 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     }
   };
 
+  const cacheKeyForThread = (threadId: string): string =>
+    `${THREAD_MESSAGES_CACHE_KEY_PREFIX}${threadId}`;
+
+  const readThreadMessagesCache = useCallback(
+    async (threadId: string): Promise<ThreadMessagesCachePayload | null> => {
+      try {
+        const cached = await readCacheValue<ThreadMessagesCachePayload>(cacheKeyForThread(threadId));
+        if (!cached || !Array.isArray(cached.messages)) {
+          return null;
+        }
+        return cached;
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
+
+  const writeThreadMessagesCache = useCallback(
+    async (threadId: string, payload: ThreadMessagesResponse): Promise<void> => {
+      try {
+        await writeCacheValue(cacheKeyForThread(threadId), {
+          ...payload,
+          cached_at: Date.now(),
+        } satisfies ThreadMessagesCachePayload);
+      } catch {
+        // Best effort only.
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!pendingBottomScrollRef.current) {
       return;
@@ -211,6 +207,8 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   }, []);
 
   useEffect(() => {
+    let isCancelled = false;
+
     setActiveThread(thread);
     setMessages([]);
     setMembers([]);
@@ -230,55 +228,86 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
       setIsLoadingMembers(true);
 
       try {
-        const response = await postWithAuth("/api/thread-messages", { thread_id: thread.id });
-        if (!response.ok) {
-          setStatusMessage(await readErrorMessage(response));
-          setMessages([]);
-        } else {
-          const payload = (await response.json()) as {
-            thread: { name: string; owner_user_id: string };
-            has_more_older: boolean;
-            next_cursor_message_id: string | null;
-            messages: ThreadMessage[];
-          };
-
+        const cached = await readThreadMessagesCache(thread.id);
+        if (!isCancelled && cached) {
           setActiveThread((previousThread) => ({
             ...previousThread,
-            name: payload.thread.name,
-            owner_user_id: payload.thread.owner_user_id,
+            name: cached.thread.name,
+            owner_user_id: cached.thread.owner_user_id,
           }));
-          setMessages(payload.messages);
-          setHasMoreOlderMessages(payload.has_more_older);
-          setOldestLoadedMessageId(payload.next_cursor_message_id);
+          setMessages(cached.messages);
+          setHasMoreOlderMessages(cached.has_more_older);
+          setOldestLoadedMessageId(cached.next_cursor_message_id);
           pendingBottomScrollRef.current = "instant";
+          setIsLoadingMessages(false);
+        }
+
+        const response = await postWithAuth("/api/thread-messages", { thread_id: thread.id });
+        if (!response.ok) {
+          if (!isCancelled) {
+            setStatusMessage(await readErrorMessage(response));
+            setMessages([]);
+          }
+        } else {
+          const payload = (await response.json()) as ThreadMessagesResponse;
+
+          if (!isCancelled) {
+            setActiveThread((previousThread) => ({
+              ...previousThread,
+              name: payload.thread.name,
+              owner_user_id: payload.thread.owner_user_id,
+            }));
+            setMessages(payload.messages);
+            setHasMoreOlderMessages(payload.has_more_older);
+            setOldestLoadedMessageId(payload.next_cursor_message_id);
+            pendingBottomScrollRef.current = "instant";
+          }
+
+          void writeThreadMessagesCache(thread.id, payload);
         }
       } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : "Failed to load thread.");
-        setMessages([]);
+        if (!isCancelled) {
+          setStatusMessage(error instanceof Error ? error.message : "Failed to load thread.");
+          setMessages([]);
+        }
       } finally {
-        setIsLoadingMessages(false);
+        if (!isCancelled) {
+          setIsLoadingMessages(false);
+        }
       }
 
       try {
         const membersResponse = await postWithAuth("/api/thread-members", { thread_id: thread.id });
         if (!membersResponse.ok) {
-          setStatusMessage(await readErrorMessage(membersResponse));
-          setMembers([]);
+          if (!isCancelled) {
+            setStatusMessage(await readErrorMessage(membersResponse));
+            setMembers([]);
+          }
           return;
         }
 
-        const membersPayload = (await membersResponse.json()) as { members: ThreadMember[] };
-        setMembers(membersPayload.members);
+        const membersPayload = (await membersResponse.json()) as ThreadMembersResponse;
+        if (!isCancelled) {
+          setMembers(membersPayload.members);
+        }
       } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : "Failed to load members.");
-        setMembers([]);
+        if (!isCancelled) {
+          setStatusMessage(error instanceof Error ? error.message : "Failed to load members.");
+          setMembers([]);
+        }
       } finally {
-        setIsLoadingMembers(false);
+        if (!isCancelled) {
+          setIsLoadingMembers(false);
+        }
       }
     };
 
     void loadThread();
-  }, [thread]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [thread, readThreadMessagesCache, writeThreadMessagesCache]);
 
   const loadOlderMessages = async () => {
     if (
@@ -306,11 +335,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
         return;
       }
 
-      const payload = (await response.json()) as {
-        has_more_older: boolean;
-        next_cursor_message_id: string | null;
-        messages: ThreadMessage[];
-      };
+      const payload = (await response.json()) as ThreadMessagesResponse;
 
       if (payload.messages.length > 0) {
         setMessages((previousMessages) => [...payload.messages, ...previousMessages]);
@@ -368,7 +393,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
             continue;
           }
 
-          const payload = (await syncResponse.json()) as { events: SyncEvent[] };
+          const payload = (await syncResponse.json()) as SyncResponse;
           if (payload.events.length === 0) {
             continue;
           }
@@ -395,11 +420,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
             continue;
           }
 
-          const latestPayload = (await latestResponse.json()) as {
-            has_more_older: boolean;
-            next_cursor_message_id: string | null;
-            messages: ThreadMessage[];
-          };
+          const latestPayload = (await latestResponse.json()) as ThreadMessagesResponse;
 
           setMessages((previousMessages) =>
             mergeMessagesById(previousMessages, latestPayload.messages),
@@ -408,6 +429,8 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
           setOldestLoadedMessageId(
             (previousCursorId) => previousCursorId ?? latestPayload.next_cursor_message_id,
           );
+
+          void writeThreadMessagesCache(activeThread.id, latestPayload);
 
           if (wasNearBottom) {
             pendingBottomScrollRef.current = "smooth";
@@ -474,7 +497,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
         throw new Error(await readErrorMessage(response));
       }
 
-      const payload = (await response.json()) as { message: ThreadMessage };
+      const payload = (await response.json()) as ThreadSendResponse;
       const newMessage = {
         ...payload.message,
         image_url: payload.message.image_url ?? imagePreviewDataUrl ?? null,
@@ -628,9 +651,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
         return [];
       }
 
-      const payload = (await response.json()) as {
-        users: Array<FriendSearchResult & { relation?: unknown }>;
-      };
+      const payload = (await response.json()) as FriendSearchResponse;
       return payload.users.map((user) => ({
         id: user.id,
         username: user.username,
@@ -707,7 +728,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
         return;
       }
 
-      const payload = (await response.json()) as { message: ThreadMessage };
+      const payload = (await response.json()) as ThreadSendResponse;
       setMessages((previousMessages) =>
         previousMessages.map((message) =>
           message.id === payload.message.id
@@ -774,8 +795,9 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
           ) : null}
           {message.image_url ? (
             <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
-              <img
-                src={message.image_url}
+              <CachedImage
+                signedUrl={message.image_url}
+                imageId={message.image_id}
                 alt="Thread message attachment"
                 className="max-h-56 w-full rounded-xl object-cover"
                 loading="lazy"

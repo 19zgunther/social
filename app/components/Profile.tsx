@@ -2,62 +2,32 @@
 
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronRight, CircleUserRound, LogOut, Plus, Trash2 } from "lucide-react";
-import PostSection, { PostItem } from "@/app/components/PostSection";
+import CachedImage from "@/app/components/CachedImage";
+import PostSection from "@/app/components/PostSection";
 import { prepareImageForUpload } from "@/app/components/client_file_storage_utils";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
+import {
+  AcceptedFriend,
+  ApiError,
+  FriendRequestsListResponse,
+  FriendSearchResponse,
+  FriendSearchResult,
+  IncomingFriendRequest,
+  OutgoingFriendRequest,
+  PostCreateResponse,
+  PostItem,
+  ProfilePostsListResponse,
+} from "@/app/types/interfaces";
 
 type ProfileProps = {
   userId: string;
   username: string;
   email: string | null;
+  profileImageId: string | null;
   profileImageUrl: string | null;
-  onProfileImageUpdated: (profileImageUrl: string | null) => void;
+  onProfileImageUpdated: (profileImageId: string | null, profileImageUrl: string | null) => void;
   onLogout: () => void;
-};
-
-type ApiError = {
-  error?: {
-    code?: string;
-    message?: string;
-  };
-};
-
-type FriendSearchResult = {
-  id: string;
-  username: string;
-  email: string | null;
-  relation: {
-    id: string;
-    direction: "outgoing" | "incoming";
-    accepted: boolean | null;
-  } | null;
-};
-
-type IncomingFriendRequest = {
-  id: string;
-  requesting_user_id: string;
-  requested_at: string;
-  username: string;
-  email: string | null;
-};
-
-type OutgoingFriendRequest = {
-  id: string;
-  other_user_id: string;
-  requested_at: string;
-  accepted: boolean | null;
-  accepted_at: string | null;
-  username: string;
-  email: string | null;
-};
-
-type AcceptedFriend = {
-  id: string;
-  user_id: string;
-  username: string;
-  email: string | null;
-  accepted_at: string | null;
 };
 
 const AUTH_TOKEN_KEY = "auth_token";
@@ -91,6 +61,7 @@ export default function Profile({
   userId,
   username,
   email,
+  profileImageId,
   profileImageUrl,
   onProfileImageUpdated,
   onLogout,
@@ -118,12 +89,17 @@ export default function Profile({
   const [removingFriendId, setRemovingFriendId] = useState<string | null>(null);
   const [confirmedDeleteFriendId, setConfirmedDeleteFriendId] = useState<string | null>(null);
   const [isProfilePictureEditorOpen, setIsProfilePictureEditorOpen] = useState(false);
+  const [localProfileImageId, setLocalProfileImageId] = useState<string | null>(profileImageId);
   const [localProfileImageUrl, setLocalProfileImageUrl] = useState<string | null>(profileImageUrl);
   const [statusMessage, setStatusMessage] = useState("");
   const createInputRef = useRef<HTMLInputElement | null>(null);
   const pendingOutgoingRequests = outgoingRequests.filter((row) => row.accepted === null);
 
   const selectedPost = selectedPostId ? posts.find((post) => post.id === selectedPostId) ?? null : null;
+
+  useEffect(() => {
+    setLocalProfileImageId(profileImageId);
+  }, [profileImageId]);
 
   useEffect(() => {
     setLocalProfileImageUrl(profileImageUrl);
@@ -146,11 +122,7 @@ export default function Profile({
         return;
       }
 
-      const payload = (await response.json()) as {
-        posts: PostItem[];
-        has_more: boolean;
-        next_cursor_post_id: string | null;
-      };
+      const payload = (await response.json()) as ProfilePostsListResponse;
       setPosts((previousPosts) =>
         cursorPostId ? [...previousPosts, ...payload.posts] : payload.posts,
       );
@@ -177,11 +149,7 @@ export default function Profile({
         return;
       }
 
-      const payload = (await response.json()) as {
-        incoming_requests: IncomingFriendRequest[];
-        outgoing_requests: OutgoingFriendRequest[];
-        accepted_friends: AcceptedFriend[];
-      };
+      const payload = (await response.json()) as FriendRequestsListResponse;
       setIncomingRequests(payload.incoming_requests);
       setOutgoingRequests(payload.outgoing_requests);
       setAcceptedFriends(payload.accepted_friends);
@@ -212,7 +180,7 @@ export default function Profile({
         return [];
       }
 
-      const payload = (await response.json()) as { users: FriendSearchResult[] };
+      const payload = (await response.json()) as FriendSearchResponse;
       setFriendSearchResults(payload.users);
       return payload.users;
     } catch (error) {
@@ -357,7 +325,7 @@ export default function Profile({
         return;
       }
 
-      const payload = (await response.json()) as { post: PostItem };
+      const payload = (await response.json()) as PostCreateResponse;
       setPosts((previousPosts) => [payload.post, ...previousPosts]);
       setCreateCaption("");
       setCreateImagePreviewUrl(null);
@@ -436,9 +404,10 @@ export default function Profile({
       <ProfilePictureEditor
         isOpen={isProfilePictureEditorOpen}
         onClose={() => setIsProfilePictureEditorOpen(false)}
-        onSaved={(nextProfileImageUrl) => {
+        onSaved={(nextProfileImageId, nextProfileImageUrl) => {
+          setLocalProfileImageId(nextProfileImageId);
           setLocalProfileImageUrl(nextProfileImageUrl);
-          onProfileImageUpdated(nextProfileImageUrl);
+          onProfileImageUpdated(nextProfileImageId, nextProfileImageUrl);
           setStatusMessage(nextProfileImageUrl ? "Profile image updated." : "Profile image removed.");
         }}
       />
@@ -452,8 +421,9 @@ export default function Profile({
               aria-label="Edit profile picture"
             >
               {localProfileImageUrl ? (
-                <img
-                  src={localProfileImageUrl}
+                <CachedImage
+                  signedUrl={localProfileImageUrl}
+                  imageId={localProfileImageId}
                   alt="Profile picture"
                   className="h-16 w-16 object-cover"
                 />
@@ -736,7 +706,12 @@ export default function Profile({
               } border-b border-accent-1`}
             >
               {post.image_url ? (
-                <img src={post.image_url} alt="Profile post" className="h-full w-full object-cover" />
+                <CachedImage
+                  signedUrl={post.image_url}
+                  imageId={post.image_id}
+                  alt="Profile post"
+                  className="h-full w-full object-cover"
+                />
               ) : null}
             </button>
           ))}

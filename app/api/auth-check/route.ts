@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
+import { AuthCheckResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -32,11 +33,11 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json(
-    {
-      ...authResult,
-      profile_image_url: profileImageUrl,
-    },
-    { status: 200 },
-  );
+  const payload: AuthCheckResponse = {
+    ...authResult,
+    profile_image_id: user?.profile_image_id ?? null,
+    profile_image_url: profileImageUrl,
+  };
+
+  return NextResponse.json(payload, { status: 200 });
 }

@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-
-type ThreadMembersBody = {
-  thread_id?: string;
-};
+import { ThreadMembersRequest, ThreadMembersResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -14,7 +11,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as ThreadMembersBody;
+    const body = (await request.json()) as ThreadMembersRequest;
     const threadId = body.thread_id?.trim();
 
     if (!threadId) {
@@ -63,19 +60,17 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(
-      {
-        thread_id: thread.id,
-        is_owner: thread.owner === authResult.user_id,
-        members: members.map((member) => ({
-          user_id: member.user_id,
-          username: member.users.username,
-          email: member.users.email,
-          is_owner: member.user_id === thread.owner,
-        })),
-      },
-      { status: 200 },
-    );
+    const payload: ThreadMembersResponse = {
+      thread_id: thread.id,
+      is_owner: thread.owner === authResult.user_id,
+      members: members.map((member) => ({
+        user_id: member.user_id,
+        username: member.users.username,
+        email: member.users.email,
+        is_owner: member.user_id === thread.owner,
+      })),
+    };
+    return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("thread_members_failed", error);
     return NextResponse.json(

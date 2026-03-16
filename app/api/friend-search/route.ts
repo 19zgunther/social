@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-
-type FriendSearchBody = {
-  query?: string;
-};
+import { FriendSearchRequest, FriendSearchResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -14,10 +11,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as FriendSearchBody;
+    const body = (await request.json()) as FriendSearchRequest;
     const query = body.query?.trim();
     if (!query) {
-      return NextResponse.json({ users: [] }, { status: 200 });
+      const emptyPayload: FriendSearchResponse = { users: [] };
+      return NextResponse.json(emptyPayload, { status: 200 });
     }
 
     const users = await prisma.users.findMany({
@@ -84,26 +82,24 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json(
-      {
-        users: users.map((user) => {
-          const relation = relationByOtherUserId.get(user.id);
-          return {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            relation: relation
-              ? {
-                  id: relation.id,
-                  direction: relation.direction,
-                  accepted: relation.accepted,
-                }
-              : null,
-          };
-        }),
-      },
-      { status: 200 },
-    );
+    const payload: FriendSearchResponse = {
+      users: users.map((user) => {
+        const relation = relationByOtherUserId.get(user.id);
+        return {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          relation: relation
+            ? {
+                id: relation.id,
+                direction: relation.direction,
+                accepted: relation.accepted,
+              }
+            : null,
+        };
+      }),
+    };
+    return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("friend_search_failed", error);
     return NextResponse.json(
