@@ -23,6 +23,7 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraErrorMessage, setCameraErrorMessage] = useState("");
   const [cameraFacingMode, setCameraFacingMode] = useState<CameraFacingMode>("environment");
+  const [isMirrored, setIsMirrored] = useState(true);
   const [capturedPhotoFile, setCapturedPhotoFile] = useState<File | null>(null);
   const [capturedPhotoPreviewUrl, setCapturedPhotoPreviewUrl] = useState<string | null>(null);
   const [overlayText, setOverlayText] = useState("");
@@ -35,6 +36,27 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
   const overlayTextInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("camera_mirror_enabled");
+      if (stored === null) {
+        setIsMirrored(true);
+      } else {
+        setIsMirrored(stored === "true");
+      }
+    } catch {
+      setIsMirrored(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("camera_mirror_enabled", isMirrored ? "true" : "false");
+    } catch {
+      // Ignore storage errors
+    }
+  }, [isMirrored]);
 
   const stopCameraStream = useCallback(() => {
     const stream = cameraStreamRef.current;
@@ -350,7 +372,7 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
             <img
               src={capturedPhotoPreviewUrl}
               alt="Captured preview"
-              className="h-full w-full object-cover"
+              className={`h-full w-full object-cover ${isMirrored ? "-scale-x-100" : ""}`}
             />
             <button
               type="button"
@@ -395,7 +417,7 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
         ) : (
           <video
             ref={cameraVideoRef}
-            className="h-full w-full object-cover"
+            className={`h-full w-full object-cover ${isMirrored ? "-scale-x-100" : ""}`}
             autoPlay
             muted
             playsInline
@@ -433,7 +455,13 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
             >
               <Send className="h-8 w-8" />
             </button>
-            <div className="h-12 w-12" />
+            <button
+              type="button"
+              onClick={() => setIsMirrored((previous) => !previous)}
+              className="rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+            >
+              Mirror {isMirrored ? "On" : "Off"}
+            </button>
           </>
         ) : (
           <>
@@ -459,7 +487,13 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
             >
               <Circle className="h-12 w-12" />
             </button>
-            <div className="h-12 w-12" />
+            <button
+              type="button"
+              onClick={() => setIsMirrored((previous) => !previous)}
+              className="rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20"
+            >
+              Mirror {isMirrored ? "On" : "Off"}
+            </button>
           </>
         )}
       </div>
