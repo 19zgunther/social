@@ -11,8 +11,10 @@ if (!databaseUrl) {
 const createPgPool = () =>
   new Pool({
     connectionString: databaseUrl,
-    // Keep connection usage conservative for session-mode poolers.
-    max: process.env.NODE_ENV === "production" ? 5 : 1,
+    // Supabase session pooler: each serverless function should use max 1 connection
+    max: 1,
+    idleTimeoutMillis: 0, // Don't keep idle connections in serverless
+    connectionTimeoutMillis: 10000,
   });
 
 const createPrismaClient = (pool: Pool) =>
