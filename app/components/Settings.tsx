@@ -2,6 +2,7 @@
 
 import { ArrowLeft, LogOut } from "lucide-react";
 import { useState } from "react";
+import useSwipeBack from "@/app/components/utils/useSwipeBack";
 
 type SettingsProps = {
   onBack: () => void;
@@ -18,8 +19,14 @@ export default function Settings({ onBack, onLogout }: SettingsProps) {
     setStatusMessage("Notification prompt reset. It will appear again on the next app launch.");
   };
 
+  const { onTouchStart, onTouchEnd } = useSwipeBack({ onBack });
+
   return (
-    <div className="flex h-full min-h-0 flex-col bg-primary-background">
+    <div
+      className="flex h-full min-h-0 flex-col bg-primary-background"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <div className="flex items-center justify-between border-b border-accent-1 px-3 py-3">
         <button
           type="button"

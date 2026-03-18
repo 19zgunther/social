@@ -1,7 +1,7 @@
 "use client";
 
 import { TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState } from "react";
-import PostSection from "@/app/components/PostSection";
+import { PostSection} from "@/app/components/PostSection";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
 const FEED_CACHE_KEY = "feed_cache_v1";

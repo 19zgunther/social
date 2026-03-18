@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Heart, ChevronDown, CircleUserRound } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { ApiError, PostCommentNode, PostData, PostItem } from "@/app/types/interfaces";
@@ -33,7 +33,7 @@ const formatPostDate = (value: string): string => {
   });
 };
 
-export default function PostSection({
+function PostSectionComponent({
   post,
   showComments = true,
   className,
@@ -350,3 +350,5 @@ export default function PostSection({
     </article>
   );
 }
+
+export const PostSection = memo(PostSectionComponent);

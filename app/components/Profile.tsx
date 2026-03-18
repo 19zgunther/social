@@ -3,10 +3,11 @@
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronRight, CircleUserRound, Plus, Settings as SettingsIcon, Trash2 } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
-import PostSection from "@/app/components/PostSection";
+import { PostSection } from "@/app/components/PostSection";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
+import useSwipeBack from "@/app/components/utils/useSwipeBack";
 import {
   AcceptedFriend,
   ApiError,
@@ -911,6 +912,8 @@ export function ProfileOtherUser({
   const [removeFriendConfirmed, setRemoveFriendConfirmed] = useState(false);
   const [isRemovingFriend, setIsRemovingFriend] = useState(false);
 
+  const { onTouchStart, onTouchEnd } = useSwipeBack({ onBack });
+
   const onRemoveFriend = async () => {
     if (!profileData || !profileData.friendship_id) {
       return;
@@ -1017,7 +1020,11 @@ export function ProfileOtherUser({
 
   if (selectedPost) {
     return (
-      <div className="flex h-full min-h-0 w-full flex-col bg-primary-background">
+      <div
+        className="flex h-full min-h-0 w-full flex-col bg-primary-background"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
           <button
             type="button"
@@ -1063,7 +1070,11 @@ export function ProfileOtherUser({
 
   if (isLoadingProfile || !profileData) {
     return (
-      <div className="flex h-full min-h-0 flex-col bg-primary-background">
+      <div
+        className="flex h-full min-h-0 flex-col bg-primary-background"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         <div className="border-b border-accent-1 px-3 py-2">
           <button
             type="button"
@@ -1086,7 +1097,11 @@ export function ProfileOtherUser({
   const canSendRequest = profileData.friendship_status === "none" || profileData.friendship_status === "rejected";
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain touch-pan-y bg-primary-background">
+    <div
+      className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain touch-pan-y bg-primary-background"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <div className="border-b border-accent-1 px-3 py-2">
         <button
           type="button"

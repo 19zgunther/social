@@ -5,6 +5,7 @@ import CachedImage from "@/app/components/utils/CachedImage";
 import ThreadPictureEditor from "@/app/components/ThreadPictureEditor";
 import BackButton from "@/app/components/utils/BackButton";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
+import useSwipeBack from "@/app/components/utils/useSwipeBack";
 import {
   ApiError,
   FriendSearchResponse,
@@ -56,6 +57,8 @@ export default function ThreadSettings({
   const [localImageUrl, setLocalImageUrl] = useState<string | null>(thread.image_url ?? null);
   const [localName, setLocalName] = useState(thread.name);
   const [isRenaming, setIsRenaming] = useState(false);
+
+  const { onTouchStart, onTouchEnd } = useSwipeBack({ onBack });
 
   useEffect(() => {
     setLocalImageId(thread.image_id ?? null);
@@ -198,7 +201,11 @@ export default function ThreadSettings({
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background">
+    <div
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <ThreadPictureEditor
         threadId={thread.id}
         isOpen={isPictureEditorOpen}

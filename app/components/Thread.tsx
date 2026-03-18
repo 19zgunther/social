@@ -24,6 +24,7 @@ import {
 } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import BackButton from "./utils/BackButton";
+import useSwipeBack from "./utils/useSwipeBack";
 
 type ThreadProps = {
   thread: ThreadItem;
@@ -132,8 +133,6 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const pendingBottomScrollRef = useRef<ScrollBehavior | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const swipeStartXRef = useRef<number | null>(null);
-  const swipeStartYRef = useRef<number | null>(null);
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -555,43 +554,6 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     }
   };
 
-  const onAddMember = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!memberIdentifier.trim()) {
-      return;
-    }
-
-    setIsUpdatingMembers(true);
-    setMemberFormError("");
-    setStatusMessage("");
-
-    try {
-      const response = await postWithAuth("/api/thread-member-add", {
-        thread_id: activeThread.id,
-        identifier: memberIdentifier,
-      });
-      if (!response.ok) {
-        setMemberFormError(await readErrorMessage(response));
-        return;
-      }
-
-      const payload = (await response.json()) as { member: ThreadMember };
-      setMembers((previousMembers) => {
-        const exists = previousMembers.some((member) => member.user_id === payload.member.user_id);
-        if (exists) {
-          return previousMembers;
-        }
-        return [...previousMembers, payload.member];
-      });
-      setMemberIdentifier("");
-      setMemberFormError("");
-    } catch (error) {
-      setMemberFormError(error instanceof Error ? error.message : "Failed to add member.");
-    } finally {
-      setIsUpdatingMembers(false);
-    }
-  };
-
   const openCameraModal = () => {
     if (editTargetMessageId) {
       return;
@@ -624,46 +586,6 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
       throw error;
     }
   };
-
-  const onRemoveMember = async (userId: string) => {
-    setIsUpdatingMembers(true);
-    setStatusMessage("");
-
-    try {
-      const response = await postWithAuth("/api/thread-member-remove", {
-        thread_id: activeThread.id,
-        user_id: userId,
-      });
-      if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
-        return;
-      }
-      setMembers((previousMembers) =>
-        previousMembers.filter((member) => member.user_id !== userId),
-      );
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to remove member.");
-    } finally {
-      setIsUpdatingMembers(false);
-    }
-  };
-
-  const searchThreadMemberOptions = useCallback(
-    async (query: string): Promise<UserSearchOption[]> => {
-      const response = await postWithAuth("/api/friend-search", { query });
-      if (!response.ok) {
-        return [];
-      }
-
-      const payload = (await response.json()) as FriendSearchResponse;
-      return payload.users.map((user) => ({
-        id: user.id,
-        username: user.username,
-        email: user.email,
-      }));
-    },
-    [],
-  );
 
   const messageById = new Map(messages.map((message) => [message.id, message]));
 
@@ -839,7 +761,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
         ) : null}
 
         {children.length > 0 ? (
-          <div className="mt-1 space-y-1">
+          <div className="mt-1 mx-2 space-y-1 border-l border-r border-accent-1/60">
             {children.map((childMessage) => renderMessage(childMessage, depth + 1))}
           </div>
         ) : null}
@@ -899,36 +821,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     );
   }
 
-  const onTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    const touch = event.touches[0];
-    if (!touch) {
-      return;
-    }
-    swipeStartXRef.current = touch.clientX;
-    swipeStartYRef.current = touch.clientY;
-  };
-
-  const onTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    const startX = swipeStartXRef.current;
-    const startY = swipeStartYRef.current;
-    swipeStartXRef.current = null;
-    swipeStartYRef.current = null;
-
-    const touch = event.changedTouches[0];
-    if (!touch || startX === null || startY === null) {
-      return;
-    }
-
-    const deltaX = touch.clientX - startX;
-    const deltaY = Math.abs(touch.clientY - startY);
-
-    const HORIZONTAL_THRESHOLD = 60;
-    const VERTICAL_TOLERANCE = 40;
-
-    if (deltaX > HORIZONTAL_THRESHOLD && deltaY < VERTICAL_TOLERANCE) {
-      onBack();
-    }
-  };
+  const { onTouchStart, onTouchEnd } = useSwipeBack({ onBack });
 
   return (
     <div
