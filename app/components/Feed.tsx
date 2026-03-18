@@ -2,7 +2,7 @@
 
 import { TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState } from "react";
 import PostSection from "@/app/components/PostSection";
-import { ApiError, FeedPostsListResponse, PostItem } from "@/app/types/interfaces";
+import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
 const FEED_CACHE_KEY = "feed_cache_v1";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
@@ -91,6 +91,32 @@ export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userI
       }
     },
     [],
+  );
+
+  const onPostUpdated = useCallback(
+    (updated: {
+      id: string;
+      data?: PostData | null;
+      like_count?: number;
+      is_liked_by_viewer?: boolean;
+    }) => {
+      setPosts((previousPosts) =>
+        previousPosts.map((post) => {
+          if (post.id !== updated.id) {
+            return post;
+          }
+          return {
+            ...post,
+            ...(updated.data !== undefined ? { data: updated.data } : {}),
+            ...(updated.like_count !== undefined ? { like_count: updated.like_count } : {}),
+            ...(updated.is_liked_by_viewer !== undefined
+              ? { is_liked_by_viewer: updated.is_liked_by_viewer }
+              : {}),
+          };
+        }),
+      );
+    },
+    [setPosts],
   );
 
   const triggerTopRefresh = useCallback(() => {
@@ -189,7 +215,12 @@ export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userI
         ) : null}
 
         {posts.map((post) => (
-          <PostSection key={post.id} post={post} onViewUserProfile={onViewUserProfile} />
+          <PostSection
+            key={post.id}
+            post={post}
+            onViewUserProfile={onViewUserProfile}
+            onPostUpdated={onPostUpdated}
+          />
         ))}
 
         {hasMore ? (

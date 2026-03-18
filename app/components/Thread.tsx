@@ -23,7 +23,6 @@ import {
   ThreadSendResponse,
 } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
-import { useStateCached } from "./useStateCached";
 import BackButton from "./utils/BackButton";
 
 type ThreadProps = {
@@ -813,7 +812,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
               signedUrl={message.image_url}
               imageId={message.image_id}
               alt="Thread message attachment"
-              className="max-h-56 w-full rounded-xl object-cover"
+              className="max-h-[100vh] w-full rounded-xl object-cover"
               loading="lazy"
               onLoad={handleMessageImageLoad}
             />

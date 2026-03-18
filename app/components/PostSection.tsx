@@ -10,6 +10,12 @@ type PostSectionProps = {
   showComments?: boolean;
   className?: string;
   onViewUserProfile?: (userId: string) => void;
+  onPostUpdated?: (updated: {
+    id: string;
+    data?: PostData | null;
+    like_count?: number;
+    is_liked_by_viewer?: boolean;
+  }) => void;
 };
 
 const COMMENT_PATH_SEPARATOR = ">";
@@ -27,7 +33,13 @@ const formatPostDate = (value: string): string => {
   });
 };
 
-export default function PostSection({ post, showComments = true, className, onViewUserProfile }: PostSectionProps) {
+export default function PostSection({
+  post,
+  showComments = true,
+  className,
+  onViewUserProfile,
+  onPostUpdated,
+}: PostSectionProps) {
   const [postData, setPostData] = useState<PostData>(post.data ?? {});
   const initialLikes = useMemo(() => postData.likes ?? {}, [postData.likes]);
   const [isLikedByViewer, setIsLikedByViewer] = useState(false);
@@ -100,6 +112,14 @@ export default function PostSection({ post, showComments = true, className, onVi
       if (payload.data) {
         setPostData(payload.data);
       }
+      if (onPostUpdated) {
+        onPostUpdated({
+          id: post.id,
+          like_count: payload.like_count,
+          is_liked_by_viewer: payload.is_liked_by_viewer,
+          data: payload.data,
+        });
+      }
     } catch {
       setIsLikedByViewer(previousLikedState);
       setLikeCount(previousLikeCount);
@@ -133,6 +153,12 @@ export default function PostSection({ post, showComments = true, className, onVi
 
       const payload = (await response.json()) as { data?: PostData | null };
       setPostData(payload.data ?? {});
+      if (onPostUpdated) {
+        onPostUpdated({
+          id: post.id,
+          data: payload.data ?? {},
+        });
+      }
       if (parentPath.length === 0) {
         setRootCommentDraft("");
       } else {

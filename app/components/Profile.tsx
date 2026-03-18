@@ -573,7 +573,30 @@ export default function Profile({
           </button>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
-          <PostSection post={selectedPost} showComments />
+          <PostSection
+            post={selectedPost}
+            showComments
+            onPostUpdated={(updated) => {
+              if (!selectedPost) {
+                return;
+              }
+              setPosts((previousPosts) =>
+                previousPosts.map((post) => {
+                  if (post.id !== updated.id) {
+                    return post;
+                  }
+                  return {
+                    ...post,
+                    ...(updated.data !== undefined ? { data: updated.data } : {}),
+                    ...(updated.like_count !== undefined ? { like_count: updated.like_count } : {}),
+                    ...(updated.is_liked_by_viewer !== undefined
+                      ? { is_liked_by_viewer: updated.is_liked_by_viewer }
+                      : {}),
+                  };
+                }),
+              );
+            }}
+          />
         </div>
         {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
       </div>
@@ -1005,7 +1028,33 @@ export function ProfileOtherUser({
           </button>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
-          <PostSection post={selectedPost} showComments />
+          <PostSection
+            post={selectedPost}
+            showComments
+            onPostUpdated={(updated) => {
+              setProfileData((previous) => {
+                if (!previous) {
+                  return previous;
+                }
+                return {
+                  ...previous,
+                  posts: previous.posts.map((post) => {
+                    if (post.id !== updated.id) {
+                      return post;
+                    }
+                    return {
+                      ...post,
+                      ...(updated.data !== undefined ? { data: updated.data } : {}),
+                      ...(updated.like_count !== undefined ? { like_count: updated.like_count } : {}),
+                      ...(updated.is_liked_by_viewer !== undefined
+                        ? { is_liked_by_viewer: updated.is_liked_by_viewer }
+                        : {}),
+                    };
+                  }),
+                };
+              });
+            }}
+          />
         </div>
         {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
       </div>
