@@ -396,27 +396,6 @@ function Profile({
     }
   }, [userId, onViewUserProfile]);
 
-  const onSendFriendRequest = async (otherUserId: string) => {
-    setActiveFriendUserId(otherUserId);
-    setStatusMessage("");
-    try {
-      const response = await postWithAuth("/api/friend-request-create", {
-        other_user_id: otherUserId,
-      });
-      if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
-        return;
-      }
-
-      await Promise.all([runFriendSearch(friendSearchQuery), loadFriendRows()]);
-      setStatusMessage("Friend request sent.");
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to send friend request.");
-    } finally {
-      setActiveFriendUserId(null);
-    }
-  };
-
   const onRespondToFriendRequest = async (friendId: string, accept: boolean) => {
     setActiveIncomingRequestId(friendId);
     setStatusMessage("");
@@ -436,37 +415,6 @@ function Profile({
       setStatusMessage(error instanceof Error ? error.message : "Failed to respond to request.");
     } finally {
       setActiveIncomingRequestId(null);
-    }
-  };
-
-  const onRemoveFriend = async (friendId: string) => {
-    if (removingFriendId) {
-      return;
-    }
-
-    if (confirmedDeleteFriendId !== friendId) {
-      setConfirmedDeleteFriendId(friendId);
-      return;
-    }
-
-    setRemovingFriendId(friendId);
-    setStatusMessage("");
-    try {
-      const response = await postWithAuth("/api/friend-remove", {
-        friend_id: friendId,
-      });
-      if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
-        return;
-      }
-
-      setConfirmedDeleteFriendId(null);
-      await Promise.all([loadFriendRows(), runFriendSearch(friendSearchQuery)]);
-      setStatusMessage("Friend removed.");
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to remove friend.");
-    } finally {
-      setRemovingFriendId(null);
     }
   };
 

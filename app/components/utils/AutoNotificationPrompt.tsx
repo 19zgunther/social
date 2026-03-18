@@ -165,7 +165,7 @@ export function AutoNotificationPrompt({
 
     if (!showNotificationsPrompt) { return null; }
     return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center bg-black/50">
             <div className="mx-4 max-w-sm rounded-lg border border-accent-1 bg-secondary-background p-4 shadow-lg">
                 <p className="text-sm text-accent-2">
                     Enable notifications to get new thread message alerts.

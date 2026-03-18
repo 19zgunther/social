@@ -15,7 +15,7 @@ export default function NavRowButton({
         <button
             type="button"
             onClick={onClick}
-            className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${isActive
+            className={`flex flex-1 items-center justify-center gap-2 py-3 text-sm font-medium transition ${isActive
                 ? "text-accent-3"
                 : "text-accent-2 hover:text-foreground"
                 }`}

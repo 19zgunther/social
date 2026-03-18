@@ -74,7 +74,7 @@ export default function Home() {
 
   const onViewUserProfile = useCallback((userId: string) => {
     setViewingUserId(userId);
-    setActiveTab("profile");
+    setActiveTab("other_user_profile");
   }, []);
 
   const refreshGroupsUnreadCount = useCallback(async () => {
@@ -265,7 +265,7 @@ export default function Home() {
           setSelectedThread={setSelectedThread}
           currentUserId={authUser.user_id}
           onBack={() => { setSelectedThread(null); }}
-          setThreadSettingsOpen={() => { setActiveTab("thread_settings")}}
+          setThreadSettingsOpen={() => { setActiveTab("thread_settings") }}
         />
       )
     }
@@ -345,7 +345,7 @@ export default function Home() {
     onDeepLinkThreadHandled, onProfileImageUpdated, onViewUserProfile, onLogout,
   ])
 
-  const onBackRef = useRef<() => void>(() => {console.error("onBackRef not set");});
+  const onBackRef = useRef<() => void>(() => { console.error("onBackRef not set"); });
   onBackRef.current = () => {
     if (backSwipeTab === "thread") {
       setActiveTab("groups");
@@ -362,10 +362,6 @@ export default function Home() {
       setActiveTab("feed");
     }
   }
-
-  const constOnBack = useCallback(() => {
-    onBackRef.current && onBackRef.current();
-  }, []);
 
   const { onTouchStart, onTouchEnd, onTouchMove, swipingBackPercent } = useSwipeBack({ onBack: () => { onBackRef.current && onBackRef.current(); } });
 
@@ -396,16 +392,16 @@ export default function Home() {
         <AutoNotificationPrompt authUser={authUser} showNotificationsPrompt={showNotificationsPrompt} setShowNotificationsPrompt={setShowNotificationsPrompt} />
 
         {/** Main Content Container */}
-        <div 
-          className="flex-1 min-h-0 overflow-hidden px-0 py-0"
+        <div
+          className="relative flex-1 min-h-0 overflow-hidden px-0 py-0"
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
           onTouchMove={onTouchMove}
         >
           {/** Content */}
-          <div 
+          <div
             className="absolute top-0 left-0 w-full h-full z-[100] bg-black"
-            style={{ transform: swipingBackPercent && backSwipeContent? `translateX(${swipingBackPercent * 100}%)` : undefined }}
+            style={{ transform: swipingBackPercent && backSwipeContent ? `translateX(${swipingBackPercent * 100}%)` : undefined }}
           >
             {content}
           </div>
@@ -418,7 +414,8 @@ export default function Home() {
           )}
         </div>
 
-        <nav className="grid grid-cols-3 border-t border-accent-1 bg-primary-background z-[1000]">
+        {/** Bottom Navigation Bar */}
+        <div className="w-full h-fit flex justify-between border-t border-accent-1 bg-primary-background z-[1000]">
           <NavRowButton
             icon={<House aria-hidden className="h-4 w-4" />}
             isActive={activeTab === "feed"}
@@ -439,7 +436,8 @@ export default function Home() {
               setActiveTab("profile");
             }}
           />
-        </nav>
+        </div>
+        {/* </div> */}
       </section>
     </main>
   );
