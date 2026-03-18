@@ -335,7 +335,7 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
         onChange={onFileInputChange}
         className="hidden"
       />
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex items-center justify-between px-4 py-3 mt-[2rem]">
         <button
           type="button"
           onClick={onClose}
