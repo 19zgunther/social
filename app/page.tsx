@@ -550,7 +550,7 @@ export default function Home() {
               }`}
             >
               <Users aria-hidden className="h-4 w-4" />
-              <span>{`Groups (${groupsUnreadCount})`}</span>
+              {groupsUnreadCount > 0 && <div className="rounded-full bg-accent-3 text-primary-background text-xs font-medium px-1 py-1"/>}
             </button>
             <button
               type="button"
@@ -562,7 +562,7 @@ export default function Home() {
               }`}
             >
               <UserRound aria-hidden className="h-4 w-4" />
-              <span>{`Profile (${profileIncomingRequestCount})`}</span>
+              {profileIncomingRequestCount > 0 && <div className="rounded-full bg-accent-3 text-primary-background text-xs font-medium px-1 py-1"/>}
             </button>
           </nav>
         </section>

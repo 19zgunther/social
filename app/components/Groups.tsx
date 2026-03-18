@@ -5,7 +5,7 @@ import Thread from "@/app/components/Thread";
 import { ApiError, GroupsListResponse, ThreadItem } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import CachedImage from "./utils/CachedImage";
-import { Image } from "lucide-react";
+import { Image, MessageCirclePlus, PencilIcon } from "lucide-react";
 
 type GroupsProps = {
   currentUserId: string;
@@ -41,6 +41,7 @@ export default function Groups({
   const [unreadThreadIds, setUnreadThreadIds] = useState<Set<string>>(new Set());
   const [threadName, setThreadName] = useState("");
   const [isLoadingThreads, setIsLoadingThreads] = useState(true);
+  const [createThreadIsVisible, setCreateThreadIsVisible] = useState(false);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
 
@@ -171,6 +172,7 @@ export default function Groups({
       setStatusMessage(error instanceof Error ? error.message : "Failed to create thread.");
     } finally {
       setIsCreatingThread(false);
+      setCreateThreadIsVisible(false);
     }
   };
 
@@ -219,25 +221,38 @@ export default function Groups({
       <div>
         <header className="flex items-center justify-between border-b border-accent-1 px-4 py-3">
           <h1 className="text-lg font-semibold text-foreground">Groups</h1>
+          <button type="button" onClick={() => { setCreateThreadIsVisible(true); }}>
+            <MessageCirclePlus className="h-6 w-6 text-accent-3" />
+          </button>
         </header>
       </div>
 
-      <form onSubmit={onCreateThread} className="flex items-center gap-2">
+      {createThreadIsVisible && <form onSubmit={onCreateThread} className="w-full block relative">
         <input
-          className="flex-1 rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+          className="flex-1 w-full rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
           placeholder="New thread name"
           value={threadName}
           onChange={(event) => setThreadName(event.target.value)}
           required
         />
-        <button
-          type="submit"
-          disabled={isCreatingThread}
-          className="rounded-xl bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
-        >
-          {isCreatingThread ? "Creating..." : "Create"}
-        </button>
-      </form>
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            type="button"
+            onClick={() => { setCreateThreadIsVisible(false); }}
+            disabled={isCreatingThread}
+            className="flex-1 rounded-xl bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isCreatingThread}
+            className="flex-1 rounded-xl bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+          >
+            {isCreatingThread ? "Creating..." : "Create"}
+          </button>
+        </div>
+      </form>}
 
       {isLoadingThreads ? (
         <div className="flex items-center gap-2 rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-xs text-accent-2">
@@ -249,51 +264,69 @@ export default function Groups({
         </div>
       ) : null}
 
-      <div className="flex-1 min-h-0 space-y-2 overflow-y-auto overscroll-contain pr-1 touch-pan-y">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
         {!isLoadingThreads && threads.length === 0 ? (
-          <p className="text-xs text-accent-2">No threads yet. Create your first one.</p>
+          <p className="text-xs text-accent-2 px-4">No threads yet. Create your first one.</p>
         ) : null}
 
         {threads.map((thread) => (
-          <button
-            key={thread.id}
-            type="button"
-            onClick={() => {
-              onOpenThread(thread);
-            }}
-            className={`w-full rounded-xl border px-4 py-3 text-left transition ${unreadThreadIds.has(thread.id)
-              ? "border-accent-3 bg-secondary-background"
-              : "border-accent-1 bg-primary-background hover:border-accent-2"
-              }`}
-          >
-            <div className="flex items-center gap-2">
-              {thread.image_url ? (
-                <CachedImage
-                  signedUrl={thread.image_url}
-                  imageId={thread.image_id ?? null}
-                  alt="Group photo"
-                  className="h-10 w-10 rounded-full border border-accent-1 object-cover"
-                />
-              ) : (
-                <div className="flex h-10 w-10 items-center justify-center">
-                  <Image className="h-10 w-10 text-accent-2" />
-                </div>
-              )}
-
-              <p className="text-sm font-medium text-foreground">{thread.name}</p>
-
-              {unreadThreadIds.has(thread.id) ? (
-                <span className="rounded-full border border-accent-3 px-2 py-0.5 text-[10px] font-semibold text-accent-3">
-                  New
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-1 text-xs text-accent-2">Owner: {thread.owner_username}</p>
-          </button>
+          <GroupThreadRow key={thread.id} thread={thread} unreadThreadIds={unreadThreadIds} onOpenThread={onOpenThread} />
         ))}
       </div>
 
       {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
     </div>
+  );
+}
+
+
+function GroupThreadRow({
+  thread,
+  unreadThreadIds,
+  onOpenThread
+}: {
+  thread: ThreadItem;
+  unreadThreadIds: Set<string>;
+  onOpenThread: (thread: ThreadItem) => void;
+}) {
+  return (
+    <button
+      key={thread.id}
+      type="button"
+      onClick={() => {
+        onOpenThread(thread);
+      }}
+      className={`relative w-full px-4 py-3 text-left transition border-b border-accent-1/30 ${unreadThreadIds.has(thread.id)
+        ? "bg-secondary-background/50"
+        : "bg-primary-background hover:bg-secondary-background/20"
+        }`}
+    >
+      <div className="flex items-start gap-3">
+        {thread.image_url ? (
+          <CachedImage
+            signedUrl={thread.image_url}
+            imageId={thread.image_id ?? null}
+            alt="Group photo"
+            className="h-12 w-12 rounded-full object-cover flex-shrink-0"
+          />
+        ) : (
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-1/20 flex-shrink-0">
+            <Image className="h-6 w-6 text-accent-2" />
+          </div>
+        )}
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-base font-semibold text-foreground truncate">{thread.name}</p>
+            <span className="text-xs text-accent-2 flex-shrink-0">Yesterday</span>
+          </div>
+          <p className="mt-0.5 text-sm text-accent-2 truncate">Owner: {thread.owner_username}</p>
+        </div>
+      </div>
+
+      {unreadThreadIds.has(thread.id) ? (
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-accent-3" />
+      ) : null}
+    </button>
   );
 }

@@ -41,9 +41,5 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
     };
   }, [imageId, signedUrl]);
 
-  if (!src) {
-    return null;
-  }
-
-  return <img src={src} {...imgProps} />;
+  return <img src={src ?? undefined} {...imgProps} />;
 }
