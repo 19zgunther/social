@@ -134,6 +134,8 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const pendingBottomScrollRef = useRef<ScrollBehavior | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const { onTouchStart, onTouchEnd } = useSwipeBack({ onBack });
+
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
       const body = (await response.json()) as ApiError;
@@ -797,6 +799,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
       />
     );
   }
+  
 
   if (isSettingsOpen) {
     return (
@@ -820,8 +823,6 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
       />
     );
   }
-
-  const { onTouchStart, onTouchEnd } = useSwipeBack({ onBack });
 
   return (
     <div
