@@ -1,7 +1,7 @@
 "use client";
 
 import { ImgHTMLAttributes, useEffect, useState } from "react";
-import { imageCache } from "@/app/lib/imageCache";
+import { imageCache, getImageUrlFromCache } from "@/app/lib/imageCache";
 
 type CachedImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
   signedUrl: string | null;
@@ -18,9 +18,6 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
     const load = async () => {
       const resolvedUrl = await imageCache(signedUrl, imageId);
       if (isCancelled) {
-        if (resolvedUrl?.startsWith("blob:")) {
-          URL.revokeObjectURL(resolvedUrl);
-        }
         return;
       }
 
@@ -32,13 +29,8 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
 
     void load();
 
-    return () => {
-      isCancelled = true;
-      if (objectUrlToRevoke) {
-        URL.revokeObjectURL(objectUrlToRevoke);
-      }
-    };
+    return () => { isCancelled = true; };
   }, [imageId, signedUrl]);
 
-  return <img src={src ?? undefined} {...imgProps} />;
+  return <img src={src ?? (imageId ? getImageUrlFromCache(imageId) : undefined)} {...imgProps} />;
 }

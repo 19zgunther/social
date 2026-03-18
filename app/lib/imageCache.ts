@@ -91,6 +91,7 @@ const getBlobForImage = async (signedUrl: string, imageId: string): Promise<Blob
   return inFlight;
 };
 
+const __imageURLCache = new Map<string, string>();
 export const imageCache = async (signedUrl: string | null, imageId: string | null): Promise<string | null> => {
   if (!signedUrl) {
     return null;
@@ -102,8 +103,11 @@ export const imageCache = async (signedUrl: string | null, imageId: string | nul
 
   try {
     const blob = await getBlobForImage(signedUrl, imageId);
-    return URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    __imageURLCache.set(imageId, url);
+    return url;
   } catch {
     return signedUrl;
   }
 };
+export const getImageUrlFromCache = (imageId: string): string | undefined => {  return __imageURLCache.get(imageId); }
