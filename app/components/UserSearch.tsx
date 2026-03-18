@@ -132,7 +132,7 @@ export default function UserSearch({
                       {option.email && (
                         <p className="truncate text-xs text-accent-2">{option.email}</p>
                       )}
-                      {option.hint ? <p className="text-[11px] text-accent-2">{option.hint}</p> : null}
+                      {option.hint ? <p className="text-xs text-accent-2">{option.hint}</p> : null}
                     </div>
                   </button>
                 </li>

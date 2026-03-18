@@ -5,7 +5,6 @@ import CachedImage from "@/app/components/utils/CachedImage";
 import ThreadPictureEditor from "@/app/components/ThreadPictureEditor";
 import BackButton from "@/app/components/utils/BackButton";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
-import useSwipeBack from "@/app/components/utils/useSwipeBack";
 import {
   ApiError,
   FriendSearchResponse,
@@ -25,7 +24,7 @@ type ThreadSettingsProps = {
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   return fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 };
@@ -56,9 +55,10 @@ export default function ThreadSettings({
   const [localImageId, setLocalImageId] = useState<string | null>(thread.image_id ?? null);
   const [localImageUrl, setLocalImageUrl] = useState<string | null>(thread.image_url ?? null);
   const [localName, setLocalName] = useState(thread.name);
+  const [isEditingName, setIsEditingName] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [confirmedRemoveMember, setConfirmedRemoveMember] = useState<string | null>(null);
 
-  const { onTouchStart, onTouchEnd } = useSwipeBack({ onBack });
 
   useEffect(() => {
     setLocalImageId(thread.image_id ?? null);
@@ -148,6 +148,10 @@ export default function ThreadSettings({
   };
 
   const onRemoveMember = async (userId: string) => {
+    if (!confirmedRemoveMember) {
+      setConfirmedRemoveMember(userId);
+      return;
+    }
     setIsUpdatingMembers(true);
     setStatusMessage("");
 
@@ -167,10 +171,9 @@ export default function ThreadSettings({
       setStatusMessage(error instanceof Error ? error.message : "Failed to remove member.");
     } finally {
       setIsUpdatingMembers(false);
+      setConfirmedRemoveMember(null);
     }
   };
-
-  const isOwner = thread.owner_user_id === currentUserId;
 
   const onRenameGroup = async () => {
     const nextName = localName.trim();
@@ -193,6 +196,7 @@ export default function ThreadSettings({
 
       setStatusMessage("Group name updated.");
       onThreadRenamed(nextName);
+      setIsEditingName(false);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to rename group.");
     } finally {
@@ -203,8 +207,6 @@ export default function ThreadSettings({
   return (
     <div
       className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background"
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
     >
       <ThreadPictureEditor
         threadId={thread.id}
@@ -245,38 +247,71 @@ export default function ThreadSettings({
                   className="h-16 w-16 object-cover"
                 />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center text-[11px] text-accent-2">
+                <div className="flex h-16 w-16 items-center justify-center text-xs text-accent-2">
                   Add group photo
                 </div>
               )}
             </button>
             <div className="min-w-0 flex-1 space-y-1">
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void onRenameGroup();
-                }}
-                className="flex items-center gap-2"
-              >
-                <input
-                  type="text"
-                  value={localName}
-                  onChange={(event) => setLocalName(event.target.value)}
-                  className="min-w-0 flex-1 rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-                  placeholder="Group name"
-                />
-                <button
-                  type="submit"
-                  disabled={
-                    isRenaming ||
-                    !localName.trim() ||
-                    localName.trim() === thread.name
-                  }
-                  className="shrink-0 rounded-xl bg-accent-3 px-3 py-1.5 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+              {isEditingName ? (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void onRenameGroup();
+                  }}
+                  className="relative block w-full"
                 >
-                  {isRenaming ? "Saving..." : "Save"}
-                </button>
-              </form>
+                  <input
+                    type="text"
+                    value={localName}
+                    onChange={(event) => setLocalName(event.target.value)}
+                    className="min-w-0 w-full rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+                    placeholder="Group name"
+                    autoFocus
+                  />
+
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocalName(thread.name);
+                        setIsEditingName(false);
+                      }}
+                      className="flex-1 rounded-xl border border-accent-1 px-3 py-1.5 text-xs font-semibold text-accent-2 transition hover:text-foreground"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={
+                        isRenaming ||
+                        !localName.trim() ||
+                        localName.trim() === thread.name
+                      }
+                      className="flex-1 rounded-xl bg-accent-3 px-3 py-1.5 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+                    >
+                      {isRenaming ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+                    {thread.name}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocalName(thread.name);
+                      setIsEditingName(true);
+                    }}
+                    className="shrink-0 rounded-xl border border-accent-1 px-3 py-1.5 text-xs font-semibold text-accent-2 transition hover:text-foreground"
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
+
               <p className="truncate text-xs text-accent-2">
                 Owner: {thread.owner_username}
               </p>
@@ -343,6 +378,7 @@ export default function ThreadSettings({
                     </p>
                     <p className="text-xs text-accent-2">{member.email ?? "No email"}</p>
                   </div>
+                  
                   {!member.is_owner ? (
                     <button
                       type="button"
@@ -351,8 +387,9 @@ export default function ThreadSettings({
                       }}
                       disabled={isUpdatingMembers}
                       className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 transition hover:text-foreground disabled:opacity-60"
+                      style={{ borderColor: confirmedRemoveMember === member.user_id ? "red" : undefined }}
                     >
-                      Remove
+                      {confirmedRemoveMember === member.user_id ? "Confirm Remove" : "Remove"}
                     </button>
                   ) : null}
                 </div>

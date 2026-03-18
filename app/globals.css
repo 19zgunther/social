@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --primary-background: #0f1115;
-  --secondary-background: #1b1f27;
+  --primary-background: #030304;
+  --secondary-background: #040406;
 
   --accent-1: #2d3440;
   --accent-2: #8e9cb0;
@@ -19,11 +19,21 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Slightly larger global text sizes */
+  --text-xs: 0.8rem;
+  --text-xs--line-height: 1.2;
+  --text-sm: 0.95rem;
+  --text-sm--line-height: 1.4;
+  --text-base: 1.05rem;
+  --text-base--line-height: 1.5;
+  --text-lg: 1.2rem;
+  --text-lg--line-height: 1.5;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --primary-background: #0f1115;
+    --primary-background: #050608;
     --secondary-background: #1b1f27;
     --accent-1: #2d3440;
     --accent-2: #8e9cb0;
@@ -36,6 +46,7 @@ body {
   background: var(--primary-background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
+  font-size: 15px;
 }
 
 html,

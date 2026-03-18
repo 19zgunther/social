@@ -91,7 +91,7 @@ function PostSectionComponent({
     try {
       const response = await fetch("/api/feed-post-like", {
         method: "POST",
-        headers: { "Content-Type": "application/json"},
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           post_id: post.id,
           like: nextLikedState,
@@ -140,7 +140,7 @@ function PostSectionComponent({
     try {
       const response = await fetch("/api/feed-post-comment", {
         method: "POST",
-        headers: { "Content-Type": "application/json"},
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           post_id: post.id,
           parent_path: parentPath,
@@ -200,12 +200,12 @@ function PostSectionComponent({
           {comment.text}
         </div>
         <div className="mt-1 ml-10 flex items-center gap-5">
-          
+
           {hasReplies ? (
             <button
               type="button"
               onClick={() => toggleReplies(pathKey)}
-              className="text-[11px] flex text-accent-2 underline underline-offset-2 hover:text-foreground"
+              className="text-xs flex text-accent-2 underline underline-offset-2 hover:text-foreground"
             >
               <ChevronDown className={`h-4 w-4 ${isExpanded ? "rotate-180" : ""}`} />
               {isExpanded ? "Hide replies" : `${replyEntries.length} repl${replyEntries.length === 1 ? "y" : "ies"}`}
@@ -215,7 +215,7 @@ function PostSectionComponent({
           <button
             type="button"
             onClick={() => setActiveReplyPath(isReplyInputOpen ? null : pathKey)}
-            className="text-[11px] text-accent-2 underline underline-offset-2 hover:text-foreground"
+            className="text-xs text-accent-2 underline underline-offset-2 hover:text-foreground"
           >
             Reply
           </button>
@@ -240,7 +240,7 @@ function PostSectionComponent({
                 void onSubmitComment(path);
               }}
               disabled={isSubmittingComment}
-              className="rounded-lg border border-accent-1 px-2 py-1 text-[11px] text-accent-2 hover:text-foreground disabled:opacity-50"
+              className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
             >
               Send
             </button>
@@ -266,7 +266,7 @@ function PostSectionComponent({
               signedUrl={post.author_profile_image_url}
               imageId={post.author_profile_image_id ?? null}
               alt={`${post.username} profile`}
-              className="h-10 w-10 rounded-full border border-accent-1 object-cover"
+              className="h-10 w-10 rounded-full object-cover"
             />
           ) : (
             <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-1 bg-secondary-background">
@@ -286,28 +286,34 @@ function PostSectionComponent({
           )}
           <p className="text-[11px] text-accent-2">{formatPostDate(post.created_at)}</p>
         </div>
-        
+
       </header>
       {post.image_url ? (
         <CachedImage
           signedUrl={post.image_url}
           imageId={post.image_id}
           alt="Post attachment"
-          className="w-full aspect-square overflow-hidden border-y border-accent-1 object-cover"
+          className="w-full aspect-square overflow-hidden object-cover"
         />
       ) : (
         <div className="h-40 w-full border-y border-accent-1 bg-secondary-background" />
       )}
-      <div className="px-3 py-2">
+
+      {/** Post Content */}
+      <div className="px-3 py-1">
+
+        {/** Post Text */}
         {post.text.trim() ? <p className="text-sm text-foreground">{post.text}</p> : null}
-        <div className="mt-2">
+        
+        {/** Like Button */}
+        <div className="mt-1">
           <button
             type="button"
             onClick={() => {
               void onToggleLike();
             }}
             disabled={isUpdatingLike}
-            className="inline-flex items-center gap-1 rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 transition hover:text-foreground disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-xs text-accent-2 transition hover:text-foreground disabled:opacity-50"
           >
             <Heart
               className={`h-4 w-4 ${isLikedByViewer ? "fill-accent-3 text-accent-3" : "text-accent-2"}`}
@@ -315,14 +321,18 @@ function PostSectionComponent({
             <span>{likeCount}</span>
           </button>
         </div>
+
+        {/** Comments */}
         {showComments ? (
-          <div className="mt-2 space-y-1">
+          <div className="mt-1 space-y-1">
+            
+            {/** Add Comment Input */}
             <div className="flex items-center gap-2">
               <input
                 value={rootCommentDraft}
                 onChange={(event) => setRootCommentDraft(event.target.value)}
                 placeholder="Add a comment..."
-                className="flex-1 rounded-lg border border-accent-1 bg-secondary-background px-2 py-1.5 text-xs text-foreground outline-none focus:border-accent-2"
+                className="flex-1 rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-xs text-foreground outline-none focus:border-accent-2"
               />
               <button
                 type="button"
@@ -335,6 +345,8 @@ function PostSectionComponent({
                 Send
               </button>
             </div>
+
+            {/** Comment Tree */}
             {rootCommentEntries.length === 0 ? (
               <p className="text-xs text-accent-2">No comments yet.</p>
             ) : (

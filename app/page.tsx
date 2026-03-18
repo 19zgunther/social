@@ -1,130 +1,39 @@
 "use client";
 
-import { CSSProperties, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { House, UserRound, Users } from "lucide-react";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
-import Profile, { ProfileOtherUser } from "@/app/components/Profile";
-import Settings from "@/app/components/Settings";
+import { Profile, ProfileOtherUser } from "@/app/components/Profile";
+import ProfileSettings from "@/app/components/ProfileSettings";
 import {
-  ApiError,
   AuthCheckResponse,
   AuthUser,
-  LoginResponse,
-  SignupResponse,
+  ThreadItem,
 } from "@/app/types/interfaces";
-
-type Mode = "login" | "signup";
-type AppTab = "feed" | "groups" | "profile";
-type ProfileView = "profile" | "settings" | "other_user";
-
-const PUSH_PROMPT_DISMISSED_KEY = "push_prompt_dismissed";
-const MOBILE_FRAME_STYLE: CSSProperties = {
-  width: "100vw",
-  maxWidth: "32rem",
-};
-const APP_VIEWPORT_STYLE: CSSProperties = {
-  height: "100dvh",
-  minHeight: "100svh",
-};
-
-const urlBase64ToArrayBuffer = (base64String: string): ArrayBuffer => {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  const outputBuffer = new ArrayBuffer(rawData.length);
-  const outputArray = new Uint8Array(outputBuffer);
-  for (let index = 0; index < rawData.length; index += 1) {
-    outputArray[index] = rawData.charCodeAt(index);
-  }
-  return outputBuffer;
-};
-
-const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | null } => {
-  const params = new URLSearchParams(window.location.search);
-  const tabParam = params.get("tab");
-  const threadIdParam = params.get("thread_id");
-  let tab: AppTab | null =
-    tabParam === "feed" || tabParam === "groups" || tabParam === "profile" ? tabParam : null;
-  if (!tab && threadIdParam) {
-    tab = "groups";
-  }
-
-  return {
-    tab,
-    threadId: threadIdParam?.trim() || null,
-  };
-};
+import {
+  MOBILE_FRAME_STYLE,
+  APP_VIEWPORT_STYLE,
+  parseDeepLinkFromLocation,
+  AppTab,
+} from "@/app/components/utils";
+import { AutoNotificationPrompt } from "./components/utils/AutoNotificationPrompt";
+import SignUpPage from "./components/SignupPage";
+import NavRowButton from "./components/utils/NavRowButton";
+import Thread from "./components/Thread";
+import ThreadSettings from "./components/ThreadSettings";
+import useSwipeBack from "./components/utils/useSwipeBack";
 
 export default function Home() {
-  const [mode, setMode] = useState<Mode>("login");
   const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("feed");
-  const [profileView, setProfileView] = useState<ProfileView>("profile");
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [pendingDeepLinkThreadId, setPendingDeepLinkThreadId] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string>("");
-  const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
-  const [isEnablingNotifications, setIsEnablingNotifications] = useState(false);
   const [groupsUnreadCount, setGroupsUnreadCount] = useState(0);
   const [profileIncomingRequestCount, setProfileIncomingRequestCount] = useState(0);
-  const [identifier, setIdentifier] = useState("");
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const pageTitle = useMemo(() => (mode === "login" ? "Log in" : "Create account"), [mode]);
-
-  useEffect(() => {
-    const runAuthCheck = async () => {
-      const response = await fetch("/api/auth-check", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        setIsCheckingSession(false);
-        return;
-      }
-
-      const sessionUser = (await response.json()) as AuthCheckResponse;
-      setAuthUser(sessionUser);
-      setIsCheckingSession(false);
-    };
-
-    void runAuthCheck();
-  }, []);
-
-  useEffect(() => {
-    const applyDeepLinkState = () => {
-      const deepLink = parseDeepLinkFromLocation();
-      if (deepLink.tab) {
-        setActiveTab(deepLink.tab);
-      }
-      if (deepLink.threadId) {
-        setPendingDeepLinkThreadId(deepLink.threadId);
-      }
-    };
-
-    applyDeepLinkState();
-    window.addEventListener("popstate", applyDeepLinkState);
-    return () => {
-      window.removeEventListener("popstate", applyDeepLinkState);
-    };
-  }, []);
-
-  const readApiError = async (response: Response): Promise<string> => {
-    try {
-      const body = (await response.json()) as ApiError;
-      return body.error?.message ?? "Request failed.";
-    } catch {
-      return "Request failed.";
-    }
-  };
+  const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
+  const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
 
   const onLogout = () => {
     const token = undefined;
@@ -156,18 +65,15 @@ export default function Home() {
     document.cookie = "auth_token=; Max-Age=0; path=/";
     setAuthUser(null);
     setActiveTab("feed");
-    setProfileView("profile");
     setViewingUserId(null);
     setPendingDeepLinkThreadId(null);
     setShowNotificationsPrompt(false);
     setGroupsUnreadCount(0);
     setProfileIncomingRequestCount(0);
-    setStatusMessage("Logged out.");
   };
 
   const onViewUserProfile = useCallback((userId: string) => {
     setViewingUserId(userId);
-    setProfileView("other_user");
     setActiveTab("profile");
   }, []);
 
@@ -193,6 +99,74 @@ export default function Home() {
     }
   }, []);
 
+  const onDeepLinkThreadHandled = useCallback(() => {
+    setPendingDeepLinkThreadId(null);
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.delete("thread_id");
+    nextParams.set("tab", "groups");
+    const nextQuery = nextParams.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`,
+    );
+  }, []);
+
+  const onProfileImageUpdated = useCallback((profileImageId: string | null, profileImageUrl: string | null) => {
+    setAuthUser((previous) =>
+      previous
+        ? {
+          ...previous,
+          profile_image_id: profileImageId,
+          profile_image_url: profileImageUrl,
+        }
+        : previous,
+    );
+  }, [authUser]);
+
+  // Perform an initial auth check on mount to hydrate session user state.
+  useEffect(() => {
+    const runAuthCheck = async () => {
+      const response = await fetch("/api/auth-check", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        setIsCheckingSession(false);
+        return;
+      }
+
+      const sessionUser = (await response.json()) as AuthCheckResponse;
+      setAuthUser(sessionUser);
+      setIsCheckingSession(false);
+    };
+
+    void runAuthCheck();
+  }, []);
+
+  // Initialize tab/thread state from URL and keep it in sync with browser history.
+  useEffect(() => {
+    const applyDeepLinkState = () => {
+      const deepLink = parseDeepLinkFromLocation();
+      if (deepLink.tab) {
+        setActiveTab(deepLink.tab);
+      }
+      if (deepLink.threadId) {
+        setPendingDeepLinkThreadId(deepLink.threadId);
+      }
+    };
+
+    applyDeepLinkState();
+    window.addEventListener("popstate", applyDeepLinkState);
+    return () => {
+      window.removeEventListener("popstate", applyDeepLinkState);
+    };
+  }, []);
+
+  // Poll groups unread count at an interval while user is authenticated.
   useEffect(() => {
     if (!authUser) {
       setGroupsUnreadCount(0);
@@ -218,6 +192,7 @@ export default function Home() {
     };
   }, [authUser, refreshGroupsUnreadCount]);
 
+  // Poll incoming friend request count at an interval while user is authenticated.
   useEffect(() => {
     if (!authUser) {
       setProfileIncomingRequestCount(0);
@@ -260,191 +235,142 @@ export default function Home() {
     };
   }, [authUser]);
 
-  const ensurePushSubscription = useCallback(async (options?: { requestPermission?: boolean }) => {
-    try {
-      if (
-        !("serviceWorker" in navigator) ||
-        !("PushManager" in window) ||
-        !("Notification" in window)
-      ) {
-        return;
-      }
+  const { content, backSwipeContent, backSwipeTab } = useMemo(() => {
+    if (!authUser) { return { content: null, backSwipeContent: null, backSwipeTab: "feed" }; }
 
-      const isStandalone =
-        window.matchMedia("(display-mode: standalone)").matches ||
-        Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
-      if (!isStandalone) {
-        return;
-      }
-
-      const registration = await navigator.serviceWorker.register("/sw.js");
-
-      let permission = Notification.permission;
-      if (permission === "default" && options?.requestPermission) {
-        permission = await Notification.requestPermission();
-      }
-
-      if (permission === "default") {
-        return;
-      }
-
-      if (permission !== "granted") {
-        const existingSubscription = await registration.pushManager.getSubscription();
-        if (existingSubscription) {
-          await fetch("/api/push-unsubscribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              endpoint: existingSubscription.endpoint,
-            }),
-          });
-          await existingSubscription.unsubscribe();
-        }
-        window.localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, "1");
-        setShowNotificationsPrompt(false);
-        return;
-      }
-
-      let subscription = await registration.pushManager.getSubscription();
-      if (!subscription) {
-        const keyResponse = await fetch("/api/push-public-key", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        if (!keyResponse.ok) {
-          return;
-        }
-        const keyPayload = (await keyResponse.json()) as { vapid_public_key?: string };
-        if (!keyPayload.vapid_public_key) {
-          return;
-        }
-
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToArrayBuffer(keyPayload.vapid_public_key),
-        });
-      }
-
-      const serializedSubscription = subscription.toJSON();
-      if (!serializedSubscription.endpoint || !serializedSubscription.keys?.p256dh || !serializedSubscription.keys.auth) {
-        return;
-      }
-
-      await fetch("/api/push-subscribe", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          endpoint: serializedSubscription.endpoint,
-          keys: {
-            p256dh: serializedSubscription.keys.p256dh,
-            auth: serializedSubscription.keys.auth,
-          },
-        }),
-      });
-      window.localStorage.removeItem(PUSH_PROMPT_DISMISSED_KEY);
-      setShowNotificationsPrompt(false);
-    } catch (error) {
-      console.error("push_setup_failed", error);
+    function getFeed() {
+      return (
+        <Feed onViewUserProfile={onViewUserProfile} />
+      )
     }
+    function getGroups(isActiveTab: boolean) {
+      if (!authUser) { return null; }
+      return (
+        <Groups
+          currentUserId={authUser.user_id}
+          deepLinkThreadId={pendingDeepLinkThreadId}
+          onDeepLinkThreadHandled={onDeepLinkThreadHandled}
+          onThreadRead={refreshGroupsUnreadCount}
+          selectedThread={selectedThread}
+          setSelectedThread={setSelectedThread}
+          isActiveTab={isActiveTab}
+        />
+      )
+    }
+    function getThread() {
+      if (!selectedThread || !authUser?.user_id) { return null; }
+      return (
+        <Thread
+          selectedThread={selectedThread}
+          setSelectedThread={setSelectedThread}
+          currentUserId={authUser.user_id}
+          onBack={() => { setSelectedThread(null); }}
+          setThreadSettingsOpen={() => { setActiveTab("thread_settings")}}
+        />
+      )
+    }
+    function getThreadSettings() {
+      if (!selectedThread || !authUser?.user_id) { return null; }
+      return (
+        <ThreadSettings
+          thread={selectedThread}
+          currentUserId={authUser.user_id}
+          onBack={() => setActiveTab("groups")}
+          onThreadImageUpdated={(imageId, imageUrl) => {
+            setSelectedThread((previous) => ({
+              ...previous as ThreadItem,
+              image_id: imageId,
+              image_url: imageUrl,
+            }));
+          }}
+          onThreadRenamed={(name) => {
+            setSelectedThread((previous: ThreadItem | null) => ({
+              ...previous as ThreadItem,
+              name,
+            }));
+          }}
+        />
+      )
+    }
+    function getProfile() {
+      if (!authUser) { return null; }
+      return (
+        <Profile
+          userId={authUser.user_id}
+          username={authUser.username}
+          email={authUser.email}
+          profileImageId={authUser.profile_image_id}
+          profileImageUrl={authUser.profile_image_url}
+          onProfileImageUpdated={onProfileImageUpdated}
+          onOpenSettings={() => setActiveTab("profile_settings")}
+          onViewUserProfile={onViewUserProfile}
+        />
+      )
+    }
+    function getProfileSettings() {
+      return (
+        <ProfileSettings
+          onBack={() => setActiveTab("profile")}
+          onLogout={onLogout}
+        />
+      )
+    }
+    function getOtherUser() {
+      if (!viewingUserId) { return null; }
+      return (
+        <ProfileOtherUser
+          userId={viewingUserId}
+          onBack={() => setActiveTab("profile")}
+        />
+      )
+    }
+    if (activeTab === "thread_settings" && selectedThread) {
+      return { content: getThreadSettings(), backSwipeContent: getGroups(false), backSwipeTab: "thread" };
+    } else if (activeTab === "groups" && selectedThread) {
+      return { content: getThread(), backSwipeContent: getGroups(false), backSwipeTab: "groups" };
+    } else if (activeTab === "groups") {
+      return { content: getGroups(true), backSwipeContent: getFeed(), backSwipeTab: "feed" };
+    } else if (activeTab === "profile") {
+      return { content: getProfile(), backSwipeContent: getGroups(false), backSwipeTab: "groups" };
+    } else if (activeTab === "profile_settings") {
+      return { content: getProfileSettings(), backSwipeContent: getProfile(), backSwipeTab: "profile" };
+    } else if (activeTab === "other_user_profile") {
+      return { content: getOtherUser(), backSwipeContent: null, backSwipeTab: "feed" };
+    }
+    // Default to feed
+    return { content: getFeed(), backSwipeContent: null, backSwipeTab: "feed" };
+  }, [
+    activeTab, authUser, pendingDeepLinkThreadId,
+    profileIncomingRequestCount, refreshGroupsUnreadCount, selectedThread, viewingUserId,
+    onDeepLinkThreadHandled, onProfileImageUpdated, onViewUserProfile, onLogout,
+  ])
+
+  const onBackRef = useRef<() => void>(() => {console.error("onBackRef not set");});
+  onBackRef.current = () => {
+    if (backSwipeTab === "thread") {
+      setActiveTab("groups");
+    } else if (backSwipeTab === "groups") {
+      setSelectedThread(null);
+      setActiveTab("groups");
+    } else if (backSwipeTab === "profile") {
+      setActiveTab("profile");
+    } else if (backSwipeTab === "profile_settings") {
+      setActiveTab("profile_settings");
+    } else if (backSwipeTab === "other_user_profile") {
+      setActiveTab("other_user_profile");
+    } else {
+      setActiveTab("feed");
+    }
+  }
+
+  const constOnBack = useCallback(() => {
+    onBackRef.current && onBackRef.current();
   }, []);
 
-  useEffect(() => {
-    if (!authUser) {
-      return;
-    }
-    void ensurePushSubscription();
-  }, [authUser, ensurePushSubscription]);
+  const { onTouchStart, onTouchEnd, onTouchMove, swipingBackPercent } = useSwipeBack({ onBack: () => { onBackRef.current && onBackRef.current(); } });
 
-  useEffect(() => {
-    if (!authUser) {
-      setShowNotificationsPrompt(false);
-      return;
-    }
 
-    if (!("Notification" in window)) {
-      setShowNotificationsPrompt(false);
-      return;
-    }
-
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
-    const wasDismissed = window.localStorage.getItem(PUSH_PROMPT_DISMISSED_KEY) === "1";
-    const shouldShow =
-      isStandalone && Notification.permission === "default" && !wasDismissed;
-    setShowNotificationsPrompt(shouldShow);
-  }, [authUser]);
-
-  const submitLogin = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setStatusMessage("");
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password }),
-      });
-
-      if (!response.ok) {
-        setStatusMessage(await readApiError(response));
-        return;
-      }
-
-      const payload = (await response.json()) as LoginResponse;
-      setAuthUser(payload.user);
-      setStatusMessage("");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const submitSignup = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setStatusMessage("");
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch("/api/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password }),
-      });
-
-      if (!response.ok) {
-        setStatusMessage(await readApiError(response));
-        return;
-      }
-
-      const payload = (await response.json()) as SignupResponse;
-      setAuthUser(payload.user);
-      setStatusMessage("");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const onEnableNotifications = async () => {
-    setIsEnablingNotifications(true);
-    try {
-      await ensurePushSubscription({ requestPermission: true });
-    } finally {
-      setIsEnablingNotifications(false);
-      const shouldStillShow =
-        "Notification" in window && Notification.permission === "default";
-      setShowNotificationsPrompt(shouldStillShow);
-    }
-  };
-
-  const onDismissNotificationsPrompt = () => {
-    window.localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, "1");
-    setShowNotificationsPrompt(false);
-  };
-
+  // Early return for loading state if session is still being checked.
   if (isCheckingSession) {
     return (
       <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0">
@@ -458,230 +384,62 @@ export default function Home() {
     );
   }
 
-  if (authUser) {
-    return (
-      <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
-        <section
-          style={MOBILE_FRAME_STYLE}
-          className="flex h-full max-h-dvh flex-col overflow-hidden shadow-xl shadow-black/25 relative"
-        >
-
-          {showNotificationsPrompt ? (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="mx-4 max-w-sm rounded-lg border border-accent-1 bg-secondary-background p-4 shadow-lg">
-                <p className="text-sm text-accent-2">
-                  Enable notifications to get new thread message alerts.
-                </p>
-                <div className="mt-4 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void onEnableNotifications();
-                    }}
-                    disabled={isEnablingNotifications}
-                    className="flex-1 rounded-lg bg-accent-3 px-4 py-2 text-sm font-semibold text-primary-background disabled:opacity-60"
-                  >
-                    {isEnablingNotifications ? "Enabling..." : "Enable notifications"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onDismissNotificationsPrompt}
-                    className="flex-1 rounded-lg border border-accent-1 px-4 py-2 text-sm text-accent-2 hover:text-foreground"
-                  >
-                    Not now
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="flex-1 min-h-0 overflow-hidden px-0 py-0">
-            {activeTab === "feed" ? (
-              <Feed onViewUserProfile={onViewUserProfile} />
-            ) : activeTab === "groups" ? (
-              <Groups
-                currentUserId={authUser.user_id}
-                deepLinkThreadId={pendingDeepLinkThreadId}
-                onDeepLinkThreadHandled={() => {
-                  setPendingDeepLinkThreadId(null);
-                  const nextParams = new URLSearchParams(window.location.search);
-                  nextParams.delete("thread_id");
-                  nextParams.set("tab", "groups");
-                  const nextQuery = nextParams.toString();
-                  window.history.replaceState(
-                    null,
-                    "",
-                    `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`,
-                  );
-                }}
-                onThreadRead={() => {
-                  void refreshGroupsUnreadCount();
-                }}
-              />
-            ) : profileView === "settings" ? (
-              <Settings
-                onBack={() => setProfileView("profile")}
-                onLogout={onLogout}
-              />
-            ) : profileView === "other_user" && viewingUserId ? (
-              <ProfileOtherUser
-                userId={viewingUserId}
-                onBack={() => setProfileView("profile")}
-              />
-            ) : (
-              <Profile
-                userId={authUser.user_id}
-                username={authUser.username}
-                email={authUser.email}
-                profileImageId={authUser.profile_image_id}
-                profileImageUrl={authUser.profile_image_url}
-                onProfileImageUpdated={(profileImageId, profileImageUrl) => {
-                  setAuthUser((previous) =>
-                    previous
-                      ? {
-                        ...previous,
-                        profile_image_id: profileImageId,
-                        profile_image_url: profileImageUrl,
-                      }
-                      : previous,
-                  );
-                }}
-                onOpenSettings={() => setProfileView("settings")}
-                onViewUserProfile={onViewUserProfile}
-              />
-            )}
-          </div>
-
-          <nav className="grid grid-cols-3 border-t border-accent-1 bg-primary-background">
-            <button
-              type="button"
-              onClick={() => setActiveTab("feed")}
-              className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${activeTab === "feed"
-                  ? "text-accent-3"
-                  : "text-accent-2 hover:text-foreground"
-                }`}
-            >
-              <House aria-hidden className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("groups")}
-              className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${activeTab === "groups"
-                  ? "text-accent-3"
-                  : "text-accent-2 hover:text-foreground"
-                }`}
-            >
-              <Users aria-hidden className="h-4 w-4" />
-              {groupsUnreadCount > 0 && <div className="rounded-full bg-accent-3 text-primary-background text-xs font-medium px-1 py-1" />}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("profile");
-                setProfileView("profile");
-              }}
-              className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${activeTab === "profile"
-                  ? "text-accent-3"
-                  : "text-accent-2 hover:text-foreground"
-                }`}
-            >
-              <UserRound aria-hidden className="h-4 w-4" />
-              {profileIncomingRequestCount > 0 && <div className="rounded-full bg-accent-3 text-primary-background text-xs font-medium px-1 py-1" />}
-            </button>
-          </nav>
-        </section>
-      </main>
-    );
-  }
+  // Early return for signup page if user is not authenticated.
+  if (!authUser) { return (<SignUpPage setAuthUser={setAuthUser} />); }
 
   return (
-    <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0">
+    <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
       <section
         style={MOBILE_FRAME_STYLE}
-        className="flex h-full flex-col justify-center border border-accent-1 bg-secondary-background px-6 shadow-lg shadow-black/20"
+        className="flex h-full max-h-dvh flex-col overflow-hidden shadow-xl shadow-black/25 relative"
       >
-        <h1 className="text-2xl font-semibold text-foreground">{pageTitle}</h1>
-        <p className="mt-1 text-sm text-accent-2">Single-page auth flow for mobile-first layout.</p>
+        <AutoNotificationPrompt authUser={authUser} showNotificationsPrompt={showNotificationsPrompt} setShowNotificationsPrompt={setShowNotificationsPrompt} />
 
-        {mode === "login" ? (
-          <form className="mt-6 flex flex-col gap-3" onSubmit={submitLogin}>
-            <input
-              className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent-2"
-              placeholder="Username or email"
-              value={identifier}
-              onChange={(event) => setIdentifier(event.target.value)}
-              autoCapitalize="none"
-              autoComplete="username"
-              required
-            />
-            <input
-              className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent-2"
-              placeholder="Password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="current-password"
-              required
-            />
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="mt-2 rounded-xl bg-accent-3 px-4 py-3 text-sm font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
-            >
-              {isSubmitting ? "Logging in..." : "Log in"}
-            </button>
-          </form>
-        ) : (
-          <form className="mt-6 flex flex-col gap-3" onSubmit={submitSignup}>
-            <input
-              className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent-2"
-              placeholder="Username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              autoCapitalize="none"
-              autoComplete="username"
-              required
-            />
-            <input
-              className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent-2"
-              placeholder="Email (optional)"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoCapitalize="none"
-              autoComplete="email"
-            />
-            <input
-              className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent-2"
-              placeholder="Password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="new-password"
-              required
-            />
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="mt-2 rounded-xl bg-accent-3 px-4 py-3 text-sm font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
-            >
-              {isSubmitting ? "Creating account..." : "Sign up"}
-            </button>
-          </form>
-        )}
-
-        <button
-          type="button"
-          onClick={() => {
-            setMode((previousMode) => (previousMode === "login" ? "signup" : "login"));
-            setStatusMessage("");
-          }}
-          className="mt-4 text-sm text-accent-2 underline underline-offset-4 hover:text-foreground"
+        {/** Main Content Container */}
+        <div 
+          className="flex-1 min-h-0 overflow-hidden px-0 py-0"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+          onTouchMove={onTouchMove}
         >
-          {mode === "login" ? "Need an account? Sign up" : "Have an account? Log in"}
-        </button>
+          {/** Content */}
+          <div 
+            className="absolute top-0 left-0 w-full h-full z-[100] bg-black"
+            style={{ transform: swipingBackPercent && backSwipeContent? `translateX(${swipingBackPercent * 100}%)` : undefined }}
+          >
+            {content}
+          </div>
 
-        {statusMessage ? <p className="mt-4 text-sm text-accent-2">{statusMessage}</p> : null}
+          {/** Back Swipe Content */}
+          {swipingBackPercent !== null && backSwipeContent && (
+            <div className="absolute top-0 left-0 w-full h-full bg-black" style={{ touchAction: "none" }}>
+              {backSwipeContent}
+            </div>
+          )}
+        </div>
+
+        <nav className="grid grid-cols-3 border-t border-accent-1 bg-primary-background z-[1000]">
+          <NavRowButton
+            icon={<House aria-hidden className="h-4 w-4" />}
+            isActive={activeTab === "feed"}
+            showCircle={false}
+            onClick={() => setActiveTab("feed")}
+          />
+          <NavRowButton
+            icon={<Users aria-hidden className="h-4 w-4" />}
+            isActive={activeTab === "groups"}
+            showCircle={groupsUnreadCount > 0}
+            onClick={() => setActiveTab("groups")}
+          />
+          <NavRowButton
+            icon={<UserRound aria-hidden className="h-4 w-4" />}
+            isActive={activeTab === "profile"}
+            showCircle={profileIncomingRequestCount > 0}
+            onClick={() => {
+              setActiveTab("profile");
+            }}
+          />
+        </nav>
       </section>
     </main>
   );

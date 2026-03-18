@@ -182,8 +182,8 @@ export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userI
     });
   }, [loadPosts]);
 
-  const showTopRefreshIndicator = isRefreshingLatest && didHydrateFromCache && posts.length > 0;
-
+  const showTopRefreshIndicator = isRefreshingLatest && didHydrateFromCache && posts.length > 0
+  
   return (
     <div className="flex h-full min-h-0 flex-col bg-primary-background">
       <div

@@ -4,13 +4,6 @@ export type PreparedImageUpload = {
   previewDataUrl: string;
 };
 
-const BROWSER_SAFE_IMAGE_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-]);
-
 const fileToDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -27,13 +20,25 @@ const loadImageElement = (dataUrl: string): Promise<HTMLImageElement> =>
     image.src = dataUrl;
   });
 
+const MAX_IMAGE_DIMENSION = 1440;
+
 const normalizeImageDataUrl = async (
   dataUrl: string,
 ): Promise<{ normalizedDataUrl: string; normalizedMimeType: string }> => {
   const image = await loadImageElement(dataUrl);
   const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
+
+  const originalWidth = image.naturalWidth || image.width;
+  const originalHeight = image.naturalHeight || image.height;
+  const largestSide = Math.max(originalWidth, originalHeight);
+  const scale =
+    largestSide > MAX_IMAGE_DIMENSION ? MAX_IMAGE_DIMENSION / largestSide : 1;
+
+  const targetWidth = Math.max(1, Math.round(originalWidth * scale));
+  const targetHeight = Math.max(1, Math.round(originalHeight * scale));
+
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
 
   const context = canvas.getContext("2d");
   if (!context) {
@@ -44,7 +49,7 @@ const normalizeImageDataUrl = async (
 
   const normalizedMimeType = "image/jpeg";
   return {
-    normalizedDataUrl: canvas.toDataURL(normalizedMimeType, 0.92),
+    normalizedDataUrl: canvas.toDataURL(normalizedMimeType, 0.85),
     normalizedMimeType,
   };
 };
@@ -55,10 +60,7 @@ export const prepareImageForUpload = async (file: File): Promise<PreparedImageUp
   }
 
   const originalDataUrl = await fileToDataUrl(file);
-  const isBrowserSafeType = BROWSER_SAFE_IMAGE_MIME_TYPES.has(file.type);
-  const { normalizedDataUrl, normalizedMimeType } = isBrowserSafeType
-    ? { normalizedDataUrl: originalDataUrl, normalizedMimeType: file.type }
-    : await normalizeImageDataUrl(originalDataUrl);
+  const { normalizedDataUrl, normalizedMimeType } = await normalizeImageDataUrl(originalDataUrl);
 
   const base64Data = normalizedDataUrl.split(",")[1];
   if (!base64Data) {

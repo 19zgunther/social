@@ -1,19 +1,16 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CircleUserRound, Image, Video } from "lucide-react";
+import { FormEvent, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
+import { Camera, Image, Video } from "lucide-react";
 import CameraModal from "@/app/components/Camera";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
-import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ThreadSettings from "@/app/components/ThreadSettings";
 import VideoCall from "@/app/components/VideoCall";
 import {
   ApiError,
-  FriendSearchResponse,
   ImageOverlayData,
   MessageData,
-  SyncEvent,
   SyncResponse,
   ThreadItem,
   ThreadMember,
@@ -24,12 +21,13 @@ import {
 } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import BackButton from "./utils/BackButton";
-import useSwipeBack from "./utils/useSwipeBack";
 
 type ThreadProps = {
-  thread: ThreadItem;
   currentUserId: string;
   onBack: () => void;
+  setThreadSettingsOpen: () => void;
+  selectedThread: ThreadItem;
+  setSelectedThread: (value: SetStateAction<ThreadItem | null>) => void
 };
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -46,7 +44,7 @@ const isNearBottom = (element: HTMLDivElement): boolean =>
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   return fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 };
@@ -105,8 +103,7 @@ const toImageOverlayData = (data: MessageData | null | undefined): ImageOverlayD
   };
 };
 
-export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
-  const [activeThread, setActiveThread] = useState<ThreadItem>(thread);
+export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, selectedThread, setSelectedThread }: ThreadProps) {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [messageDraft, setMessageDraft] = useState("");
   const [memberIdentifier, setMemberIdentifier] = useState("");
@@ -133,8 +130,6 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const pendingBottomScrollRef = useRef<ScrollBehavior | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const { onTouchStart, onTouchEnd } = useSwipeBack({ onBack });
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -209,7 +204,6 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   useEffect(() => {
     let isCancelled = false;
 
-    setActiveThread(thread);
     setMessages([]);
     setMembers([]);
     setMessageDraft("");
@@ -226,12 +220,13 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     const loadThread = async () => {
       setIsLoadingMessages(true);
       setIsLoadingMembers(true);
+      const thread = selectedThread;
 
       try {
         const cached = await readThreadMessagesCache(thread.id);
         if (!isCancelled && cached) {
-          setActiveThread((previousThread) => ({
-            ...previousThread,
+          setSelectedThread((previousThread: ThreadItem | null) => ({
+            ...previousThread as ThreadItem,
             name: cached.thread.name,
             owner_user_id: cached.thread.owner_user_id,
           }));
@@ -252,8 +247,8 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
           const payload = (await response.json()) as ThreadMessagesResponse;
 
           if (!isCancelled) {
-            setActiveThread((previousThread) => ({
-              ...previousThread,
+            setSelectedThread((previousThread: ThreadItem | null) => ({
+              ...previousThread as ThreadItem,
               name: payload.thread.name,
               owner_user_id: payload.thread.owner_user_id,
             }));
@@ -307,7 +302,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     return () => {
       isCancelled = true;
     };
-  }, [thread, readThreadMessagesCache, writeThreadMessagesCache]);
+  }, [readThreadMessagesCache, writeThreadMessagesCache]);
 
   const loadOlderMessages = async () => {
     if (
@@ -326,7 +321,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
 
     try {
       const response = await postWithAuth("/api/thread-messages", {
-        thread_id: activeThread.id,
+        thread_id: selectedThread.id,
         cursor_message_id: oldestLoadedMessageId,
       });
 
@@ -404,7 +399,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
             (event) =>
               (event.type === "thread_message_posted" ||
                 event.type === "thread_message_updated") &&
-              event.thread_id === activeThread.id,
+              event.thread_id === selectedThread.id,
           );
 
           if (!needsThreadRefresh) {
@@ -415,7 +410,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
           const wasNearBottom = container ? isNearBottom(container) : false;
 
           const latestResponse = await postWithAuth("/api/thread-messages", {
-            thread_id: activeThread.id,
+            thread_id: selectedThread.id,
           });
 
           if (!latestResponse.ok) {
@@ -432,15 +427,15 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
             (previousCursorId) => previousCursorId ?? latestPayload.next_cursor_message_id,
           );
 
-          void writeThreadMessagesCache(activeThread.id, latestPayload);
+          void writeThreadMessagesCache(selectedThread.id, latestPayload);
 
           if (wasNearBottom) {
             pendingBottomScrollRef.current = "smooth";
             setShowNewMessagesButton(false);
-          isFollowingBottomRef.current = true;
+            isFollowingBottomRef.current = true;
           } else {
             setShowNewMessagesButton(true);
-          isFollowingBottomRef.current = false;
+            isFollowingBottomRef.current = false;
           }
         } catch {
           await sleep(1_000);
@@ -453,7 +448,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     return () => {
       isCancelled = true;
     };
-  }, [activeThread.id, currentUserId]);
+  }, [selectedThread.id, currentUserId]);
 
   const sendThreadMessage = async ({
     text,
@@ -476,23 +471,23 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     const trimmedText = text.trim();
     const messageData = imageOverlay
       ? {
-          image_overlay: {
-            text: imageOverlay.text.trim(),
-            y_ratio: clampOverlayYRatio(imageOverlay.y_ratio),
-          },
-        }
+        image_overlay: {
+          text: imageOverlay.text.trim(),
+          y_ratio: clampOverlayYRatio(imageOverlay.y_ratio),
+        },
+      }
       : undefined;
 
     try {
       const response = await postWithAuth("/api/thread-send", {
-        thread_id: activeThread.id,
+        thread_id: selectedThread.id,
         text: trimmedText,
         ...(replyTargetMessageId ? { reply_to_message_id: replyTargetMessageId } : {}),
         ...(imageBase64Data && imageMimeType
           ? {
-              image_base64_data: imageBase64Data,
-              image_mime_type: imageMimeType,
-            }
+            image_base64_data: imageBase64Data,
+            image_mime_type: imageMimeType,
+          }
           : {}),
         ...(messageData ? { message_data: messageData } : {}),
       });
@@ -577,9 +572,9 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
         imagePreviewDataUrl: preparedImage.previewDataUrl,
         imageOverlay: payload.overlayText.trim()
           ? {
-              text: payload.overlayText.trim(),
-              y_ratio: payload.overlayYRatio,
-            }
+            text: payload.overlayText.trim(),
+            y_ratio: payload.overlayYRatio,
+          }
           : undefined,
         clearDraftOnSuccess: false,
       });
@@ -599,10 +594,10 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     return hasText || hasImage || hasOverlay;
   });
 
-  const rootMessages = visibleMessages.filter((message) => message.parent_id === activeThread.id);
+  const rootMessages = visibleMessages.filter((message) => message.parent_id === selectedThread.id);
   const childMessagesByParentId = new Map<string, ThreadMessage[]>();
   for (const message of visibleMessages) {
-    if (!message.parent_id || message.parent_id === activeThread.id) {
+    if (!message.parent_id || message.parent_id === selectedThread.id) {
       continue;
     }
 
@@ -615,7 +610,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     let cursor = messageById.get(messageId);
     let safety = 0;
     while (cursor && cursor.parent_id && safety < 100) {
-      if (cursor.parent_id === activeThread.id) {
+      if (cursor.parent_id === selectedThread.id) {
         return cursor.id;
       }
       cursor = messageById.get(cursor.parent_id);
@@ -656,7 +651,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
 
     try {
       const response = await postWithAuth("/api/thread-edit", {
-        thread_id: activeThread.id,
+        thread_id: selectedThread.id,
         message_id: editTargetMessageId,
         text: messageDraft,
       });
@@ -670,9 +665,9 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
         previousMessages.map((message) =>
           message.id === payload.message.id
             ? {
-                ...message,
-                text: payload.message.text,
-              }
+              ...message,
+              text: payload.message.text,
+            }
             : message,
         ),
       );
@@ -713,33 +708,31 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
             event.preventDefault();
             setActiveOptionsMessageId(message.id);
           }}
-          className={`max-w-[85%] text-sm ${
-            isImageOnly
-              ? `${isOwnMessage ? "ml-auto" : ""}`
-              : `rounded-2xl px-3 py-1 shadow-sm ${
-                  isOwnMessage
-                    ? "ml-auto rounded-br-sm bg-accent-3 text-primary-background"
-                    : "rounded-bl-sm bg-secondary-background text-foreground"
-                }`
-          } ${depth > 0 ? "ml-5 border-l border-accent-1/60" : ""}`}
+          className={`max-w-[85%] text-sm ${isImageOnly
+            ? `${isOwnMessage ? "ml-auto" : ""}`
+            : `rounded-2xl px-3 py-1 shadow-sm ${isOwnMessage
+              ? "ml-auto rounded-br-sm bg-accent-3 text-primary-background"
+              : "rounded-bl-sm bg-secondary-background text-foreground"
+            }`
+            } ${depth > 0 ? "ml-5 border-l border-accent-1/60" : ""}`}
           style={depth > 0 ? { width: "calc(85% - 1.25rem)" } : undefined}
         >
           {!isImageOnly ? (
             <>
-              <p className="text-[10px] opacity-60">{isOwnMessage ? "You" : message.username}</p>
+              <p className="text-xs opacity-60">{isOwnMessage ? "You" : message.username}</p>
               <p className="break-words">{message.text}</p>
             </>
           ) : null}
           {message.image_url ? (
             <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
-            <CachedImage
-              signedUrl={message.image_url}
-              imageId={message.image_id}
-              alt="Thread message attachment"
-              className="max-h-[100vh] w-full rounded-xl object-cover"
-              loading="lazy"
-              onLoad={handleMessageImageLoad}
-            />
+              <CachedImage
+                signedUrl={message.image_url}
+                imageId={message.image_id}
+                alt="Thread message attachment"
+                className="max-h-[100vh] w-full rounded-xl object-cover"
+                loading="lazy"
+                onLoad={handleMessageImageLoad}
+              />
               {messageImageOverlay ? (
                 <div
                   className="absolute left-0 right-0 -translate-y-1/2 bg-black/45 px-3 py-2 text-center text-sm font-semibold text-white"
@@ -771,7 +764,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
     );
   };
 
-  const isOwner = activeThread.owner_user_id === currentUserId;
+  const isOwner = selectedThread.owner_user_id === currentUserId;
   const isComposerExpanded =
     isComposerFocused || Boolean(editTargetMessageId) || messageDraft.trim().length > 0;
 
@@ -793,30 +786,30 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   if (isVideoCallOpen) {
     return (
       <VideoCall
-        threadId={activeThread.id}
+        threadId={selectedThread.id}
         currentUserId={currentUserId}
         onBack={() => setIsVideoCallOpen(false)}
       />
     );
   }
-  
+
 
   if (isSettingsOpen) {
     return (
       <ThreadSettings
-        thread={activeThread}
+        thread={selectedThread}
         currentUserId={currentUserId}
         onBack={() => setIsSettingsOpen(false)}
         onThreadImageUpdated={(imageId, imageUrl) => {
-          setActiveThread((previous) => ({
-            ...previous,
+          setSelectedThread((previous: ThreadItem | null) => ({
+            ...previous as ThreadItem,
             image_id: imageId,
             image_url: imageUrl,
           }));
         }}
         onThreadRenamed={(name) => {
-          setActiveThread((previous) => ({
-            ...previous,
+          setSelectedThread((previous: ThreadItem | null) => ({
+            ...previous as ThreadItem,
             name,
           }));
         }}
@@ -827,19 +820,17 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   return (
     <div
       className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background"
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
     >
       <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
         <BackButton onBack={onBack} backLabel="Groups" />
         <div
           className="min-w-0 text-center flex items-center gap-2"
-          onClick={() => setIsSettingsOpen((previous) => !previous)}
+          onClick={setThreadSettingsOpen}
         >
-           {activeThread.image_url ? (
+          {selectedThread.image_url ? (
             <CachedImage
-              signedUrl={activeThread.image_url}
-              imageId={activeThread.image_id ?? null}
+              signedUrl={selectedThread.image_url}
+              imageId={selectedThread.image_id ?? null}
               alt="Group photo"
               className="h-10 w-10 rounded-full border border-accent-1 object-cover"
             />
@@ -848,7 +839,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
               <Image className="h-10 w-10 text-accent-2" />
             </div>
           )}
-          <p className="truncate text-sm font-semibold text-foreground">{activeThread.name}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{selectedThread.name}</p>
         </div>
         <button
           type="button"
@@ -995,9 +986,8 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
 
       <form onSubmit={onSendMessage} className="mx-2 mb-2 mt-1 flex items-center gap-2">
         <input
-          className={`rounded-full border border-accent-1 bg-secondary-background px-4 py-2 text-sm text-foreground outline-none focus:border-accent-2 transition-all duration-200 ${
-            isComposerExpanded ? "flex-1" : "w-1/2"
-          }`}
+          className={`rounded-full border border-accent-1 bg-secondary-background px-4 py-2 text-sm text-foreground outline-none focus:border-accent-2 transition-all duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
+            }`}
           placeholder="Type a message..."
           value={messageDraft}
           onChange={(event) => setMessageDraft(event.target.value)}

@@ -12,6 +12,9 @@ type GroupsProps = {
   onThreadRead?: () => void;
   deepLinkThreadId?: string | null;
   onDeepLinkThreadHandled?: () => void;
+  selectedThread: ThreadItem | null;
+  setSelectedThread: (thread: ThreadItem | null) => void;
+  isActiveTab: boolean;
 };
 
 const GROUPS_CACHE_KEY = "groups_list_v1";
@@ -35,9 +38,11 @@ export default function Groups({
   onThreadRead,
   deepLinkThreadId,
   onDeepLinkThreadHandled,
+  selectedThread,
+  setSelectedThread,
+  isActiveTab,
 }: GroupsProps) {
   const [threads, setThreads] = useState<ThreadItem[]>([]);
-  const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
   const [unreadThreadIds, setUnreadThreadIds] = useState<Set<string>>(new Set());
   const [threadName, setThreadName] = useState("");
   const [isLoadingThreads, setIsLoadingThreads] = useState(true);
@@ -149,6 +154,12 @@ export default function Groups({
     };
   }, [loadUnreadThreads, selectedThread]);
 
+  useEffect(() => {
+    if (isActiveTab) {
+      loadUnreadThreads();
+    }
+  }, [loadUnreadThreads, isActiveTab])
+
   const onCreateThread = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!threadName.trim()) {
@@ -201,20 +212,6 @@ export default function Groups({
     onOpenThread(match);
     onDeepLinkThreadHandled?.();
   }, [deepLinkThreadId, isLoadingThreads, onDeepLinkThreadHandled, onOpenThread, selectedThread, threads]);
-
-  if (selectedThread) {
-    return (
-      <Thread
-        thread={selectedThread}
-        currentUserId={currentUserId}
-        onBack={() => {
-          setSelectedThread(null);
-          setStatusMessage("");
-          void loadUnreadThreads();
-        }}
-      />
-    );
-  }
 
   return (
     <div className="flex h-full min-h-0 flex-col space-y-3 px-2">

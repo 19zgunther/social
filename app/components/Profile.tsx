@@ -7,7 +7,6 @@ import { PostSection } from "@/app/components/PostSection";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
-import useSwipeBack from "@/app/components/utils/useSwipeBack";
 import {
   AcceptedFriend,
   ApiError,
@@ -226,7 +225,7 @@ function ProfilePostsSection({
   )
 }
 
-export default function Profile({
+function Profile({
   userId,
   username,
   email,
@@ -659,62 +658,6 @@ export default function Profile({
               />
             </div>
 
-            {/* {friendSearchResults.length > 0 ? (
-              <div className="space-y-2">
-                {friendSearchResults.map((result) => {
-                  const relation = result.relation;
-                  const canRequest = relation === null;
-                  const relationLabel = relation
-                    ? relation.accepted === true
-                      ? "Friends"
-                      : relation.accepted === false
-                        ? "Rejected"
-                        : relation.direction === "incoming"
-                          ? "Incoming request"
-                          : "Request sent"
-                    : "";
-                  return (
-                    <div
-                      key={result.id}
-                      className="flex items-center gap-3 rounded-lg border border-accent-1 bg-primary-background px-3 py-2"
-                    >
-                      {result.profile_image_url ? (
-                        <CachedImage
-                          signedUrl={result.profile_image_url}
-                          imageId={result.profile_image_id}
-                          alt={`${result.username} profile`}
-                          className="h-10 w-10 rounded-full border border-accent-1 object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-1 bg-secondary-background flex-shrink-0">
-                          <CircleUserRound className="h-5 w-5 text-accent-2" />
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">{result.username}</p>
-                        {result.email && (
-                          <p className="truncate text-xs text-accent-2">{result.email}</p>
-                        )}
-                        {relationLabel ? (
-                          <p className="text-[11px] text-accent-2">{relationLabel}</p>
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void onSendFriendRequest(result.id);
-                        }}
-                        disabled={!canRequest || activeFriendUserId === result.id}
-                        className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50 flex-shrink-0"
-                      >
-                        {activeFriendUserId === result.id ? "..." : "Request"}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null} */}
-
             <div>
               {isLoadingFriendRows ? (
                 <p className="text-xs text-accent-2">Loading friends...</p>
@@ -817,7 +760,7 @@ export default function Profile({
                         {row.email && (
                           <p className="text-xs text-accent-2 truncate">{row.email}</p>
                         )}
-                        <p className="mt-0.5 text-[11px] text-accent-2">Pending</p>
+                        <p className="mt-0.5 text-xs text-accent-2">Pending</p>
                       </div>
                     </div>
                   ))}
@@ -895,7 +838,7 @@ export default function Profile({
   );
 }
 
-export function ProfileOtherUser({
+function ProfileOtherUser({
   userId,
   onBack,
 }: {
@@ -911,8 +854,6 @@ export function ProfileOtherUser({
 
   const [removeFriendConfirmed, setRemoveFriendConfirmed] = useState(false);
   const [isRemovingFriend, setIsRemovingFriend] = useState(false);
-
-  const { onTouchStart, onTouchEnd } = useSwipeBack({ onBack });
 
   const onRemoveFriend = async () => {
     if (!profileData || !profileData.friendship_id) {
@@ -1022,8 +963,6 @@ export function ProfileOtherUser({
     return (
       <div
         className="flex h-full min-h-0 w-full flex-col bg-primary-background"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
       >
         <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
           <button
@@ -1072,8 +1011,6 @@ export function ProfileOtherUser({
     return (
       <div
         className="flex h-full min-h-0 flex-col bg-primary-background"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
       >
         <div className="border-b border-accent-1 px-3 py-2">
           <button
@@ -1099,8 +1036,6 @@ export function ProfileOtherUser({
   return (
     <div
       className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain touch-pan-y bg-primary-background"
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
     >
       <div className="border-b border-accent-1 px-3 py-2">
         <button
@@ -1178,4 +1113,9 @@ export function ProfileOtherUser({
       {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
     </div>
   );
+}
+
+export {
+  Profile,
+  ProfileOtherUser,
 }
