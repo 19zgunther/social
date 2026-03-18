@@ -30,7 +30,6 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
       }
     };
 
-    setSrc(null);
     void load();
 
     return () => {

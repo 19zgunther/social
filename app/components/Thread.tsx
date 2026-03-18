@@ -124,6 +124,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const [statusMessage, setStatusMessage] = useState("");
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const isFollowingBottomRef = useRef(true);
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
   const [replyTargetMessageId, setReplyTargetMessageId] = useState<string | null>(null);
   const [editTargetMessageId, setEditTargetMessageId] = useState<string | null>(null);
@@ -193,6 +194,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
         top: container.scrollHeight,
         behavior,
       });
+      isFollowingBottomRef.current = true;
     });
   }, [messages.length]);
 
@@ -362,6 +364,8 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
       return;
     }
 
+    isFollowingBottomRef.current = isNearBottom(container);
+
     if (isNearBottom(container)) {
       setShowNewMessagesButton(false);
     }
@@ -433,8 +437,10 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
           if (wasNearBottom) {
             pendingBottomScrollRef.current = "smooth";
             setShowNewMessagesButton(false);
+          isFollowingBottomRef.current = true;
           } else {
             setShowNewMessagesButton(true);
+          isFollowingBottomRef.current = false;
           }
         } catch {
           await sleep(1_000);
@@ -513,6 +519,7 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
       }
 
       setShowNewMessagesButton(false);
+      isFollowingBottomRef.current = true;
       if (replyTargetMessageId) {
         const rootMessageId = getRootMessageIdForMessage(replyTargetMessageId);
         if (rootMessageId) {
@@ -802,13 +809,14 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
           ) : null}
           {message.image_url ? (
             <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
-              <CachedImage
-                signedUrl={message.image_url}
-                imageId={message.image_id}
-                alt="Thread message attachment"
-                className="max-h-56 w-full rounded-xl object-cover"
-                loading="lazy"
-              />
+            <CachedImage
+              signedUrl={message.image_url}
+              imageId={message.image_id}
+              alt="Thread message attachment"
+              className="max-h-56 w-full rounded-xl object-cover"
+              loading="lazy"
+              onLoad={handleMessageImageLoad}
+            />
               {messageImageOverlay ? (
                 <div
                   className="absolute left-0 right-0 -translate-y-1/2 bg-black/45 px-3 py-2 text-center text-sm font-semibold text-white"
@@ -843,6 +851,21 @@ export default function Thread({ thread, currentUserId, onBack }: ThreadProps) {
   const isOwner = activeThread.owner_user_id === currentUserId;
   const isComposerExpanded =
     isComposerFocused || Boolean(editTargetMessageId) || messageDraft.trim().length > 0;
+
+  const handleMessageImageLoad = () => {
+    const container = chatContainerRef.current;
+    if (!container || !isFollowingBottomRef.current) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      const activeContainer = chatContainerRef.current;
+      if (!activeContainer) {
+        return;
+      }
+      activeContainer.scrollTop = activeContainer.scrollHeight;
+    });
+  };
 
   if (isVideoCallOpen) {
     return (
