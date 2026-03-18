@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronDown, ChevronRight, CircleUserRound, LogOut, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, CircleUserRound, Plus, Settings as SettingsIcon, Trash2 } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
 import PostSection from "@/app/components/PostSection";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
@@ -18,6 +18,7 @@ import {
   PostCreateResponse,
   PostItem,
   ProfilePostsListResponse,
+  UserProfileResponse,
 } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
 
@@ -28,14 +29,15 @@ type ProfileProps = {
   profileImageId: string | null;
   profileImageUrl: string | null;
   onProfileImageUpdated: (profileImageId: string | null, profileImageUrl: string | null) => void;
-  onLogout: () => void;
+  onOpenSettings: () => void;
+  onViewUserProfile: (userId: string) => void;
 };
 
 
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   return fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 };
@@ -49,6 +51,180 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   }
 };
 
+function ProfilePictureRow({
+  isCurrentUsers,
+  localProfileImageUrl,
+  localProfileImageId,
+  username,
+  email,
+  onOpenSettings,
+  setIsProfilePictureEditorOpen,
+}: {
+  isCurrentUsers: boolean;
+  localProfileImageUrl: string | null;
+  localProfileImageId: string | null;
+  username: string;
+  email: string | null;
+  onOpenSettings: () => void;
+  setIsProfilePictureEditorOpen: (isOpen: boolean) => void;
+}) {
+  return (
+    <div className="border-b border-accent-1 px-4 py-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {isCurrentUsers ? (
+            <button
+              type="button"
+              onClick={() => setIsProfilePictureEditorOpen(true)}
+              className="overflow-hidden rounded-full border border-accent-1 bg-secondary-background cursor-pointer"
+              aria-label="Edit profile picture"
+            >
+              {localProfileImageUrl ? (
+                <CachedImage
+                  signedUrl={localProfileImageUrl}
+                  imageId={localProfileImageId}
+                  alt="Profile picture"
+                  className="h-16 w-16 object-cover"
+                />
+              ) : (
+                <div className="p-2 text-xs">
+                  <CircleUserRound className="h-14 w-14 text-accent-2" />
+                  <p className="text-accent-2">Click to add</p>
+                </div>
+              )}
+            </button>
+          ) : (
+            <div className="overflow-hidden rounded-full border border-accent-1 bg-secondary-background">
+              {localProfileImageUrl ? (
+                <CachedImage
+                  signedUrl={localProfileImageUrl}
+                  imageId={localProfileImageId}
+                  alt="Profile picture"
+                  className="h-16 w-16 object-cover"
+                />
+              ) : (
+                <div className="p-2">
+                  <CircleUserRound className="h-14 w-14 text-accent-2" />
+                </div>
+              )}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-lg font-semibold text-foreground">{username}</p>
+            {isCurrentUsers && <p className="truncate text-xs text-accent-2">{email ?? "No email"}</p>}
+          </div>
+        </div>
+
+        {isCurrentUsers && (
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="rounded-full border border-accent-1 bg-secondary-background p-2 text-accent-2 transition hover:text-foreground"
+            aria-label="Settings"
+            title="Settings"
+          >
+            <SettingsIcon className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProfilePostsSection({
+  posts,
+  isLoadingPosts,
+  hasMorePosts,
+  nextCursorPostId,
+  isLoadingMorePosts,
+  loadPosts,
+  setSelectedPostId,
+  createInputRef,
+  showCreateButton = true,
+}: {
+  posts: PostItem[];
+  isLoadingPosts: boolean;
+  hasMorePosts: boolean;
+  nextCursorPostId: string | null;
+  isLoadingMorePosts: boolean;
+  loadPosts: (cursorPostId?: string) => void;
+  setSelectedPostId: (postId: string | null) => void;
+  createInputRef: React.RefObject<HTMLInputElement> | null;
+  showCreateButton?: boolean;
+}) {
+  return (
+    <>
+      <div className="border-b border-accent-1 px-3 py-3">
+        Posts
+      </div>
+      <div className="min-h-0">
+        {isLoadingPosts ? <p className="px-3 py-3 text-xs text-accent-2">Loading posts...</p> : null}
+        {!isLoadingPosts && posts.length === 0 ? (
+          <p className="px-3 py-3 text-xs text-accent-2">
+            {showCreateButton ? "No posts yet. Create your first post." : "No posts yet."}
+          </p>
+        ) : null}
+
+        <div className="grid grid-cols-3 border-t border-accent-1">
+          {showCreateButton && createInputRef && (
+            <button
+              type="button"
+              onClick={() => createInputRef.current?.click()}
+              className="aspect-square border-r border-b border-accent-1 bg-secondary-background p-2"
+            >
+              <div className="flex h-full w-full items-center justify-center rounded-md border border-accent-1">
+                <Plus className="h-6 w-6 text-accent-2" />
+              </div>
+            </button>
+          )}
+
+          {posts.map((post, index) => {
+            const showRightBorder = showCreateButton && createInputRef
+              ? (index + 1) % 3 !== 0
+              : index % 3 !== 2;
+            return (
+              <button
+                key={post.id}
+                type="button"
+                onClick={() => setSelectedPostId(post.id)}
+                className={`aspect-square bg-primary-background ${
+                  showRightBorder ? "border-r border-accent-1" : ""
+                } border-b border-accent-1`}
+              >
+                {post.image_url ? (
+                  <CachedImage
+                    signedUrl={post.image_url}
+                    imageId={post.image_id}
+                    alt="Profile post"
+                    className="h-full w-full object-cover"
+                  />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        {hasMorePosts ? (
+          <div className="px-3 py-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (nextCursorPostId && !isLoadingMorePosts) {
+                  void loadPosts(nextCursorPostId);
+                }
+              }}
+              disabled={!nextCursorPostId || isLoadingMorePosts}
+              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs font-medium text-accent-2 transition hover:text-foreground disabled:opacity-50"
+            >
+              {isLoadingMorePosts ? "Loading..." : "Load more"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </>
+  )
+}
+
 export default function Profile({
   userId,
   username,
@@ -56,7 +232,8 @@ export default function Profile({
   profileImageId,
   profileImageUrl,
   onProfileImageUpdated,
-  onLogout,
+  onOpenSettings,
+  onViewUserProfile,
 }: ProfileProps) {
   const [posts, setPosts] = useStateCached<PostItem[]>([], 'user_profile_posts_cache_v1');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -201,11 +378,23 @@ export default function Profile({
           username: user.username,
           email: user.email,
           hint,
+          profile_image_id: user.profile_image_id,
+          profile_image_url: user.profile_image_url,
         };
       });
     },
     [runFriendSearch],
   );
+
+  const onSelectUserFromSearch = useCallback((option: UserSearchOption) => {
+    setFriendSearchQuery(option.username);
+    if (option.hint) {
+      setStatusMessage(option.hint);
+    }
+    if (option.id !== userId) {
+      onViewUserProfile(option.id);
+    }
+  }, [userId, onViewUserProfile]);
 
   const onSendFriendRequest = async (otherUserId: string) => {
     setActiveFriendUserId(otherUserId);
@@ -403,46 +592,16 @@ export default function Profile({
           setStatusMessage(nextProfileImageUrl ? "Profile image updated." : "Profile image removed.");
         }}
       />
-      <div className="border-b border-accent-1 px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsProfilePictureEditorOpen(true)}
-              className="overflow-hidden rounded-full border border-accent-1 bg-secondary-background cursor-pointer"
-              aria-label="Edit profile picture"
-            >
-              {localProfileImageUrl ? (
-                <CachedImage
-                  signedUrl={localProfileImageUrl}
-                  imageId={localProfileImageId}
-                  alt="Profile picture"
-                  className="h-16 w-16 object-cover"
-                />
-              ) : (
-                <div className="p-2 text-xs">
-                  <CircleUserRound className="h-14 w-14 text-accent-2" />
-                  <p className="text-accent-2">Click to add</p>
-                </div>
-                
-              )}
-            </button>
-            <div className="min-w-0">
-              <p className="truncate text-lg font-semibold text-foreground">{username}</p>
-              <p className="truncate text-xs text-accent-2">{email ?? "No email"}</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="rounded-full border border-accent-1 bg-secondary-background p-2 text-accent-2 transition hover:text-foreground"
-            aria-label="Log out"
-            title="Log out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+
+      <ProfilePictureRow
+        isCurrentUsers={true}
+        localProfileImageUrl={localProfileImageUrl}
+        localProfileImageId={localProfileImageId}
+        username={username}
+        email={email}
+        onOpenSettings={onOpenSettings}
+        setIsProfilePictureEditorOpen={setIsProfilePictureEditorOpen}
+      />
 
       {/** Friends Section */}
       <section className="border-b border-accent-1 px-3 py-3">
@@ -458,9 +617,8 @@ export default function Profile({
           )}
           {isFriendsExpanded
             ? "Friends"
-            : `Friends (${acceptedFriends.length}), Requests (${
-                incomingRequests.length + pendingOutgoingRequests.length
-              })`}
+            : `Friends (${acceptedFriends.length}), Requests (${incomingRequests.length + pendingOutgoingRequests.length
+            })`}
         </button>
 
         {isFriendsExpanded ? (
@@ -470,19 +628,14 @@ export default function Profile({
               <UserSearch
                 value={friendSearchQuery}
                 onValueChange={setFriendSearchQuery}
-                onSelect={(option) => {
-                  setFriendSearchQuery(option.username);
-                  if (option.hint) {
-                    setStatusMessage(option.hint);
-                  }
-                }}
+                onSelect={onSelectUserFromSearch}
                 searchUsers={searchFriendOptions}
                 placeholder="Search username/email"
                 inputClassName="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
               />
             </div>
 
-            {friendSearchResults.length > 0 ? (
+            {/* {friendSearchResults.length > 0 ? (
               <div className="space-y-2">
                 {friendSearchResults.map((result) => {
                   const relation = result.relation;
@@ -499,11 +652,25 @@ export default function Profile({
                   return (
                     <div
                       key={result.id}
-                      className="flex items-center justify-between rounded-lg border border-accent-1 bg-primary-background px-3 py-2"
+                      className="flex items-center gap-3 rounded-lg border border-accent-1 bg-primary-background px-3 py-2"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm text-foreground">{result.username}</p>
-                        <p className="truncate text-xs text-accent-2">{result.email ?? "No email"}</p>
+                      {result.profile_image_url ? (
+                        <CachedImage
+                          signedUrl={result.profile_image_url}
+                          imageId={result.profile_image_id}
+                          alt={`${result.username} profile`}
+                          className="h-10 w-10 rounded-full border border-accent-1 object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-1 bg-secondary-background flex-shrink-0">
+                          <CircleUserRound className="h-5 w-5 text-accent-2" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{result.username}</p>
+                        {result.email && (
+                          <p className="truncate text-xs text-accent-2">{result.email}</p>
+                        )}
                         {relationLabel ? (
                           <p className="text-[11px] text-accent-2">{relationLabel}</p>
                         ) : null}
@@ -514,7 +681,7 @@ export default function Profile({
                           void onSendFriendRequest(result.id);
                         }}
                         disabled={!canRequest || activeFriendUserId === result.id}
-                        className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
+                        className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50 flex-shrink-0"
                       >
                         {activeFriendUserId === result.id ? "..." : "Request"}
                       </button>
@@ -522,7 +689,7 @@ export default function Profile({
                   );
                 })}
               </div>
-            ) : null}
+            ) : null} */}
 
             <div>
               {isLoadingFriendRows ? (
@@ -567,32 +734,36 @@ export default function Profile({
                 ))}
 
                 <p className="mb-1 text-xs font-semibold text-accent-2">Your friends ({acceptedFriends.length})</p>
-                <div className="space-y-2" />
-                {acceptedFriends.map((friend) => (
-                  <div
-                    key={friend.id}
-                    className="rounded-lg border border-accent-1 bg-primary-background px-3 py-1 flex items-center"
-                  >
-                    <p className="text-sm text-foreground">{friend.username}</p>
-                    <p className="text-xs text-accent-2 justify-self-end ml-auto mr-2">{friend.email ?? "No email"}</p>
+                <div className="space-y-2">
+                  {acceptedFriends.map((friend) => (
                     <button
+                      key={friend.id}
                       type="button"
-                      onClick={() => {
-                        void onRemoveFriend(friend.id);
-                      }}
-                      disabled={removingFriendId === friend.id}
-                      className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground"
-                      style={{ color: confirmedDeleteFriendId === friend.id ? "red" : undefined }}
+                      onClick={() => { onViewUserProfile(friend.user_id); }}
+                      className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 flex items-center gap-3 transition hover:bg-secondary-background"
                     >
-                      <Trash2 className="h-4 w-4" />{" "}
-                      {removingFriendId === friend.id
-                        ? "Removing..."
-                        : confirmedDeleteFriendId === friend.id
-                          ? "Confirm Delete"
-                          : ""}
+                      {friend.profile_image_url ? (
+                        <CachedImage
+                          signedUrl={friend.profile_image_url}
+                          imageId={friend.profile_image_id}
+                          alt={`${friend.username} profile`}
+                          className="h-10 w-10 rounded-full border border-accent-1 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-1 bg-secondary-background">
+                          <CircleUserRound className="h-5 w-5 text-accent-2" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-sm font-medium text-foreground truncate">{friend.username}</p>
+                        {friend.email && (
+                          <p className="text-xs text-accent-2 truncate">{friend.email}</p>
+                        )}
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-accent-2 flex-shrink-0" />
                     </button>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -603,11 +774,27 @@ export default function Profile({
                   {pendingOutgoingRequests.map((row) => (
                     <div
                       key={row.id}
-                      className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2"
+                      className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2 flex items-center gap-3"
                     >
-                      <p className="text-sm text-foreground">{row.username}</p>
-                      <p className="text-xs text-accent-2">{row.email ?? "No email"}</p>
-                      <p className="mt-1 text-[11px] text-accent-2">Pending</p>
+                      {row.profile_image_url ? (
+                        <CachedImage
+                          signedUrl={row.profile_image_url}
+                          imageId={row.profile_image_id}
+                          alt={`${row.username} profile`}
+                          className="h-10 w-10 rounded-full border border-accent-1 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-1 bg-secondary-background">
+                          <CircleUserRound className="h-5 w-5 text-accent-2" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{row.username}</p>
+                        {row.email && (
+                          <p className="text-xs text-accent-2 truncate">{row.email}</p>
+                        )}
+                        <p className="mt-0.5 text-[11px] text-accent-2">Pending</p>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -668,64 +855,261 @@ export default function Profile({
         className="hidden"
       />
 
-      <div className="border-b border-accent-1 px-3 py-3">
-        Posts
-      </div>
-      <div className="min-h-0">
-        {isLoadingPosts ? <p className="px-3 py-3 text-xs text-accent-2">Loading posts...</p> : null}
-        {!isLoadingPosts && posts.length === 0 ? (
-          <p className="px-3 py-3 text-xs text-accent-2">No posts yet. Create your first post.</p>
-        ) : null}
+      <ProfilePostsSection
+        posts={posts}
+        isLoadingPosts={isLoadingPosts}
+        hasMorePosts={hasMorePosts}
+        nextCursorPostId={nextCursorPostId}
+        isLoadingMorePosts={isLoadingMorePosts}
+        loadPosts={loadPosts}
+        setSelectedPostId={setSelectedPostId}
+        createInputRef={createInputRef as React.RefObject<HTMLInputElement>}
+      />
 
-        <div className="grid grid-cols-3 border-t border-accent-1">
+      {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
+    </div>
+  );
+}
+
+export function ProfileOtherUser({
+  userId,
+  onBack,
+}: {
+  userId: string;
+  onBack: () => void;
+}) {
+  const [profileData, setProfileData] = useState<UserProfileResponse | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [isSendingRequest, setIsSendingRequest] = useState(false);
+
+  const [removeFriendConfirmed, setRemoveFriendConfirmed] = useState(false);
+  const [isRemovingFriend, setIsRemovingFriend] = useState(false);
+
+  const onRemoveFriend = async () => {
+    if (!profileData || !profileData.friendship_id) {
+      return;
+    }
+
+    if (!removeFriendConfirmed) {
+      setRemoveFriendConfirmed(true);
+      return;
+    }
+
+    setIsRemovingFriend(true);
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/friend-remove", {
+        friend_id: profileData.friendship_id,
+      });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+
+      setRemoveFriendConfirmed(false);
+      await loadProfile();
+      setStatusMessage("Friend removed.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to remove friend.");
+    } finally {
+      setIsRemovingFriend(false);
+    }
+  };
+
+  const selectedPost = selectedPostId && profileData
+    ? profileData.posts.find((post) => post.id === selectedPostId) ?? null
+    : null;
+
+  const loadProfile = async (cursorPostId?: string) => {
+    if (cursorPostId) {
+      setIsLoadingMorePosts(true);
+    } else {
+      setIsLoadingProfile(true);
+    }
+
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/user-profile", {
+        user_id: userId,
+        ...(cursorPostId ? { cursor_post_id: cursorPostId } : {}),
+      });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+
+      const payload = (await response.json()) as UserProfileResponse;
+      setProfileData((previous) => {
+        if (cursorPostId && previous) {
+          return {
+            ...payload,
+            posts: [...previous.posts, ...payload.posts],
+          };
+        }
+        return payload;
+      });
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to load profile.");
+    } finally {
+      setIsLoadingProfile(false);
+      setIsLoadingMorePosts(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadProfile();
+  }, [userId]);
+
+  useEffect(() => {
+    setRemoveFriendConfirmed(false);
+  }, [profileData?.friendship_status]);
+
+  const onSendFriendRequest = async () => {
+    if (!profileData) {
+      return;
+    }
+
+    setIsSendingRequest(true);
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/friend-request-create", {
+        other_user_id: userId,
+      });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+
+      await loadProfile();
+      setStatusMessage("Friend request sent.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to send friend request.");
+    } finally {
+      setIsSendingRequest(false);
+    }
+  };
+
+  if (selectedPost) {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-col bg-primary-background">
+        <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
           <button
             type="button"
-            onClick={() => createInputRef.current?.click()}
-            className="aspect-square border-r border-b border-accent-1 bg-secondary-background p-2"
+            onClick={() => setSelectedPostId(null)}
+            className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs text-accent-2 hover:text-foreground"
           >
-            <div className="flex h-full w-full items-center justify-center rounded-md border border-accent-1">
-              <Plus className="h-6 w-6 text-accent-2" />
-            </div>
+            <ArrowLeft className="h-4 w-4" /> Back
           </button>
-
-          {posts.map((post, index) => (
-            <button
-              key={post.id}
-              type="button"
-              onClick={() => setSelectedPostId(post.id)}
-              className={`aspect-square bg-primary-background ${
-                index % 3 !== 2 ? "border-r border-accent-1" : ""
-              } border-b border-accent-1`}
-            >
-              {post.image_url ? (
-                <CachedImage
-                  signedUrl={post.image_url}
-                  imageId={post.image_id}
-                  alt="Profile post"
-                  className="h-full w-full object-cover"
-                />
-              ) : null}
-            </button>
-          ))}
         </div>
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
+          <PostSection post={selectedPost} showComments />
+        </div>
+        {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
+      </div>
+    );
+  }
 
-        {hasMorePosts ? (
-          <div className="px-3 py-3">
+  if (isLoadingProfile || !profileData) {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-primary-background">
+        <div className="border-b border-accent-1 px-3 py-2">
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs text-accent-2 hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-xs text-accent-2">
+            {isLoadingProfile ? "Loading profile..." : statusMessage || "Profile not found."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const isFriends = profileData.friendship_status === "friends";
+  const canSendRequest = profileData.friendship_status === "none" || profileData.friendship_status === "rejected";
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain touch-pan-y bg-primary-background">
+      <div className="border-b border-accent-1 px-3 py-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs text-accent-2 hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back
+        </button>
+      </div>
+
+      <ProfilePictureRow
+        isCurrentUsers={false}
+        localProfileImageUrl={profileData.user.profile_image_url}
+        localProfileImageId={profileData.user.profile_image_id}
+        username={profileData.user.username}
+        email={null}
+        onOpenSettings={() => {}}
+        setIsProfilePictureEditorOpen={() => {}}
+      />
+
+      {!isFriends ? (
+        <div className="border-b border-accent-1 px-4 py-6 flex flex-col items-center justify-center gap-3">
+          {canSendRequest ? (
+            <>
+              <p className="text-sm text-accent-2 text-center">
+                Send a friend request to view {profileData.user.username}'s posts.
+              </p>
+              <button
+                type="button"
+                onClick={() => { void onSendFriendRequest(); }}
+                disabled={isSendingRequest}
+                className="rounded-lg bg-accent-3 px-6 py-3 text-sm font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-50"
+              >
+                {isSendingRequest ? "Sending..." : "Request To Follow"}
+              </button>
+            </>
+          ) : profileData.friendship_status === "pending_sent" ? (
+            <p className="text-sm text-accent-2 text-center">
+              Friend request sent. Waiting for {profileData.user.username} to accept.
+            </p>
+          ) : profileData.friendship_status === "pending_received" ? (
+            <p className="text-sm text-accent-2 text-center">
+              {profileData.user.username} has sent you a friend request. Check your Profile tab to respond.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <div className="border-b border-accent-1 px-4 py-3 flex items-center justify-center">
             <button
               type="button"
-              onClick={() => {
-                if (nextCursorPostId && !isLoadingMorePosts) {
-                  void loadPosts(nextCursorPostId);
-                }
-              }}
-              disabled={!nextCursorPostId || isLoadingMorePosts}
-              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs font-medium text-accent-2 transition hover:text-foreground disabled:opacity-50"
+              onClick={() => { void onRemoveFriend(); }}
+              disabled={isRemovingFriend}
+              className="rounded-lg border border-red-500 px-4 py-2 text-xs font-medium text-accent-2 transition hover:text-foreground disabled:opacity-50"
+              style={{ color: removeFriendConfirmed ? "red" : undefined }}
             >
-              {isLoadingMorePosts ? "Loading..." : "Load more"}
+              {isRemovingFriend ? "Removing..." : removeFriendConfirmed ? "Confirm Remove Friend" : "Remove Friend"}
             </button>
           </div>
-        ) : null}
-      </div>
+          <ProfilePostsSection
+            posts={profileData.posts}
+            isLoadingPosts={false}
+            hasMorePosts={profileData.has_more}
+            nextCursorPostId={profileData.next_cursor_post_id}
+            isLoadingMorePosts={isLoadingMorePosts}
+            loadPosts={(cursorPostId) => { void loadProfile(cursorPostId); }}
+            setSelectedPostId={setSelectedPostId}
+            createInputRef={null}
+            showCreateButton={false}
+          />
+        </>
+      )}
 
       {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
     </div>

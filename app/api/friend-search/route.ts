@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
 import { FriendSearchRequest, FriendSearchResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
         id: true,
         username: true,
         email: true,
+        profile_image_id: true,
       },
     });
 
@@ -96,9 +98,32 @@ export async function POST(request: Request) {
                 accepted: relation.accepted,
               }
             : null,
+          profile_image_id: user.profile_image_id,
+          profile_image_url: null,
         };
       }),
     };
+
+    const usersWithImages = await Promise.all(
+      payload.users.map(async (user) => {
+        if (!user.profile_image_id) {
+          return user;
+        }
+        try {
+          const signedUrl = await getSignedMainBucketImageUrl({
+            userId: user.id,
+            imageId: user.profile_image_id,
+          });
+          return { ...user, profile_image_url: signedUrl };
+        } catch (error) {
+          console.error("friend_search_profile_image_sign_failed", user.id, error);
+          return user;
+        }
+      }),
+    );
+
+    payload.users = usersWithImages;
+
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("friend_search_failed", error);

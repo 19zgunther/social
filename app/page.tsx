@@ -4,7 +4,8 @@ import { CSSProperties, FormEvent, useCallback, useEffect, useMemo, useState } f
 import { House, UserRound, Users } from "lucide-react";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
-import Profile from "@/app/components/Profile";
+import Profile, { ProfileOtherUser } from "@/app/components/Profile";
+import Settings from "@/app/components/Settings";
 import {
   ApiError,
   AuthCheckResponse,
@@ -15,6 +16,7 @@ import {
 
 type Mode = "login" | "signup";
 type AppTab = "feed" | "groups" | "profile";
+type ProfileView = "profile" | "settings" | "other_user";
 
 const PUSH_PROMPT_DISMISSED_KEY = "push_prompt_dismissed";
 const MOBILE_FRAME_STYLE: CSSProperties = {
@@ -60,6 +62,8 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("feed");
+  const [profileView, setProfileView] = useState<ProfileView>("profile");
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [pendingDeepLinkThreadId, setPendingDeepLinkThreadId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
@@ -152,12 +156,20 @@ export default function Home() {
     document.cookie = "auth_token=; Max-Age=0; path=/";
     setAuthUser(null);
     setActiveTab("feed");
+    setProfileView("profile");
+    setViewingUserId(null);
     setPendingDeepLinkThreadId(null);
     setShowNotificationsPrompt(false);
     setGroupsUnreadCount(0);
     setProfileIncomingRequestCount(0);
     setStatusMessage("Logged out.");
   };
+
+  const onViewUserProfile = useCallback((userId: string) => {
+    setViewingUserId(userId);
+    setProfileView("other_user");
+    setActiveTab("profile");
+  }, []);
 
   const refreshGroupsUnreadCount = useCallback(async () => {
     try {
@@ -281,7 +293,7 @@ export default function Home() {
         if (existingSubscription) {
           await fetch("/api/push-unsubscribe", {
             method: "POST",
-            headers: { "Content-Type": "application/json"},
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               endpoint: existingSubscription.endpoint,
             }),
@@ -297,7 +309,7 @@ export default function Home() {
       if (!subscription) {
         const keyResponse = await fetch("/api/push-public-key", {
           method: "POST",
-          headers: { "Content-Type": "application/json"},
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({}),
         });
         if (!keyResponse.ok) {
@@ -448,42 +460,44 @@ export default function Home() {
 
   if (authUser) {
     return (
-      <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0">
+      <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
         <section
           style={MOBILE_FRAME_STYLE}
-          className="flex h-full max-h-dvh flex-col overflow-hidden border border-accent-1 shadow-xl shadow-black/25"
+          className="flex h-full max-h-dvh flex-col overflow-hidden shadow-xl shadow-black/25 relative"
         >
 
           {showNotificationsPrompt ? (
-            <div className="border-b border-accent-1 bg-secondary-background px-3 py-2">
-              <p className="text-xs text-accent-2">
-                Enable notifications to get new thread message alerts.
-              </p>
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void onEnableNotifications();
-                  }}
-                  disabled={isEnablingNotifications}
-                  className="rounded-lg bg-accent-3 px-3 py-1.5 text-xs font-semibold text-primary-background disabled:opacity-60"
-                >
-                  {isEnablingNotifications ? "Enabling..." : "Enable notifications"}
-                </button>
-                <button
-                  type="button"
-                  onClick={onDismissNotificationsPrompt}
-                  className="rounded-lg border border-accent-1 px-3 py-1.5 text-xs text-accent-2 hover:text-foreground"
-                >
-                  Not now
-                </button>
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="mx-4 max-w-sm rounded-lg border border-accent-1 bg-secondary-background p-4 shadow-lg">
+                <p className="text-sm text-accent-2">
+                  Enable notifications to get new thread message alerts.
+                </p>
+                <div className="mt-4 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void onEnableNotifications();
+                    }}
+                    disabled={isEnablingNotifications}
+                    className="flex-1 rounded-lg bg-accent-3 px-4 py-2 text-sm font-semibold text-primary-background disabled:opacity-60"
+                  >
+                    {isEnablingNotifications ? "Enabling..." : "Enable notifications"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDismissNotificationsPrompt}
+                    className="flex-1 rounded-lg border border-accent-1 px-4 py-2 text-sm text-accent-2 hover:text-foreground"
+                  >
+                    Not now
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
 
           <div className="flex-1 min-h-0 overflow-hidden px-0 py-0">
             {activeTab === "feed" ? (
-              <Feed />
+              <Feed onViewUserProfile={onViewUserProfile} />
             ) : activeTab === "groups" ? (
               <Groups
                 currentUserId={authUser.user_id}
@@ -504,6 +518,16 @@ export default function Home() {
                   void refreshGroupsUnreadCount();
                 }}
               />
+            ) : profileView === "settings" ? (
+              <Settings
+                onBack={() => setProfileView("profile")}
+                onLogout={onLogout}
+              />
+            ) : profileView === "other_user" && viewingUserId ? (
+              <ProfileOtherUser
+                userId={viewingUserId}
+                onBack={() => setProfileView("profile")}
+              />
             ) : (
               <Profile
                 userId={authUser.user_id}
@@ -515,14 +539,15 @@ export default function Home() {
                   setAuthUser((previous) =>
                     previous
                       ? {
-                          ...previous,
-                          profile_image_id: profileImageId,
-                          profile_image_url: profileImageUrl,
-                        }
+                        ...previous,
+                        profile_image_id: profileImageId,
+                        profile_image_url: profileImageUrl,
+                      }
                       : previous,
                   );
                 }}
-                onLogout={onLogout}
+                onOpenSettings={() => setProfileView("settings")}
+                onViewUserProfile={onViewUserProfile}
               />
             )}
           </div>
@@ -531,38 +556,37 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setActiveTab("feed")}
-              className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${
-                activeTab === "feed"
+              className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${activeTab === "feed"
                   ? "text-accent-3"
                   : "text-accent-2 hover:text-foreground"
-              }`}
+                }`}
             >
               <House aria-hidden className="h-4 w-4" />
-              <span>Feed</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("groups")}
-              className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${
-                activeTab === "groups"
+              className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${activeTab === "groups"
                   ? "text-accent-3"
                   : "text-accent-2 hover:text-foreground"
-              }`}
+                }`}
             >
               <Users aria-hidden className="h-4 w-4" />
-              {groupsUnreadCount > 0 && <div className="rounded-full bg-accent-3 text-primary-background text-xs font-medium px-1 py-1"/>}
+              {groupsUnreadCount > 0 && <div className="rounded-full bg-accent-3 text-primary-background text-xs font-medium px-1 py-1" />}
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab("profile")}
-              className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${
-                activeTab === "profile"
+              onClick={() => {
+                setActiveTab("profile");
+                setProfileView("profile");
+              }}
+              className={`flex items-center justify-center gap-2 py-3 text-sm font-medium transition ${activeTab === "profile"
                   ? "text-accent-3"
                   : "text-accent-2 hover:text-foreground"
-              }`}
+                }`}
             >
               <UserRound aria-hidden className="h-4 w-4" />
-              {profileIncomingRequestCount > 0 && <div className="rounded-full bg-accent-3 text-primary-background text-xs font-medium px-1 py-1"/>}
+              {profileIncomingRequestCount > 0 && <div className="rounded-full bg-accent-3 text-primary-background text-xs font-medium px-1 py-1" />}
             </button>
           </nav>
         </section>

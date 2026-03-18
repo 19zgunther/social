@@ -9,6 +9,7 @@ type PostSectionProps = {
   post: PostItem;
   showComments?: boolean;
   className?: string;
+  onViewUserProfile?: (userId: string) => void;
 };
 
 const COMMENT_PATH_SEPARATOR = ">";
@@ -26,7 +27,7 @@ const formatPostDate = (value: string): string => {
   });
 };
 
-export default function PostSection({ post, showComments = true, className }: PostSectionProps) {
+export default function PostSection({ post, showComments = true, className, onViewUserProfile }: PostSectionProps) {
   const [postData, setPostData] = useState<PostData>(post.data ?? {});
   const initialLikes = useMemo(() => postData.likes ?? {}, [postData.likes]);
   const [isLikedByViewer, setIsLikedByViewer] = useState(false);
@@ -246,7 +247,17 @@ export default function PostSection({ post, showComments = true, className }: Po
               <CircleUserRound className="h-4 w-4 text-accent-2" />
             </div>
           )}
-          <p className="text-sm font-semibold text-foreground">{post.username}</p>
+          {onViewUserProfile ? (
+            <button
+              type="button"
+              onClick={() => onViewUserProfile(post.created_by)}
+              className="text-sm font-semibold text-foreground hover:underline"
+            >
+              {post.username}
+            </button>
+          ) : (
+            <p className="text-sm font-semibold text-foreground">{post.username}</p>
+          )}
           <p className="text-[11px] text-accent-2">{formatPostDate(post.created_at)}</p>
         </div>
         

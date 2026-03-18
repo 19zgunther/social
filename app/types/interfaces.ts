@@ -95,6 +95,8 @@ export type FriendSearchResult = {
   username: string;
   email: string | null;
   relation: FriendRelation | null;
+  profile_image_id: string | null;
+  profile_image_url: string | null;
 };
 
 export type IncomingFriendRequest = {
@@ -113,6 +115,8 @@ export type OutgoingFriendRequest = {
   accepted_at: string | null;
   username: string;
   email: string | null;
+  profile_image_id: string | null;
+  profile_image_url: string | null;
 };
 
 export type AcceptedFriend = {
@@ -121,6 +125,8 @@ export type AcceptedFriend = {
   username: string;
   email: string | null;
   accepted_at: string | null;
+  profile_image_id: string | null;
+  profile_image_url: string | null;
 };
 
 export type SyncEvent = {
@@ -230,4 +236,23 @@ export type ThreadImageRemoveResponse = {
   thread_id: string;
   image_id: null;
   image_url: null;
+};
+
+export type UserProfileRequest = {
+  user_id?: string;
+  cursor_post_id?: string;
+};
+
+export type UserProfileResponse = {
+  user: {
+    id: string;
+    username: string;
+    profile_image_id: string | null;
+    profile_image_url: string | null;
+  };
+  friendship_status: "none" | "friends" | "pending_sent" | "pending_received" | "rejected";
+  friendship_id: string | null;
+  posts: PostItem[];
+  has_more: boolean;
+  next_cursor_post_id: string | null;
 };

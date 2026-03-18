@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import CachedImage from "@/app/components/utils/CachedImage";
+import { CircleUserRound } from "lucide-react";
 
 export type UserSearchOption = {
   id: string;
   username: string;
   email: string | null;
   hint?: string;
+  profile_image_id?: string | null;
+  profile_image_url?: string | null;
 };
 
 type UserSearchProps = {
@@ -109,11 +113,27 @@ export default function UserSearch({
                       onSelect(option);
                       setIsOpen(false);
                     }}
-                    className="w-full border-b border-accent-1/60 px-3 py-2 text-left last:border-b-0 hover:bg-secondary-background"
+                    className="w-full border-b border-accent-1/60 px-3 py-2 text-left last:border-b-0 hover:bg-secondary-background flex items-center gap-3"
                   >
-                    <p className="truncate text-sm text-foreground">{option.username}</p>
-                    <p className="truncate text-xs text-accent-2">{option.email ?? "No email"}</p>
-                    {option.hint ? <p className="text-[11px] text-accent-2">{option.hint}</p> : null}
+                    {option.profile_image_url ? (
+                      <CachedImage
+                        signedUrl={option.profile_image_url}
+                        imageId={option.profile_image_id ?? null}
+                        alt={`${option.username} profile`}
+                        className="h-10 w-10 rounded-full border border-accent-1 object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-1 bg-secondary-background flex-shrink-0">
+                        <CircleUserRound className="h-5 w-5 text-accent-2" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">{option.username}</p>
+                      {option.email && (
+                        <p className="truncate text-xs text-accent-2">{option.email}</p>
+                      )}
+                      {option.hint ? <p className="text-[11px] text-accent-2">{option.hint}</p> : null}
+                    </div>
                   </button>
                 </li>
               ))}

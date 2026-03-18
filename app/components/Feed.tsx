@@ -28,7 +28,7 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 };
 
 
-export default function Feed() {
+export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userId: string) => void }) {
   const [posts, setPosts] = useStateCached<PostItem[]>([], FEED_CACHE_KEY);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -189,7 +189,7 @@ export default function Feed() {
         ) : null}
 
         {posts.map((post) => (
-          <PostSection key={post.id} post={post} />
+          <PostSection key={post.id} post={post} onViewUserProfile={onViewUserProfile} />
         ))}
 
         {hasMore ? (
