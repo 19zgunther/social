@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const TARGET_USER_ID = "74fc2cb5-3df2-4309-8d8a-3c881add7114";
+const TARGET_USER_IDS = ["149755c6-e62f-43d6-a476-a88afcba439f", "9b4ccfec-9fa6-4fe4-bea7-f8122ae4bb29", "2e432834-dcda-4197-a743-457cfc219fa2", "3df596f3-a0b6-44b4-af39-a3688c78edd9"];
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const STORAGE_KEY = "dumb_advert_payload_v1";
 
@@ -121,7 +121,7 @@ export default function DumbAdvertModal({ currentUserId }: { currentUserId: stri
   const [retry, setRetry] = useState<number>(0);
 
   useEffect(() => {
-    if (currentUserId !== TARGET_USER_ID) {
+    if (!TARGET_USER_IDS.includes(currentUserId)) {
       return;
     }
 
@@ -193,7 +193,7 @@ export default function DumbAdvertModal({ currentUserId }: { currentUserId: stri
     drawCross(canvasRef.current);
   }, [isOpen, payload]);
 
-  if (!isOpen || !payload || currentUserId !== TARGET_USER_ID) {
+  if (!isOpen || !payload || !TARGET_USER_IDS.includes(currentUserId)) {
     return null;
   }
 
