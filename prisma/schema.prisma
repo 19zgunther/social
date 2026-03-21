@@ -115,4 +115,16 @@ model users {
   user_sessions                          user_sessions?
   user_thread_access                     user_thread_access[]
   user_thread_last_read_at               user_thread_last_read_at[]
+  webrtc_signalling                      webrtc_signalling[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model webrtc_signalling {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  thread_id       String   @db.Uuid
+  call_session_id String   @db.Uuid
+  from_user_id    String   @db.Uuid
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  payload         Json?
+  users           users    @relation(fields: [from_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
