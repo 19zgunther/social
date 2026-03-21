@@ -24,6 +24,7 @@ import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
 import useSwipeBack from "./components/utils/useSwipeBack";
 import CreatePostTab from "./components/CreatePostTab";
+import DumbAdvertModal from "./components/DumbAdvertModal";
 
 
 const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab, back: AppTab } } = {
@@ -320,6 +321,7 @@ export default function Home() {
         className="flex h-full max-h-dvh flex-col overflow-hidden shadow-xl shadow-black/25 relative"
       >
         <AutoNotificationPrompt authUser={authUser} showNotificationsPrompt={showNotificationsPrompt} setShowNotificationsPrompt={setShowNotificationsPrompt} />
+        <DumbAdvertModal currentUserId={authUser.user_id} />
 
         {/** Main Content Container */}
         <div
