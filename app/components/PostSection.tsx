@@ -1,8 +1,9 @@
 "use client";
 
 import { memo, UIEvent, useEffect, useMemo, useState } from "react";
-import { Heart, ChevronDown, CircleUserRound, Trash2 } from "lucide-react";
+import { Heart, ChevronDown, Trash2 } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
+import UserProfileImage from "@/app/components/UserProfileImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { ApiError, PostCommentNode, PostData, PostItem } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
@@ -439,18 +440,13 @@ function PostSectionComponent({
     <article className={`w-full border-t border-accent-1 bg-primary-background mb-10 ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME: ""}`}>
       <header className="px-2 py-2">
         <div className="flex items-center gap-2">
-          {post.author_profile_image_url ? (
-            <CachedImage
-              signedUrl={post.author_profile_image_url}
-              imageId={post.author_profile_image_id ?? null}
-              alt={`${post.username} profile`}
-              className="h-10 w-10 rounded-full object-cover"
-            />
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-1 bg-secondary-background">
-              <CircleUserRound className="h-4 w-4 text-accent-2" />
-            </div>
-          )}
+          <UserProfileImage
+            userId={post.created_by}
+            sizePx={40}
+            alt={`${post.username} profile`}
+            signedUrl={post.author_profile_image_url}
+            imageId={post.author_profile_image_id ?? null}
+          />
           {onViewUserProfile ? (
             <button
               type="button"

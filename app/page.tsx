@@ -25,6 +25,7 @@ import ThreadSettings from "./components/ThreadSettings";
 import useSwipeBack from "./components/utils/useSwipeBack";
 import CreatePostTab from "./components/CreatePostTab";
 import DumbAdvertModal from "./components/DumbAdvertModal";
+import { UserSessionSyncProvider } from "./components/UserSessionSyncContext";
 
 
 const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab, back: AppTab } } = {
@@ -316,6 +317,7 @@ export default function Home() {
 
   return (
     <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
+      <UserSessionSyncProvider currentUserId={authUser.user_id}>
       <section
         style={MOBILE_FRAME_STYLE}
         className="flex h-full max-h-dvh flex-col overflow-hidden shadow-xl shadow-black/25 relative"
@@ -352,7 +354,7 @@ export default function Home() {
               selectedThread={selectedThread}
               setSelectedThread={setSelectedThread}
               currentUserId={authUser.user_id}
-              onBack={() => { setSelectedThread(null); }}
+              onBack={() => { setSelectedThread(null); setActiveTab("groups"); }}
               setThreadSettingsOpen={() => { setActiveTab("thread_settings") }}
             />
           </div>}
@@ -446,6 +448,7 @@ export default function Home() {
           </div>
         ) : null}
       </section>
+      </UserSessionSyncProvider>
     </main>
   );
 }

@@ -71,6 +71,13 @@ model threads {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_sessions {
+  user_id    String   @id @db.Uuid
+  updated_at DateTime @db.Timestamptz(6)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model user_thread_access {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   thread_id  String   @db.Uuid
@@ -105,6 +112,7 @@ model users {
   push_subscriptions                     push_subscriptions[]
   thread_messages                        thread_messages[]
   threads                                threads[]
+  user_sessions                          user_sessions?
   user_thread_access                     user_thread_access[]
   user_thread_last_read_at               user_thread_last_read_at[]
 }

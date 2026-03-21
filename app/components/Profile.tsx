@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronRight, CircleUserRound, Plus, Settings as SettingsIcon, Trash2 } from "lucide-react";
+import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { PostSection } from "@/app/components/PostSection";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
@@ -52,6 +53,7 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 };
 
 function ProfilePictureRow({
+  profileUserId,
   isCurrentUsers,
   localProfileImageUrl,
   localProfileImageId,
@@ -60,6 +62,7 @@ function ProfilePictureRow({
   onOpenSettings,
   setIsProfilePictureEditorOpen,
 }: {
+  profileUserId: string;
   isCurrentUsers: boolean;
   localProfileImageUrl: string | null;
   localProfileImageId: string | null;
@@ -76,34 +79,36 @@ function ProfilePictureRow({
             <button
               type="button"
               onClick={() => setIsProfilePictureEditorOpen(true)}
-              className="overflow-hidden rounded-full border border-accent-1 bg-secondary-background cursor-pointer"
+              className="cursor-pointer rounded-full"
               aria-label="Edit profile picture"
             >
               {localProfileImageUrl ? (
-                <CachedImage
+                <UserProfileImage
+                  userId={profileUserId}
+                  sizePx={64}
+                  alt="Profile picture"
                   signedUrl={localProfileImageUrl}
                   imageId={localProfileImageId}
-                  alt="Profile picture"
-                  className="h-16 w-16 object-cover"
                 />
               ) : (
-                <div className="p-2 text-xs">
-                  <CircleUserRound className="h-14 w-14 text-accent-2" />
+                <div className="flex h-16 w-16 flex-col items-center justify-center rounded-full border border-accent-1 bg-secondary-background p-2 text-xs">
+                  <CircleUserRound className="h-10 w-10 text-accent-2" />
                   <p className="text-accent-2">Click to add</p>
                 </div>
               )}
             </button>
           ) : (
-            <div className="overflow-hidden rounded-full border border-accent-1 bg-secondary-background">
+            <div>
               {localProfileImageUrl ? (
-                <CachedImage
+                <UserProfileImage
+                  userId={profileUserId}
+                  sizePx={64}
+                  alt="Profile picture"
                   signedUrl={localProfileImageUrl}
                   imageId={localProfileImageId}
-                  alt="Profile picture"
-                  className="h-16 w-16 object-cover"
                 />
               ) : (
-                <div className="p-2">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-accent-1 bg-secondary-background p-2">
                   <CircleUserRound className="h-14 w-14 text-accent-2" />
                 </div>
               )}
@@ -523,6 +528,7 @@ function Profile({
       />
 
       <ProfilePictureRow
+        profileUserId={userId}
         isCurrentUsers={true}
         localProfileImageUrl={localProfileImageUrl}
         localProfileImageId={localProfileImageId}
@@ -614,18 +620,13 @@ function Profile({
                       onClick={() => { onViewUserProfile(friend.user_id); }}
                       className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 flex items-center gap-3 transition hover:bg-secondary-background"
                     >
-                      {friend.profile_image_url ? (
-                        <CachedImage
-                          signedUrl={friend.profile_image_url}
-                          imageId={friend.profile_image_id}
-                          alt={`${friend.username} profile`}
-                          className="h-10 w-10 rounded-full border border-accent-1 object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-1 bg-secondary-background">
-                          <CircleUserRound className="h-5 w-5 text-accent-2" />
-                        </div>
-                      )}
+                      <UserProfileImage
+                        userId={friend.user_id}
+                        sizePx={40}
+                        alt={`${friend.username} profile`}
+                        signedUrl={friend.profile_image_url}
+                        imageId={friend.profile_image_id}
+                      />
                       <div className="flex-1 min-w-0 text-left">
                         <p className="text-sm font-medium text-foreground truncate">{friend.username}</p>
                         {friend.email && (
@@ -648,18 +649,13 @@ function Profile({
                       key={row.id}
                       className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2 flex items-center gap-3"
                     >
-                      {row.profile_image_url ? (
-                        <CachedImage
-                          signedUrl={row.profile_image_url}
-                          imageId={row.profile_image_id}
-                          alt={`${row.username} profile`}
-                          className="h-10 w-10 rounded-full border border-accent-1 object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-1 bg-secondary-background">
-                          <CircleUserRound className="h-5 w-5 text-accent-2" />
-                        </div>
-                      )}
+                      <UserProfileImage
+                        userId={row.other_user_id}
+                        sizePx={40}
+                        alt={`${row.username} profile`}
+                        signedUrl={row.profile_image_url}
+                        imageId={row.profile_image_id}
+                      />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{row.username}</p>
                         {row.email && (
@@ -904,6 +900,7 @@ function ProfileOtherUser({
       </div>
 
       <ProfilePictureRow
+        profileUserId={profileData.user.id}
         isCurrentUsers={false}
         localProfileImageUrl={profileData.user.profile_image_url}
         localProfileImageId={profileData.user.profile_image_id}
