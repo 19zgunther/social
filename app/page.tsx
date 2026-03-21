@@ -354,6 +354,7 @@ export default function Home() {
               selectedThread={selectedThread}
               setSelectedThread={setSelectedThread}
               currentUserId={authUser.user_id}
+              currentUsername={authUser.username}
               onBack={() => { setSelectedThread(null); setActiveTab("groups"); }}
               setThreadSettingsOpen={() => { setActiveTab("thread_settings") }}
             />

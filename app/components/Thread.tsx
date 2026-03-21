@@ -1,8 +1,16 @@
 "use client";
 
 import { FormEvent, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Image, Video } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Camera, Image, Plus, Video } from "lucide-react";
 import CameraModal from "@/app/components/Camera";
+import Pool from "@/app/components/games/Pool";
+import {
+  createInitialPoolGame,
+  getPoolGameFromMessageData,
+  latestPoolMessagesByGameId,
+} from "@/app/components/games/poolGameUtils";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import CachedImage from "@/app/components/utils/CachedImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
@@ -11,6 +19,7 @@ import {
   ApiError,
   ImageOverlayData,
   MessageData,
+  PoolGameMessageData,
   SyncResponse,
   ThreadItem,
   ThreadMember,
@@ -24,6 +33,7 @@ import BackButton from "./utils/BackButton";
 
 type ThreadProps = {
   currentUserId: string;
+  currentUsername: string;
   onBack: () => void;
   setThreadSettingsOpen: () => void;
   selectedThread: ThreadItem;
@@ -111,7 +121,14 @@ const toImageOverlayData = (data: MessageData | null | undefined): ImageOverlayD
   };
 };
 
-export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, selectedThread, setSelectedThread }: ThreadProps) {
+export default function Thread({
+  currentUserId,
+  currentUsername,
+  onBack,
+  setThreadSettingsOpen,
+  selectedThread,
+  setSelectedThread,
+}: ThreadProps) {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [messageDraft, setMessageDraft] = useState("");
   const [memberIdentifier, setMemberIdentifier] = useState("");
@@ -129,6 +146,8 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
   const [statusMessage, setStatusMessage] = useState("");
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [isGamesModalOpen, setIsGamesModalOpen] = useState(false);
+  const [poolSession, setPoolSession] = useState<PoolGameMessageData | null>(null);
   const isFollowingBottomRef = useRef(true);
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
   const [replyTargetMessageId, setReplyTargetMessageId] = useState<string | null>(null);
@@ -224,6 +243,8 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
     setOldestLoadedMessageId(null);
     setIsLoadingOlderMessages(false);
     setIsCameraModalOpen(false);
+    setIsGamesModalOpen(false);
+    setPoolSession(null);
 
     const loadThread = async () => {
       setIsLoadingMessages(true);
@@ -543,6 +564,67 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
     }
   };
 
+  const sendPoolGameMessage = async (poolGame: PoolGameMessageData): Promise<PoolGameMessageData> => {
+    setIsSendingMessage(true);
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/thread-send", {
+        thread_id: selectedThread.id,
+        text: "",
+        message_data: { pool_game: poolGame },
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+
+      const payload = (await response.json()) as ThreadSendResponse;
+      const sanitized = getPoolGameFromMessageData(payload.message.data);
+      if (!sanitized) {
+        throw new Error("Server did not accept pool game data.");
+      }
+
+      const newMessage: ThreadMessage = {
+        ...payload.message,
+        direct_reply_count: 0,
+      };
+
+      setMessages((previous) => [...previous, newMessage]);
+      if (!oldestLoadedMessageId) {
+        setOldestLoadedMessageId(payload.message.id);
+      }
+
+      setShowNewMessagesButton(false);
+      isFollowingBottomRef.current = true;
+      pendingBottomScrollRef.current = "smooth";
+      return sanitized;
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  const startNewPoolGame = async () => {
+    const opponent = members.find((member) => member.user_id !== currentUserId);
+    if (!opponent) {
+      setStatusMessage("Add another member to this thread to play Pool.");
+      return;
+    }
+
+    try {
+      const game = createInitialPoolGame({
+        gameId: crypto.randomUUID(),
+        playerAUsername: currentUsername,
+        playerBUsername: opponent.username,
+        startingUsername: currentUsername,
+      });
+      const saved = await sendPoolGameMessage(game);
+      setIsGamesModalOpen(false);
+      setPoolSession(saved);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Could not start Pool.");
+    }
+  };
+
   const onSendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!messageDraft.trim()) {
@@ -599,12 +681,22 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
 
   const messageById = new Map(messages.map((message) => [message.id, message]));
 
+  const latestPoolByGameId = latestPoolMessagesByGameId(messages);
+  const latestPoolMessageIds = new Set(
+    Array.from(latestPoolByGameId.values()).map((entry) => entry.message.id),
+  );
+
   const visibleMessages = messages.filter((message) => {
     const hasText = message.text.trim().length > 0;
     const hasImage = Boolean(message.image_url);
     const hasOverlay = Boolean(toImageOverlayData(message.data));
+    const poolGame = getPoolGameFromMessageData(message.data);
+    if (poolGame && !latestPoolMessageIds.has(message.id)) {
+      return false;
+    }
+    const showLatestPool = Boolean(poolGame && latestPoolMessageIds.has(message.id));
     // Hide pure signaling / data-only messages (e.g., video call signals) from the chat UI.
-    return hasText || hasImage || hasOverlay;
+    return hasText || hasImage || hasOverlay || showLatestPool;
   });
 
   const rootMessages = visibleMessages.filter((message) => message.parent_id === selectedThread.id);
@@ -719,6 +811,66 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
     const hasImage = Boolean(message.image_url);
     const isImageOnly = hasImage && !hasText;
     const messageImageOverlay = toImageOverlayData(message.data);
+    const poolGame = getPoolGameFromMessageData(message.data);
+    const showPoolCard = poolGame && latestPoolMessageIds.has(message.id);
+
+    if (showPoolCard && poolGame) {
+      const isPlayer =
+        poolGame.player_a_username === currentUsername ||
+        poolGame.player_b_username === currentUsername;
+      const opponentUsername =
+        poolGame.player_a_username === currentUsername
+          ? poolGame.player_b_username
+          : poolGame.player_a_username;
+      const myTurn = isPlayer && poolGame.current_turn_username === currentUsername;
+
+      if (depth > 0) {
+        return null;
+      }
+
+      return (
+        <div key={message.id} className="max-w-[85%]">
+          <div
+            className={`rounded-2xl border border-accent-1 bg-secondary-background px-3 py-3 shadow-sm ${isOwnMessage ? "ml-auto" : ""}`}
+          >
+            <p className="text-xs opacity-60">{isOwnMessage ? "You" : message.username}</p>
+            <p className="text-sm font-semibold text-foreground">🎱 Pool</p>
+            <p className="mt-1 text-xs text-accent-2">
+              {isPlayer ? (
+                <>
+                  vs <span className="text-foreground">{opponentUsername}</span>
+                </>
+              ) : (
+                <>
+                  {poolGame.player_a_username} vs {poolGame.player_b_username}
+                </>
+              )}
+            </p>
+            <p className="mt-2 text-xs text-accent-2">
+              {myTurn
+                ? "Your turn — take a shot."
+                : isPlayer
+                  ? `Waiting for ${poolGame.current_turn_username}.`
+                  : "Spectating this game."}
+            </p>
+            <button
+              type="button"
+              disabled={!myTurn || Boolean(editTargetMessageId)}
+              onClick={() => {
+                if (!myTurn) {
+                  return;
+                }
+                setPoolSession(poolGame);
+              }}
+              className="mt-3 w-full rounded-full border border-accent-1 bg-accent-3/20 py-2 text-xs font-semibold text-foreground transition hover:bg-accent-3/30 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {myTurn ? "Play" : "Not your turn"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     const rootMessageId = getRootMessageIdForMessage(message.id);
     const children = childMessagesByParentId.get(message.id) ?? [];
     const emojiOnlyChildren = children.filter((childMessage) => isEmojiOnlyMessage(childMessage.text));
@@ -893,6 +1045,19 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
     });
   };
 
+  if (poolSession) {
+    return (
+      <Pool
+        game={poolSession}
+        currentUsername={currentUsername}
+        onBack={() => setPoolSession(null)}
+        onTurnComplete={async (nextGame) => {
+          await sendPoolGameMessage(nextGame);
+        }}
+      />
+    );
+  }
+
   if (isVideoCallOpen) {
     return (
       <VideoCall
@@ -1040,6 +1205,37 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
         isSending={isSendingMessage}
       />
 
+      {isGamesModalOpen
+        ? createPortal(
+            <div
+              className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2100] flex items-end justify-center bg-black/45 px-3 pb-6 pt-16 sm:items-center`}
+            >
+              <button
+                type="button"
+                aria-label="Close games"
+                className="absolute inset-0 cursor-default"
+                onClick={() => setIsGamesModalOpen(false)}
+              />
+              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-accent-1 bg-secondary-background p-4 shadow-xl">
+                <p className="text-sm font-semibold text-foreground">Games</p>
+                <p className="mt-1 text-xs text-accent-2">Start a turn-based game in this thread.</p>
+                <button
+                  type="button"
+                  disabled={isSendingMessage || isLoadingMembers || members.length < 2}
+                  onClick={() => void startNewPoolGame()}
+                  className="mt-4 w-full rounded-xl border border-accent-1 bg-primary-background px-3 py-3 text-left text-sm font-medium text-foreground transition hover:border-accent-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="block">🎱 Pool</span>
+                  <span className="mt-0.5 block text-xs font-normal text-accent-2">
+                    Top-down billiards — one shot per turn, state syncs in chat.
+                  </span>
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
       <form onSubmit={onSendMessage} className="mx-2 mb-2 mt-1 flex items-center gap-2">
         <input
           className={`rounded-full border border-accent-1 bg-secondary-background px-4 py-2 text-sm text-foreground outline-none focus:border-accent-2 transition-all duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
@@ -1055,25 +1251,47 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
           }}
         />
         {!isComposerExpanded ? (
-          <button
-            type="button"
-            onClick={() => {
-              openCameraModal();
-            }}
-            disabled={Boolean(editTargetMessageId)}
-            className="flex-1 rounded-full border border-accent-1 px-3 py-2 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
-            aria-label="Take photo"
-          >
-            <Camera className="mx-auto h-4 w-4" />
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                openCameraModal();
+              }}
+              disabled={Boolean(editTargetMessageId)}
+              className="flex-1 rounded-full border border-accent-1 px-3 py-2 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
+              aria-label="Take photo"
+            >
+              <Camera className="mx-auto h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsGamesModalOpen(true)}
+              disabled={Boolean(editTargetMessageId)}
+              className="flex shrink-0 items-center justify-center rounded-full border border-accent-1 px-3 py-2 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
+              aria-label="Games"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </>
         ) : (
-          <button
-            type="submit"
-            disabled={isSendingMessage || !messageDraft.trim()}
-            className="rounded-full bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
-          >
-            {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => setIsGamesModalOpen(true)}
+              disabled={Boolean(editTargetMessageId)}
+              className="flex shrink-0 items-center justify-center rounded-full border border-accent-1 px-3 py-2 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
+              aria-label="Games"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            <button
+              type="submit"
+              disabled={isSendingMessage || !messageDraft.trim()}
+              className="rounded-full bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+            >
+              {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}
+            </button>
+          </>
         )}
       </form>
 

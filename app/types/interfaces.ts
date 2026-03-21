@@ -60,9 +60,32 @@ export type ImageOverlayData = {
 
 import type { VideoCallSignal } from "@/app/components/utils/webrtcVideoCall";
 
+export type PoolBallState = {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+  pocketed: boolean;
+};
+
+/** Turn-based pool game payload stored on thread_messages.data.pool_game */
+export type PoolGameMessageData = {
+  v: 1;
+  game_id: string;
+  player_a_username: string;
+  player_b_username: string;
+  current_turn_username: string;
+  table_w: number;
+  table_h: number;
+  balls: PoolBallState[];
+};
+
 export type MessageData = {
   image_overlay?: ImageOverlayData;
   video_call_signal?: VideoCallSignal;
+  pool_game?: PoolGameMessageData;
 };
 
 export type ThreadMessage = {
