@@ -691,6 +691,8 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
     const isRootMessage = rootMessageId === message.id;
     const isRootRepliesExpanded =
       rootMessageId !== null && expandedReplyRootIds.includes(rootMessageId);
+    const isActiveOptionsMessage = activeOptionsMessageId === message.id;
+    const isReplyTargetMessage = replyTargetMessageId === message.id;
 
     if (depth > 0 && !isRootRepliesExpanded) {
       return null;
@@ -760,6 +762,62 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
             {children.map((childMessage) => renderMessage(childMessage, depth + 1))}
           </div>
         ) : null}
+
+        {isActiveOptionsMessage ? (
+          <div
+            className="mt-1 ml-1 mr-2 rounded-xl border border-accent-1 bg-secondary-background p-2 text-xs text-foreground"
+            style={{ boxShadow: "0 0 10px 0 rgba(246, 243, 50, 0.88)" }}
+          >
+            <p className="mb-2 text-accent-2 p-2">Message options</p>
+            <div className="flex flex-wrap gap-2 w-full">
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyTargetMessageId(message.id);
+                  setEditTargetMessageId(null);
+                  setActiveOptionsMessageId(null);
+                }}
+                className="flex-1 rounded-lg border border-accent-1 px-4 py-2 hover:text-foreground"
+              >
+                Reply
+              </button>
+              {isOwnMessage ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessageDraft(message.text);
+                    setEditTargetMessageId(message.id);
+                    setReplyTargetMessageId(null);
+                    setActiveOptionsMessageId(null);
+                  }}
+                  className="flex-1 rounded-lg border border-accent-1 px-4 py-2 hover:text-foreground"
+                >
+                  Edit
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setActiveOptionsMessageId(null)}
+                className="flex-1 rounded-lg border border-accent-1 px-4 py-2 hover:text-foreground"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {isReplyTargetMessage ? (
+          <div className="mt-1 ml-1 text-xs text-accent-2">
+            Replying to this message
+            <button
+              type="button"
+              onClick={() => setReplyTargetMessageId(null)}
+              className="ml-2 p-4 underline underline-offset-2 hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -794,28 +852,30 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
   }
 
 
-  if (isSettingsOpen) {
-    return (
-      <ThreadSettings
-        thread={selectedThread}
-        currentUserId={currentUserId}
-        onBack={() => setIsSettingsOpen(false)}
-        onThreadImageUpdated={(imageId, imageUrl) => {
-          setSelectedThread((previous: ThreadItem | null) => ({
-            ...previous as ThreadItem,
-            image_id: imageId,
-            image_url: imageUrl,
-          }));
-        }}
-        onThreadRenamed={(name) => {
-          setSelectedThread((previous: ThreadItem | null) => ({
-            ...previous as ThreadItem,
-            name,
-          }));
-        }}
-      />
-    );
-  }
+  // if (isSettingsOpen) {
+  //   return (
+  //     <ThreadSettings
+  //       thread={selectedThread}
+  //       currentUserId={currentUserId}
+  //       onBack={() => {
+  //         setIsSettingsOpen(false);
+  //       }}
+  //       onThreadImageUpdated={(imageId, imageUrl) => {
+  //         setSelectedThread((previous: ThreadItem | null) => ({
+  //           ...previous as ThreadItem,
+  //           image_id: imageId,
+  //           image_url: imageUrl,
+  //         }));
+  //       }}
+  //       onThreadRenamed={(name) => {
+  //         setSelectedThread((previous: ThreadItem | null) => ({
+  //           ...previous as ThreadItem,
+  //           name,
+  //         }));
+  //       }}
+  //     />
+  //   );
+  // }
 
   return (
     <div
@@ -904,62 +964,6 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
         ) : null}
       </div>
 
-      {activeOptionsMessageId ? (
-        <div className="mx-2 mb-1 rounded-xl border border-accent-1 bg-secondary-background p-2 text-xs text-foreground">
-          <p className="mb-2 text-accent-2">Message options</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setReplyTargetMessageId(activeOptionsMessageId);
-                setEditTargetMessageId(null);
-                setActiveOptionsMessageId(null);
-              }}
-              className="rounded-lg border border-accent-1 px-2 py-1 text-accent-2 hover:text-foreground"
-            >
-              Reply
-            </button>
-            {messageById.get(activeOptionsMessageId)?.created_by === currentUserId ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const activeMessage = messageById.get(activeOptionsMessageId);
-                  if (activeMessage) {
-                    setMessageDraft(activeMessage.text);
-                    setEditTargetMessageId(activeMessage.id);
-                    setReplyTargetMessageId(null);
-                  }
-                  setActiveOptionsMessageId(null);
-                }}
-                className="rounded-lg border border-accent-1 px-2 py-1 text-accent-2 hover:text-foreground"
-              >
-                Edit
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setActiveOptionsMessageId(null)}
-              className="rounded-lg border border-accent-1 px-2 py-1 text-accent-2 hover:text-foreground"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {replyTargetMessageId ? (
-        <div className="mx-2 mb-1 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs text-accent-2">
-          Replying to: {messageById.get(replyTargetMessageId)?.text ?? "message"}
-          <button
-            type="button"
-            onClick={() => setReplyTargetMessageId(null)}
-            className="ml-2 underline underline-offset-2 hover:text-foreground"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : null}
-
       {editTargetMessageId ? (
         <div className="mx-2 mb-1 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs text-accent-2">
           Editing message
@@ -970,7 +974,7 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
               setMessageDraft("");
               setIsComposerFocused(false);
             }}
-            className="ml-2 underline underline-offset-2 hover:text-foreground"
+            className="ml-2 p-2 underline underline-offset-2 hover:text-foreground"
           >
             Cancel
           </button>

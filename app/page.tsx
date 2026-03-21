@@ -354,7 +354,7 @@ export default function Home() {
             <ThreadSettings
               thread={selectedThread}
               currentUserId={authUser.user_id}
-              onBack={() => setActiveTab("groups")}
+              onBack={() => setActiveTab("thread")}
               onThreadImageUpdated={(imageId, imageUrl) => {
                 setSelectedThread((previous) => ({
                   ...previous as ThreadItem,

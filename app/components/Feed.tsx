@@ -4,6 +4,7 @@ import { TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState } from
 import { PostSection} from "@/app/components/PostSection";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
+import { LoaderCircle } from "lucide-react";
 const FEED_CACHE_KEY = "feed_cache_v1";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
@@ -186,7 +187,13 @@ export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userI
     });
   }, [loadPosts]);
 
-  const showTopRefreshIndicator = isRefreshingLatest && didHydrateFromCache && posts.length > 0
+  const showTopRefreshIndicator = isRefreshingLatest && didHydrateFromCache && posts.length > 0;
+
+  // For animating loading feed height
+  const [loadingFeedHeight, setLoadingFeedHeight] = useState(0);
+  useEffect(() => {
+    setLoadingFeedHeight(isLoading ? 5 : 0);
+  }, [isLoading])
   
   return (
     <div className="flex h-full min-h-0 flex-col bg-primary-background">
@@ -199,9 +206,12 @@ export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userI
         onWheel={onFeedWheel}
         className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y"
       >
-        {isLoading ? (
-          <div className="px-3 py-3 text-xs text-accent-2">Loading feed...</div>
-        ) : null}
+        <div className="text-xs text-accent-2 transition-all duration-400 overflow-hidden w-full" style={{ maxHeight: `${loadingFeedHeight}rem` }}>
+          <div className="px-3 py-3 flex items-center text-center justify-center gap-2 w-full">
+            Loading feed... <LoaderCircle className="w-4 h-4 inline-block animate-spin" />
+          </div>
+        </div>
+
         {!isLoading && posts.length === 0 ? (
           <div className="px-3 py-3 text-xs text-accent-2">No posts yet.</div>
         ) : null}
