@@ -3,6 +3,7 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { Heart, ChevronDown, CircleUserRound, Trash2 } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
+import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { ApiError, PostCommentNode, PostData, PostItem } from "@/app/types/interfaces";
 
 type PostSectionProps = {
@@ -20,6 +21,8 @@ type PostSectionProps = {
 };
 
 const COMMENT_PATH_SEPARATOR = ">";
+const EMOJI_ONLY_COMMENT_REGEX = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
+const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
 
 const formatPostDate = (value: string): string => {
   const date = new Date(value);
@@ -32,6 +35,11 @@ const formatPostDate = (value: string): string => {
     hour: "numeric",
     minute: "2-digit",
   });
+};
+
+const isEmojiOnlyComment = (value: string): boolean => {
+  const trimmed = value.trim();
+  return Boolean(trimmed) && EMOJI_ONLY_COMMENT_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed);
 };
 
 function PostSectionComponent({
@@ -63,6 +71,17 @@ function PostSectionComponent({
         return a > b ? -1 : 1;
       }),
     [postData.comments],
+  );
+  const rootTextCommentEntries = useMemo(
+    () => rootCommentEntries.filter(([, comment]) => !isEmojiOnlyComment(comment.text)),
+    [rootCommentEntries],
+  );
+  const rootEmojiReactions = useMemo(
+    () =>
+      rootCommentEntries
+        .filter(([, comment]) => isEmojiOnlyComment(comment.text))
+        .map(([, comment]) => comment.text.trim()),
+    [rootCommentEntries],
   );
 
   useEffect(() => {
@@ -131,10 +150,10 @@ function PostSectionComponent({
     }
   };
 
-  const onSubmitComment = async (parentPath: string[]) => {
+  const onSubmitComment = async (parentPath: string[], emoji?: string) => {
     const pathKey = parentPath.join(COMMENT_PATH_SEPARATOR);
     const draft = parentPath.length === 0 ? rootCommentDraft : replyDraftByPath[pathKey] ?? "";
-    const message = draft.trim();
+    const message = emoji ?? draft.trim();
     if (!message || isSubmittingComment) {
       return;
     }
@@ -177,9 +196,15 @@ function PostSectionComponent({
   };
 
   const toggleReplies = (pathKey: string) => {
+    setAboutToDeleteCommentPath(null);
     setExpandedReplyPaths((previous) =>
       previous.includes(pathKey) ? previous.filter((item) => item !== pathKey) : [...previous, pathKey],
     );
+  };
+
+
+  const handlePostEmojiReply = (emoji: string, path?: string[]) => {
+    void onSubmitComment(path ?? [], emoji);
   };
 
   const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
@@ -246,8 +271,14 @@ function PostSectionComponent({
   ) => {
     const path = [...parentPath, commentTimestamp];
     const pathKey = path.join(COMMENT_PATH_SEPARATOR);
-    const replyEntries = Object.entries(comment.replies ?? {}).sort(([a], [b]) => (a > b ? 1 : -1));
-    const hasReplies = replyEntries.length > 0;
+    const allReplyEntries = Object.entries(comment.replies ?? {}).sort(([a], [b]) => (a > b ? 1 : -1));
+    const emojiReplyEntries = allReplyEntries.filter(([, childComment]) =>
+      isEmojiOnlyComment(childComment.text),
+    );
+    const threadedReplyEntries = allReplyEntries.filter(([, childComment]) =>
+      !isEmojiOnlyComment(childComment.text),
+    );
+    const hasThreadedReplies = threadedReplyEntries.length > 0;
     const isExpanded = expandedReplyPaths.includes(pathKey);
     const isReplyInputOpen = activeReplyPath === pathKey;
     const replyDraft = replyDraftByPath[pathKey] ?? "";
@@ -257,23 +288,34 @@ function PostSectionComponent({
       <div key={pathKey} className={`${depth > 0 ? "ml-4 border-l border-accent-1/70 pl-2" : ""}`}>
         <div className="text-sm text-accent-2 flex">
           <span className="font-semibold text-foreground/90 pr-2">{comment.username || comment.user_id}</span>
-          
+
           {comment.text}
 
           {canDeleteReply && <button className="ml-auto" onClick={() => { void onDeleteComment(path); }} disabled={isDeletingCommentPath === pathKey}>
-            <Trash2 className={`h-4 w-4 ${aboutToDeleteCommentPath === pathKey ? "text-red-400" : "text-accent-2"}`} />
+            <Trash2 className={`h-4 w-4 ${aboutToDeleteCommentPath === pathKey ? "text-red-400" : "text-accent-2 opacity-30"}`} />
           </button>}
         </div>
+        {emojiReplyEntries.length > 0 ? (
+          <div className="mt-1 ml-10 flex flex-wrap items-center gap-1">
+            {emojiReplyEntries.map(([childTimestamp, childComment]) => (
+              <span key={childTimestamp} className="text-base leading-none">
+                {childComment.text.trim()}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <div className="mt-1 ml-10 flex items-center gap-5">
 
-          {hasReplies ? (
+          {hasThreadedReplies ? (
             <button
               type="button"
               onClick={() => toggleReplies(pathKey)}
               className="text-xs flex text-accent-2 underline underline-offset-2 hover:text-foreground opacity-50"
             >
               <ChevronDown className={`h-4 w-4 ${isExpanded ? "rotate-180" : ""}`} />
-              {isExpanded ? "Hide replies" : `${replyEntries.length} repl${replyEntries.length === 1 ? "y" : "ies"}`}
+              {isExpanded
+                ? "Hide replies"
+                : `${threadedReplyEntries.length} repl${threadedReplyEntries.length === 1 ? "y" : "ies"}`}
             </button>
           ) : null}
 
@@ -284,6 +326,11 @@ function PostSectionComponent({
           >
             Reply
           </button>
+
+          <EmojiPicker
+            onSelectEmoji={(emoji) => handlePostEmojiReply(emoji, path)}
+            buttonClassName="h-5 border-none pt-0.5"
+          />
         </div>
 
 
@@ -312,9 +359,9 @@ function PostSectionComponent({
             </button>
           </div>
         ) : null}
-        {hasReplies && isExpanded ? (
+        {hasThreadedReplies && isExpanded ? (
           <div className="mt-1 space-y-2">
-            {replyEntries.map(([childTimestamp, childComment]) =>
+            {threadedReplyEntries.map(([childTimestamp, childComment]) =>
               renderCommentTree(childTimestamp, childComment, path, depth + 1),
             )}
           </div>
@@ -370,28 +417,44 @@ function PostSectionComponent({
 
         {/** Post Text */}
         {post.text.trim() ? <p className="text-sm text-foreground">{post.text}</p> : null}
-        
+
         {/** Like Button */}
-        <div className="mt-1">
+        <div className="mt-1 flex items-center gap-2">
+
           <button
             type="button"
             onClick={() => {
               void onToggleLike();
             }}
             disabled={isUpdatingLike}
-            className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-xs text-accent-2 transition hover:text-foreground disabled:opacity-50"
+            className="h-5 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-xs text-accent-2 transition hover:text-foreground disabled:opacity-50"
           >
             <Heart
               className={`h-4 w-4 ${isLikedByViewer ? "fill-accent-3 text-accent-3" : "text-accent-2"}`}
             />
             <span>{likeCount}</span>
           </button>
+
+          <EmojiPicker
+            onSelectEmoji={handlePostEmojiReply}
+            buttonClassName="h-5 border-none pt-0.5"
+          />
+
+          {rootEmojiReactions.length > 0 ? (
+            <div className="flex max-w-[60%] flex-wrap items-center gap-0">
+              {rootEmojiReactions.map((emoji, index) => (
+                <span key={`${emoji}-${index}`} className="text-base leading-none">
+                  {emoji}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {/** Comments */}
         {showComments ? (
           <div className="mt-1 space-y-1">
-            
+
             {/** Add Comment Input */}
             <div className="flex items-center gap-2">
               <input
@@ -413,11 +476,11 @@ function PostSectionComponent({
             </div>
 
             {/** Comment Tree */}
-            {rootCommentEntries.length === 0 ? (
+            {rootTextCommentEntries.length === 0 ? (
               <p className="text-xs text-accent-2">No comments yet.</p>
             ) : (
               <div className="space-y-2">
-                {rootCommentEntries.map(([commentTimestamp, comment]) =>
+                {rootTextCommentEntries.map(([commentTimestamp, comment]) =>
                   renderCommentTree(commentTimestamp, comment, [], 0),
                 )}
               </div>
