@@ -84,12 +84,38 @@ const sanitizePoolGameMessage = (raw: unknown): PoolGameMessageData | undefined 
   }
 
   const playerA = sanitizeUsernameField(o.player_a_username);
-  const playerB = sanitizeUsernameField(o.player_b_username);
-  const currentTurn = sanitizeUsernameField(o.current_turn_username);
-  if (!playerA || !playerB || !currentTurn) {
+  if (!playerA) {
     return undefined;
   }
-  if (playerA === playerB) {
+
+  let playerB: string | null = null;
+  const rawB = o.player_b_username;
+  if (rawB !== null && rawB !== undefined && rawB !== "") {
+    const b = sanitizeUsernameField(rawB);
+    if (!b) {
+      return undefined;
+    }
+    if (b === playerA) {
+      return undefined;
+    }
+    playerB = b;
+  }
+
+  let currentTurn: string | null = null;
+  const rawTurn = o.current_turn_username;
+  if (rawTurn !== null && rawTurn !== undefined && rawTurn !== "") {
+    const t = sanitizeUsernameField(rawTurn);
+    if (!t) {
+      return undefined;
+    }
+    currentTurn = t;
+  }
+
+  if (playerB === null) {
+    if (currentTurn !== null && currentTurn !== playerA) {
+      return undefined;
+    }
+  } else if (currentTurn !== null && currentTurn !== playerA && currentTurn !== playerB) {
     return undefined;
   }
 
@@ -129,7 +155,7 @@ const sanitizePoolGameMessage = (raw: unknown): PoolGameMessageData | undefined 
     table_w: tableW,
     table_h: tableH,
     balls,
-  };
+  } satisfies PoolGameMessageData;
 };
 
 const clampOverlayYRatio = (value: number): number => Math.min(0.9, Math.max(0.1, value));

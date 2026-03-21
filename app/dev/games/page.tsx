@@ -3,18 +3,28 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import Pool from "@/app/components/games/Pool";
-import { createInitialPoolGame } from "@/app/components/games/poolGameUtils";
+import { createInitialPoolGame, isPoolTurnForUser } from "@/app/components/games/poolGameUtils";
 import type { PoolGameMessageData } from "@/app/types/interfaces";
 
-const DEV_USER = "dev";
+const DEV_A = "dev_a";
+const DEV_B = "dev_b";
 
 function newDevPoolGame(): PoolGameMessageData {
   return createInitialPoolGame({
     gameId: `dev-${Date.now()}`,
-    playerAUsername: DEV_USER,
-    playerBUsername: DEV_USER,
-    startingUsername: DEV_USER,
+    playerAUsername: DEV_A,
+    startingUsername: DEV_A,
   });
+}
+
+function devPlayUsername(game: PoolGameMessageData): string {
+  if (isPoolTurnForUser(game, DEV_A)) {
+    return DEV_A;
+  }
+  if (isPoolTurnForUser(game, DEV_B)) {
+    return DEV_B;
+  }
+  return DEV_A;
 }
 
 export default function DevGamesPage() {
@@ -49,7 +59,7 @@ export default function DevGamesPage() {
         <div className="flex min-h-0 flex-1 flex-col">
           <Pool
             game={poolGame}
-            currentUsername={DEV_USER}
+            currentUsername={devPlayUsername(poolGame)}
             exitAfterTurn={false}
             backLabel="Games"
             onBack={() => {

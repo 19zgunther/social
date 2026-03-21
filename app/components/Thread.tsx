@@ -8,7 +8,9 @@ import Pool from "@/app/components/games/Pool";
 import {
   createInitialPoolGame,
   getPoolGameFromMessageData,
+  isPoolTurnForUser,
   latestPoolMessagesByGameId,
+  withSecondPlayerClaimed,
 } from "@/app/components/games/poolGameUtils";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import CachedImage from "@/app/components/utils/CachedImage";
@@ -567,11 +569,20 @@ export default function Thread({
   const sendPoolGameMessage = async (poolGame: PoolGameMessageData): Promise<PoolGameMessageData> => {
     setIsSendingMessage(true);
     setStatusMessage("");
+    const claimSecondSeat = (pg: PoolGameMessageData): PoolGameMessageData => {
+      if (pg.player_b_username !== null) {
+        return pg;
+      }
+      if (pg.player_a_username === currentUsername) {
+        return pg;
+      }
+      return { ...pg, player_b_username: currentUsername };
+    };
     try {
       const response = await postWithAuth("/api/thread-send", {
         thread_id: selectedThread.id,
         text: "",
-        message_data: { pool_game: poolGame },
+        message_data: { pool_game: claimSecondSeat(poolGame) },
       });
 
       if (!response.ok) {
@@ -604,8 +615,8 @@ export default function Thread({
   };
 
   const startNewPoolGame = async () => {
-    const opponent = members.find((member) => member.user_id !== currentUserId);
-    if (!opponent) {
+    const hasSomeoneElse = members.some((member) => member.user_id !== currentUserId);
+    if (!hasSomeoneElse) {
       setStatusMessage("Add another member to this thread to play Pool.");
       return;
     }
@@ -614,7 +625,6 @@ export default function Thread({
       const game = createInitialPoolGame({
         gameId: crypto.randomUUID(),
         playerAUsername: currentUsername,
-        playerBUsername: opponent.username,
         startingUsername: currentUsername,
       });
       const saved = await sendPoolGameMessage(game);
@@ -815,14 +825,38 @@ export default function Thread({
     const showPoolCard = poolGame && latestPoolMessageIds.has(message.id);
 
     if (showPoolCard && poolGame) {
-      const isPlayer =
+      const isLockedPlayer =
         poolGame.player_a_username === currentUsername ||
         poolGame.player_b_username === currentUsername;
+      const canJoinAsOpponent =
+        poolGame.player_b_username === null &&
+        poolGame.current_turn_username === null &&
+        currentUsername !== poolGame.player_a_username;
+      const canInteract = isLockedPlayer || canJoinAsOpponent;
+      const myTurn = canInteract && isPoolTurnForUser(poolGame, currentUsername);
+
       const opponentUsername =
         poolGame.player_a_username === currentUsername
           ? poolGame.player_b_username
-          : poolGame.player_a_username;
-      const myTurn = isPlayer && poolGame.current_turn_username === currentUsername;
+          : poolGame.player_b_username === currentUsername
+            ? poolGame.player_a_username
+            : null;
+
+      let statusHint: string;
+      if (myTurn) {
+        statusHint = "Your turn — take a shot.";
+      } else if (!canInteract) {
+        statusHint = "Spectating — only the host and first responder play.";
+      } else if (poolGame.current_turn_username !== null) {
+        statusHint = `Waiting for ${poolGame.current_turn_username}.`;
+      } else if (poolGame.player_b_username === null) {
+        statusHint =
+          currentUsername === poolGame.player_a_username
+            ? "Waiting for someone to take the first shot as Player 2."
+            : "Tap Play to join as Player 2 (first tap wins if several people try).";
+      } else {
+        statusHint = `Waiting for ${poolGame.player_b_username}.`;
+      }
 
       if (depth > 0) {
         return null;
@@ -836,23 +870,32 @@ export default function Thread({
             <p className="text-xs opacity-60">{isOwnMessage ? "You" : message.username}</p>
             <p className="text-sm font-semibold text-foreground">🎱 Pool</p>
             <p className="mt-1 text-xs text-accent-2">
-              {isPlayer ? (
+              {isLockedPlayer ? (
                 <>
-                  vs <span className="text-foreground">{opponentUsername}</span>
+                  vs{" "}
+                  <span className="text-foreground">
+                    {opponentUsername ?? "…"}
+                  </span>
+                  {!opponentUsername ? (
+                    <span className="text-accent-2"> (Player 2 not joined yet)</span>
+                  ) : null}
+                </>
+              ) : canJoinAsOpponent ? (
+                <>
+                  Host <span className="text-foreground">{poolGame.player_a_username}</span> — you can join as Player 2
                 </>
               ) : (
                 <>
-                  {poolGame.player_a_username} vs {poolGame.player_b_username}
+                  {poolGame.player_a_username}
+                  {poolGame.player_b_username ? (
+                    <> vs {poolGame.player_b_username}</>
+                  ) : (
+                    <> — waiting for Player 2</>
+                  )}
                 </>
               )}
             </p>
-            <p className="mt-2 text-xs text-accent-2">
-              {myTurn
-                ? "Your turn — take a shot."
-                : isPlayer
-                  ? `Waiting for ${poolGame.current_turn_username}.`
-                  : "Spectating this game."}
-            </p>
+            <p className="mt-2 text-xs text-accent-2">{statusHint}</p>
             <button
               type="button"
               disabled={!myTurn || Boolean(editTargetMessageId)}
@@ -860,7 +903,7 @@ export default function Thread({
                 if (!myTurn) {
                   return;
                 }
-                setPoolSession(poolGame);
+                setPoolSession(withSecondPlayerClaimed(poolGame, currentUsername));
               }}
               className="mt-3 w-full rounded-full border border-accent-1 bg-accent-3/20 py-2 text-xs font-semibold text-foreground transition hover:bg-accent-3/30 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -1207,36 +1250,37 @@ export default function Thread({
 
       {isGamesModalOpen
         ? createPortal(
-            <div
-              className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2100] flex items-end justify-center bg-black/45 px-3 pb-6 pt-16 sm:items-center`}
-            >
+          <div
+            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2100] flex items-end justify-center bg-black/45 px-3 pb-6 pt-16 sm:items-center`}
+          >
+            <button
+              type="button"
+              aria-label="Close games"
+              className="absolute inset-0 cursor-default"
+              onClick={() => setIsGamesModalOpen(false)}
+            />
+            <div className="relative z-10 w-full max-w-sm rounded-2xl border border-accent-1 bg-secondary-background p-4 shadow-xl">
+              <p className="text-sm font-semibold text-foreground">Games</p>
+              <p className="mt-1 text-xs text-accent-2">Start a turn-based game in this thread.</p>
               <button
                 type="button"
-                aria-label="Close games"
-                className="absolute inset-0 cursor-default"
-                onClick={() => setIsGamesModalOpen(false)}
-              />
-              <div className="relative z-10 w-full max-w-sm rounded-2xl border border-accent-1 bg-secondary-background p-4 shadow-xl">
-                <p className="text-sm font-semibold text-foreground">Games</p>
-                <p className="mt-1 text-xs text-accent-2">Start a turn-based game in this thread.</p>
-                <button
-                  type="button"
-                  disabled={isSendingMessage || isLoadingMembers || members.length < 2}
-                  onClick={() => void startNewPoolGame()}
-                  className="mt-4 w-full rounded-xl border border-accent-1 bg-primary-background px-3 py-3 text-left text-sm font-medium text-foreground transition hover:border-accent-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <span className="block">🎱 Pool</span>
-                  <span className="mt-0.5 block text-xs font-normal text-accent-2">
-                    Top-down billiards — one shot per turn, state syncs in chat.
-                  </span>
-                </button>
-              </div>
-            </div>,
-            document.body,
-          )
+                disabled={isSendingMessage || isLoadingMembers || members.length < 2}
+                onClick={() => void startNewPoolGame()}
+                className="mt-4 w-full rounded-xl border border-accent-1 bg-primary-background px-3 py-3 text-left text-sm font-medium text-foreground transition hover:border-accent-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="block">🎱 Pool</span>
+                <span className="mt-0.5 block text-xs font-normal text-accent-2">
+                  Top-down billiards — one shot per turn, state syncs in chat.
+                </span>
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )
         : null}
 
       <form onSubmit={onSendMessage} className="mx-2 mb-2 mt-1 flex items-center gap-2">
+        {/** Main message input */}
         <input
           className={`rounded-full border border-accent-1 bg-secondary-background px-4 py-2 text-sm text-foreground outline-none focus:border-accent-2 transition-all duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
             }`}
@@ -1250,6 +1294,8 @@ export default function Thread({
             }
           }}
         />
+
+        {/** Camera button & Plus Games button */}
         {!isComposerExpanded ? (
           <>
             <button
@@ -1258,7 +1304,7 @@ export default function Thread({
                 openCameraModal();
               }}
               disabled={Boolean(editTargetMessageId)}
-              className="flex-1 rounded-full border border-accent-1 px-3 py-2 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
+              className="flex-1 rounded-full border border-accent-1 px-3 py-3 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
               aria-label="Take photo"
             >
               <Camera className="mx-auto h-4 w-4" />
@@ -1267,7 +1313,7 @@ export default function Thread({
               type="button"
               onClick={() => setIsGamesModalOpen(true)}
               disabled={Boolean(editTargetMessageId)}
-              className="flex shrink-0 items-center justify-center rounded-full border border-accent-1 px-3 py-2 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
+              className="flex shrink-0 items-center justify-center rounded-full border border-accent-1 px-3 py-3 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
               aria-label="Games"
             >
               <Plus className="h-4 w-4" />
@@ -1276,18 +1322,9 @@ export default function Thread({
         ) : (
           <>
             <button
-              type="button"
-              onClick={() => setIsGamesModalOpen(true)}
-              disabled={Boolean(editTargetMessageId)}
-              className="flex shrink-0 items-center justify-center rounded-full border border-accent-1 px-3 py-2 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
-              aria-label="Games"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-            <button
               type="submit"
               disabled={isSendingMessage || !messageDraft.trim()}
-              className="rounded-full bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+              className="rounded-full bg-accent-3 px-4 py-3 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
             >
               {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}
             </button>

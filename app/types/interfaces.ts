@@ -74,9 +74,12 @@ export type PoolBallState = {
 export type PoolGameMessageData = {
   v: 1;
   game_id: string;
+  /** Creator / first participant (always set). */
   player_a_username: string;
-  player_b_username: string;
-  current_turn_username: string;
+  /** Second participant — null until the first non-creator sends a pool move (first responder). */
+  player_b_username: string | null;
+  /** Whose shot; null means “waiting for first opponent shot” after the opener, or opponent’s turn when b is set (see isPoolTurnForUser). */
+  current_turn_username: string | null;
   table_w: number;
   table_h: number;
   balls: PoolBallState[];

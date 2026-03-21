@@ -6,6 +6,7 @@ import BackButton from "@/app/components/utils/BackButton";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import {
   flipTurn,
+  isPoolTurnForUser,
   respawnCueBallInKitchen,
 } from "@/app/components/games/poolGameUtils";
 import {
@@ -99,7 +100,7 @@ export default function Pool({
   const [isSendingTurn, setIsSendingTurn] = useState(false);
   const [statusLine, setStatusLine] = useState("");
 
-  const isMyTurn = workingGame.current_turn_username === currentUsername;
+  const isMyTurn = isPoolTurnForUser(workingGame, currentUsername);
 
   useEffect(() => {
     setWorkingGame(deepCopyGame(game));
@@ -385,7 +386,13 @@ export default function Pool({
         <div className="min-w-0 flex-1 px-2 text-center">
           <p className="truncate text-sm font-semibold text-foreground">Pool</p>
           <p className="truncate text-xs text-accent-2">
-            {isMyTurn ? "Your turn" : `Waiting for ${workingGame.current_turn_username}`}
+            {isMyTurn
+              ? "Your turn"
+              : workingGame.current_turn_username
+                ? `Waiting for ${workingGame.current_turn_username}`
+                : workingGame.player_b_username === null
+                  ? "Waiting for Player 2"
+                  : `Waiting for ${workingGame.player_b_username}`}
           </p>
         </div>
         <div className="w-14" />

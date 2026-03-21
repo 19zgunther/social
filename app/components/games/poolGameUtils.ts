@@ -13,7 +13,14 @@ export function getPoolGameFromMessageData(data: MessageData | null | undefined)
   if (g.v !== 1 || typeof g.game_id !== "string" || !Array.isArray(g.balls)) {
     return null;
   }
-  return g;
+  const pg = g as PoolGameMessageData;
+  const playerB =
+    pg.player_b_username === undefined || pg.player_b_username === "" ? null : pg.player_b_username;
+  const currentTurn =
+    pg.current_turn_username === undefined || pg.current_turn_username === ""
+      ? null
+      : pg.current_turn_username;
+  return { ...pg, player_b_username: playerB, current_turn_username: currentTurn };
 }
 
 /**
@@ -57,14 +64,13 @@ function rackBalls(tableW: number, tableH: number, r: number): PoolBallState[] {
 export function createInitialPoolGame(params: {
   gameId: string;
   playerAUsername: string;
-  playerBUsername: string;
   startingUsername: string;
 }): PoolGameMessageData {
   return {
     v: 1,
     game_id: params.gameId,
     player_a_username: params.playerAUsername,
-    player_b_username: params.playerBUsername,
+    player_b_username: null,
     current_turn_username: params.startingUsername,
     table_w: DEFAULT_TABLE_W,
     table_h: DEFAULT_TABLE_H,
@@ -72,12 +78,41 @@ export function createInitialPoolGame(params: {
   };
 }
 
-export function flipTurn(game: PoolGameMessageData): string {
-  const next =
-    game.current_turn_username === game.player_a_username
-      ? game.player_b_username
-      : game.player_a_username;
-  return next;
+/** Whose shot it is (creator, first responder while seat open, or locked player B). */
+export function isPoolTurnForUser(game: PoolGameMessageData, username: string): boolean {
+  if (game.current_turn_username !== null) {
+    return game.current_turn_username === username;
+  }
+  if (game.player_b_username === null) {
+    return username !== game.player_a_username;
+  }
+  return username === game.player_b_username;
+}
+
+/**
+ * When opening the table as the first non-creator after the break, claim the B seat locally
+ * so physics/flipTurn see two players (server gets player_b on send).
+ */
+export function withSecondPlayerClaimed(game: PoolGameMessageData, username: string): PoolGameMessageData {
+  if (game.player_b_username !== null || username === game.player_a_username) {
+    return game;
+  }
+  return { ...game, player_b_username: username };
+}
+
+export function flipTurn(game: PoolGameMessageData): string | null {
+  if (game.current_turn_username === null) {
+    if (game.player_b_username === null) {
+      return null;
+    }
+    return game.player_a_username;
+  }
+  if (game.player_b_username === null) {
+    return null;
+  }
+  return game.current_turn_username === game.player_a_username
+    ? game.player_b_username
+    : game.player_a_username;
 }
 
 /** Latest pool message per game_id (by message order in array = chronological from API). */
