@@ -1,7 +1,15 @@
 import { CSSProperties } from "react";
 
 type Mode = "login" | "signup";
-type AppTab = "feed" | "groups" | "profile" | "thread" | "thread_settings" | "profile" | "profile_settings" | "other_user_profile";
+type AppTab =
+    | "feed"
+    | "groups"
+    | "profile"
+    | "thread"
+    | "thread_settings"
+    | "profile_settings"
+    | "other_user_profile"
+    | "create_post";
 
 const MOBILE_FRAME_STYLE: CSSProperties = {
     width: "100vw",
@@ -17,7 +25,12 @@ const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | n
     const tabParam = params.get("tab");
     const threadIdParam = params.get("thread_id");
     let tab: AppTab | null =
-        tabParam === "feed" || tabParam === "groups" || tabParam === "profile" ? tabParam : null;
+        tabParam === "feed" ||
+            tabParam === "groups" ||
+            tabParam === "profile" ||
+            tabParam === "create_post"
+            ? tabParam
+            : null;
     if (!tab && threadIdParam) {
         tab = "groups";
     }

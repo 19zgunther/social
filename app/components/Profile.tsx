@@ -1,10 +1,9 @@
 "use client";
 
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronRight, CircleUserRound, Plus, Settings as SettingsIcon, Trash2 } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { PostSection } from "@/app/components/PostSection";
-import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 import {
@@ -15,7 +14,6 @@ import {
   FriendSearchResult,
   IncomingFriendRequest,
   OutgoingFriendRequest,
-  PostCreateResponse,
   PostItem,
   ProfilePostsListResponse,
   UserProfileResponse,
@@ -28,9 +26,11 @@ type ProfileProps = {
   email: string | null;
   profileImageId: string | null;
   profileImageUrl: string | null;
+  reloadSignal?: number;
   onProfileImageUpdated: (profileImageId: string | null, profileImageUrl: string | null) => void;
   onOpenSettings: () => void;
   onViewUserProfile: (userId: string) => void;
+  onOpenCreatePost: () => void;
 };
 
 
@@ -139,7 +139,7 @@ function ProfilePostsSection({
   isLoadingMorePosts,
   loadPosts,
   setSelectedPostId,
-  createInputRef,
+  onOpenCreatePost,
   showCreateButton = true,
 }: {
   posts: PostItem[];
@@ -149,13 +149,22 @@ function ProfilePostsSection({
   isLoadingMorePosts: boolean;
   loadPosts: (cursorPostId?: string) => void;
   setSelectedPostId: (postId: string | null) => void;
-  createInputRef: React.RefObject<HTMLInputElement> | null;
+  onOpenCreatePost?: () => void;
   showCreateButton?: boolean;
 }) {
   return (
     <>
-      <div className="border-b border-accent-1 px-3 py-3">
-        Posts
+      <div className="border-b border-accent-1 px-3 py-3 flex items-center justify-between gap-3">
+        <p>Posts</p>
+        {showCreateButton && onOpenCreatePost ? (
+          <button
+            type="button"
+            onClick={onOpenCreatePost}
+            className="rounded-lg border border-accent-1 bg-secondary-background px-3 py-1.5 text-xs font-semibold text-accent-2 hover:text-foreground"
+          >
+            New Post
+          </button>
+        ) : null}
       </div>
       <div className="min-h-0">
         {isLoadingPosts ? <p className="px-3 py-3 text-xs text-accent-2">Loading posts...</p> : null}
@@ -166,11 +175,13 @@ function ProfilePostsSection({
         ) : null}
 
         <div className="grid grid-cols-3 border-t border-accent-1">
-          {showCreateButton && createInputRef && (
+          {showCreateButton && onOpenCreatePost && (
             <button
               type="button"
-              onClick={() => createInputRef.current?.click()}
+              onClick={onOpenCreatePost}
               className="aspect-square border-r border-b border-accent-1 bg-secondary-background p-2"
+              aria-label="New Post"
+              title="New Post"
             >
               <div className="flex h-full w-full items-center justify-center rounded-md border border-accent-1">
                 <Plus className="h-6 w-6 text-accent-2" />
@@ -179,7 +190,7 @@ function ProfilePostsSection({
           )}
 
           {posts.map((post, index) => {
-            const showRightBorder = showCreateButton && createInputRef
+            const showRightBorder = showCreateButton && onOpenCreatePost
               ? (index + 1) % 3 !== 0
               : index % 3 !== 2;
             return (
@@ -187,9 +198,8 @@ function ProfilePostsSection({
                 key={post.id}
                 type="button"
                 onClick={() => setSelectedPostId(post.id)}
-                className={`aspect-square bg-primary-background ${
-                  showRightBorder ? "border-r border-accent-1" : ""
-                } border-b border-accent-1`}
+                className={`aspect-square bg-primary-background ${showRightBorder ? "border-r border-accent-1" : ""
+                  } border-b border-accent-1`}
               >
                 {post.image_url ? (
                   <CachedImage
@@ -231,9 +241,11 @@ function Profile({
   email,
   profileImageId,
   profileImageUrl,
+  reloadSignal = 0,
   onProfileImageUpdated,
   onOpenSettings,
   onViewUserProfile,
+  onOpenCreatePost,
 }: ProfileProps) {
   const [posts, setPosts] = useStateCached<PostItem[]>([], 'user_profile_posts_cache_v1');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -241,11 +253,6 @@ function Profile({
   const [hasMorePosts, setHasMorePosts] = useState(false);
   const [nextCursorPostId, setNextCursorPostId] = useState<string | null>(null);
   const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
-  const [createCaption, setCreateCaption] = useState("");
-  const [createImagePreviewUrl, setCreateImagePreviewUrl] = useState<string | null>(null);
-  const [createImageBase64Data, setCreateImageBase64Data] = useState<string | null>(null);
-  const [createImageMimeType, setCreateImageMimeType] = useState<string | null>(null);
-  const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [friendSearchQuery, setFriendSearchQuery] = useState("");
   const [friendSearchResults, setFriendSearchResults] = useState<FriendSearchResult[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<IncomingFriendRequest[]>([]);
@@ -261,7 +268,6 @@ function Profile({
   const [localProfileImageId, setLocalProfileImageId] = useState<string | null>(profileImageId);
   const [localProfileImageUrl, setLocalProfileImageUrl] = useState<string | null>(profileImageUrl);
   const [statusMessage, setStatusMessage] = useState("");
-  const createInputRef = useRef<HTMLInputElement | null>(null);
   const pendingOutgoingRequests = outgoingRequests.filter((row) => row.accepted === null);
 
   const selectedPost = selectedPostId ? posts.find((post) => post.id === selectedPostId) ?? null : null;
@@ -307,7 +313,7 @@ function Profile({
 
   useEffect(() => {
     void loadPosts();
-  }, [userId]);
+  }, [userId, reloadSignal]);
 
   const loadFriendRows = async () => {
     setIsLoadingFriendRows(true);
@@ -415,55 +421,6 @@ function Profile({
       setStatusMessage(error instanceof Error ? error.message : "Failed to respond to request.");
     } finally {
       setActiveIncomingRequestId(null);
-    }
-  };
-
-  const onSelectPostImage = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) {
-      return;
-    }
-
-    try {
-      const preparedImage = await prepareImageForUpload(file);
-      setCreateImagePreviewUrl(preparedImage.previewDataUrl);
-      setCreateImageBase64Data(preparedImage.base64Data);
-      setCreateImageMimeType(preparedImage.mimeType);
-      setStatusMessage("");
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to prepare image.");
-    }
-  };
-
-  const onCreatePost = async () => {
-    if (!createImageBase64Data || !createImageMimeType) {
-      return;
-    }
-
-    setIsCreatingPost(true);
-    setStatusMessage("");
-    try {
-      const response = await postWithAuth("/api/post-create", {
-        text: createCaption.trim(),
-        image_base64_data: createImageBase64Data,
-        image_mime_type: createImageMimeType,
-      });
-      if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
-        return;
-      }
-
-      const payload = (await response.json()) as PostCreateResponse;
-      setPosts((previousPosts) => [payload.post, ...previousPosts]);
-      setCreateCaption("");
-      setCreateImagePreviewUrl(null);
-      setCreateImageBase64Data(null);
-      setCreateImageMimeType(null);
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to create post.");
-    } finally {
-      setIsCreatingPost(false);
     }
   };
 
@@ -593,8 +550,7 @@ function Profile({
             })`}
         </button>
 
-        {isFriendsExpanded ? (
-          <div className="mt-3 space-y-3">
+          <div className="mt-3 space-y-3 overflow-hidden transition-all duration-400" style={{ maxHeight: isFriendsExpanded ? "100%" : "0" }}>
             <p className="text-xs font-semibold text-accent-2">Search for users to add as friends</p>
             <div className="flex items-center gap-2">
               <UserSearch
@@ -717,59 +673,7 @@ function Profile({
               </div>
             ) : null}
           </div>
-        ) : null}
       </section>
-
-      {/** Create Post Section */}
-      {createImagePreviewUrl ? (
-        <div className="border-b border-accent-1 bg-secondary-background p-3">
-          <div className="relative aspect-square overflow-hidden rounded-lg border border-accent-1">
-            <img
-              src={createImagePreviewUrl}
-              alt="New post preview"
-              className="h-full w-full object-cover"
-            />
-            <div className="absolute inset-x-0 bottom-0 bg-black/55 p-2 backdrop-blur-[1px]">
-              <input
-                value={createCaption}
-                onChange={(event) => setCreateCaption(event.target.value)}
-                placeholder="Caption (optional)"
-                className="w-full rounded-lg border border-white/30 bg-black/45 px-3 py-2 text-sm text-white outline-none placeholder:text-white/70 focus:border-white/70"
-              />
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onCreatePost}
-                  disabled={isCreatingPost}
-                  className="rounded-lg bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-50"
-                >
-                  {isCreatingPost ? "Posting..." : "Post"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCreateImagePreviewUrl(null);
-                    setCreateImageBase64Data(null);
-                    setCreateImageMimeType(null);
-                    setCreateCaption("");
-                  }}
-                  className="rounded-lg border border-white/30 bg-black/45 px-3 py-2 text-xs text-white hover:text-foreground"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <input
-        ref={createInputRef}
-        type="file"
-        accept="image/*"
-        onChange={onSelectPostImage}
-        className="hidden"
-      />
 
       <ProfilePostsSection
         posts={posts}
@@ -779,7 +683,7 @@ function Profile({
         isLoadingMorePosts={isLoadingMorePosts}
         loadPosts={loadPosts}
         setSelectedPostId={setSelectedPostId}
-        createInputRef={createInputRef as React.RefObject<HTMLInputElement>}
+        onOpenCreatePost={onOpenCreatePost}
       />
 
       {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
@@ -1005,8 +909,8 @@ function ProfileOtherUser({
         localProfileImageId={profileData.user.profile_image_id}
         username={profileData.user.username}
         email={null}
-        onOpenSettings={() => {}}
-        setIsProfilePictureEditorOpen={() => {}}
+        onOpenSettings={() => { }}
+        setIsProfilePictureEditorOpen={() => { }}
       />
 
       {!isFriends ? (
@@ -1056,7 +960,7 @@ function ProfileOtherUser({
             isLoadingMorePosts={isLoadingMorePosts}
             loadPosts={(cursorPostId) => { void loadProfile(cursorPostId); }}
             setSelectedPostId={setSelectedPostId}
-            createInputRef={null}
+            onOpenCreatePost={undefined}
             showCreateButton={false}
           />
         </>

@@ -24,6 +24,7 @@ export type PostCommentNode = {
 export type PostData = {
   comments?: Record<string, PostCommentNode>;
   likes?: Record<string, boolean>;
+  other_image_ids?: string[];
 };
 
 export type PostItem = {
@@ -160,11 +161,21 @@ export type ProfilePostsListResponse = {
 
 export type PostCreateRequest = {
   text?: string;
+  image_id?: string;
   image_base64_data?: string;
   image_mime_type?: string;
   data?: unknown;
 };
 export type PostCreateResponse = { post: PostItem };
+
+export type ImageUploadRequest = {
+  image_base64_data?: string;
+  image_mime_type?: string;
+};
+export type ImageUploadResponse = {
+  image_id: string;
+  image_url: string;
+};
 
 export type GroupsListResponse = { threads: ThreadItem[] };
 

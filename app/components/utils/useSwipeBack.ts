@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const EDGE_SWIPE_START_THRESHOLD = 1 / 3;
 const EDGE_SWIPE_FINISH_THRESHOLD = 2 / 3;
 const CANCEL_SETTLE_MS = 280;
+export const DONT_SWIPE_TABS_CLASSNAME = "dont-swipe-tabs";
 
 function easeOutCubic(t: number) {
     return 1 - Math.pow(1 - t, 3);
@@ -85,6 +86,16 @@ export default function useSwipeBack({
         swipeModeRef.current = null;
         const touch = event.touches[0];
         if (!touch) return;
+
+        // get the closest DONT_SWIPE_TABS_CLASSNAME parent
+        let closestDontSwipeTabs = event.target as HTMLElement;
+        while (closestDontSwipeTabs && !closestDontSwipeTabs?.classList?.contains(DONT_SWIPE_TABS_CLASSNAME)) {
+            closestDontSwipeTabs = closestDontSwipeTabs?.parentElement as HTMLElement;
+            if (!closestDontSwipeTabs) break;
+        }
+        if (closestDontSwipeTabs) {
+            return;
+        }
 
         const parentRect = (event.target as HTMLElement)?.getBoundingClientRect();
         if (!parentRect) return;

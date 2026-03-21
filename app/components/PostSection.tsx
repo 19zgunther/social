@@ -1,10 +1,11 @@
 "use client";
 
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, UIEvent, useEffect, useMemo, useState } from "react";
 import { Heart, ChevronDown, CircleUserRound, Trash2 } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { ApiError, PostCommentNode, PostData, PostItem } from "@/app/types/interfaces";
+import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 
 type PostSectionProps = {
   post: PostItem;
@@ -51,6 +52,12 @@ function PostSectionComponent({
   onPostUpdated,
 }: PostSectionProps) {
   const [postData, setPostData] = useState<PostData>(post.data ?? {});
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [isLoadingAdditionalImages, setIsLoadingAdditionalImages] = useState(false);
+  const [hasLoadedAdditionalImages, setHasLoadedAdditionalImages] = useState(false);
+  const [imageUrlById, setImageUrlById] = useState<Record<string, string | null>>(
+    post.image_id ? { [post.image_id]: post.image_url ?? null } : {},
+  );
   const initialLikes = useMemo(() => postData.likes ?? {}, [postData.likes]);
   const [isLikedByViewer, setIsLikedByViewer] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -83,20 +90,78 @@ function PostSectionComponent({
         .map(([, comment]) => comment.text.trim()),
     [rootCommentEntries],
   );
+  const allPostImageIds = useMemo(() => {
+    const ids: string[] = [];
+    if (post.image_id) {
+      ids.push(post.image_id);
+    }
+    for (const imageId of postData.other_image_ids ?? []) {
+      if (!imageId || ids.includes(imageId)) {
+        continue;
+      }
+      ids.push(imageId);
+    }
+    return ids;
+  }, [post.image_id, postData.other_image_ids]);
+  const hasMultipleImages = allPostImageIds.length > 1;
 
   useEffect(() => {
     setPostData(post.data ?? {});
+    setActiveImageIndex(0);
+    setIsLoadingAdditionalImages(false);
+    setHasLoadedAdditionalImages(false);
+    setImageUrlById(post.image_id ? { [post.image_id]: post.image_url ?? null } : {});
     setRootCommentDraft("");
     setReplyDraftByPath({});
     setActiveReplyPath(null);
     setExpandedReplyPaths([]);
-  }, [post.data, post.id]);
+  }, [post.data, post.id, post.image_id, post.image_url]);
 
   useEffect(() => {
     const fallbackLikeCount = Object.values(initialLikes).filter(Boolean).length;
     setLikeCount(post.like_count ?? fallbackLikeCount);
     setIsLikedByViewer(Boolean(post.is_liked_by_viewer));
   }, [initialLikes, post.is_liked_by_viewer, post.like_count]);
+
+  const loadAdditionalImages = async () => {
+    if (!hasMultipleImages || hasLoadedAdditionalImages || isLoadingAdditionalImages) {
+      return;
+    }
+    const additionalImageIds = allPostImageIds.slice(1);
+    if (additionalImageIds.length === 0) {
+      setHasLoadedAdditionalImages(true);
+      return;
+    }
+
+    setIsLoadingAdditionalImages(true);
+    try {
+      const response = await fetch("/api/image-urls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_ids: additionalImageIds }),
+      });
+      if (!response.ok) {
+        return;
+      }
+      const payload = (await response.json()) as { image_urls_by_id?: Record<string, string | null> };
+      setImageUrlById((previous) => ({ ...previous, ...(payload.image_urls_by_id ?? {}) }));
+      setHasLoadedAdditionalImages(true);
+    } finally {
+      setIsLoadingAdditionalImages(false);
+    }
+  };
+
+  const onCarouselScroll = (event: UIEvent<HTMLDivElement>) => {
+    const container = event.currentTarget;
+    const width = container.clientWidth;
+    if (width <= 0) {
+      return;
+    }
+    const nextIndex = Math.round(container.scrollLeft / width);
+    if (nextIndex !== activeImageIndex) {
+      setActiveImageIndex(nextIndex);
+    }
+  };
 
   const onToggleLike = async () => {
     if (isUpdatingLike) {
@@ -345,7 +410,7 @@ function PostSectionComponent({
                 }))
               }
               placeholder="Write a reply..."
-              className="flex-1 rounded-lg border border-accent-1 bg-secondary-background px-2 py-1 text-xs text-foreground outline-none focus:border-accent-2"
+              className="flex-1 rounded-lg border border-accent-1 bg-secondary-background px-2 py-1 text-sm text-foreground outline-none focus:border-accent-2"
             />
             <button
               type="button"
@@ -371,7 +436,7 @@ function PostSectionComponent({
   };
 
   return (
-    <article className={`w-full border-t border-accent-1 bg-primary-background mb-10 ${className ?? ""}`}>
+    <article className={`w-full border-t border-accent-1 bg-primary-background mb-10 ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME: ""}`}>
       <header className="px-2 py-2">
         <div className="flex items-center gap-2">
           {post.author_profile_image_url ? (
@@ -401,19 +466,56 @@ function PostSectionComponent({
         </div>
 
       </header>
-      {post.image_url ? (
-        <CachedImage
-          signedUrl={post.image_url}
-          imageId={post.image_id}
-          alt="Post attachment"
-          className="w-full aspect-square overflow-hidden object-cover"
-        />
+      {allPostImageIds.length > 0 ? (
+        <div
+          className="flex w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth"
+          onScroll={onCarouselScroll}
+          onTouchStart={() => {
+            void loadAdditionalImages();
+          }}
+          onMouseDown={() => {
+            void loadAdditionalImages();
+          }}
+        >
+          {allPostImageIds.map((imageId, index) => {
+            const signedUrl = imageUrlById[imageId] ?? null;
+            const isPrimaryImage = index === 0;
+            return (
+              <div key={imageId} className="w-full shrink-0 snap-center">
+                {signedUrl ? (
+                  <CachedImage
+                    signedUrl={signedUrl}
+                    imageId={imageId}
+                    alt="Post attachment"
+                    className="w-full aspect-square overflow-hidden object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full aspect-square items-center justify-center border-y border-accent-1 bg-secondary-background text-xs text-accent-2">
+                    {isPrimaryImage || isLoadingAdditionalImages ? "Loading image..." : "Swipe to load image"}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="h-40 w-full border-y border-accent-1 bg-secondary-background" />
       )}
 
       {/** Post Content */}
       <div className="px-3 py-1">
+        {hasMultipleImages ? (
+          <div className="mb-2 flex justify-center gap-1">
+            {allPostImageIds.map((imageId, index) => (
+              <span
+                key={`${imageId}-dot`}
+                className={`h-1.5 w-1.5 rounded-full transition ${
+                  index === activeImageIndex ? "bg-foreground" : "bg-accent-1"
+                }`}
+              />
+            ))}
+          </div>
+        ) : null}
 
         {/** Post Text */}
         {post.text.trim() ? <p className="text-sm text-foreground">{post.text}</p> : null}
@@ -461,7 +563,7 @@ function PostSectionComponent({
                 value={rootCommentDraft}
                 onChange={(event) => setRootCommentDraft(event.target.value)}
                 placeholder="Add a comment..."
-                className="flex-1 rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-xs text-foreground outline-none focus:border-accent-2"
+                className="flex-1 rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-sm text-foreground outline-none focus:border-accent-2"
               />
               <button
                 type="button"

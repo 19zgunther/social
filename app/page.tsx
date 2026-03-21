@@ -23,6 +23,7 @@ import NavRowButton from "./components/utils/NavRowButton";
 import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
 import useSwipeBack from "./components/utils/useSwipeBack";
+import CreatePostTab from "./components/CreatePostTab";
 
 
 const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab, back: AppTab } } = {
@@ -33,6 +34,7 @@ const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab, back: AppTab } } = {
   profile: { forward: "profile_settings", back: "groups" },
   profile_settings: { forward: "feed", back: "profile" },
   other_user_profile: { forward: "feed", back: "profile" },
+  create_post: { forward: "profile", back: "profile" },
 }
 
 
@@ -46,6 +48,7 @@ export default function Home() {
   const [profileIncomingRequestCount, setProfileIncomingRequestCount] = useState(0);
   const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
   const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
+  const [profileReloadSignal, setProfileReloadSignal] = useState(0);
 
   const onLogout = () => {
     const token = undefined;
@@ -290,6 +293,7 @@ export default function Home() {
     profile: DEFAULT_TAB,
     profile_settings: DEFAULT_TAB,
     other_user_profile: DEFAULT_TAB,
+    create_post: DEFAULT_TAB,
   }
 
   const { forward, back } = TAB_TO_BACK[activeTab] ?? { forward: "profile", back: "feed" };
@@ -307,6 +311,7 @@ export default function Home() {
   const profileStyle = TAB_TO_STYLE["profile"];
   const profileSettingsStyle = TAB_TO_STYLE["profile_settings"];
   const otherUserProfileStyle = TAB_TO_STYLE["other_user_profile"];
+  const createPostStyle = TAB_TO_STYLE["create_post"];
 
   return (
     <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
@@ -378,9 +383,22 @@ export default function Home() {
               email={authUser.email}
               profileImageId={authUser.profile_image_id}
               profileImageUrl={authUser.profile_image_url}
+              reloadSignal={profileReloadSignal}
               onProfileImageUpdated={onProfileImageUpdated}
               onOpenSettings={() => setActiveTab("profile_settings")}
               onViewUserProfile={onViewUserProfile}
+              onOpenCreatePost={() => setActiveTab("create_post")}
+            />
+          </div>
+
+          <div className="absolute w-full h-full" style={createPostStyle}>
+            <CreatePostTab
+              isActive={activeTab === "create_post"}
+              onCancel={() => setActiveTab("profile")}
+              onPosted={() => {
+                setProfileReloadSignal((previous) => previous + 1);
+                setActiveTab("profile");
+              }}
             />
           </div>
 
@@ -401,29 +419,30 @@ export default function Home() {
 
         </div>
 
-        {/** Bottom Navigation Bar */}
-        <div className="w-full h-fit flex justify-between border-t border-accent-1 bg-primary-background z-[1000]">
-          <NavRowButton
-            icon={<House aria-hidden className="h-4 w-4" />}
-            isActive={activeTab === "feed"}
-            showCircle={false}
-            onClick={() => setActiveTab("feed")}
-          />
-          <NavRowButton
-            icon={<Users aria-hidden className="h-4 w-4" />}
-            isActive={activeTab === "groups"}
-            showCircle={groupsUnreadCount > 0}
-            onClick={() => setActiveTab("groups")}
-          />
-          <NavRowButton
-            icon={<UserRound aria-hidden className="h-4 w-4" />}
-            isActive={activeTab === "profile"}
-            showCircle={profileIncomingRequestCount > 0}
-            onClick={() => {
-              setActiveTab("profile");
-            }}
-          />
-        </div>
+        {activeTab !== "create_post" ? (
+          <div className="w-full h-fit flex justify-between border-t border-accent-1 bg-primary-background z-[1000]">
+            <NavRowButton
+              icon={<House aria-hidden className="h-4 w-4" />}
+              isActive={activeTab === "feed"}
+              showCircle={false}
+              onClick={() => setActiveTab("feed")}
+            />
+            <NavRowButton
+              icon={<Users aria-hidden className="h-4 w-4" />}
+              isActive={activeTab === "groups"}
+              showCircle={groupsUnreadCount > 0}
+              onClick={() => setActiveTab("groups")}
+            />
+            <NavRowButton
+              icon={<UserRound aria-hidden className="h-4 w-4" />}
+              isActive={activeTab === "profile"}
+              showCircle={profileIncomingRequestCount > 0}
+              onClick={() => {
+                setActiveTab("profile");
+              }}
+            />
+          </div>
+        ) : null}
       </section>
     </main>
   );

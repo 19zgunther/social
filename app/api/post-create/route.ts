@@ -26,24 +26,43 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as PostCreateRequest;
     const text = body.text?.trim();
+    const providedImageId = body.image_id?.trim();
     const imageBase64Data = body.image_base64_data?.trim();
     const imageMimeType = body.image_mime_type?.trim();
     const data = sanitizePostData(body.data);
 
-    if (!imageBase64Data || !imageMimeType) {
+    if (!providedImageId && (!imageBase64Data || !imageMimeType)) {
       return NextResponse.json(
-        { error: { code: "invalid_request", message: "image_base64_data and image_mime_type are required." } },
+        {
+          error: {
+            code: "invalid_request",
+            message: "image_id or image_base64_data and image_mime_type are required.",
+          },
+        },
         { status: 400 },
       );
     }
 
-    const imageId = randomUUID();
-    await uploadImageToMainBucket({
-      userId: authResult.user_id,
-      imageId,
-      base64Data: imageBase64Data,
-      mimeType: imageMimeType,
-    });
+    const imageId = providedImageId ?? randomUUID();
+    if (!providedImageId) {
+      if (!imageBase64Data || !imageMimeType) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "invalid_request",
+              message: "image_base64_data and image_mime_type are required when image_id is not provided.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      await uploadImageToMainBucket({
+        userId: authResult.user_id,
+        imageId,
+        base64Data: imageBase64Data,
+        mimeType: imageMimeType,
+      });
+    }
 
     const post = await prisma.posts.create({
       data: {
