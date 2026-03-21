@@ -1,7 +1,7 @@
 import { CSSProperties } from "react";
 
 type Mode = "login" | "signup";
-type AppTab = "feed" | "groups" | "profile" | "thread_settings" | "profile" | "profile_settings" | "other_user_profile";
+type AppTab = "feed" | "groups" | "profile" | "thread" | "thread_settings" | "profile" | "profile_settings" | "other_user_profile";
 
 const MOBILE_FRAME_STYLE: CSSProperties = {
     width: "100vw",

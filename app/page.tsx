@@ -235,135 +235,10 @@ export default function Home() {
     };
   }, [authUser]);
 
-  const { content, backSwipeContent, backSwipeTab } = useMemo(() => {
-    if (!authUser) { return { content: null, backSwipeContent: null, backSwipeTab: "feed" }; }
-
-    function getFeed() {
-      return (
-        <Feed onViewUserProfile={onViewUserProfile} />
-      )
-    }
-    function getGroups(isActiveTab: boolean) {
-      if (!authUser) { return null; }
-      return (
-        <Groups
-          currentUserId={authUser.user_id}
-          deepLinkThreadId={pendingDeepLinkThreadId}
-          onDeepLinkThreadHandled={onDeepLinkThreadHandled}
-          onThreadRead={refreshGroupsUnreadCount}
-          selectedThread={selectedThread}
-          setSelectedThread={setSelectedThread}
-          isActiveTab={isActiveTab}
-        />
-      )
-    }
-    function getThread() {
-      if (!selectedThread || !authUser?.user_id) { return null; }
-      return (
-        <Thread
-          selectedThread={selectedThread}
-          setSelectedThread={setSelectedThread}
-          currentUserId={authUser.user_id}
-          onBack={() => { setSelectedThread(null); }}
-          setThreadSettingsOpen={() => { setActiveTab("thread_settings") }}
-        />
-      )
-    }
-    function getThreadSettings() {
-      if (!selectedThread || !authUser?.user_id) { return null; }
-      return (
-        <ThreadSettings
-          thread={selectedThread}
-          currentUserId={authUser.user_id}
-          onBack={() => setActiveTab("groups")}
-          onThreadImageUpdated={(imageId, imageUrl) => {
-            setSelectedThread((previous) => ({
-              ...previous as ThreadItem,
-              image_id: imageId,
-              image_url: imageUrl,
-            }));
-          }}
-          onThreadRenamed={(name) => {
-            setSelectedThread((previous: ThreadItem | null) => ({
-              ...previous as ThreadItem,
-              name,
-            }));
-          }}
-        />
-      )
-    }
-    function getProfile() {
-      if (!authUser) { return null; }
-      return (
-        <Profile
-          userId={authUser.user_id}
-          username={authUser.username}
-          email={authUser.email}
-          profileImageId={authUser.profile_image_id}
-          profileImageUrl={authUser.profile_image_url}
-          onProfileImageUpdated={onProfileImageUpdated}
-          onOpenSettings={() => setActiveTab("profile_settings")}
-          onViewUserProfile={onViewUserProfile}
-        />
-      )
-    }
-    function getProfileSettings() {
-      return (
-        <ProfileSettings
-          onBack={() => setActiveTab("profile")}
-          onLogout={onLogout}
-        />
-      )
-    }
-    function getOtherUser() {
-      if (!viewingUserId) { return null; }
-      return (
-        <ProfileOtherUser
-          userId={viewingUserId}
-          onBack={() => setActiveTab("profile")}
-        />
-      )
-    }
-    if (activeTab === "thread_settings" && selectedThread) {
-      return { content: getThreadSettings(), backSwipeContent: getGroups(false), backSwipeTab: "thread" };
-    } else if (activeTab === "groups" && selectedThread) {
-      return { content: getThread(), backSwipeContent: getGroups(false), backSwipeTab: "groups" };
-    } else if (activeTab === "groups") {
-      return { content: getGroups(true), backSwipeContent: getFeed(), backSwipeTab: "feed" };
-    } else if (activeTab === "profile") {
-      return { content: getProfile(), backSwipeContent: getGroups(false), backSwipeTab: "groups" };
-    } else if (activeTab === "profile_settings") {
-      return { content: getProfileSettings(), backSwipeContent: getProfile(), backSwipeTab: "profile" };
-    } else if (activeTab === "other_user_profile") {
-      return { content: getOtherUser(), backSwipeContent: null, backSwipeTab: "feed" };
-    }
-    // Default to feed
-    return { content: getFeed(), backSwipeContent: null, backSwipeTab: "feed" };
-  }, [
-    activeTab, authUser, pendingDeepLinkThreadId,
-    profileIncomingRequestCount, refreshGroupsUnreadCount, selectedThread, viewingUserId,
-    onDeepLinkThreadHandled, onProfileImageUpdated, onViewUserProfile, onLogout,
-  ])
-
   const onBackRef = useRef<() => void>(() => { console.error("onBackRef not set"); });
-  onBackRef.current = () => {
-    if (backSwipeTab === "thread") {
-      setActiveTab("groups");
-    } else if (backSwipeTab === "groups") {
-      setSelectedThread(null);
-      setActiveTab("groups");
-    } else if (backSwipeTab === "profile") {
-      setActiveTab("profile");
-    } else if (backSwipeTab === "profile_settings") {
-      setActiveTab("profile_settings");
-    } else if (backSwipeTab === "other_user_profile") {
-      setActiveTab("other_user_profile");
-    } else {
-      setActiveTab("feed");
-    }
-  }
-
-  const { onTouchStart, onTouchEnd, onTouchMove, swipingBackPercent } = useSwipeBack({ onBack: () => { onBackRef.current && onBackRef.current(); } });
+  const onForwardRef = useRef<() => void>(() => { console.error("onForwardRef not set");});
+  const { onTouchStart, onTouchEnd, onTouchMove, swipingBackPercent, swipingForwardPercent } =
+    useSwipeBack({ onBack: onBackRef.current, onForward: onForwardRef.current });
 
 
   // Early return for loading state if session is still being checked.
@@ -383,6 +258,58 @@ export default function Home() {
   // Early return for signup page if user is not authenticated.
   if (!authUser) { return (<SignUpPage setAuthUser={setAuthUser} />); }
 
+  console.log("activeTab", activeTab);
+  const isSwipingForward = !!swipingForwardPercent;
+  const isSwipingBack = !!swipingBackPercent;
+
+  const ACTIVE_STYLE = {
+    zIndex: 1000,
+    left: isSwipingBack ? (swipingBackPercent ?? 0) * 100 + "%" : undefined,
+    right: isSwipingForward ? (swipingForwardPercent ?? 0) * 100 + "%" : undefined,
+  }
+  console.log("ACTIVE_STYLE", ACTIVE_STYLE);
+  const BACK_SWIPE_TAB: React.CSSProperties = { zIndex: isSwipingBack ? 999 : 998 };
+  const FORWARD_SWIPE_TAB: React.CSSProperties = { zIndex: isSwipingForward ? 999 : 998 };
+  const DEFAULT_TAB: React.CSSProperties = { display: "none" };
+
+  const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab, back: AppTab } } = {
+    thread_settings: { forward: "profile", back: "thread" },
+    thread: { forward: "thread_settings", back: "groups" },
+    groups: { forward: "profile", back: "feed" },
+    feed: { forward: "groups", back: "profile" },
+    profile: { forward: "profile_settings", back: "groups" },
+    profile_settings: { forward: "feed", back: "profile" },
+    other_user_profile: { forward: "feed", back: "profile" },
+  }
+
+  const TAB_TO_STYLE: { [key in AppTab]: React.CSSProperties } = {
+    feed: DEFAULT_TAB,
+    groups: DEFAULT_TAB,
+    thread: DEFAULT_TAB,
+    thread_settings: DEFAULT_TAB,
+    profile: DEFAULT_TAB,
+    profile_settings: DEFAULT_TAB,
+    other_user_profile: DEFAULT_TAB,
+  }
+
+  const { forward, back } = TAB_TO_BACK[activeTab] ?? { forward: "profile", back: "feed" };
+  TAB_TO_STYLE[forward] = FORWARD_SWIPE_TAB;
+  TAB_TO_STYLE[back] = BACK_SWIPE_TAB;
+  TAB_TO_STYLE[activeTab] = ACTIVE_STYLE;
+
+  onBackRef.current = () => { setActiveTab(back); }
+  onForwardRef.current = () => { setActiveTab(forward); }
+
+  let feedStyle = TAB_TO_STYLE["feed"];
+  let groupsStyle = TAB_TO_STYLE["groups"];
+  let threadStyle = TAB_TO_STYLE["thread"];
+  let threadSettingsStyle = TAB_TO_STYLE["thread_settings"];
+  let profileStyle = TAB_TO_STYLE["profile"];
+  let profileSettingsStyle = TAB_TO_STYLE["profile_settings"];
+  let otherUserProfileStyle = TAB_TO_STYLE["other_user_profile"];
+
+  console.log("activeTab", activeTab, "TAB_TO_STYLE", TAB_TO_STYLE)
+
   return (
     <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
       <section
@@ -398,20 +325,81 @@ export default function Home() {
           onTouchEnd={onTouchEnd}
           onTouchMove={onTouchMove}
         >
-          {/** Content */}
-          <div
-            className="absolute top-0 left-0 w-full h-full z-[100] bg-black"
-            style={{ transform: swipingBackPercent && backSwipeContent ? `translateX(${swipingBackPercent * 100}%)` : undefined }}
-          >
-            {content}
+          <div className="absolute w-full h-full" style={groupsStyle}>
+            <Groups
+              currentUserId={authUser.user_id}
+              deepLinkThreadId={pendingDeepLinkThreadId}
+              onDeepLinkThreadHandled={onDeepLinkThreadHandled}
+              onThreadRead={refreshGroupsUnreadCount}
+              selectedThread={selectedThread}
+              setSelectedThread={setSelectedThread}
+              setActiveTab={setActiveTab}
+              isActiveTab={true}
+            />
           </div>
 
-          {/** Back Swipe Content */}
-          {swipingBackPercent !== null && backSwipeContent && (
-            <div className="absolute top-0 left-0 w-full h-full bg-black" style={{ touchAction: "none" }}>
-              {backSwipeContent}
-            </div>
-          )}
+          <div className="absolute w-full h-full" style={feedStyle}>
+            <Feed onViewUserProfile={onViewUserProfile} />
+          </div>
+
+          {selectedThread && <div className="absolute w-full h-full" style={threadStyle}>
+            <Thread
+              selectedThread={selectedThread}
+              setSelectedThread={setSelectedThread}
+              currentUserId={authUser.user_id}
+              onBack={() => { setSelectedThread(null); }}
+              setThreadSettingsOpen={() => { setActiveTab("thread_settings") }}
+            />
+          </div>}
+
+          {selectedThread && <div className="absolute w-full h-full" style={threadSettingsStyle}>
+            <ThreadSettings
+              thread={selectedThread}
+              currentUserId={authUser.user_id}
+              onBack={() => setActiveTab("groups")}
+              onThreadImageUpdated={(imageId, imageUrl) => {
+                setSelectedThread((previous) => ({
+                  ...previous as ThreadItem,
+                  image_id: imageId,
+                  image_url: imageUrl,
+                }));
+              }}
+              onThreadRenamed={(name) => {
+                setSelectedThread((previous: ThreadItem | null) => ({
+                  ...previous as ThreadItem,
+                  name,
+                }));
+              }}
+            />
+          </div>}
+
+          <div className="absolute w-full h-full" style={profileStyle}>
+            <Profile
+              userId={authUser.user_id}
+              username={authUser.username}
+              email={authUser.email}
+              profileImageId={authUser.profile_image_id}
+              profileImageUrl={authUser.profile_image_url}
+              onProfileImageUpdated={onProfileImageUpdated}
+              onOpenSettings={() => setActiveTab("profile_settings")}
+              onViewUserProfile={onViewUserProfile}
+            />
+          </div>
+
+          <div className="absolute w-full h-full" style={profileSettingsStyle}>
+            <ProfileSettings
+              onBack={() => setActiveTab("profile")}
+              onLogout={onLogout}
+            />
+          </div>
+
+          {viewingUserId && <div className="absolute w-full h-full" style={otherUserProfileStyle}>
+            <ProfileOtherUser
+              userId={viewingUserId}
+              onBack={() => setActiveTab("profile")}
+            />
+          </div>}
+
         </div>
 
         {/** Bottom Navigation Bar */}

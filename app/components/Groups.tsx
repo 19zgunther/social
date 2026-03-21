@@ -6,6 +6,7 @@ import { ApiError, GroupsListResponse, ThreadItem } from "@/app/types/interfaces
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import CachedImage from "./utils/CachedImage";
 import { Image, MessageCirclePlus, PencilIcon } from "lucide-react";
+import { AppTab } from "./utils";
 
 type GroupsProps = {
   currentUserId: string;
@@ -14,6 +15,7 @@ type GroupsProps = {
   onDeepLinkThreadHandled?: () => void;
   selectedThread: ThreadItem | null;
   setSelectedThread: (thread: ThreadItem | null) => void;
+  setActiveTab: (tab: AppTab) => void;
   isActiveTab: boolean;
 };
 
@@ -40,6 +42,7 @@ export default function Groups({
   onDeepLinkThreadHandled,
   selectedThread,
   setSelectedThread,
+  setActiveTab,
   isActiveTab,
 }: GroupsProps) {
   const [threads, setThreads] = useState<ThreadItem[]>([]);
@@ -189,6 +192,7 @@ export default function Groups({
 
   const onOpenThread = useCallback((thread: ThreadItem) => {
     setSelectedThread(thread);
+    setActiveTab("thread");
     setUnreadThreadIds((previous) => {
       const next = new Set(previous);
       next.delete(thread.id);
@@ -214,7 +218,7 @@ export default function Groups({
   }, [deepLinkThreadId, isLoadingThreads, onDeepLinkThreadHandled, onOpenThread, selectedThread, threads]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col space-y-3 px-2">
+    <div className="flex h-full min-h-0 flex-col space-y-3 px-2 bg-black">
       <div>
         <header className="flex items-center justify-between border-b border-accent-1 px-4 py-3">
           <h1 className="text-lg font-semibold text-foreground">Groups</h1>
