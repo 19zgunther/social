@@ -4,8 +4,8 @@ import { FormEvent, SetStateAction, useCallback, useEffect, useRef, useState } f
 import { Camera, Image, Video } from "lucide-react";
 import CameraModal from "@/app/components/Camera";
 import CachedImage from "@/app/components/utils/CachedImage";
+import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
-import ThreadSettings from "@/app/components/ThreadSettings";
 import VideoCall from "@/app/components/VideoCall";
 import {
   ApiError,
@@ -32,6 +32,9 @@ type ThreadProps = {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const BOTTOM_FOLLOW_THRESHOLD_PX = 80;
+const EMOJI_ONLY_MESSAGE_REGEX =
+  /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
+const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
 
 const THREAD_MESSAGES_CACHE_KEY_PREFIX = "thread_messages_v1_";
 
@@ -73,6 +76,11 @@ const mergeMessagesById = (
     }
     return a.id.localeCompare(b.id);
   });
+};
+
+const isEmojiOnlyMessage = (value: string): boolean => {
+  const trimmed = value.trim();
+  return Boolean(trimmed) && EMOJI_ONLY_MESSAGE_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed);
 };
 
 const clampOverlayYRatio = (value: number): number => {
@@ -456,6 +464,7 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
     imageMimeType,
     imagePreviewDataUrl,
     imageOverlay,
+    replyToMessageId,
     clearDraftOnSuccess,
   }: {
     text: string;
@@ -463,10 +472,12 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
     imageMimeType?: string;
     imagePreviewDataUrl?: string;
     imageOverlay?: ImageOverlayData;
+    replyToMessageId?: string;
     clearDraftOnSuccess?: boolean;
   }): Promise<void> => {
     setIsSendingMessage(true);
     setStatusMessage("");
+    const effectiveReplyTargetMessageId = replyToMessageId ?? replyTargetMessageId;
 
     const trimmedText = text.trim();
     const messageData = imageOverlay
@@ -482,7 +493,9 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
       const response = await postWithAuth("/api/thread-send", {
         thread_id: selectedThread.id,
         text: trimmedText,
-        ...(replyTargetMessageId ? { reply_to_message_id: replyTargetMessageId } : {}),
+        ...(effectiveReplyTargetMessageId
+          ? { reply_to_message_id: effectiveReplyTargetMessageId }
+          : {}),
         ...(imageBase64Data && imageMimeType
           ? {
             image_base64_data: imageBase64Data,
@@ -515,8 +528,8 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
 
       setShowNewMessagesButton(false);
       isFollowingBottomRef.current = true;
-      if (replyTargetMessageId) {
-        const rootMessageId = getRootMessageIdForMessage(replyTargetMessageId);
+      if (effectiveReplyTargetMessageId) {
+        const rootMessageId = getRootMessageIdForMessage(effectiveReplyTargetMessageId);
         if (rootMessageId) {
           setExpandedReplyRootIds((previous) =>
             previous.includes(rootMessageId) ? previous : [...previous, rootMessageId],
@@ -680,6 +693,26 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
     }
   };
 
+  const onSendEmojiReply = async (replyToMessageId: string, emoji: string) => {
+    if (!emoji.trim()) {
+      return;
+    }
+
+    setActiveOptionsMessageId(null);
+    setEditTargetMessageId(null);
+    setReplyTargetMessageId(null);
+
+    try {
+      await sendThreadMessage({
+        text: emoji,
+        replyToMessageId,
+        clearDraftOnSuccess: false,
+      });
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to send emoji reply.");
+    }
+  };
+
   const renderMessage = (message: ThreadMessage, depth: number) => {
     const isOwnMessage = message.created_by === currentUserId;
     const hasText = message.text.trim().length > 0;
@@ -688,6 +721,8 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
     const messageImageOverlay = toImageOverlayData(message.data);
     const rootMessageId = getRootMessageIdForMessage(message.id);
     const children = childMessagesByParentId.get(message.id) ?? [];
+    const emojiOnlyChildren = children.filter((childMessage) => isEmojiOnlyMessage(childMessage.text));
+    const threadedChildren = children.filter((childMessage) => !isEmojiOnlyMessage(childMessage.text));
     const isRootMessage = rootMessageId === message.id;
     const isRootRepliesExpanded =
       rootMessageId !== null && expandedReplyRootIds.includes(rootMessageId);
@@ -747,19 +782,29 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
           ) : null}
         </div>
 
-        {isRootMessage && children.length > 0 ? (
+        {emojiOnlyChildren.length > 0 ? (
+          <div className="mt-1 ml-1 flex flex-wrap items-center gap-1">
+            {emojiOnlyChildren.map((childMessage) => (
+              <span key={childMessage.id} className="text-base leading-none">
+                {childMessage.text.trim()}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        {isRootMessage && threadedChildren.length > 0 ? (
           <button
             type="button"
             onClick={() => toggleRepliesForRootMessageId(message.id)}
             className="mt-1 ml-1 text-xs text-accent-2 underline underline-offset-2 hover:text-foreground"
           >
-            {isRootRepliesExpanded ? "Hide replies" : `${children.length} replies`}
+            {isRootRepliesExpanded ? "Hide replies" : `${threadedChildren.length} replies`}
           </button>
         ) : null}
 
-        {children.length > 0 ? (
+        {threadedChildren.length > 0 ? (
           <div className="mt-1 mx-2 space-y-1 border-l border-r border-accent-1/60">
-            {children.map((childMessage) => renderMessage(childMessage, depth + 1))}
+            {threadedChildren.map((childMessage) => renderMessage(childMessage, depth + 1))}
           </div>
         ) : null}
 
@@ -781,6 +826,13 @@ export default function Thread({ currentUserId, onBack, setThreadSettingsOpen, s
               >
                 Reply
               </button>
+              <EmojiPicker
+                onSelectEmoji={(emoji) => {
+                  void onSendEmojiReply(message.id, emoji);
+                }}
+                className="flex-1"
+                buttonClassName="h-full w-full rounded-lg border border-accent-1 px-4 py-2"
+              />
               {isOwnMessage ? (
                 <button
                   type="button"
