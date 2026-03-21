@@ -30,6 +30,7 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 
 export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userId: string) => void }) {
   const [posts, setPosts] = useStateCached<PostItem[]>([], FEED_CACHE_KEY);
+  const [viewerUserId, setViewerUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshingLatest, setIsRefreshingLatest] = useState(false);
@@ -71,6 +72,9 @@ export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userI
         }
 
         const payload = (await response.json()) as FeedPostsListResponse;
+        if (payload.viewer_user_id) {
+          setViewerUserId(payload.viewer_user_id);
+        }
         setHasMore(payload.has_more);
         setNextCursorPostId(payload.next_cursor_post_id);
 
@@ -218,6 +222,7 @@ export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userI
           <PostSection
             key={post.id}
             post={post}
+            currentUserId={viewerUserId}
             onViewUserProfile={onViewUserProfile}
             onPostUpdated={onPostUpdated}
           />

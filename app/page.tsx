@@ -24,6 +24,18 @@ import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
 import useSwipeBack from "./components/utils/useSwipeBack";
 
+
+const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab, back: AppTab } } = {
+  thread_settings: { forward: "profile", back: "thread" },
+  thread: { forward: "thread_settings", back: "groups" },
+  groups: { forward: "profile", back: "feed" },
+  feed: { forward: "groups", back: "profile" },
+  profile: { forward: "profile_settings", back: "groups" },
+  profile_settings: { forward: "feed", back: "profile" },
+  other_user_profile: { forward: "feed", back: "profile" },
+}
+
+
 export default function Home() {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -236,7 +248,7 @@ export default function Home() {
   }, [authUser]);
 
   const onBackRef = useRef<() => void>(() => { console.error("onBackRef not set"); });
-  const onForwardRef = useRef<() => void>(() => { console.error("onForwardRef not set");});
+  const onForwardRef = useRef<() => void>(() => { console.error("onForwardRef not set"); });
   const { onTouchStart, onTouchEnd, onTouchMove, swipingBackPercent, swipingForwardPercent } =
     useSwipeBack({ onBack: onBackRef.current, onForward: onForwardRef.current });
 
@@ -258,7 +270,6 @@ export default function Home() {
   // Early return for signup page if user is not authenticated.
   if (!authUser) { return (<SignUpPage setAuthUser={setAuthUser} />); }
 
-  console.log("activeTab", activeTab);
   const isSwipingForward = !!swipingForwardPercent;
   const isSwipingBack = !!swipingBackPercent;
 
@@ -267,22 +278,11 @@ export default function Home() {
     left: isSwipingBack ? (swipingBackPercent ?? 0) * 100 + "%" : undefined,
     right: isSwipingForward ? (swipingForwardPercent ?? 0) * 100 + "%" : undefined,
   }
-  console.log("ACTIVE_STYLE", ACTIVE_STYLE);
   const BACK_SWIPE_TAB: React.CSSProperties = { zIndex: isSwipingBack ? 999 : 998 };
   const FORWARD_SWIPE_TAB: React.CSSProperties = { zIndex: isSwipingForward ? 999 : 998 };
   const DEFAULT_TAB: React.CSSProperties = { display: "none" };
 
-  const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab, back: AppTab } } = {
-    thread_settings: { forward: "profile", back: "thread" },
-    thread: { forward: "thread_settings", back: "groups" },
-    groups: { forward: "profile", back: "feed" },
-    feed: { forward: "groups", back: "profile" },
-    profile: { forward: "profile_settings", back: "groups" },
-    profile_settings: { forward: "feed", back: "profile" },
-    other_user_profile: { forward: "feed", back: "profile" },
-  }
-
-  const TAB_TO_STYLE: { [key in AppTab]: React.CSSProperties } = {
+  let TAB_TO_STYLE: { [key in AppTab]: React.CSSProperties } = {
     feed: DEFAULT_TAB,
     groups: DEFAULT_TAB,
     thread: DEFAULT_TAB,
@@ -300,15 +300,13 @@ export default function Home() {
   onBackRef.current = () => { setActiveTab(back); }
   onForwardRef.current = () => { setActiveTab(forward); }
 
-  let feedStyle = TAB_TO_STYLE["feed"];
-  let groupsStyle = TAB_TO_STYLE["groups"];
-  let threadStyle = TAB_TO_STYLE["thread"];
-  let threadSettingsStyle = TAB_TO_STYLE["thread_settings"];
-  let profileStyle = TAB_TO_STYLE["profile"];
-  let profileSettingsStyle = TAB_TO_STYLE["profile_settings"];
-  let otherUserProfileStyle = TAB_TO_STYLE["other_user_profile"];
-
-  console.log("activeTab", activeTab, "TAB_TO_STYLE", TAB_TO_STYLE)
+  const feedStyle = TAB_TO_STYLE["feed"];
+  const groupsStyle = TAB_TO_STYLE["groups"];
+  const threadStyle = TAB_TO_STYLE["thread"];
+  const threadSettingsStyle = TAB_TO_STYLE["thread_settings"];
+  const profileStyle = TAB_TO_STYLE["profile"];
+  const profileSettingsStyle = TAB_TO_STYLE["profile_settings"];
+  const otherUserProfileStyle = TAB_TO_STYLE["other_user_profile"];
 
   return (
     <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
@@ -396,6 +394,7 @@ export default function Home() {
           {viewingUserId && <div className="absolute w-full h-full" style={otherUserProfileStyle}>
             <ProfileOtherUser
               userId={viewingUserId}
+              currentUserId={authUser.user_id}
               onBack={() => setActiveTab("profile")}
             />
           </div>}
@@ -425,7 +424,6 @@ export default function Home() {
             }}
           />
         </div>
-        {/* </div> */}
       </section>
     </main>
   );

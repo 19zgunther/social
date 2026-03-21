@@ -1,12 +1,13 @@
 "use client";
 
 import { memo, useEffect, useMemo, useState } from "react";
-import { Heart, ChevronDown, CircleUserRound } from "lucide-react";
+import { Heart, ChevronDown, CircleUserRound, Trash2 } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { ApiError, PostCommentNode, PostData, PostItem } from "@/app/types/interfaces";
 
 type PostSectionProps = {
   post: PostItem;
+  currentUserId?: string | null;
   showComments?: boolean;
   className?: string;
   onViewUserProfile?: (userId: string) => void;
@@ -35,6 +36,7 @@ const formatPostDate = (value: string): string => {
 
 function PostSectionComponent({
   post,
+  currentUserId,
   showComments = true,
   className,
   onViewUserProfile,
@@ -50,6 +52,7 @@ function PostSectionComponent({
   const [activeReplyPath, setActiveReplyPath] = useState<string | null>(null);
   const [expandedReplyPaths, setExpandedReplyPaths] = useState<string[]>([]);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [isDeletingCommentPath, setIsDeletingCommentPath] = useState<string | null>(null);
 
   const rootCommentEntries = useMemo(
     () =>
@@ -179,6 +182,62 @@ function PostSectionComponent({
     );
   };
 
+  const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
+
+  const onDeleteComment = async (commentPath: string[]) => {
+    const pathKey = commentPath.join(COMMENT_PATH_SEPARATOR);
+    if (!pathKey || isDeletingCommentPath) {
+      return;
+    }
+
+    if (!aboutToDeleteCommentPath || aboutToDeleteCommentPath !== pathKey) {
+      setAboutToDeleteCommentPath(pathKey);
+      return;
+    }
+
+    setIsDeletingCommentPath(pathKey);
+    try {
+      const response = await fetch("/api/feed-post-comment", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          post_id: post.id,
+          comment_path: commentPath,
+        }),
+      });
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { data?: PostData | null };
+      setPostData(payload.data ?? {});
+      if (onPostUpdated) {
+        onPostUpdated({
+          id: post.id,
+          data: payload.data ?? {},
+        });
+      }
+
+      setActiveReplyPath((previous) => (previous === pathKey ? null : previous));
+      setReplyDraftByPath((previous) => {
+        if (!previous[pathKey]) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[pathKey];
+        return next;
+      });
+      setExpandedReplyPaths((previous) =>
+        previous.filter(
+          (expandedPath) =>
+            expandedPath !== pathKey && !expandedPath.startsWith(`${pathKey}${COMMENT_PATH_SEPARATOR}`),
+        ),
+      );
+    } finally {
+      setIsDeletingCommentPath(null);
+    }
+  };
+
   const renderCommentTree = (
     commentTimestamp: string,
     comment: PostCommentNode,
@@ -187,17 +246,23 @@ function PostSectionComponent({
   ) => {
     const path = [...parentPath, commentTimestamp];
     const pathKey = path.join(COMMENT_PATH_SEPARATOR);
-    const replyEntries = Object.entries(comment.replies ?? {}).sort(([a], [b]) => (a > b ? -1 : 1));
+    const replyEntries = Object.entries(comment.replies ?? {}).sort(([a], [b]) => (a > b ? 1 : -1));
     const hasReplies = replyEntries.length > 0;
     const isExpanded = expandedReplyPaths.includes(pathKey);
     const isReplyInputOpen = activeReplyPath === pathKey;
     const replyDraft = replyDraftByPath[pathKey] ?? "";
+    const canDeleteReply = depth > 0 && Boolean(currentUserId) && comment.user_id === currentUserId;
 
     return (
       <div key={pathKey} className={`${depth > 0 ? "ml-4 border-l border-accent-1/70 pl-2" : ""}`}>
-        <div className="text-xs text-accent-2">
-          <span className="font-semibold text-foreground/90">{comment.username || comment.user_id}</span>{" "}
+        <div className="text-sm text-accent-2 flex">
+          <span className="font-semibold text-foreground/90 pr-2">{comment.username || comment.user_id}</span>
+          
           {comment.text}
+
+          {canDeleteReply && <button className="ml-auto" onClick={() => { void onDeleteComment(path); }} disabled={isDeletingCommentPath === pathKey}>
+            <Trash2 className={`h-4 w-4 ${aboutToDeleteCommentPath === pathKey ? "text-red-400" : "text-accent-2"}`} />
+          </button>}
         </div>
         <div className="mt-1 ml-10 flex items-center gap-5">
 
@@ -205,7 +270,7 @@ function PostSectionComponent({
             <button
               type="button"
               onClick={() => toggleReplies(pathKey)}
-              className="text-xs flex text-accent-2 underline underline-offset-2 hover:text-foreground"
+              className="text-xs flex text-accent-2 underline underline-offset-2 hover:text-foreground opacity-50"
             >
               <ChevronDown className={`h-4 w-4 ${isExpanded ? "rotate-180" : ""}`} />
               {isExpanded ? "Hide replies" : `${replyEntries.length} repl${replyEntries.length === 1 ? "y" : "ies"}`}
@@ -215,12 +280,13 @@ function PostSectionComponent({
           <button
             type="button"
             onClick={() => setActiveReplyPath(isReplyInputOpen ? null : pathKey)}
-            className="text-xs text-accent-2 underline underline-offset-2 hover:text-foreground"
+            className="text-xs text-accent-2 underline underline-offset-2 hover:text-foreground opacity-50"
           >
             Reply
           </button>
-
         </div>
+
+
         {isReplyInputOpen ? (
           <div className="mt-1 flex items-center gap-2">
             <input

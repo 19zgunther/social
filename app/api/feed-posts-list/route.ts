@@ -130,6 +130,7 @@ export async function POST(request: Request) {
     const authorProfileImageUrlByPostId = new Map(authorProfileImageUrlEntries);
 
     const payload: FeedPostsListResponse = {
+      viewer_user_id: authResult.user_id,
       has_more: hasMore,
       next_cursor_post_id: pagedPosts.length > 0 ? pagedPosts[pagedPosts.length - 1].id : null,
       posts: pagedPosts.map((post) => ({

@@ -523,6 +523,7 @@ function Profile({
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
           <PostSection
             post={selectedPost}
+            currentUserId={userId}
             showComments
             onPostUpdated={(updated) => {
               if (!selectedPost) {
@@ -788,9 +789,11 @@ function Profile({
 
 function ProfileOtherUser({
   userId,
+  currentUserId,
   onBack,
 }: {
   userId: string;
+  currentUserId: string;
   onBack: () => void;
 }) {
   const [profileData, setProfileData] = useState<UserProfileResponse | null>(null);
@@ -924,6 +927,7 @@ function ProfileOtherUser({
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
           <PostSection
             post={selectedPost}
+            currentUserId={currentUserId}
             showComments
             onPostUpdated={(updated) => {
               setProfileData((previous) => {

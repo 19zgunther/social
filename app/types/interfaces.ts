@@ -145,6 +145,7 @@ export type SignupResponse = { token: string; user: AuthUser };
 
 export type FeedPostsListRequest = { cursor_post_id?: string };
 export type FeedPostsListResponse = {
+  viewer_user_id?: string;
   posts: PostItem[];
   has_more: boolean;
   next_cursor_post_id: string | null;
