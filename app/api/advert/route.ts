@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 
-const TARGET_USER_ID = "74fc2cb5-3df2-4309-8d8a-3c881add7114";
+const TARGET_USER_IDS = ["149755c6-e62f-43d6-a476-a88afcba439f", "9b4ccfec-9fa6-4fe4-bea7-f8122ae4bb29", "2e432834-dcda-4197-a743-457cfc219fa2", "3df596f3-a0b6-44b4-af39-a3688c78edd9"];
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 type AdvertTopic = "politics" | "religion";
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
 
-  if (authResult.user_id !== TARGET_USER_ID) {
+  if (!TARGET_USER_IDS.includes(authResult.user_id)) {
     return NextResponse.json(
       { error: { code: "forbidden", message: "Advert is not enabled for this user." } },
       { status: 403 },
