@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Check, LoaderCircle, RefreshCw, Square, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, ImagePlus, LoaderCircle, RefreshCw, Square, Trash2, X } from "lucide-react";
+import ImageViewerModal from "@/app/components/ImageViewerModal";
+import CachedImage from "@/app/components/utils/CachedImage";
+import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import { ApiError } from "@/app/types/interfaces";
 
 export type FeedbackItem = {
@@ -11,6 +15,14 @@ export type FeedbackItem = {
   text: string;
   status: "resolved" | "unresolved";
   username: string;
+  image_id: string | null;
+  image_url: string | null;
+};
+
+type PendingComposeImage = {
+  previewDataUrl: string;
+  base64Data: string;
+  mimeType: string;
 };
 
 const postWithAuth = async (path: string, body: unknown): Promise<Response> =>
@@ -38,11 +50,19 @@ export default function Feedback({
 }) {
   const [items, setItems] = useState<FeedbackItem[]>([]);
   const [draft, setDraft] = useState("");
+  const [pendingImage, setPendingImage] = useState<PendingComposeImage | null>(null);
+  const [isPickingImage, setIsPickingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [imageViewer, setImageViewer] = useState<{
+    signedUrl: string;
+    imageId: string | null;
+    alt: string;
+  } | null>(null);
 
   const load = useCallback(async (opts?: { refresh?: boolean }) => {
     const refresh = opts?.refresh ?? false;
@@ -74,15 +94,50 @@ export default function Feedback({
     }
   }, [isActive, load]);
 
+  const canSubmit = Boolean(draft.trim() || pendingImage);
+
+  const onPickImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const onFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    setIsPickingImage(true);
+    setStatusMessage("");
+    try {
+      const prepared = await prepareImageForUpload(file);
+      setPendingImage({
+        previewDataUrl: prepared.previewDataUrl,
+        base64Data: prepared.base64Data,
+        mimeType: prepared.mimeType,
+      });
+    } catch (e) {
+      setStatusMessage(e instanceof Error ? e.message : "Could not use that image.");
+    } finally {
+      setIsPickingImage(false);
+    }
+  };
+
   const onSubmit = async () => {
-    const text = draft.trim();
-    if (!text || isSubmitting) {
+    if (!canSubmit || isSubmitting) {
       return;
     }
     setIsSubmitting(true);
     setStatusMessage("");
     try {
-      const response = await postWithAuth("/api/feedback-create", { text });
+      const response = await postWithAuth("/api/feedback-create", {
+        text: draft.trim(),
+        ...(pendingImage
+          ? {
+              image_base64_data: pendingImage.base64Data,
+              image_mime_type: pendingImage.mimeType,
+            }
+          : {}),
+      });
       if (!response.ok) {
         setStatusMessage(await readErrorMessage(response));
         return;
@@ -92,6 +147,7 @@ export default function Feedback({
         setItems((prev) => [payload.item!, ...prev]);
       }
       setDraft("");
+      setPendingImage(null);
     } catch (e) {
       setStatusMessage(e instanceof Error ? e.message : "Failed to submit.");
     } finally {
@@ -175,11 +231,51 @@ export default function Feedback({
           rows={3}
           className="w-full resize-none rounded-md border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground placeholder:text-accent-2 focus:border-accent-3 focus:outline-none"
         />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void onFileChange(e)}
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onPickImageClick}
+            disabled={isPickingImage || isSubmitting}
+            className="inline-flex items-center gap-1.5 rounded-md border border-accent-1 px-2.5 py-1.5 text-sm text-accent-2 transition hover:border-accent-3 hover:text-accent-3 disabled:opacity-50"
+          >
+            {isPickingImage ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <ImagePlus className="h-4 w-4" aria-hidden />
+            )}
+            Add image
+          </button>
+          {pendingImage ? (
+            <div className="relative inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element -- local preview blob */}
+              <img
+                src={pendingImage.previewDataUrl}
+                alt=""
+                className="h-16 max-w-[8rem] rounded-md border border-accent-1 object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => setPendingImage(null)}
+                className="absolute -right-1 -top-1 rounded-full border border-accent-1 bg-secondary-background p-0.5 text-accent-2 shadow hover:text-foreground"
+                aria-label="Remove image"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </div>
+          ) : null}
+        </div>
         <div className="mt-2 flex justify-end">
           <button
             type="button"
             onClick={() => void onSubmit()}
-            disabled={!draft.trim() || isSubmitting}
+            disabled={!canSubmit || isSubmitting}
             className="rounded-md bg-accent-3 px-4 py-2 text-sm font-medium text-primary-background transition hover:opacity-90 disabled:opacity-40"
           >
             {isSubmitting ? "Sending…" : "Submit"}
@@ -204,6 +300,7 @@ export default function Feedback({
               const isResolved = item.status === "resolved";
               const busy = pendingId === item.id;
               const canDelete = item.created_by === currentUserId;
+              const hasImage = Boolean(item.image_url && item.image_id);
               return (
                 <li
                   key={item.id}
@@ -234,7 +331,30 @@ export default function Feedback({
                           {new Date(item.created_at).toLocaleString()}
                         </time>
                       </div>
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{item.text}</p>
+                      {item.text.trim() ? (
+                        <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{item.text}</p>
+                      ) : null}
+                      {hasImage ? (
+                        <button
+                          type="button"
+                          className={`mt-2 block max-w-full cursor-zoom-in rounded-md border-0 bg-transparent p-0 ${DONT_SWIPE_TABS_CLASSNAME}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setImageViewer({
+                              signedUrl: item.image_url!,
+                              imageId: item.image_id,
+                              alt: "Feedback attachment",
+                            });
+                          }}
+                        >
+                          <CachedImage
+                            signedUrl={item.image_url!}
+                            imageId={item.image_id}
+                            alt="Feedback attachment"
+                            className="pointer-events-none max-h-32 max-w-full rounded-md border border-accent-1 object-contain"
+                          />
+                        </button>
+                      ) : null}
                     </div>
                     {canDelete ? (
                       <button
@@ -255,6 +375,19 @@ export default function Feedback({
           </ul>
         )}
       </div>
+
+      <ImageViewerModal
+        key={
+          imageViewer
+            ? `${imageViewer.signedUrl}-${imageViewer.imageId ?? ""}`
+            : "feedback-image-viewer-closed"
+        }
+        open={imageViewer !== null}
+        onClose={() => setImageViewer(null)}
+        signedUrl={imageViewer?.signedUrl ?? null}
+        imageId={imageViewer?.imageId ?? null}
+        alt={imageViewer?.alt}
+      />
     </div>
   );
 }

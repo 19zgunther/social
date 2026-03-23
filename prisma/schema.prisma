@@ -52,6 +52,7 @@ model shared_feedback {
   created_by String   @db.Uuid
   text       String
   status     String
+  image_id   String?  @db.Uuid
   users      users    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
