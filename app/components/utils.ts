@@ -5,6 +5,7 @@ type AppTab =
     | "feed"
     | "groups"
     | "profile"
+    | "feedback"
     | "thread"
     | "thread_settings"
     | "profile_settings"
@@ -28,6 +29,7 @@ const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | n
         tabParam === "feed" ||
             tabParam === "groups" ||
             tabParam === "profile" ||
+            tabParam === "feedback" ||
             tabParam === "create_post"
             ? tabParam
             : null;

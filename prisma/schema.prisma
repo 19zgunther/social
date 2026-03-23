@@ -46,6 +46,16 @@ model push_subscriptions {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model shared_feedback {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  created_by String   @db.Uuid
+  text       String
+  status     String
+  users      users    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model thread_messages {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at DateTime  @default(now()) @db.Timestamptz(6)
@@ -110,6 +120,7 @@ model users {
   friends_friends_requesting_userTousers friends[]                  @relation("friends_requesting_userTousers")
   posts                                  posts[]
   push_subscriptions                     push_subscriptions[]
+  shared_feedback                        shared_feedback[]
   thread_messages                        thread_messages[]
   threads                                threads[]
   user_sessions                          user_sessions?

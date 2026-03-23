@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { House, UserRound, Users } from "lucide-react";
+import { House, MessageSquare, UserRound, Users } from "lucide-react";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
 import { Profile, ProfileOtherUser } from "@/app/components/Profile";
@@ -24,6 +24,7 @@ import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
 import useSwipeBack from "./components/utils/useSwipeBack";
 import CreatePostTab from "./components/CreatePostTab";
+import Feedback from "./components/Feedback";
 import DumbAdvertModal from "./components/DumbAdvertModal";
 import { UserSessionSyncProvider } from "./components/UserSessionSyncContext";
 
@@ -33,7 +34,8 @@ const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab, back: AppTab } } = {
   thread: { forward: "thread_settings", back: "groups" },
   groups: { forward: "profile", back: "feed" },
   feed: { forward: "groups", back: "profile" },
-  profile: { forward: "profile_settings", back: "groups" },
+  profile: { forward: "feedback", back: "groups" },
+  feedback: { forward: "profile_settings", back: "profile" },
   profile_settings: { forward: "feed", back: "profile" },
   other_user_profile: { forward: "feed", back: "profile" },
   create_post: { forward: "profile", back: "profile" },
@@ -300,6 +302,7 @@ export default function Home() {
     profile_settings: DEFAULT_TAB,
     other_user_profile: DEFAULT_TAB,
     create_post: DEFAULT_TAB,
+    feedback: DEFAULT_TAB,
   }
 
   const { forward, back } = TAB_TO_BACK[activeTab] ?? { forward: "profile", back: "feed" };
@@ -318,6 +321,7 @@ export default function Home() {
   const profileSettingsStyle = TAB_TO_STYLE["profile_settings"];
   const otherUserProfileStyle = TAB_TO_STYLE["other_user_profile"];
   const createPostStyle = TAB_TO_STYLE["create_post"];
+  const feedbackStyle = TAB_TO_STYLE["feedback"];
 
   return (
     <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
@@ -389,6 +393,10 @@ export default function Home() {
             />
           </div>}
 
+          <div className="absolute w-full h-full" style={feedbackStyle}>
+            <Feedback currentUserId={authUser.user_id} isActive={activeTab === "feedback"} />
+          </div>
+
           <div className="absolute w-full h-full" style={profileStyle}>
             <Profile
               userId={authUser.user_id}
@@ -453,6 +461,13 @@ export default function Home() {
               onClick={() => {
                 setActiveTab("profile");
               }}
+            />
+            <NavRowButton
+              icon={<MessageSquare aria-hidden className="h-4 w-4" />}
+              isActive={activeTab === "feedback"}
+              showCircle={false}
+              onClick={() => setActiveTab("feedback")}
+              className="max-w-[2rem] opacity-50"
             />
           </div>
         ) : null}
