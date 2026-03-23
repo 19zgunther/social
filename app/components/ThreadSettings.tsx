@@ -19,6 +19,7 @@ type ThreadSettingsProps = {
   onBack: () => void;
   onThreadImageUpdated: (imageId: string | null, imageUrl: string | null) => void;
   onThreadRenamed: (name: string) => void;
+  onViewUserProfile: (userId: string) => void;
 };
 
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
@@ -44,6 +45,7 @@ export default function ThreadSettings({
   onBack,
   onThreadImageUpdated,
   onThreadRenamed,
+  onViewUserProfile,
 }: ThreadSettingsProps) {
   const [members, setMembers] = useState<ThreadMember[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
@@ -370,15 +372,21 @@ export default function ThreadSettings({
               {members.map((member) => (
                 <div
                   key={member.user_id}
-                  className="flex items-center justify-between rounded-lg border border-accent-1 bg-secondary-background px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-accent-1 bg-secondary-background pl-0 pr-3 py-0"
                 >
-                  <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onViewUserProfile(member.user_id);
+                    }}
+                    className="min-w-0 flex-1 rounded-lg px-3 py-2 text-left transition hover:bg-primary-background/60 active:bg-primary-background/80"
+                  >
                     <p className="text-sm text-foreground">
                       {member.username} {member.is_owner ? "(owner)" : ""}
                     </p>
                     <p className="text-xs text-accent-2">{member.email ?? "No email"}</p>
-                  </div>
-                  
+                  </button>
+
                   {!member.is_owner ? (
                     <button
                       type="button"
@@ -386,7 +394,7 @@ export default function ThreadSettings({
                         void onRemoveMember(member.user_id);
                       }}
                       disabled={isUpdatingMembers}
-                      className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 transition hover:text-foreground disabled:opacity-60"
+                      className="shrink-0 rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 transition hover:text-foreground disabled:opacity-60"
                       style={{ borderColor: confirmedRemoveMember === member.user_id ? "red" : undefined }}
                     >
                       {confirmedRemoveMember === member.user_id ? "Confirm Remove" : "Remove"}

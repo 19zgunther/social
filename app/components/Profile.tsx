@@ -346,14 +346,10 @@ function Profile({
 
   const runFriendSearch = useCallback(async (rawQuery: string): Promise<FriendSearchResult[]> => {
     const query = rawQuery.trim();
-    if (!query) {
-      setFriendSearchResults([]);
-      return [];
-    }
 
     try {
       const response = await postWithAuth("/api/friend-search", {
-        query,
+        query: query || undefined,
       });
       if (!response.ok) {
         setStatusMessage(await readErrorMessage(response));
@@ -542,7 +538,14 @@ function Profile({
       <section className="border-b border-accent-1 px-3 py-3">
         <button
           type="button"
-          onClick={() => setIsFriendsExpanded((previous) => !previous)}
+          onClick={() => {
+            setIsFriendsExpanded((previous) => {
+              if (!previous) {
+                void loadFriendRows();
+              }
+              return !previous;
+            });
+          }}
           className="flex w-full items-center gap-1 text-left text-sm font-semibold text-foreground"
         >
           {isFriendsExpanded ? (

@@ -35,6 +35,7 @@ export default function UserSearch({
 }: UserSearchProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [results, setResults] = useState<UserSearchOption[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const requestIdRef = useRef(0);
   const blurTimeoutRef = useRef<number | null>(null);
 
@@ -47,15 +48,16 @@ export default function UserSearch({
   }, []);
 
   useEffect(() => {
-    const query = value.trim();
-    if (!query || disabled) {
+    if (disabled || !isOpen) {
       return;
     }
 
+    const query = value.trim();
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
 
-    const timeoutId = window.setTimeout(() => {
+    const runSearch = () => {
+      setIsLoading(true);
       void searchUsers(query)
         .then((nextResults) => {
           if (requestIdRef.current !== requestId) {
@@ -68,15 +70,26 @@ export default function UserSearch({
             return;
           }
           setResults([]);
+        })
+        .finally(() => {
+          if (requestIdRef.current === requestId) {
+            setIsLoading(false);
+          }
         });
-    }, 180);
+    };
 
+    if (!query) {
+      runSearch();
+      return;
+    }
+
+    const timeoutId = window.setTimeout(runSearch, 180);
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [disabled, searchUsers, value]);
+  }, [disabled, isOpen, searchUsers, value]);
 
-  const shouldShowDropdown = isOpen && value.trim().length > 0;
+  const shouldShowDropdown = isOpen;
 
   return (
     <div className="relative">
@@ -99,7 +112,9 @@ export default function UserSearch({
 
       {shouldShowDropdown ? (
         <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-accent-1 bg-primary-background shadow-lg shadow-black/25">
-          {results.length === 0 ? (
+          {isLoading && results.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-accent-2">Loading users…</p>
+          ) : results.length === 0 ? (
             <p className="px-3 py-2 text-xs text-accent-2">{noResultsText}</p>
           ) : (
             <ul>

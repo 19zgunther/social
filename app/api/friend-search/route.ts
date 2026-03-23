@@ -13,18 +13,21 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as FriendSearchRequest;
-    const query = body.query?.trim();
-    if (!query) {
-      const emptyPayload: FriendSearchResponse = { users: [] };
-      return NextResponse.json(emptyPayload, { status: 200 });
-    }
+    const searchTerm = (body.query ?? "").trim();
 
     const users = await prisma.users.findMany({
       where: {
         id: {
           not: authResult.user_id,
         },
-        OR: [{ username: { contains: query } }, { email: { contains: query } }],
+        ...(searchTerm.length > 0
+          ? {
+              OR: [
+                { username: { contains: searchTerm, mode: "insensitive" } },
+                { email: { contains: searchTerm, mode: "insensitive" } },
+              ],
+            }
+          : {}),
       },
       orderBy: [{ username: "asc" }, { id: "asc" }],
       take: 20,

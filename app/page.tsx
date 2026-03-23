@@ -90,9 +90,13 @@ export default function Home() {
   };
 
   const onViewUserProfile = useCallback((userId: string) => {
+    if (authUser && userId === authUser.user_id) {
+      setActiveTab("profile");
+      return;
+    }
     setViewingUserId(userId);
     setActiveTab("other_user_profile");
-  }, []);
+  }, [authUser]);
 
   const refreshGroupsUnreadCount = useCallback(async () => {
     try {
@@ -365,6 +369,7 @@ export default function Home() {
               thread={selectedThread}
               currentUserId={authUser.user_id}
               onBack={() => setActiveTab("thread")}
+              onViewUserProfile={onViewUserProfile}
               onThreadImageUpdated={(imageId, imageUrl) => {
                 setSelectedThread((previous) => ({
                   ...previous as ThreadItem,
