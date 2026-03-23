@@ -438,7 +438,7 @@ export default function Camera({
         ) : null}
       </div>
 
-      <div className="flex items-center justify-center gap-4 px-6 py-6">
+      <div className="flex items-center justify-center gap-4 px-6 py-6 pb-11">
         {capturedPhotoFile ? (
           <>
             <button

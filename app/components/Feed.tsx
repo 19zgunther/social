@@ -4,7 +4,7 @@ import { TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState } from
 import { PostSection} from "@/app/components/PostSection";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, Plus } from "lucide-react";
 const FEED_CACHE_KEY = "feed_cache_v1";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
@@ -29,7 +29,13 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 };
 
 
-export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userId: string) => void }) {
+export default function Feed({
+  onViewUserProfile,
+  onOpenCreatePost,
+}: {
+  onViewUserProfile?: (userId: string) => void;
+  onOpenCreatePost?: () => void;
+}) {
   const [posts, setPosts] = useStateCached<PostItem[]>([], FEED_CACHE_KEY);
   const [viewerUserId, setViewerUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -206,6 +212,19 @@ export default function Feed({ onViewUserProfile }: { onViewUserProfile?: (userI
         onWheel={onFeedWheel}
         className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y"
       >
+        {onOpenCreatePost ? (
+          <div className="px-3 pt-3 pb-2">
+            <button
+              type="button"
+              onClick={onOpenCreatePost}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-accent-1 bg-secondary-background py-4 text-base font-semibold text-foreground shadow-sm transition hover:border-accent-2 hover:text-foreground"
+            >
+              <Plus className="h-6 w-6 shrink-0 text-accent-2" aria-hidden />
+              Create New Post
+            </button>
+          </div>
+        ) : null}
+
         <div className="text-xs text-accent-2 transition-all duration-400 overflow-hidden w-full" style={{ maxHeight: `${loadingFeedHeight}rem` }}>
           <div className="px-3 py-3 flex items-center text-center justify-center gap-2 w-full">
             Loading feed... <LoaderCircle className="w-4 h-4 inline-block animate-spin" />

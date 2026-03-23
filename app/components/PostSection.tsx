@@ -146,7 +146,10 @@ function PostSectionComponent({
       const response = await fetch("/api/image-urls", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_ids: additionalImageIds }),
+        body: JSON.stringify({
+          image_ids: additionalImageIds,
+          owner_user_id: post.created_by,
+        }),
       });
       if (!response.ok) {
         return;
@@ -168,6 +171,9 @@ function PostSectionComponent({
     const nextIndex = Math.round(container.scrollLeft / width);
     if (nextIndex !== activeImageIndex) {
       setActiveImageIndex(nextIndex);
+    }
+    if (nextIndex >= 1) {
+      void loadAdditionalImages();
     }
   };
 

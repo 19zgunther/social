@@ -350,7 +350,10 @@ export default function Home() {
           </div>
 
           <div className="absolute w-full h-full" style={feedStyle}>
-            <Feed onViewUserProfile={onViewUserProfile} />
+            <Feed
+              onViewUserProfile={onViewUserProfile}
+              onOpenCreatePost={() => setActiveTab("create_post")}
+            />
           </div>
 
           {selectedThread && <div className="absolute w-full h-full" style={threadStyle}>
