@@ -13,7 +13,7 @@ import CameraModal from "@/app/components/Camera";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import CachedImage from "./utils/CachedImage";
-import { Image, MessageCirclePlus } from "lucide-react";
+import { Image, LoaderCircle, MessageCirclePlus, RefreshCw } from "lucide-react";
 import { AppTab } from "./utils";
 
 type GroupsProps = {
@@ -84,6 +84,7 @@ export default function Groups({
   const [unreadThreadIds, setUnreadThreadIds] = useState<Set<string>>(new Set());
   const [threadName, setThreadName] = useState("");
   const [isLoadingThreads, setIsLoadingThreads] = useState(true);
+  const [isRefreshingList, setIsRefreshingList] = useState(false);
   const [createThreadIsVisible, setCreateThreadIsVisible] = useState(false);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -159,6 +160,26 @@ export default function Groups({
       void loadUnreadThreads();
     } catch {
       // Keep showing the last known list on transient failures.
+    }
+  }, [loadUnreadThreads, writeGroupsCache]);
+
+  const onRefreshGroupsList = useCallback(async () => {
+    setIsRefreshingList(true);
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/groups-list", {});
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+      const payload = (await response.json()) as GroupsListResponse;
+      setThreads(payload.threads);
+      void writeGroupsCache(payload.threads);
+      void loadUnreadThreads();
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to refresh groups.");
+    } finally {
+      setIsRefreshingList(false);
     }
   }, [loadUnreadThreads, writeGroupsCache]);
 
@@ -361,7 +382,26 @@ export default function Groups({
     <div className="flex h-full min-h-0 flex-col space-y-3 px-2 bg-black">
       <div>
         <header className="flex items-center justify-between border-b border-accent-1 px-4 py-3">
-          <h1 className="text-lg font-semibold text-foreground">Groups</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-foreground">Groups</h1>
+            {isLoadingThreads || isRefreshingList ? (
+              <LoaderCircle
+                className="h-5 w-5 shrink-0 animate-spin text-accent-2"
+                aria-hidden
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  void onRefreshGroupsList();
+                }}
+                className="rounded-md p-0.5 text-accent-2 transition hover:text-foreground"
+                aria-label="Refresh groups"
+              >
+                <RefreshCw className="h-5 w-5 shrink-0" aria-hidden />
+              </button>
+            )}
+          </div>
           <button type="button" onClick={() => { setCreateThreadIsVisible(true); }}>
             <MessageCirclePlus className="h-6 w-6 text-accent-3" />
           </button>

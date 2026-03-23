@@ -55,6 +55,8 @@ type ThreadProps = {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const BOTTOM_FOLLOW_THRESHOLD_PX = 80;
+/** Hold duration before opening message actions (reply, etc.). */
+const MESSAGE_LONG_PRESS_TO_REPLY_MS = 500;
 const EMOJI_ONLY_MESSAGE_REGEX =
   /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
 const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
@@ -818,7 +820,7 @@ export default function Thread({
     cancelPressTimer();
     pressTimerRef.current = setTimeout(() => {
       setActiveOptionsMessageId(messageId);
-    }, 1_000);
+    }, MESSAGE_LONG_PRESS_TO_REPLY_MS);
   };
 
   const toggleRepliesForRootMessageId = (rootMessageId: string) => {
