@@ -341,7 +341,7 @@ export default function Home() {
               selectedThread={selectedThread}
               setSelectedThread={setSelectedThread}
               setActiveTab={setActiveTab}
-              isActiveTab={true}
+              isActiveTab={activeTab === "groups"}
             />
           </div>
 

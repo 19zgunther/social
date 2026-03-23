@@ -14,11 +14,19 @@ type CameraProps = {
     overlayYRatio: number;
   }) => Promise<void>;
   isSending: boolean;
+  /** Override stacking (e.g. `z-[2300]` when opening above another full-screen overlay). */
+  surfaceClassName?: string;
 };
 
 const clampOverlayYRatio = (value: number): number => Math.min(0.9, Math.max(0.1, value));
 
-export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: CameraProps) {
+export default function Camera({
+  isOpen,
+  onClose,
+  onSendPhoto,
+  isSending,
+  surfaceClassName,
+}: CameraProps) {
   const [isStartingCamera, setIsStartingCamera] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraErrorMessage, setCameraErrorMessage] = useState("");
@@ -326,7 +334,7 @@ export default function Camera({ isOpen, onClose, onSendPhoto, isSending }: Came
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black">
+    <div className={`fixed inset-0 flex flex-col bg-black ${surfaceClassName ?? "z-50"}`}>
       <input
         ref={fileInputRef}
         type="file"

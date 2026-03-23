@@ -13,6 +13,7 @@ import {
   withSecondPlayerClaimed,
 } from "@/app/components/games/poolGameUtils";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
@@ -156,9 +157,19 @@ export default function Thread({
   const [editTargetMessageId, setEditTargetMessageId] = useState<string | null>(null);
   const [activeOptionsMessageId, setActiveOptionsMessageId] = useState<string | null>(null);
   const [expandedReplyRootIds, setExpandedReplyRootIds] = useState<string[]>([]);
+  const [imageViewer, setImageViewer] = useState<{
+    signedUrl: string;
+    imageId: string | null;
+    alt: string;
+  } | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const pendingBottomScrollRef = useRef<ScrollBehavior | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const messagesRef = useRef<ThreadMessage[]>([]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -247,6 +258,7 @@ export default function Thread({
     setIsCameraModalOpen(false);
     setIsGamesModalOpen(false);
     setPoolSession(null);
+    setImageViewer(null);
 
     const loadThread = async () => {
       setIsLoadingMessages(true);
@@ -402,6 +414,54 @@ export default function Thread({
     void loadOlderMessages();
   };
 
+  const applyLatestMessagesFromServer = useCallback(
+    async (scrollHintMode: "always" | "onlyWhenNew") => {
+      const threadId = selectedThread.id;
+      const container = chatContainerRef.current;
+      const wasNearBottom = container ? isNearBottom(container) : false;
+
+      const latestResponse = await postWithAuth("/api/thread-messages", {
+        thread_id: threadId,
+      });
+
+      if (!latestResponse.ok) {
+        return;
+      }
+
+      const latestPayload = (await latestResponse.json()) as ThreadMessagesResponse;
+
+      const previousSnapshot = messagesRef.current;
+      const prevIds = new Set(previousSnapshot.map((message) => message.id));
+      const hasNewMessage = latestPayload.messages.some((message) => !prevIds.has(message.id));
+
+      setMessages((previousMessages) => mergeMessagesById(previousMessages, latestPayload.messages));
+      setHasMoreOlderMessages((previousValue) => previousValue || latestPayload.has_more_older);
+      setOldestLoadedMessageId(
+        (previousCursorId) => previousCursorId ?? latestPayload.next_cursor_message_id,
+      );
+
+      void writeThreadMessagesCache(threadId, latestPayload);
+
+      const shouldUpdateScrollHints =
+        scrollHintMode === "always" ||
+        (scrollHintMode === "onlyWhenNew" && hasNewMessage);
+
+      if (!shouldUpdateScrollHints) {
+        return;
+      }
+
+      if (wasNearBottom) {
+        pendingBottomScrollRef.current = "smooth";
+        setShowNewMessagesButton(false);
+        isFollowingBottomRef.current = true;
+      } else {
+        setShowNewMessagesButton(true);
+        isFollowingBottomRef.current = false;
+      }
+    },
+    [selectedThread.id, writeThreadMessagesCache],
+  );
+
   useEffect(() => {
     let isCancelled = false;
 
@@ -437,37 +497,7 @@ export default function Thread({
             continue;
           }
 
-          const container = chatContainerRef.current;
-          const wasNearBottom = container ? isNearBottom(container) : false;
-
-          const latestResponse = await postWithAuth("/api/thread-messages", {
-            thread_id: selectedThread.id,
-          });
-
-          if (!latestResponse.ok) {
-            continue;
-          }
-
-          const latestPayload = (await latestResponse.json()) as ThreadMessagesResponse;
-
-          setMessages((previousMessages) =>
-            mergeMessagesById(previousMessages, latestPayload.messages),
-          );
-          setHasMoreOlderMessages((previousValue) => previousValue || latestPayload.has_more_older);
-          setOldestLoadedMessageId(
-            (previousCursorId) => previousCursorId ?? latestPayload.next_cursor_message_id,
-          );
-
-          void writeThreadMessagesCache(selectedThread.id, latestPayload);
-
-          if (wasNearBottom) {
-            pendingBottomScrollRef.current = "smooth";
-            setShowNewMessagesButton(false);
-            isFollowingBottomRef.current = true;
-          } else {
-            setShowNewMessagesButton(true);
-            isFollowingBottomRef.current = false;
-          }
+          await applyLatestMessagesFromServer("always");
         } catch {
           await sleep(1_000);
         }
@@ -479,7 +509,30 @@ export default function Thread({
     return () => {
       isCancelled = true;
     };
-  }, [selectedThread.id, currentUserId]);
+  }, [applyLatestMessagesFromServer, selectedThread.id, currentUserId]);
+
+  useEffect(() => {
+    if (isLoadingMessages) {
+      return;
+    }
+
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) {
+        return;
+      }
+      await applyLatestMessagesFromServer("onlyWhenNew");
+    };
+
+    const intervalId = window.setInterval(() => {
+      void tick();
+    }, 20_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [applyLatestMessagesFromServer, isLoadingMessages, selectedThread.id]);
 
   const sendThreadMessage = async ({
     text,
@@ -957,17 +1010,32 @@ export default function Thread({
           ) : null}
           {message.image_url ? (
             <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
-              <CachedImage
-                signedUrl={message.image_url}
-                imageId={message.image_id}
-                alt="Thread message attachment"
-                className="max-h-[100vh] w-full rounded-xl object-cover"
-                loading="lazy"
-                onLoad={handleMessageImageLoad}
-              />
+              <button
+                type="button"
+                className="block w-full cursor-zoom-in rounded-xl border-0 bg-transparent p-0"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setImageViewer({
+                    signedUrl: message.image_url!,
+                    imageId: message.image_id,
+                    alt: "Thread message attachment",
+                  });
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onTouchStart={(event) => event.stopPropagation()}
+              >
+                <CachedImage
+                  signedUrl={message.image_url}
+                  imageId={message.image_id}
+                  alt="Thread message attachment"
+                  className="max-h-[100vh] w-full rounded-xl object-cover"
+                  loading="lazy"
+                  onLoad={handleMessageImageLoad}
+                />
+              </button>
               {messageImageOverlay ? (
                 <div
-                  className="absolute left-0 right-0 -translate-y-1/2 bg-black/45 px-3 py-2 text-center text-sm font-semibold text-white"
+                  className="pointer-events-none absolute left-0 right-0 -translate-y-1/2 bg-black/45 px-3 py-2 text-center text-sm font-semibold text-white"
                   style={{ top: `${messageImageOverlay.y_ratio * 100}%` }}
                 >
                   {messageImageOverlay.text}
@@ -1148,12 +1216,25 @@ export default function Thread({
           onClick={setThreadSettingsOpen}
         >
           {selectedThread.image_url ? (
-            <CachedImage
-              signedUrl={selectedThread.image_url}
-              imageId={selectedThread.image_id ?? null}
-              alt="Group photo"
-              className="h-10 w-10 rounded-full border border-accent-1 object-cover"
-            />
+            <button
+              type="button"
+              className="h-10 w-10 shrink-0 rounded-full border-0 bg-transparent p-0"
+              onClick={(event) => {
+                event.stopPropagation();
+                setImageViewer({
+                  signedUrl: selectedThread.image_url!,
+                  imageId: selectedThread.image_id ?? null,
+                  alt: "Group photo",
+                });
+              }}
+            >
+              <CachedImage
+                signedUrl={selectedThread.image_url}
+                imageId={selectedThread.image_id ?? null}
+                alt="Group photo"
+                className="h-10 w-10 rounded-full border border-accent-1 object-cover"
+              />
+            </button>
           ) : (
             <div className="flex h-10 w-10 items-center justify-center">
               <Image className="h-10 w-10 text-accent-2" />
@@ -1240,6 +1321,19 @@ export default function Thread({
           </button>
         </div>
       ) : null}
+
+      <ImageViewerModal
+        key={
+          imageViewer
+            ? `${imageViewer.signedUrl}-${imageViewer.imageId ?? ""}`
+            : "image-viewer-closed"
+        }
+        open={imageViewer !== null}
+        onClose={() => setImageViewer(null)}
+        signedUrl={imageViewer?.signedUrl ?? null}
+        imageId={imageViewer?.imageId ?? null}
+        alt={imageViewer?.alt}
+      />
 
       <CameraModal
         isOpen={isCameraModalOpen}

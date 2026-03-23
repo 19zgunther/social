@@ -43,6 +43,19 @@ export type PostItem = {
   author_profile_image_url?: string | null;
 };
 
+export type ImageOverlayData = {
+  text: string;
+  y_ratio: number;
+};
+
+/** Latest incoming photo message when it is the most recent message in the thread (Groups list preview). */
+export type ThreadLastPhotoPreview = {
+  message_id: string;
+  image_id: string;
+  image_url: string | null;
+  image_overlay: ImageOverlayData | null;
+};
+
 export type ThreadItem = {
   id: string;
   name: string;
@@ -51,11 +64,10 @@ export type ThreadItem = {
   owner_username: string;
   image_id?: string | null;
   image_url?: string | null;
-};
-
-export type ImageOverlayData = {
-  text: string;
-  y_ratio: number;
+  /** ISO time of the chronologically latest message in the thread, if any. */
+  last_message_at?: string | null;
+  /** Present when the latest message is an image from someone else (tap to preview on Groups). */
+  last_photo_preview?: ThreadLastPhotoPreview | null;
 };
 
 import type { VideoCallSignal } from "@/app/components/utils/webrtcVideoCall";

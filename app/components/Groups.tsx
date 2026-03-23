@@ -1,11 +1,19 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import Thread from "@/app/components/Thread";
-import { ApiError, GroupsListResponse, ThreadItem } from "@/app/types/interfaces";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  ApiError,
+  GroupsListResponse,
+  ImageOverlayData,
+  MessageData,
+  ThreadItem,
+} from "@/app/types/interfaces";
+import ImageViewerModal from "@/app/components/ImageViewerModal";
+import CameraModal from "@/app/components/Camera";
+import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import CachedImage from "./utils/CachedImage";
-import { Image, MessageCirclePlus, PencilIcon } from "lucide-react";
+import { Image, MessageCirclePlus } from "lucide-react";
 import { AppTab } from "./utils";
 
 type GroupsProps = {
@@ -35,6 +43,33 @@ const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   });
 };
 
+const clampOverlayYRatio = (value: number): number => {
+  if (Number.isNaN(value)) {
+    return 0.5;
+  }
+  return Math.min(0.9, Math.max(0.1, value));
+};
+
+const formatThreadListTime = (iso: string | null | undefined): string => {
+  if (!iso) {
+    return "";
+  }
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  const now = new Date();
+  if (parsed.toDateString() === now.toDateString()) {
+    return parsed.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (parsed.toDateString() === yesterday.toDateString()) {
+    return "Yesterday";
+  }
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+};
+
 export default function Groups({
   currentUserId,
   onThreadRead,
@@ -52,6 +87,18 @@ export default function Groups({
   const [createThreadIsVisible, setCreateThreadIsVisible] = useState(false);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [groupsPhotoViewer, setGroupsPhotoViewer] = useState<{
+    threadId: string;
+    signedUrl: string;
+    imageId: string | null;
+    imageOverlay: ImageOverlayData | null;
+    replyToMessageId: string;
+  } | null>(null);
+  const [replyCamera, setReplyCamera] = useState<{
+    threadId: string;
+    replyToMessageId: string;
+  } | null>(null);
+  const [isReplyCameraSending, setIsReplyCameraSending] = useState(false);
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -98,6 +145,51 @@ export default function Groups({
       // Keep old unread indications on transient failures.
     }
   }, []);
+
+  const refreshGroupsListSilent = useCallback(async () => {
+    try {
+      const response = await postWithAuth("/api/groups-list", {});
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as GroupsListResponse;
+      setThreads(payload.threads);
+      void writeGroupsCache(payload.threads);
+      void loadUnreadThreads();
+    } catch {
+      // Keep showing the last known list on transient failures.
+    }
+  }, [loadUnreadThreads, writeGroupsCache]);
+
+  const prevIsActiveTab = useRef(isActiveTab);
+  useEffect(() => {
+    const becameActive = isActiveTab && !prevIsActiveTab.current;
+    prevIsActiveTab.current = isActiveTab;
+    if (!becameActive) {
+      return;
+    }
+    void refreshGroupsListSilent();
+  }, [isActiveTab, refreshGroupsListSilent]);
+
+  useEffect(() => {
+    if (!isActiveTab) {
+      return;
+    }
+
+    let cancelled = false;
+    const intervalId = window.setInterval(() => {
+      if (cancelled) {
+        return;
+      }
+      void refreshGroupsListSilent();
+    }, 45_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isActiveTab, refreshGroupsListSilent]);
 
   useEffect(() => {
     const run = async () => {
@@ -203,6 +295,54 @@ export default function Groups({
     });
   }, [onThreadRead]);
 
+  const onSendPhotoReply = async (payload: {
+    file: File;
+    overlayText: string;
+    overlayYRatio: number;
+  }) => {
+    if (!replyCamera) {
+      return;
+    }
+    const { threadId, replyToMessageId } = replyCamera;
+    setIsReplyCameraSending(true);
+    setStatusMessage("");
+    try {
+      const prepared = await prepareImageForUpload(payload.file);
+      const trimmedOverlay = payload.overlayText.trim();
+      const messageData: MessageData | undefined =
+        trimmedOverlay.length > 0
+          ? {
+              image_overlay: {
+                text: trimmedOverlay,
+                y_ratio: clampOverlayYRatio(payload.overlayYRatio),
+              },
+            }
+          : undefined;
+
+      const response = await postWithAuth("/api/thread-send", {
+        thread_id: threadId,
+        text: "",
+        reply_to_message_id: replyToMessageId,
+        image_base64_data: prepared.base64Data,
+        image_mime_type: prepared.mimeType,
+        ...(messageData ? { message_data: messageData } : {}),
+      });
+
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+
+      await response.json();
+      setReplyCamera(null);
+      void refreshGroupsListSilent();
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to send photo.");
+    } finally {
+      setIsReplyCameraSending(false);
+    }
+  };
+
   useEffect(() => {
     if (!deepLinkThreadId || isLoadingThreads || selectedThread) {
       return;
@@ -271,11 +411,57 @@ export default function Groups({
         ) : null}
 
         {threads.map((thread) => (
-          <GroupThreadRow key={thread.id} thread={thread} unreadThreadIds={unreadThreadIds} onOpenThread={onOpenThread} />
+          <GroupThreadRow
+            key={thread.id}
+            thread={thread}
+            unreadThreadIds={unreadThreadIds}
+            onOpenThread={onOpenThread}
+            onOpenLastPhotoPreview={(item) => {
+              const preview = item.last_photo_preview;
+              if (!preview?.image_url) {
+                return;
+              }
+              setGroupsPhotoViewer({
+                threadId: item.id,
+                signedUrl: preview.image_url,
+                imageId: preview.image_id,
+                imageOverlay: preview.image_overlay,
+                replyToMessageId: preview.message_id,
+              });
+            }}
+          />
         ))}
       </div>
 
       {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
+
+      <ImageViewerModal
+        open={groupsPhotoViewer !== null}
+        onClose={() => {
+          setGroupsPhotoViewer(null);
+        }}
+        signedUrl={groupsPhotoViewer?.signedUrl ?? null}
+        imageId={groupsPhotoViewer?.imageId ?? null}
+        imageOverlay={groupsPhotoViewer?.imageOverlay ?? null}
+        onReply={() => {
+          if (!groupsPhotoViewer) {
+            return;
+          }
+          const { threadId, replyToMessageId } = groupsPhotoViewer;
+          setGroupsPhotoViewer(null);
+          setReplyCamera({ threadId, replyToMessageId });
+        }}
+      />
+
+      <CameraModal
+        isOpen={replyCamera !== null}
+        onClose={() => {
+          setReplyCamera(null);
+        }}
+        onSendPhoto={onSendPhotoReply}
+        isSending={isReplyCameraSending}
+        surfaceClassName="z-[2300]"
+      />
     </div>
   );
 }
@@ -284,12 +470,17 @@ export default function Groups({
 function GroupThreadRow({
   thread,
   unreadThreadIds,
-  onOpenThread
+  onOpenThread,
+  onOpenLastPhotoPreview,
 }: {
   thread: ThreadItem;
   unreadThreadIds: Set<string>;
   onOpenThread: (thread: ThreadItem) => void;
+  onOpenLastPhotoPreview: (thread: ThreadItem) => void;
 }) {
+  const preview = thread.last_photo_preview;
+  const listTime = formatThreadListTime(thread.last_message_at);
+
   return (
     <button
       key={thread.id}
@@ -316,18 +507,36 @@ function GroupThreadRow({
           </div>
         )}
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="text-base font-semibold text-foreground truncate">{thread.name}</p>
-            <span className="text-xs text-accent-2 flex-shrink-0">Yesterday</span>
+        <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-base font-semibold text-foreground">{thread.name}</p>
+              {unreadThreadIds.has(thread.id) ? (
+                <span
+                  aria-label="Unread messages"
+                  className="h-2 w-2 flex-shrink-0 rounded-full bg-accent-3"
+                />
+              ) : null}
+            </div>
+            <p className="mt-0.5 truncate text-sm text-accent-2">Owner: {thread.owner_username}</p>
           </div>
-          <p className="mt-0.5 text-sm text-accent-2 truncate">Owner: {thread.owner_username}</p>
+
+          <div className="flex flex-shrink-0 flex-col items-end gap-1 pt-0.5">
+            {preview?.image_url ? (
+              <button
+                type="button"
+                aria-label="View last photo message"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenLastPhotoPreview(thread);
+                }}
+                className="h-3 w-3 flex-shrink-0 rounded-md bg-red-600 shadow-sm ring-1 ring-red-500/40"
+              />
+            ) : null}
+            {listTime ? <span className="text-xs text-accent-2">{listTime}</span> : null}
+          </div>
         </div>
       </div>
-
-      {unreadThreadIds.has(thread.id) ? (
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-accent-3" />
-      ) : null}
     </button>
   );
 }

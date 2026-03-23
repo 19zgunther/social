@@ -2,6 +2,7 @@
 
 import { memo, UIEvent, useEffect, useMemo, useState } from "react";
 import { Heart, ChevronDown, Trash2 } from "lucide-react";
+import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
@@ -69,6 +70,11 @@ function PostSectionComponent({
   const [expandedReplyPaths, setExpandedReplyPaths] = useState<string[]>([]);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [isDeletingCommentPath, setIsDeletingCommentPath] = useState<string | null>(null);
+  const [imageViewer, setImageViewer] = useState<{
+    signedUrl: string;
+    imageId: string | null;
+    alt: string;
+  } | null>(null);
 
   const rootCommentEntries = useMemo(
     () =>
@@ -116,6 +122,7 @@ function PostSectionComponent({
     setReplyDraftByPath({});
     setActiveReplyPath(null);
     setExpandedReplyPaths([]);
+    setImageViewer(null);
   }, [post.data, post.id, post.image_id, post.image_url]);
 
   useEffect(() => {
@@ -479,12 +486,25 @@ function PostSectionComponent({
             return (
               <div key={imageId} className="w-full shrink-0 snap-center">
                 {signedUrl ? (
-                  <CachedImage
-                    signedUrl={signedUrl}
-                    imageId={imageId}
-                    alt="Post attachment"
-                    className="w-full aspect-square overflow-hidden object-cover"
-                  />
+                  <button
+                    type="button"
+                    className="block w-full cursor-zoom-in border-0 bg-transparent p-0"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setImageViewer({
+                        signedUrl,
+                        imageId,
+                        alt: "Post attachment",
+                      });
+                    }}
+                  >
+                    <CachedImage
+                      signedUrl={signedUrl}
+                      imageId={imageId}
+                      alt="Post attachment"
+                      className="pointer-events-none aspect-square w-full overflow-hidden object-cover"
+                    />
+                  </button>
                 ) : (
                   <div className="flex h-full w-full aspect-square items-center justify-center border-y border-accent-1 bg-secondary-background text-xs text-accent-2">
                     {isPrimaryImage || isLoadingAdditionalImages ? "Loading image..." : "Swipe to load image"}
@@ -586,6 +606,19 @@ function PostSectionComponent({
           </div>
         ) : null}
       </div>
+
+      <ImageViewerModal
+        key={
+          imageViewer
+            ? `${imageViewer.signedUrl}-${imageViewer.imageId ?? ""}`
+            : "post-image-viewer-closed"
+        }
+        open={imageViewer !== null}
+        onClose={() => setImageViewer(null)}
+        signedUrl={imageViewer?.signedUrl ?? null}
+        imageId={imageViewer?.imageId ?? null}
+        alt={imageViewer?.alt}
+      />
     </article>
   );
 }
