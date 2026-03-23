@@ -1,6 +1,15 @@
 "use client";
 
-import { FormEvent, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  KeyboardEvent,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { Camera, Image, Plus, Video } from "lucide-react";
 import CameraModal from "@/app/components/Camera";
@@ -163,6 +172,7 @@ export default function Thread({
     alt: string;
   } | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingBottomScrollRef = useRef<ScrollBehavior | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesRef = useRef<ThreadMessage[]>([]);
@@ -170,6 +180,15 @@ export default function Thread({
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useLayoutEffect(() => {
+    const element = composerTextareaRef.current;
+    if (!element) {
+      return;
+    }
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+  }, [messageDraft]);
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -989,11 +1008,13 @@ export default function Thread({
           onMouseLeave={cancelPressTimer}
           onTouchStart={() => startLongPress(message.id)}
           onTouchEnd={cancelPressTimer}
+          onTouchMove={cancelPressTimer}
+          onTouchCancel={cancelPressTimer}
           onContextMenu={(event) => {
             event.preventDefault();
             setActiveOptionsMessageId(message.id);
           }}
-          className={`max-w-[85%] text-sm ${isImageOnly
+          className={`max-w-[85%] select-none text-sm ${isImageOnly
             ? `${isOwnMessage ? "ml-auto" : ""}`
             : `rounded-2xl px-3 py-1 shadow-sm ${isOwnMessage
               ? "ml-auto rounded-br-sm bg-accent-3 text-primary-background"
@@ -1004,8 +1025,10 @@ export default function Thread({
         >
           {!isImageOnly ? (
             <>
-              <p className="text-xs opacity-60">{isOwnMessage ? "You" : message.username}</p>
-              <p className="break-words">{message.text}</p>
+              <p className="text-xs opacity-60 [-webkit-touch-callout:none]">
+                {isOwnMessage ? "You" : message.username}
+              </p>
+              <p className="break-words [-webkit-touch-callout:none]">{message.text}</p>
             </>
           ) : null}
           {message.image_url ? (
@@ -1373,14 +1396,27 @@ export default function Thread({
         )
         : null}
 
-      <form onSubmit={onSendMessage} className="mx-2 mb-2 mt-1 flex items-center gap-2">
+      <form onSubmit={onSendMessage} className="mx-2 mb-2 mt-1 flex items-end gap-2">
         {/** Main message input */}
-        <input
-          className={`rounded-full border border-accent-1 bg-secondary-background px-4 py-2 text-sm text-foreground outline-none focus:border-accent-2 transition-all duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
+        <textarea
+          ref={composerTextareaRef}
+          rows={1}
+          className={`min-h-10 resize-none overflow-hidden rounded-2xl border border-accent-1 bg-secondary-background px-4 py-2 text-sm leading-normal text-foreground break-words outline-none focus:border-accent-2 transition-[border-color] duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
             }`}
           placeholder="Type a message..."
           value={messageDraft}
           onChange={(event) => setMessageDraft(event.target.value)}
+          onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
+            if (event.key !== "Enter" || event.shiftKey) {
+              return;
+            }
+            event.preventDefault();
+            const form = event.currentTarget.form;
+            if (!form || isSendingMessage || !messageDraft.trim()) {
+              return;
+            }
+            form.requestSubmit();
+          }}
           onFocus={() => setIsComposerFocused(true)}
           onBlur={() => {
             if (!messageDraft.trim() && !editTargetMessageId) {
