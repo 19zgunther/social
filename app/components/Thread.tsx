@@ -21,6 +21,7 @@ import {
   latestPoolMessagesByGameId,
   withSecondPlayerClaimed,
 } from "@/app/components/games/poolGameUtils";
+import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
@@ -1028,7 +1029,7 @@ export default function Thread({
               <p className="text-xs opacity-60 [-webkit-touch-callout:none]">
                 {isOwnMessage ? "You" : message.username}
               </p>
-              <p className="break-words [-webkit-touch-callout:none]">{message.text}</p>
+              <p className="break-words [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
             </>
           ) : null}
           {message.image_url ? (
