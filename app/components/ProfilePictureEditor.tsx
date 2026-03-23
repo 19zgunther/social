@@ -2,6 +2,7 @@
 
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProfileImageRemoveResponse, ProfileImageSetResponse } from "@/app/types/interfaces";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 
 type ProfilePictureEditorProps = {
   isOpen: boolean;
@@ -235,7 +236,7 @@ export default function ProfilePictureEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 ${DONT_SWIPE_TABS_CLASSNAME}`}>
       <div className="w-full max-w-sm rounded-xl border border-accent-1 bg-secondary-background p-3 shadow-xl shadow-black/35">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Edit Profile Picture</h2>
