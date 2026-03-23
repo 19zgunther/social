@@ -198,6 +198,9 @@ function ProfilePostsSection({
             const showRightBorder = showCreateButton && onOpenCreatePost
               ? (index + 1) % 3 !== 0
               : index % 3 !== 2;
+            const hasImageAttachment = Boolean(post.image_id);
+            const hasSignedImageUrl = Boolean(post.image_url);
+            const trimmedPostText = post.text.trim();
             return (
               <button
                 key={post.id}
@@ -206,14 +209,31 @@ function ProfilePostsSection({
                 className={`aspect-square bg-primary-background ${showRightBorder ? "border-r border-accent-1" : ""
                   } border-b border-accent-1`}
               >
-                {post.image_url ? (
+                {hasSignedImageUrl ? (
                   <CachedImage
                     signedUrl={post.image_url}
                     imageId={post.image_id}
                     alt="Profile post"
                     className="h-full w-full object-cover"
                   />
-                ) : null}
+                ) : hasImageAttachment ? (
+                  <div className="flex h-full w-full items-center justify-center bg-black text-[10px] text-accent-2">
+                    Loading...
+                  </div>
+                ) : (
+                  <div className="flex h-full w-full items-start justify-start overflow-hidden bg-black p-1.5">
+                    <p
+                      className="w-full overflow-hidden text-left text-[9px] leading-tight text-foreground/80 break-words"
+                      style={{
+                        display: "-webkit-box",
+                        WebkitLineClamp: 7,
+                        WebkitBoxOrient: "vertical",
+                      }}
+                    >
+                      {trimmedPostText || "(No text)"}
+                    </p>
+                  </div>
+                )}
               </button>
             );
           })}

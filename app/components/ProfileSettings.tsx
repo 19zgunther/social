@@ -2,6 +2,7 @@
 
 import { ArrowLeft, LogOut } from "lucide-react";
 import { useState } from "react";
+import { clearAllCachedImages } from "@/app/lib/imageCache";
 
 type ProfileSettingsProps = {
   onBack: () => void;
@@ -12,10 +13,25 @@ const PUSH_PROMPT_DISMISSED_KEY = "push_prompt_dismissed";
 
 export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsProps) {
   const [statusMessage, setStatusMessage] = useState("");
+  const [isClearingImageCache, setIsClearingImageCache] = useState(false);
 
   const onResetNotificationPrompt = () => {
     window.localStorage.removeItem(PUSH_PROMPT_DISMISSED_KEY);
     setStatusMessage("Notification prompt reset. It will appear again on the next app launch.");
+  };
+
+  const onClearImageCache = async () => {
+    if (isClearingImageCache) {
+      return;
+    }
+
+    setIsClearingImageCache(true);
+    try {
+      await clearAllCachedImages();
+      setStatusMessage("Image cache cleared.");
+    } finally {
+      setIsClearingImageCache(false);
+    }
   };
 
   return (
@@ -46,6 +62,21 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
               <p className="font-medium">Reset notification prompt</p>
               <p className="text-xs text-accent-2 mt-1">
                 Make the notification permission prompt appear again
+              </p>
+            </button>
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold text-foreground mb-3">Storage</h2>
+            <button
+              type="button"
+              onClick={() => { void onClearImageCache(); }}
+              disabled={isClearingImageCache}
+              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-4 py-3 text-left text-sm text-foreground hover:bg-accent-1/30 transition disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <p className="font-medium">{isClearingImageCache ? "Clearing image cache..." : "Clear cached images"}</p>
+              <p className="text-xs text-accent-2 mt-1">
+                Remove all locally cached images and reload them as needed
               </p>
             </button>
           </div>

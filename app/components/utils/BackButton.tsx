@@ -1,11 +1,21 @@
+export default function BackButton({
+    onBack,
+    backLabel,
+    textOnly = false,
+}: {
+    onBack: () => void;
+    backLabel: string;
+    textOnly?: boolean;
+}) {
+    const buttonClassName = textOnly
+        ? "border-0 bg-transparent p-0 text-sm font-medium text-accent-2 transition hover:text-foreground"
+        : "rounded-full border border-accent-1 bg-primary-background px-3 py-1.5 text-sm font-medium text-accent-2 transition hover:text-foreground";
 
-
-export default function BackButton({ onBack, backLabel }: { onBack: () => void, backLabel: string }) {
     return (
         <button
           type="button"
           onClick={onBack}
-          className="rounded-full border border-accent-1 bg-primary-background px-3 py-1.5 text-xs font-medium text-accent-2 transition hover:text-foreground"
+          className={buttonClassName}
         >
           {"<"} {backLabel}
         </button>

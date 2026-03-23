@@ -4,6 +4,7 @@ import {
   FormEvent,
   KeyboardEvent,
   SetStateAction,
+  TouchEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -62,6 +63,8 @@ const EMOJI_ONLY_MESSAGE_REGEX =
 const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
 
 const THREAD_MESSAGES_CACHE_KEY_PREFIX = "thread_messages_v1_";
+const TIMESTAMP_REVEAL_MAX_PX = 68;
+const TIMESTAMP_REVEAL_SETTLE_MS = 180;
 
 type ThreadMessagesCachePayload = ThreadMessagesResponse & {
   cached_at: number;
@@ -69,6 +72,16 @@ type ThreadMessagesCachePayload = ThreadMessagesResponse & {
 
 const isNearBottom = (element: HTMLDivElement): boolean =>
   element.scrollHeight - element.scrollTop - element.clientHeight < BOTTOM_FOLLOW_THRESHOLD_PX;
+const formatMessageTimestamp = (value: string): string => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   return fetch(path, {
     method: "POST",
@@ -179,6 +192,12 @@ export default function Thread({
   const pendingBottomScrollRef = useRef<ScrollBehavior | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesRef = useRef<ThreadMessage[]>([]);
+  const timestampSwipeStartXRef = useRef(0);
+  const timestampSwipeStartYRef = useRef(0);
+  const timestampSwipeTrackingRef = useRef(false);
+  const timestampRevealPercentRef = useRef(0);
+  const timestampRevealRafRef = useRef<number | null>(null);
+  const [timestampRevealPercent, setTimestampRevealPercent] = useState(0);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -260,8 +279,47 @@ export default function Thread({
       if (pressTimerRef.current) {
         clearTimeout(pressTimerRef.current);
       }
+      if (timestampRevealRafRef.current !== null) {
+        cancelAnimationFrame(timestampRevealRafRef.current);
+      }
     };
   }, []);
+
+  const cancelTimestampRevealAnimation = () => {
+    if (timestampRevealRafRef.current !== null) {
+      cancelAnimationFrame(timestampRevealRafRef.current);
+      timestampRevealRafRef.current = null;
+    }
+  };
+
+  const setTimestampReveal = (value: number) => {
+    const clamped = Math.max(0, Math.min(1, value));
+    timestampRevealPercentRef.current = clamped;
+    setTimestampRevealPercent(clamped);
+  };
+
+  const settleTimestampReveal = () => {
+    const from = timestampRevealPercentRef.current;
+    cancelTimestampRevealAnimation();
+    if (from <= 0) {
+      setTimestampReveal(0);
+      return;
+    }
+
+    const start = performance.now();
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - start) / TIMESTAMP_REVEAL_SETTLE_MS);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const next = from * (1 - eased);
+      setTimestampReveal(next);
+      if (progress < 1) {
+        timestampRevealRafRef.current = requestAnimationFrame(step);
+      } else {
+        timestampRevealRafRef.current = null;
+      }
+    };
+    timestampRevealRafRef.current = requestAnimationFrame(step);
+  };
 
   useEffect(() => {
     let isCancelled = false;
@@ -434,6 +492,46 @@ export default function Thread({
       return;
     }
     void loadOlderMessages();
+  };
+
+  const onTimestampSwipeStart = (event: TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+    timestampSwipeStartXRef.current = touch.clientX;
+    timestampSwipeStartYRef.current = touch.clientY;
+    timestampSwipeTrackingRef.current = true;
+    cancelTimestampRevealAnimation();
+  };
+
+  const onTimestampSwipeMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!timestampSwipeTrackingRef.current) {
+      return;
+    }
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+
+    const deltaX = touch.clientX - timestampSwipeStartXRef.current;
+    const deltaY = touch.clientY - timestampSwipeStartYRef.current;
+
+    // Keep regular vertical scrolling responsive and only react to mostly-horizontal drags.
+    if (Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+      return;
+    }
+
+    const nextPercent = Math.max(0, Math.min(1, -deltaX / TIMESTAMP_REVEAL_MAX_PX));
+    setTimestampReveal(nextPercent);
+  };
+
+  const onTimestampSwipeEnd = () => {
+    if (!timestampSwipeTrackingRef.current) {
+      return;
+    }
+    timestampSwipeTrackingRef.current = false;
+    settleTimestampReveal();
   };
 
   const applyLatestMessagesFromServer = useCallback(
@@ -938,7 +1036,7 @@ export default function Thread({
       }
 
       return (
-        <div key={message.id} className="max-w-[85%]">
+        <div key={message.id} className="relative max-w-[85%]">
           <div
             className={`rounded-2xl border border-accent-1 bg-secondary-background px-3 py-3 shadow-sm ${isOwnMessage ? "ml-auto" : ""}`}
           >
@@ -985,6 +1083,12 @@ export default function Thread({
               {myTurn ? "Play" : "Not your turn"}
             </button>
           </div>
+          <p
+            className="pointer-events-none absolute right-[-68px] top-1/2 w-16 -translate-y-1/2 text-right text-[11px] text-accent-2/90 transition-opacity duration-75"
+            style={{ opacity: timestampRevealPercent }}
+          >
+            {formatMessageTimestamp(message.created_at)}
+          </p>
         </div>
       );
     }
@@ -1017,7 +1121,7 @@ export default function Thread({
             event.preventDefault();
             setActiveOptionsMessageId(message.id);
           }}
-          className={`max-w-[85%] select-none text-sm ${isImageOnly
+          className={`relative max-w-[85%] select-none text-sm ${isImageOnly
             ? `${isOwnMessage ? "ml-auto" : ""}`
             : `rounded-2xl px-3 py-1 shadow-sm ${isOwnMessage
               ? "ml-auto rounded-br-sm bg-accent-3 text-primary-background"
@@ -1033,6 +1137,11 @@ export default function Thread({
               </p>
               <p className="break-words [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
             </>
+          ) : null}
+          {isImageOnly ? (
+            <p className="mb-1 px-1 text-xs opacity-60 [-webkit-touch-callout:none]">
+              {isOwnMessage ? "You" : message.username}
+            </p>
           ) : null}
           {message.image_url ? (
             <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
@@ -1069,6 +1178,12 @@ export default function Thread({
               ) : null}
             </div>
           ) : null}
+          <p
+            className="pointer-events-none absolute right-[-68px] top-1/2 w-16 -translate-y-1/2 text-right text-[11px] text-accent-2/90 transition-opacity duration-75"
+            style={{ opacity: timestampRevealPercent }}
+          >
+            {formatMessageTimestamp(message.created_at)}
+          </p>
         </div>
 
         {emojiOnlyChildren.length > 0 ? (
@@ -1166,6 +1281,7 @@ export default function Thread({
   const isOwner = selectedThread.owner_user_id === currentUserId;
   const isComposerExpanded =
     isComposerFocused || Boolean(editTargetMessageId) || messageDraft.trim().length > 0;
+  const messagesRevealOffsetPx = Math.round(timestampRevealPercent * TIMESTAMP_REVEAL_MAX_PX);
 
   const handleMessageImageLoad = () => {
     const container = chatContainerRef.current;
@@ -1236,7 +1352,7 @@ export default function Thread({
       className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background"
     >
       <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
-        <BackButton onBack={onBack} backLabel="Groups" />
+        <BackButton onBack={onBack} backLabel="Groups" textOnly />
         <div
           className="min-w-0 text-center flex items-center gap-2"
           onClick={setThreadSettingsOpen}
@@ -1282,7 +1398,11 @@ export default function Thread({
         <div
           ref={chatContainerRef}
           onScroll={onChatScroll}
-          className="h-full min-h-0 space-y-2 overflow-y-auto overscroll-contain px-3 py-3 touch-pan-y"
+          onTouchStart={onTimestampSwipeStart}
+          onTouchMove={onTimestampSwipeMove}
+          onTouchEnd={onTimestampSwipeEnd}
+          onTouchCancel={onTimestampSwipeEnd}
+          className="h-full min-h-0 space-y-2 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 touch-pan-y"
         >
           {isLoadingMessages ? (
             <div className="flex items-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2">
@@ -1307,7 +1427,12 @@ export default function Thread({
             <p className="text-xs text-accent-2">No messages yet. Send the first one.</p>
           ) : null}
 
-          {rootMessages.map((message) => renderMessage(message, 0))}
+          <div
+            className="space-y-2 transition-transform duration-75"
+            style={{ transform: `translateX(${-messagesRevealOffsetPx}px)` }}
+          >
+            {rootMessages.map((message) => renderMessage(message, 0))}
+          </div>
         </div>
 
         {showNewMessagesButton ? (

@@ -520,9 +520,7 @@ function PostSectionComponent({
             );
           })}
         </div>
-      ) : (
-        <div className="h-40 w-full border-y border-accent-1 bg-secondary-background" />
-      )}
+      ) : null}
 
       {/** Post Content */}
       <div className="px-3 py-1">

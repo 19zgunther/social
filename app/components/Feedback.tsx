@@ -41,6 +41,21 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   }
 };
 
+const sortFeedbackItems = (rows: FeedbackItem[]): FeedbackItem[] =>
+  [...rows].sort((a, b) => {
+    const aResolved = a.status === "resolved";
+    const bResolved = b.status === "resolved";
+    if (aResolved !== bResolved) {
+      return aResolved ? 1 : -1;
+    }
+    const aCreatedAtMs = Date.parse(a.created_at);
+    const bCreatedAtMs = Date.parse(b.created_at);
+    if (!Number.isNaN(aCreatedAtMs) && !Number.isNaN(bCreatedAtMs) && aCreatedAtMs !== bCreatedAtMs) {
+      return bCreatedAtMs - aCreatedAtMs;
+    }
+    return b.id.localeCompare(a.id);
+  });
+
 export default function Feedback({
   currentUserId,
   isActive,
@@ -79,7 +94,7 @@ export default function Feedback({
         return;
       }
       const payload = (await response.json()) as { items?: FeedbackItem[] };
-      setItems(payload.items ?? []);
+      setItems(sortFeedbackItems(payload.items ?? []));
     } catch (e) {
       setStatusMessage(e instanceof Error ? e.message : "Failed to load feedback.");
     } finally {
@@ -133,9 +148,9 @@ export default function Feedback({
         text: draft.trim(),
         ...(pendingImage
           ? {
-              image_base64_data: pendingImage.base64Data,
-              image_mime_type: pendingImage.mimeType,
-            }
+            image_base64_data: pendingImage.base64Data,
+            image_mime_type: pendingImage.mimeType,
+          }
           : {}),
       });
       if (!response.ok) {
@@ -144,7 +159,7 @@ export default function Feedback({
       }
       const payload = (await response.json()) as { item?: FeedbackItem };
       if (payload.item) {
-        setItems((prev) => [payload.item!, ...prev]);
+        setItems((prev) => sortFeedbackItems([payload.item!, ...prev]));
       }
       setDraft("");
       setPendingImage(null);
@@ -170,7 +185,7 @@ export default function Feedback({
       }
       const payload = (await response.json()) as { item?: FeedbackItem };
       if (payload.item) {
-        setItems((prev) => prev.map((r) => (r.id === item.id ? payload.item! : r)));
+        setItems((prev) => sortFeedbackItems(prev.map((r) => (r.id === item.id ? payload.item! : r))));
       }
     } catch (e) {
       setStatusMessage(e instanceof Error ? e.message : "Failed to update status.");
@@ -201,13 +216,13 @@ export default function Feedback({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-primary-background">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-accent-1 px-4 py-3">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-accent-1 px-2 py-1.5">
         <h1 className="text-lg font-semibold text-foreground">Feedback</h1>
         <button
           type="button"
           onClick={() => void load({ refresh: true })}
           disabled={isRefreshing || isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-accent-1 px-2.5 py-1.5 text-sm text-accent-2 transition hover:border-accent-3 hover:text-accent-3 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-md border border-accent-1 px-1 py-0.5 text-sm text-accent-2 transition hover:border-accent-3 hover:text-accent-3 disabled:opacity-50"
           aria-label="Refresh feedback"
         >
           {isRefreshing ? (
@@ -219,7 +234,7 @@ export default function Feedback({
         </button>
       </header>
 
-      <div className="shrink-0 border-b border-accent-1 p-4">
+      <div className="shrink-0 border-b border-accent-1 p-2">
         <label htmlFor="feedback-draft" className="sr-only">
           New bug report or message
         </label>
@@ -229,7 +244,7 @@ export default function Feedback({
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Describe a bug, idea, or message for everyone…"
           rows={3}
-          className="w-full resize-none rounded-md border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground placeholder:text-accent-2 focus:border-accent-3 focus:outline-none"
+          className="w-full resize-none rounded-md border border-accent-1 bg-secondary-background px-1.5 py-1 text-sm text-foreground placeholder:text-accent-2 focus:border-accent-3 focus:outline-none"
         />
         <input
           ref={fileInputRef}
@@ -243,7 +258,7 @@ export default function Feedback({
             type="button"
             onClick={onPickImageClick}
             disabled={isPickingImage || isSubmitting}
-            className="inline-flex items-center gap-1.5 rounded-md border border-accent-1 px-2.5 py-1.5 text-sm text-accent-2 transition hover:border-accent-3 hover:text-accent-3 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md border border-accent-1 px-1 py-0.5 text-sm text-accent-2 transition hover:border-accent-3 hover:text-accent-3 disabled:opacity-50"
           >
             {isPickingImage ? (
               <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
@@ -263,39 +278,40 @@ export default function Feedback({
               <button
                 type="button"
                 onClick={() => setPendingImage(null)}
-                className="absolute -right-1 -top-1 rounded-full border border-accent-1 bg-secondary-background p-0.5 text-accent-2 shadow hover:text-foreground"
+                className="absolute -right-1 -top-1 rounded-full border border-accent-1 bg-secondary-background p-0 text-accent-2 shadow hover:text-foreground"
                 aria-label="Remove image"
               >
                 <X className="h-3.5 w-3.5" aria-hidden />
               </button>
             </div>
           ) : null}
-        </div>
-        <div className="mt-2 flex justify-end">
-          <button
-            type="button"
-            onClick={() => void onSubmit()}
-            disabled={!canSubmit || isSubmitting}
-            className="rounded-md bg-accent-3 px-4 py-2 text-sm font-medium text-primary-background transition hover:opacity-90 disabled:opacity-40"
-          >
-            {isSubmitting ? "Sending…" : "Submit"}
-          </button>
+
+          <div className="ml-auto flex justify-end">
+            <button
+              type="button"
+              onClick={() => void onSubmit()}
+              disabled={!canSubmit || isSubmitting}
+              className="rounded-md bg-accent-3 px-2 py-1 text-sm font-medium text-primary-background transition hover:opacity-90 disabled:opacity-40"
+            >
+              {isSubmitting ? "Sending…" : "Submit"}
+            </button>
+          </div>
         </div>
       </div>
 
       {statusMessage ? (
-        <p className="shrink-0 px-4 py-2 text-center text-sm text-red-400">{statusMessage}</p>
+        <p className="shrink-0 px-2 py-1 text-center text-sm text-red-400">{statusMessage}</p>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
         {isLoading && !isRefreshing ? (
-          <div className="flex justify-center py-12">
+          <div className="flex justify-center py-6">
             <LoaderCircle className="h-8 w-8 animate-spin text-accent-2" aria-hidden />
           </div>
         ) : items.length === 0 ? (
-          <p className="py-8 text-center text-sm text-accent-2">No feedback yet. Be the first to post.</p>
+          <p className="py-4 text-center text-sm text-accent-2">No feedback yet. Be the first to post.</p>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-1">
             {items.map((item) => {
               const isResolved = item.status === "resolved";
               const busy = pendingId === item.id;
@@ -304,15 +320,15 @@ export default function Feedback({
               return (
                 <li
                   key={item.id}
-                  className="rounded-lg border border-accent-1 bg-secondary-background p-3"
+                  className="rounded-lg border border-accent-1 bg-secondary-background p-0.5"
                 >
-                  <div className="flex items-start gap-2">
+                  <div className="flex items-start gap-0">
                     <button
                       type="button"
                       onClick={() => void toggleStatus(item)}
                       disabled={busy}
                       title={isResolved ? "Mark unresolved" : "Mark resolved"}
-                      className="shrink-0 rounded-md p-2 transition hover:bg-primary-background disabled:opacity-40"
+                      className="shrink-0 rounded-md p-1 transition hover:bg-primary-background disabled:opacity-40"
                       aria-label={isResolved ? "Mark unresolved" : "Mark resolved"}
                     >
                       {busy ? (
@@ -362,7 +378,7 @@ export default function Feedback({
                         onClick={() => void onDelete(item)}
                         disabled={busy}
                         title="Delete"
-                        className="shrink-0 rounded-md p-2 text-accent-2 transition hover:bg-primary-background hover:text-red-400 disabled:opacity-40"
+                        className="shrink-0 rounded-md p-1 text-accent-2 transition hover:bg-primary-background hover:text-red-400 disabled:opacity-40"
                         aria-label="Delete feedback"
                       >
                         <Trash2 className="h-5 w-5" aria-hidden />

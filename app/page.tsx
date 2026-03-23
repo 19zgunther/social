@@ -29,16 +29,16 @@ import DumbAdvertModal from "./components/DumbAdvertModal";
 import { UserSessionSyncProvider } from "./components/UserSessionSyncContext";
 
 
-const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab, back: AppTab } } = {
-  thread_settings: { forward: "profile", back: "thread" },
-  thread: { forward: "thread_settings", back: "groups" },
+const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab | null, back: AppTab | null } } = {
+  thread_settings: { forward: null, back: "thread" },
+  thread: { forward: null, back: "groups" },
   groups: { forward: "profile", back: "feed" },
-  feed: { forward: "groups", back: "profile" },
-  profile: { forward: "feedback", back: "groups" },
+  feed: { forward: "groups", back: null },
+  profile: { forward: null, back: "groups" },
   feedback: { forward: "profile_settings", back: "profile" },
-  profile_settings: { forward: "feed", back: "profile" },
-  other_user_profile: { forward: "feed", back: "profile" },
-  create_post: { forward: "profile", back: "profile" },
+  profile_settings: { forward: null, back: "profile" },
+  other_user_profile: { forward: null, back: "profile" },
+  create_post: { forward: null, back: "profile" },
 }
 
 
@@ -260,7 +260,7 @@ export default function Home() {
 
   const onBackRef = useRef<() => void>(() => { console.error("onBackRef not set"); });
   const onForwardRef = useRef<() => void>(() => { console.error("onForwardRef not set"); });
-  const { onTouchStart, onTouchEnd, onTouchMove, swipingBackPercent, swipingForwardPercent } =
+  const { onTouchStart, onTouchEnd, onTouchMove, onTouchCancel, swipingBackPercent, swipingForwardPercent } =
     useSwipeBack({ onBack: onBackRef.current, onForward: onForwardRef.current });
 
 
@@ -284,10 +284,12 @@ export default function Home() {
   const isSwipingForward = !!swipingForwardPercent;
   const isSwipingBack = !!swipingBackPercent;
 
+  const { forward, back } = TAB_TO_BACK[activeTab] ?? { forward: null, back: null };
+
   const ACTIVE_STYLE = {
     zIndex: 1000,
-    left: isSwipingBack ? (swipingBackPercent ?? 0) * 100 + "%" : undefined,
-    right: isSwipingForward ? (swipingForwardPercent ?? 0) * 100 + "%" : undefined,
+    left: isSwipingBack && back ? (swipingBackPercent ?? 0) * 100 + "%" : undefined,
+    right: isSwipingForward && forward ? (swipingForwardPercent ?? 0) * 100 + "%" : undefined,
   }
   const BACK_SWIPE_TAB: React.CSSProperties = { zIndex: isSwipingBack ? 999 : 998 };
   const FORWARD_SWIPE_TAB: React.CSSProperties = { zIndex: isSwipingForward ? 999 : 998 };
@@ -305,13 +307,12 @@ export default function Home() {
     feedback: DEFAULT_TAB,
   }
 
-  const { forward, back } = TAB_TO_BACK[activeTab] ?? { forward: "profile", back: "feed" };
-  TAB_TO_STYLE[forward] = FORWARD_SWIPE_TAB;
-  TAB_TO_STYLE[back] = BACK_SWIPE_TAB;
+  if (forward) { TAB_TO_STYLE[forward] = FORWARD_SWIPE_TAB; }
+  if (back) { TAB_TO_STYLE[back] = BACK_SWIPE_TAB; }
   TAB_TO_STYLE[activeTab] = ACTIVE_STYLE;
 
-  onBackRef.current = () => { setActiveTab(back); }
-  onForwardRef.current = () => { setActiveTab(forward); }
+  onBackRef.current = () => { if (back) {setActiveTab(back);} }
+  onForwardRef.current = () => { if (forward) {setActiveTab(forward);} }
 
   const feedStyle = TAB_TO_STYLE["feed"];
   const groupsStyle = TAB_TO_STYLE["groups"];
@@ -339,6 +340,7 @@ export default function Home() {
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
           onTouchMove={onTouchMove}
+          onTouchCancel={onTouchCancel}
         >
           <div className="absolute w-full h-full" style={groupsStyle}>
             <Groups
@@ -467,7 +469,7 @@ export default function Home() {
               isActive={activeTab === "feedback"}
               showCircle={false}
               onClick={() => setActiveTab("feedback")}
-              className="max-w-[2rem] opacity-50"
+              className="max-w-[2rem] opacity-30"
             />
           </div>
         ) : null}

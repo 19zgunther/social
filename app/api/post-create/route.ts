@@ -30,35 +30,40 @@ export async function POST(request: Request) {
     const imageBase64Data = body.image_base64_data?.trim();
     const imageMimeType = body.image_mime_type?.trim();
     const data = sanitizePostData(body.data);
+    const hasText = Boolean(text);
+    const hasProvidedImageId = Boolean(providedImageId);
+    const hasImageUploadPayload = Boolean(imageBase64Data || imageMimeType);
 
-    if (!providedImageId && (!imageBase64Data || !imageMimeType)) {
+    if (!hasText && !hasProvidedImageId && !hasImageUploadPayload) {
       return NextResponse.json(
         {
           error: {
             code: "invalid_request",
-            message: "image_id or image_base64_data and image_mime_type are required.",
+            message: "text and/or image_id or image_base64_data with image_mime_type is required.",
           },
         },
         { status: 400 },
       );
     }
 
-    const imageId = providedImageId ?? randomUUID();
-    if (!providedImageId) {
-      if (!imageBase64Data || !imageMimeType) {
-        return NextResponse.json(
-          {
-            error: {
-              code: "invalid_request",
-              message: "image_base64_data and image_mime_type are required when image_id is not provided.",
-            },
+    if (!providedImageId && hasImageUploadPayload && (!imageBase64Data || !imageMimeType)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_request",
+            message: "image_base64_data and image_mime_type are required when uploading an image.",
           },
-          { status: 400 },
-        );
-      }
+        },
+        { status: 400 },
+      );
+    }
+
+    let imageId: string | null = providedImageId ?? null;
+    if (!providedImageId && imageBase64Data && imageMimeType) {
+      imageId = randomUUID();
       await uploadImageToMainBucket({
         userId: authResult.user_id,
-        imageId,
+        imageId: imageId,
         base64Data: imageBase64Data,
         mimeType: imageMimeType,
       });
@@ -81,10 +86,12 @@ export async function POST(request: Request) {
       },
     });
 
-    const imageUrl = await getSignedMainBucketImageUrl({
-      userId: post.created_by,
-      imageId: post.image_id ?? "",
-    });
+    const imageUrl = post.image_id
+      ? await getSignedMainBucketImageUrl({
+        userId: post.created_by,
+        imageId: post.image_id,
+      })
+      : null;
 
     const author = await prisma.users.findFirst({
       where: {

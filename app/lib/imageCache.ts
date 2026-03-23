@@ -110,4 +110,29 @@ export const imageCache = async (signedUrl: string | null, imageId: string | nul
     return signedUrl;
   }
 };
-export const getImageUrlFromCache = (imageId: string): string | undefined => {  return __imageURLCache.get(imageId); }
+export const getImageUrlFromCache = (imageId: string): string | undefined => { return __imageURLCache.get(imageId); }
+
+export const clearAllCachedImages = async (): Promise<void> => {
+  for (const url of __imageURLCache.values()) {
+    URL.revokeObjectURL(url);
+  }
+  __imageURLCache.clear();
+  inFlightByImageId.clear();
+
+  if (typeof window === "undefined" || typeof window.indexedDB === "undefined") {
+    return;
+  }
+
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      store.clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error("Failed to clear image cache."));
+    });
+  } catch {
+    // Swallow errors so a cache clear request doesn't break user flows.
+  }
+};

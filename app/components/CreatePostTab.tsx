@@ -408,6 +408,7 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 
 export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePostTabProps) {
   const createInputRef = useRef<HTMLInputElement | null>(null);
+  const textInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [comment, setComment] = useState("");
   const [images, setImages] = useState<PendingUploadImage[]>([]);
   const [editingImageId, setEditingImageId] = useState<string | null>(null);
@@ -420,7 +421,7 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
       return;
     }
     window.setTimeout(() => {
-      createInputRef.current?.click();
+      textInputRef.current?.focus();
     }, 0);
   }, [isActive]);
 
@@ -451,7 +452,8 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
   };
 
   const onPost = async () => {
-    if (images.length === 0 || isPosting) {
+    const trimmedComment = comment.trim();
+    if ((images.length === 0 && !trimmedComment) || isPosting) {
       return;
     }
 
@@ -479,8 +481,8 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
 
       const [primaryImageId, ...otherImageIds] = uploadedImageIds;
       const createResponse = await postWithAuth("/api/post-create", {
-        text: comment.trim(),
-        image_id: primaryImageId,
+        ...(trimmedComment ? { text: trimmedComment } : {}),
+        ...(primaryImageId ? { image_id: primaryImageId } : {}),
         ...(otherImageIds.length > 0 ? { data: { other_image_ids: otherImageIds } } : {}),
       });
       if (!createResponse.ok) {
@@ -586,6 +588,7 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
 
         <div className="mt-4">
           <textarea
+            ref={textInputRef}
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             placeholder="Write a comment..."
@@ -602,7 +605,7 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
           onClick={() => {
             void onPost();
           }}
-          disabled={images.length === 0 || isPosting}
+          disabled={(images.length === 0 && comment.trim().length === 0) || isPosting}
           className="rounded-xl bg-accent-3 px-6 py-3 text-base font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-50"
         >
           {isPosting ? "Posting..." : "Post ->"}

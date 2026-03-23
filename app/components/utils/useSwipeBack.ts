@@ -81,6 +81,17 @@ export default function useSwipeBack({
 
     useEffect(() => () => cancelSettleAnimation(), [cancelSettleAnimation]);
 
+    const settleCurrentSwipe = useCallback(
+        (mode: SwipeMode | null) => {
+            if (mode === "back") {
+                animateSettleToNull("back", latestBackPercentRef.current ?? 0);
+            } else if (mode === "forward") {
+                animateSettleToNull("forward", latestForwardPercentRef.current ?? 0);
+            }
+        },
+        [animateSettleToNull]
+    );
+
     const onTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
         thisTouchIsInvalid.current = true;
         swipeModeRef.current = null;
@@ -97,7 +108,7 @@ export default function useSwipeBack({
             return;
         }
 
-        const parentRect = (event.target as HTMLElement)?.getBoundingClientRect();
+        const parentRect = event.currentTarget.getBoundingClientRect();
         if (!parentRect) return;
 
         const fromLeft = touch.clientX - parentRect.left;
@@ -136,7 +147,7 @@ export default function useSwipeBack({
         const touch = event.touches[0];
         if (!touch) return;
 
-        const parentRect = (event.target as HTMLElement)?.getBoundingClientRect();
+        const parentRect = event.currentTarget.getBoundingClientRect();
         if (!parentRect) return;
 
         const touchDL = touch.clientX - swipeStartXRef.current;
@@ -159,23 +170,17 @@ export default function useSwipeBack({
 
         const touch = event.changedTouches[0];
         if (!touch) {
-            if (mode === "back") {
-                animateSettleToNull("back", latestBackPercentRef.current ?? 0);
-            } else if (mode === "forward") {
-                animateSettleToNull("forward", latestForwardPercentRef.current ?? 0);
-            }
+            settleCurrentSwipe(mode);
             swipeModeRef.current = null;
+            thisTouchIsInvalid.current = true;
             return;
         }
 
-        const parentRect = (event.target as HTMLElement)?.getBoundingClientRect();
+        const parentRect = event.currentTarget.getBoundingClientRect();
         if (!parentRect) {
-            if (mode === "back") {
-                animateSettleToNull("back", latestBackPercentRef.current ?? 0);
-            } else if (mode === "forward") {
-                animateSettleToNull("forward", latestForwardPercentRef.current ?? 0);
-            }
+            settleCurrentSwipe(mode);
             swipeModeRef.current = null;
+            thisTouchIsInvalid.current = true;
             return;
         }
 
@@ -205,6 +210,14 @@ export default function useSwipeBack({
         }
 
         swipeModeRef.current = null;
+        thisTouchIsInvalid.current = true;
+    };
+
+    const onTouchCancel = () => {
+        if (thisTouchIsInvalid.current) return;
+        settleCurrentSwipe(swipeModeRef.current);
+        swipeModeRef.current = null;
+        thisTouchIsInvalid.current = true;
     };
 
     return {
@@ -213,5 +226,6 @@ export default function useSwipeBack({
         onTouchStart,
         onTouchMove,
         onTouchEnd,
+        onTouchCancel,
     };
 }
