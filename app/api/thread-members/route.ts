@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
+import { threadMemberFriendshipStatusesForMany } from "@/app/lib/threadMemberFriendship";
 import { ThreadMembersRequest, ThreadMembersResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -55,20 +57,53 @@ export async function POST(request: Request) {
           select: {
             username: true,
             email: true,
+            profile_image_id: true,
           },
         },
       },
     });
 
+    const membersPayload = members.map((member) => ({
+      user_id: member.user_id,
+      username: member.users.username,
+      email: member.users.email,
+      is_owner: member.user_id === thread.owner,
+      profile_image_id: member.users.profile_image_id,
+      profile_image_url: null as string | null,
+    }));
+
+    const membersWithImages = await Promise.all(
+      membersPayload.map(async (row) => {
+        if (!row.profile_image_id) {
+          return row;
+        }
+        try {
+          const signedUrl = await getSignedMainBucketImageUrl({
+            userId: row.user_id,
+            imageId: row.profile_image_id,
+          });
+          return { ...row, profile_image_url: signedUrl };
+        } catch (error) {
+          console.error("thread_member_profile_image_sign_failed", row.user_id, error);
+          return row;
+        }
+      }),
+    );
+
+    const friendshipByUserId = await threadMemberFriendshipStatusesForMany(
+      authResult.user_id,
+      membersWithImages.map((m) => m.user_id),
+    );
+
+    const membersWithFriendship = membersWithImages.map((row) => ({
+      ...row,
+      friendship_status: friendshipByUserId.get(row.user_id) ?? "none",
+    }));
+
     const payload: ThreadMembersResponse = {
       thread_id: thread.id,
       is_owner: thread.owner === authResult.user_id,
-      members: members.map((member) => ({
-        user_id: member.user_id,
-        username: member.users.username,
-        email: member.users.email,
-        is_owner: member.user_id === thread.owner,
-      })),
+      members: membersWithFriendship,
     };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

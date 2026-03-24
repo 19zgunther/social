@@ -16,6 +16,7 @@ type CommentNode = {
   user_id: string;
   text: string;
   replies: Record<string, CommentNode>;
+  deleted?: boolean;
 };
 
 type PostData = {
@@ -38,6 +39,7 @@ const cloneCommentTree = (comments: Record<string, CommentNode>): Record<string,
       user_id: comment.user_id,
       text: comment.text,
       replies: cloneCommentTree(comment.replies ?? {}),
+      ...(comment.deleted ? { deleted: true } : {}),
     };
   }
   return cloned;
@@ -278,12 +280,24 @@ export async function DELETE(request: Request) {
 
     if (targetComment.user_id !== authResult.user_id) {
       return NextResponse.json(
-        { error: { code: "not_allowed", message: "You can only delete your own replies." } },
+        { error: { code: "not_allowed", message: "You can only delete your own comments." } },
         { status: 403 },
       );
     }
 
-    delete targetMap[targetKey];
+    const preservedReplies = targetComment.replies ?? {};
+    const hasReplies = Object.keys(preservedReplies).length > 0;
+    if (hasReplies) {
+      targetMap[targetKey] = {
+        username: "",
+        user_id: "",
+        text: "Comment Deleted",
+        replies: preservedReplies,
+        deleted: true,
+      };
+    } else {
+      delete targetMap[targetKey];
+    }
 
     const nextData: Prisma.InputJsonValue = {
       ...dataObject,

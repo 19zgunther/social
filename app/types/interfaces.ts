@@ -19,6 +19,8 @@ export type PostCommentNode = {
   user_id: string;
   text: string;
   replies: Record<string, PostCommentNode>;
+  /** Present when the author removed the comment but replies were preserved. */
+  deleted?: boolean;
 };
 
 export type PostData = {
@@ -72,6 +74,14 @@ export type ThreadItem = {
 
 import type { VideoCallSignal } from "@/app/components/utils/webrtcVideoCall";
 
+export type ThreadMemberFriendshipStatus =
+  | "self"
+  | "none"
+  | "friends"
+  | "pending_sent"
+  | "pending_received"
+  | "rejected";
+
 export type PoolBallState = {
   id: number;
   x: number;
@@ -121,6 +131,9 @@ export type ThreadMember = {
   username: string;
   email: string | null;
   is_owner: boolean;
+  profile_image_id: string | null;
+  profile_image_url: string | null;
+  friendship_status: ThreadMemberFriendshipStatus;
 };
 
 export type FriendRelation = {

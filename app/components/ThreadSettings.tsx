@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
+import UserProfileImage from "@/app/components/UserProfileImage";
 import ThreadPictureEditor from "@/app/components/ThreadPictureEditor";
 import BackButton from "@/app/components/utils/BackButton";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
@@ -19,6 +21,7 @@ type ThreadSettingsProps = {
   onBack: () => void;
   onThreadImageUpdated: (imageId: string | null, imageUrl: string | null) => void;
   onThreadRenamed: (name: string) => void;
+  onThreadDeleted: () => void;
   onViewUserProfile: (userId: string) => void;
 };
 
@@ -45,6 +48,7 @@ export default function ThreadSettings({
   onBack,
   onThreadImageUpdated,
   onThreadRenamed,
+  onThreadDeleted,
   onViewUserProfile,
 }: ThreadSettingsProps) {
   const [members, setMembers] = useState<ThreadMember[]>([]);
@@ -60,6 +64,32 @@ export default function ThreadSettings({
   const [isEditingName, setIsEditingName] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [confirmedRemoveMember, setConfirmedRemoveMember] = useState<string | null>(null);
+  const [confirmDeleteThread, setConfirmDeleteThread] = useState(false);
+  const [isDeletingThread, setIsDeletingThread] = useState(false);
+  const [sendingFriendUserId, setSendingFriendUserId] = useState<string | null>(null);
+
+  const isOwner = currentUserId === thread.owner_user_id;
+
+  const loadMembers = useCallback(async () => {
+    setIsLoadingMembers(true);
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/thread-members", { thread_id: thread.id });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        setMembers([]);
+        return;
+      }
+
+      const payload = (await response.json()) as ThreadMembersResponse;
+      setMembers(payload.members);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to load members.");
+      setMembers([]);
+    } finally {
+      setIsLoadingMembers(false);
+    }
+  }, [thread.id]);
 
 
   useEffect(() => {
@@ -75,29 +105,13 @@ export default function ThreadSettings({
   }, [thread.name]);
 
   useEffect(() => {
-    const loadMembers = async () => {
-      setIsLoadingMembers(true);
-      setStatusMessage("");
-      try {
-        const response = await postWithAuth("/api/thread-members", { thread_id: thread.id });
-        if (!response.ok) {
-          setStatusMessage(await readErrorMessage(response));
-          setMembers([]);
-          return;
-        }
-
-        const payload = (await response.json()) as ThreadMembersResponse;
-        setMembers(payload.members);
-      } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : "Failed to load members.");
-        setMembers([]);
-      } finally {
-        setIsLoadingMembers(false);
-      }
-    };
-
-    void loadMembers();
+    setConfirmDeleteThread(false);
+    setConfirmedRemoveMember(null);
   }, [thread.id]);
+
+  useEffect(() => {
+    void loadMembers();
+  }, [loadMembers]);
 
   const searchThreadMemberOptions = async (query: string): Promise<UserSearchOption[]> => {
     const response = await postWithAuth("/api/friend-search", { query });
@@ -149,8 +163,35 @@ export default function ThreadSettings({
     }
   };
 
+  const onSendFriendRequest = async (userId: string) => {
+    setSendingFriendUserId(userId);
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/friend-request-create", {
+        other_user_id: userId,
+      });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        if (response.status === 409) {
+          await loadMembers();
+        }
+        return;
+      }
+      setMembers((previousMembers) =>
+        previousMembers.map((member) =>
+          member.user_id === userId ? { ...member, friendship_status: "pending_sent" } : member,
+        ),
+      );
+      setStatusMessage("Friend request sent.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to send friend request.");
+    } finally {
+      setSendingFriendUserId(null);
+    }
+  };
+
   const onRemoveMember = async (userId: string) => {
-    if (!confirmedRemoveMember) {
+    if (confirmedRemoveMember !== userId) {
       setConfirmedRemoveMember(userId);
       return;
     }
@@ -174,6 +215,36 @@ export default function ThreadSettings({
     } finally {
       setIsUpdatingMembers(false);
       setConfirmedRemoveMember(null);
+    }
+  };
+
+  const onDeleteThread = async () => {
+    if (!isOwner || isDeletingThread) {
+      return;
+    }
+
+    if (!confirmDeleteThread) {
+      setConfirmDeleteThread(true);
+      return;
+    }
+
+    setIsDeletingThread(true);
+    setStatusMessage("");
+
+    try {
+      const response = await postWithAuth("/api/thread-delete", { thread_id: thread.id });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        setConfirmDeleteThread(false);
+        return;
+      }
+
+      onThreadDeleted();
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to delete group.");
+      setConfirmDeleteThread(false);
+    } finally {
+      setIsDeletingThread(false);
     }
   };
 
@@ -372,39 +443,126 @@ export default function ThreadSettings({
               {members.map((member) => (
                 <div
                   key={member.user_id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-accent-1 bg-secondary-background pl-0 pr-3 py-0"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-accent-1 bg-secondary-background py-2 pl-3 pr-2"
                 >
                   <button
                     type="button"
                     onClick={() => {
                       onViewUserProfile(member.user_id);
                     }}
-                    className="min-w-0 flex-1 rounded-lg px-3 py-2 text-left transition hover:bg-primary-background/60 active:bg-primary-background/80"
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition hover:bg-primary-background/60 active:bg-primary-background/80"
                   >
-                    <p className="text-sm text-foreground">
-                      {member.username} {member.is_owner ? "(owner)" : ""}
-                    </p>
-                    <p className="text-xs text-accent-2">{member.email ?? "No email"}</p>
+                    <UserProfileImage
+                      userId={member.user_id}
+                      sizePx={40}
+                      alt={`${member.username} profile`}
+                      signedUrl={member.profile_image_url}
+                      imageId={member.profile_image_id}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-foreground">
+                        {member.username} {member.is_owner ? "(owner)" : ""}
+                      </p>
+                      <p className="text-xs text-accent-2">{member.email ?? "No email"}</p>
+                    </div>
                   </button>
 
-                  {!member.is_owner ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void onRemoveMember(member.user_id);
-                      }}
-                      disabled={isUpdatingMembers}
-                      className="shrink-0 rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 transition hover:text-foreground disabled:opacity-60"
-                      style={{ borderColor: confirmedRemoveMember === member.user_id ? "red" : undefined }}
-                    >
-                      {confirmedRemoveMember === member.user_id ? "Confirm Remove" : "Remove"}
-                    </button>
-                  ) : null}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {member.friendship_status !== "self" &&
+                    member.friendship_status !== "friends" ? (
+                      member.friendship_status === "none" ||
+                      member.friendship_status === "rejected" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void onSendFriendRequest(member.user_id);
+                          }}
+                          disabled={
+                            sendingFriendUserId === member.user_id || isUpdatingMembers
+                          }
+                          className="rounded-lg border border-accent-1 px-2 py-1 text-[11px] font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
+                        >
+                          {sendingFriendUserId === member.user_id ? "Sending…" : "Add Friend"}
+                        </button>
+                      ) : member.friendship_status === "pending_sent" ? (
+                        <span className="max-w-[5.5rem] text-center text-[11px] text-accent-2">
+                          Request sent
+                        </span>
+                      ) : member.friendship_status === "pending_received" ? (
+                        <span className="max-w-[6rem] text-center text-[11px] text-accent-2">
+                          Respond in Profile
+                        </span>
+                      ) : null
+                    ) : null}
+
+                    {!member.is_owner ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void onRemoveMember(member.user_id);
+                        }}
+                        disabled={isUpdatingMembers}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-accent-2 transition hover:bg-primary-background/60 hover:text-foreground disabled:opacity-60"
+                        aria-label={
+                          confirmedRemoveMember === member.user_id
+                            ? "Tap again to confirm remove from group"
+                            : `Remove ${member.username} from group`
+                        }
+                      >
+                        <Trash2
+                          className={`h-4 w-4 ${
+                            confirmedRemoveMember === member.user_id
+                              ? "text-red-400"
+                              : "opacity-50"
+                          }`}
+                          aria-hidden
+                        />
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </section>
+
+        {isOwner ? (
+          <section className="rounded-xl border border-accent-1 border-red-500/40 bg-secondary-background p-3">
+            <p className="text-xs font-semibold text-foreground">Admin</p>
+            <p className="mt-1 text-xs text-accent-2">
+              Permanently delete this group and all of its messages. This cannot be undone.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void onDeleteThread();
+              }}
+              disabled={isDeletingThread}
+              className="mt-3 w-full rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:opacity-60"
+              style={{
+                borderColor: confirmDeleteThread ? "rgb(239 68 68)" : undefined,
+                color: confirmDeleteThread ? "rgb(239 68 68)" : undefined,
+              }}
+            >
+              {isDeletingThread
+                ? "Deleting…"
+                : confirmDeleteThread
+                  ? "Tap again to confirm — cannot be undone"
+                  : "Delete group"}
+            </button>
+            {confirmDeleteThread && !isDeletingThread ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDeleteThread(false);
+                }}
+                className="mt-2 w-full rounded-xl border border-accent-1 px-3 py-2 text-xs font-semibold text-accent-2 transition hover:text-foreground"
+              >
+                Cancel
+              </button>
+            ) : null}
+          </section>
+        ) : null}
       </div>
 
       {statusMessage ? (

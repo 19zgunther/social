@@ -52,6 +52,7 @@ export default function Home() {
   const [profileIncomingRequestCount, setProfileIncomingRequestCount] = useState(0);
   const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
   const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
+  const [groupsListRefreshNonce, setGroupsListRefreshNonce] = useState(0);
   const [profileReloadSignal, setProfileReloadSignal] = useState(0);
 
   const onLogout = () => {
@@ -352,6 +353,7 @@ export default function Home() {
               setSelectedThread={setSelectedThread}
               setActiveTab={setActiveTab}
               isActiveTab={activeTab === "groups"}
+              groupsListRefreshNonce={groupsListRefreshNonce}
             />
           </div>
 
@@ -391,6 +393,11 @@ export default function Home() {
                   ...previous as ThreadItem,
                   name,
                 }));
+              }}
+              onThreadDeleted={() => {
+                setGroupsListRefreshNonce((previous) => previous + 1);
+                setSelectedThread(null);
+                setActiveTab("groups");
               }}
             />
           </div>}

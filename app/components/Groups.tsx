@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   GroupsListResponse,
@@ -25,9 +25,13 @@ type GroupsProps = {
   setSelectedThread: (thread: ThreadItem | null) => void;
   setActiveTab: (tab: AppTab) => void;
   isActiveTab: boolean;
+  /** Increment to refetch the groups list (e.g. after a thread is deleted elsewhere). */
+  groupsListRefreshNonce?: number;
 };
 
 const GROUPS_CACHE_KEY = "groups_list_v1";
+const TOP_REFRESH_COOLDOWN_MS = 1500;
+const PULL_REFRESH_THRESHOLD_PX = 55;
 
 type GroupsCachePayload = {
   threads: ThreadItem[];
@@ -79,6 +83,7 @@ export default function Groups({
   setSelectedThread,
   setActiveTab,
   isActiveTab,
+  groupsListRefreshNonce = 0,
 }: GroupsProps) {
   const [threads, setThreads] = useState<ThreadItem[]>([]);
   const [unreadThreadIds, setUnreadThreadIds] = useState<Set<string>>(new Set());
@@ -100,6 +105,10 @@ export default function Groups({
     replyToMessageId: string;
   } | null>(null);
   const [isReplyCameraSending, setIsReplyCameraSending] = useState(false);
+  const groupsContainerRef = useRef<HTMLDivElement | null>(null);
+  const pullStartYRef = useRef<number | null>(null);
+  const pullRefreshTriggeredRef = useRef(false);
+  const lastTopRefreshAtRef = useRef(0);
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -183,6 +192,59 @@ export default function Groups({
     }
   }, [loadUnreadThreads, writeGroupsCache]);
 
+  const triggerTopRefresh = useCallback(() => {
+    const now = Date.now();
+    if (
+      isLoadingThreads ||
+      isRefreshingList ||
+      now - lastTopRefreshAtRef.current < TOP_REFRESH_COOLDOWN_MS
+    ) {
+      return;
+    }
+    lastTopRefreshAtRef.current = now;
+    void onRefreshGroupsList();
+  }, [isLoadingThreads, isRefreshingList, onRefreshGroupsList]);
+
+  const onGroupsTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    pullStartYRef.current = event.touches[0]?.clientY ?? null;
+    pullRefreshTriggeredRef.current = false;
+  };
+
+  const onGroupsTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (pullRefreshTriggeredRef.current) {
+      return;
+    }
+    const startY = pullStartYRef.current;
+    const currentY = event.touches[0]?.clientY;
+    const container = groupsContainerRef.current;
+    if (startY === null || currentY === undefined || !container) {
+      return;
+    }
+    if (container.scrollTop > 0) {
+      return;
+    }
+    const deltaY = currentY - startY;
+    if (deltaY >= PULL_REFRESH_THRESHOLD_PX) {
+      pullRefreshTriggeredRef.current = true;
+      triggerTopRefresh();
+    }
+  };
+
+  const resetPullGesture = () => {
+    pullStartYRef.current = null;
+    pullRefreshTriggeredRef.current = false;
+  };
+
+  const onGroupsWheel = (event: WheelEvent<HTMLDivElement>) => {
+    const container = groupsContainerRef.current;
+    if (!container) {
+      return;
+    }
+    if (container.scrollTop <= 0 && event.deltaY < -30) {
+      triggerTopRefresh();
+    }
+  };
+
   const prevIsActiveTab = useRef(isActiveTab);
   useEffect(() => {
     const becameActive = isActiveTab && !prevIsActiveTab.current;
@@ -192,6 +254,13 @@ export default function Groups({
     }
     void refreshGroupsListSilent();
   }, [isActiveTab, refreshGroupsListSilent]);
+
+  useEffect(() => {
+    if (groupsListRefreshNonce === 0) {
+      return;
+    }
+    void refreshGroupsListSilent();
+  }, [groupsListRefreshNonce, refreshGroupsListSilent]);
 
   useEffect(() => {
     if (!isActiveTab) {
@@ -445,7 +514,15 @@ export default function Groups({
         </div>
       ) : null}
 
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
+      <div
+        ref={groupsContainerRef}
+        onTouchStart={onGroupsTouchStart}
+        onTouchMove={onGroupsTouchMove}
+        onTouchEnd={resetPullGesture}
+        onTouchCancel={resetPullGesture}
+        onWheel={onGroupsWheel}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y"
+      >
         {!isLoadingThreads && threads.length === 0 ? (
           <p className="text-xs text-accent-2 px-4">No threads yet. Create your first one.</p>
         ) : null}

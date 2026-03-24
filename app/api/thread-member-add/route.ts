@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
+import { threadMemberFriendshipStatusForPair } from "@/app/lib/threadMemberFriendship";
 
 type ThreadMemberAddBody = {
   thread_id?: string;
@@ -55,6 +57,7 @@ export async function POST(request: Request) {
         id: true,
         username: true,
         email: true,
+        profile_image_id: true,
       },
     });
 
@@ -85,6 +88,23 @@ export async function POST(request: Request) {
       });
     }
 
+    let profile_image_url: string | null = null;
+    if (user.profile_image_id) {
+      try {
+        profile_image_url = await getSignedMainBucketImageUrl({
+          userId: user.id,
+          imageId: user.profile_image_id,
+        });
+      } catch (error) {
+        console.error("thread_member_add_profile_image_sign_failed", user.id, error);
+      }
+    }
+
+    const friendship_status = await threadMemberFriendshipStatusForPair(
+      authResult.user_id,
+      user.id,
+    );
+
     return NextResponse.json(
       {
         member: {
@@ -92,6 +112,9 @@ export async function POST(request: Request) {
           username: user.username,
           email: user.email,
           is_owner: user.id === thread.owner,
+          profile_image_id: user.profile_image_id,
+          profile_image_url,
+          friendship_status,
         },
         already_member: Boolean(existingAccess),
       },

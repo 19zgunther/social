@@ -8,6 +8,7 @@ import UserProfileImage from "@/app/components/UserProfileImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { ApiError, PostCommentNode, PostData, PostItem } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
+import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 
 type PostSectionProps = {
   post: PostItem;
@@ -43,6 +44,27 @@ const formatPostDate = (value: string): string => {
 const isEmojiOnlyComment = (value: string): boolean => {
   const trimmed = value.trim();
   return Boolean(trimmed) && EMOJI_ONLY_COMMENT_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed);
+};
+
+const getCommentAtPath = (
+  comments: Record<string, PostCommentNode> | undefined,
+  path: string[],
+): PostCommentNode | null => {
+  if (!comments || path.length === 0) {
+    return null;
+  }
+  let map = comments;
+  for (let index = 0; index < path.length; index += 1) {
+    const node = map[path[index]!];
+    if (!node) {
+      return null;
+    }
+    if (index === path.length - 1) {
+      return node;
+    }
+    map = node.replies ?? {};
+  }
+  return null;
 };
 
 function PostSectionComponent({
@@ -314,6 +336,7 @@ function PostSectionComponent({
       }
 
       const payload = (await response.json()) as { data?: PostData | null };
+      const nextComments = payload.data?.comments;
       setPostData(payload.data ?? {});
       if (onPostUpdated) {
         onPostUpdated({
@@ -322,6 +345,7 @@ function PostSectionComponent({
         });
       }
 
+      setAboutToDeleteCommentPath(null);
       setActiveReplyPath((previous) => (previous === pathKey ? null : previous));
       setReplyDraftByPath((previous) => {
         if (!previous[pathKey]) {
@@ -331,12 +355,16 @@ function PostSectionComponent({
         delete next[pathKey];
         return next;
       });
-      setExpandedReplyPaths((previous) =>
-        previous.filter(
+      const nodeAfter = getCommentAtPath(nextComments, commentPath);
+      setExpandedReplyPaths((previous) => {
+        if (nodeAfter?.deleted) {
+          return previous;
+        }
+        return previous.filter(
           (expandedPath) =>
             expandedPath !== pathKey && !expandedPath.startsWith(`${pathKey}${COMMENT_PATH_SEPARATOR}`),
-        ),
-      );
+        );
+      });
     } finally {
       setIsDeletingCommentPath(null);
     }
@@ -361,21 +389,37 @@ function PostSectionComponent({
     const isExpanded = expandedReplyPaths.includes(pathKey);
     const isReplyInputOpen = activeReplyPath === pathKey;
     const replyDraft = replyDraftByPath[pathKey] ?? "";
-    const canDeleteReply = depth > 0 && Boolean(currentUserId) && comment.user_id === currentUserId;
+    const isDeletedPlaceholder = Boolean(comment.deleted);
+    const canDeleteComment =
+      Boolean(currentUserId) && !isDeletedPlaceholder && comment.user_id === currentUserId;
 
     return (
       <div key={pathKey} className={`${depth > 0 ? "ml-4 border-l border-accent-1/70 pl-2" : ""}`}>
-        <div className="text-sm text-accent-2 flex">
-          <span className="font-semibold text-foreground/90 pr-2">{comment.username || comment.user_id}</span>
-
-          {comment.text}
-
-          {canDeleteReply && <button className="ml-auto" onClick={() => { void onDeleteComment(path); }} disabled={isDeletingCommentPath === pathKey}>
-            <Trash2 className={`h-4 w-4 ${aboutToDeleteCommentPath === pathKey ? "text-red-400" : "text-accent-2 opacity-30"}`} />
-          </button>}
-        </div>
+        {isDeletedPlaceholder ? (
+          <div className="text-sm italic text-accent-2">Comment Deleted</div>
+        ) : (
+          <div className="text-sm text-accent-2 flex items-start gap-2">
+            <span className="shrink-0 font-semibold text-foreground/90">{comment.username || comment.user_id}</span>
+            <span className="min-w-0 flex-1 break-words">{linkifyHttpsText(comment.text)}</span>
+            {canDeleteComment ? (
+              <button
+                type="button"
+                className="ml-auto shrink-0"
+                onClick={() => {
+                  void onDeleteComment(path);
+                }}
+                disabled={isDeletingCommentPath === pathKey}
+                aria-label={aboutToDeleteCommentPath === pathKey ? "Confirm delete comment" : "Delete comment"}
+              >
+                <Trash2
+                  className={`h-4 w-4 ${aboutToDeleteCommentPath === pathKey ? "text-red-400" : "text-accent-2 opacity-30"}`}
+                />
+              </button>
+            ) : null}
+          </div>
+        )}
         {emojiReplyEntries.length > 0 ? (
-          <div className="mt-1 ml-10 flex flex-wrap items-center gap-1">
+          <div className="ml-10 flex flex-wrap items-center gap-1">
             {emojiReplyEntries.map(([childTimestamp, childComment]) => (
               <span key={childTimestamp} className="text-base leading-none">
                 {childComment.text.trim()}
@@ -383,7 +427,7 @@ function PostSectionComponent({
             ))}
           </div>
         ) : null}
-        <div className="mt-1 ml-10 flex items-center gap-5">
+        <div className="ml-10 flex items-center gap-5">
 
           {hasThreadedReplies ? (
             <button
@@ -538,7 +582,9 @@ function PostSectionComponent({
         ) : null}
 
         {/** Post Text */}
-        {post.text.trim() ? <p className="text-sm text-foreground">{post.text}</p> : null}
+        {post.text.trim() ? (
+          <p className="text-sm text-foreground break-words">{linkifyHttpsText(post.text)}</p>
+        ) : null}
 
         {/** Like Button */}
         <div className="mt-1 flex items-center gap-2">
