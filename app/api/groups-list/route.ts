@@ -16,6 +16,7 @@ type MessageRow = {
   parent_id: string | null;
   created_at: Date;
   created_by: string;
+  text: string | null;
   image_id: string | null;
   data: unknown;
 };
@@ -69,6 +70,7 @@ async function loadLatestMessageByThreadId(
       parent_id: true,
       created_at: true,
       created_by: true,
+      text: true,
       image_id: true,
       data: true,
     },
@@ -100,6 +102,7 @@ async function loadLatestMessageByThreadId(
         parent_id: true,
         created_at: true,
         created_by: true,
+        text: true,
         image_id: true,
         data: true,
       },
@@ -205,27 +208,35 @@ export async function POST(request: Request) {
         threads.map(async (thread) => {
           const latest = latestByThreadId.get(thread.id);
           const last_message_at = latest ? latest.created_at.toISOString() : null;
+          const last_message_from_self = Boolean(
+            latest && latest.created_by === authResult.user_id,
+          );
 
           let last_photo_preview: ThreadItem["last_photo_preview"] = null;
-          if (
-            latest &&
-            latest.image_id &&
-            latest.created_by !== authResult.user_id
-          ) {
-            try {
-              const signedUrl = await getSignedMainBucketImageUrl({
-                userId: latest.created_by,
-                imageId: latest.image_id,
-              });
-              const overlay = parseImageOverlayFromMessageData(latest.data);
+          if (latest && latest.created_by !== authResult.user_id) {
+            if (latest.image_id) {
+              try {
+                const signedUrl = await getSignedMainBucketImageUrl({
+                  userId: latest.created_by,
+                  imageId: latest.image_id,
+                });
+                const overlay = parseImageOverlayFromMessageData(latest.data);
+                last_photo_preview = {
+                  message_id: latest.id,
+                  image_id: latest.image_id,
+                  image_url: signedUrl,
+                  image_overlay: overlay,
+                };
+              } catch (error) {
+                console.error("groups_list_last_photo_sign_failed", thread.id, error);
+              }
+            } else if (latest.text?.trim()) {
               last_photo_preview = {
                 message_id: latest.id,
-                image_id: latest.image_id,
-                image_url: signedUrl,
-                image_overlay: overlay,
+                image_id: null,
+                image_url: null,
+                image_overlay: null,
               };
-            } catch (error) {
-              console.error("groups_list_last_photo_sign_failed", thread.id, error);
             }
           }
 
@@ -238,6 +249,7 @@ export async function POST(request: Request) {
             image_id: thread.image_id,
             image_url: imageUrlByThreadId.get(thread.id) ?? null,
             last_message_at,
+            last_message_from_self,
             last_photo_preview,
           };
         }),

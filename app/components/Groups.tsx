@@ -13,7 +13,7 @@ import CameraModal from "@/app/components/Camera";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import CachedImage from "./utils/CachedImage";
-import { Image, LoaderCircle, MessageCirclePlus, RefreshCw } from "lucide-react";
+import { ArrowRight, Image, LoaderCircle, MessageCirclePlus, RefreshCw } from "lucide-react";
 import { AppTab } from "./utils";
 
 type GroupsProps = {
@@ -372,9 +372,7 @@ export default function Groups({
     }
   };
 
-  const onOpenThread = useCallback((thread: ThreadItem) => {
-    setSelectedThread(thread);
-    setActiveTab("thread");
+  const markThreadRead = useCallback((thread: ThreadItem) => {
     setUnreadThreadIds((previous) => {
       const next = new Set(previous);
       next.delete(thread.id);
@@ -384,6 +382,37 @@ export default function Groups({
       onThreadRead?.();
     });
   }, [onThreadRead]);
+
+  const onOpenThread = useCallback(
+    (thread: ThreadItem) => {
+      setSelectedThread(thread);
+      setActiveTab("thread");
+      markThreadRead(thread);
+    },
+    [markThreadRead],
+  );
+
+  const onLastMessagePreviewClick = useCallback(
+    (thread: ThreadItem) => {
+      markThreadRead(thread);
+      const preview = thread.last_photo_preview;
+      if (!preview) {
+        return;
+      }
+      if (preview.image_url) {
+        setGroupsPhotoViewer({
+          threadId: thread.id,
+          signedUrl: preview.image_url,
+          imageId: preview.image_id,
+          imageOverlay: preview.image_overlay,
+          replyToMessageId: preview.message_id,
+        });
+        return;
+      }
+      setReplyCamera({ threadId: thread.id, replyToMessageId: preview.message_id });
+    },
+    [markThreadRead],
+  );
 
   const onSendPhotoReply = async (payload: {
     file: File;
@@ -533,19 +562,7 @@ export default function Groups({
             thread={thread}
             unreadThreadIds={unreadThreadIds}
             onOpenThread={onOpenThread}
-            onOpenLastPhotoPreview={(item) => {
-              const preview = item.last_photo_preview;
-              if (!preview?.image_url) {
-                return;
-              }
-              setGroupsPhotoViewer({
-                threadId: item.id,
-                signedUrl: preview.image_url,
-                imageId: preview.image_id,
-                imageOverlay: preview.image_overlay,
-                replyToMessageId: preview.message_id,
-              });
-            }}
+            onLastMessagePreviewClick={onLastMessagePreviewClick}
           />
         ))}
       </div>
@@ -588,15 +605,22 @@ function GroupThreadRow({
   thread,
   unreadThreadIds,
   onOpenThread,
-  onOpenLastPhotoPreview,
+  onLastMessagePreviewClick,
 }: {
   thread: ThreadItem;
   unreadThreadIds: Set<string>;
   onOpenThread: (thread: ThreadItem) => void;
-  onOpenLastPhotoPreview: (thread: ThreadItem) => void;
+  onLastMessagePreviewClick: (thread: ThreadItem) => void;
 }) {
   const preview = thread.last_photo_preview;
   const listTime = formatThreadListTime(thread.last_message_at);
+  const hasPhotoPreview = Boolean(preview?.image_url);
+  const isUnread = unreadThreadIds.has(thread.id);
+  const showSelfLastArrow =
+    !preview &&
+    !isUnread &&
+    thread.last_message_at &&
+    thread.last_message_from_self === true;
 
   return (
     <button
@@ -605,7 +629,7 @@ function GroupThreadRow({
       onClick={() => {
         onOpenThread(thread);
       }}
-      className={`relative w-full px-4 py-3 text-left transition border-b border-accent-1/30 ${unreadThreadIds.has(thread.id)
+      className={`relative w-full px-4 py-3 text-left transition border-b border-accent-1/30 ${isUnread
         ? "bg-secondary-background/50"
         : "bg-primary-background hover:bg-secondary-background/20"
         }`}
@@ -628,7 +652,7 @@ function GroupThreadRow({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <p className="truncate text-base font-semibold text-foreground">{thread.name}</p>
-              {unreadThreadIds.has(thread.id) ? (
+              {isUnread ? (
                 <span
                   aria-label="Unread messages"
                   className="h-2 w-2 flex-shrink-0 rounded-full bg-accent-3"
@@ -638,18 +662,41 @@ function GroupThreadRow({
             <p className="mt-0.5 truncate text-sm text-accent-2">Owner: {thread.owner_username}</p>
           </div>
 
-          <div className="flex flex-shrink-0 flex-col items-end gap-1 pt-0.5">
-            {preview?.image_url ? (
+          <div className="flex flex-col flex-shrink-0 items-end gap-1 pt-0.5">
+            {preview ? (
               <button
                 type="button"
-                aria-label="View last photo message"
+                aria-label={
+                  hasPhotoPreview ? "View last photo message" : "Reply with photo to last message"
+                }
                 onClick={(event) => {
                   event.stopPropagation();
-                  onOpenLastPhotoPreview(thread);
+                  onLastMessagePreviewClick(thread);
                 }}
-                className="h-3 w-3 flex-shrink-0 rounded-md bg-red-600 shadow-sm ring-1 ring-red-500/40"
+                className={`h-8 w-8 flex-shrink-0 rounded-md ${
+                  isUnread
+                    ? hasPhotoPreview
+                      ? "bg-red-600 shadow-sm ring-1 ring-red-500/40"
+                      : "bg-blue-600 shadow-sm ring-1 ring-blue-500/40"
+                    : hasPhotoPreview
+                      ? "border-2 border-red-500/70 bg-transparent"
+                      : "border-2 border-blue-500/70 bg-transparent"
+                }`}
               />
+            ) : showSelfLastArrow ? (
+              <button
+                type="button"
+                aria-label="Open thread"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenThread(thread);
+                }}
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border-2 border-accent-2/80 bg-transparent text-accent-2"
+              >
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </button>
             ) : null}
+
             {listTime ? <span className="text-xs text-accent-2">{listTime}</span> : null}
           </div>
         </div>

@@ -50,10 +50,10 @@ export type ImageOverlayData = {
   y_ratio: number;
 };
 
-/** Latest incoming photo message when it is the most recent message in the thread (Groups list preview). */
+/** Latest incoming message from someone else when it is the most recent in the thread (Groups list: tap for preview or photo reply). */
 export type ThreadLastPhotoPreview = {
   message_id: string;
-  image_id: string;
+  image_id: string | null;
   image_url: string | null;
   image_overlay: ImageOverlayData | null;
 };
@@ -68,7 +68,9 @@ export type ThreadItem = {
   image_url?: string | null;
   /** ISO time of the chronologically latest message in the thread, if any. */
   last_message_at?: string | null;
-  /** Present when the latest message is an image from someone else (tap to preview on Groups). */
+  /** True when `last_message_at` refers to a message you sent (Groups list affordance). */
+  last_message_from_self?: boolean;
+  /** Present when the latest message is from someone else: image (tap to preview) or text-only (tap to reply with a photo). */
   last_photo_preview?: ThreadLastPhotoPreview | null;
 };
 
