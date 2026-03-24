@@ -217,10 +217,9 @@ export default function Feed({
             <button
               type="button"
               onClick={onOpenCreatePost}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-accent-1 bg-secondary-background py-4 text-base font-semibold text-foreground shadow-sm transition hover:border-accent-2 hover:text-foreground"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-accent-3 bg-secondary-background py-4 text-accent-3 font-semibold shadow-sm transition hover:border-accent-2 hover:text-foreground"
             >
-              <Plus className="h-6 w-6 shrink-0 text-accent-2" aria-hidden />
-              Create New Post
+              + Create Post
             </button>
           </div>
         ) : null}

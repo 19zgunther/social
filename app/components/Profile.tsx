@@ -128,7 +128,7 @@ function ProfilePictureRow({
             aria-label="Settings"
             title="Settings"
           >
-            <SettingsIcon className="h-4 w-4" />
+            <SettingsIcon className="h-5 w-5" />
           </button>
         )}
       </div>
@@ -165,9 +165,9 @@ function ProfilePostsSection({
           <button
             type="button"
             onClick={onOpenCreatePost}
-            className="rounded-lg border border-accent-1 bg-secondary-background px-3 py-1.5 text-xs font-semibold text-accent-2 hover:text-foreground"
+            className="rounded-lg border border-accent-3 bg-secondary-background px-3 py-2 text-xs font-semibold text-accent-3 hover:text-foreground"
           >
-            New Post
+            + Create Post
           </button>
         ) : null}
       </div>
@@ -180,20 +180,6 @@ function ProfilePostsSection({
         ) : null}
 
         <div className="grid grid-cols-3 border-t border-accent-1">
-          {showCreateButton && onOpenCreatePost && (
-            <button
-              type="button"
-              onClick={onOpenCreatePost}
-              className="aspect-square border-r border-b border-accent-1 bg-secondary-background p-2"
-              aria-label="New Post"
-              title="New Post"
-            >
-              <div className="flex h-full w-full items-center justify-center rounded-md border border-accent-1">
-                <Plus className="h-6 w-6 text-accent-2" />
-              </div>
-            </button>
-          )}
-
           {posts.map((post, index) => {
             const showRightBorder = showCreateButton && onOpenCreatePost
               ? (index + 1) % 3 !== 0
