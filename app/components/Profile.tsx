@@ -550,6 +550,7 @@ function Profile({
                   return {
                     ...post,
                     ...(updated.data !== undefined ? { data: updated.data } : {}),
+                    ...(updated.text !== undefined ? { text: updated.text } : {}),
                     ...(updated.like_count !== undefined ? { like_count: updated.like_count } : {}),
                     ...(updated.is_liked_by_viewer !== undefined
                       ? { is_liked_by_viewer: updated.is_liked_by_viewer }
@@ -763,10 +764,12 @@ function Profile({
 }
 
 function ProfileOtherUser({
+  isActive,
   userId,
   currentUserId,
   onBack,
 }: {
+  isActive: boolean;
   userId: string;
   currentUserId: string;
   onBack: () => void;
@@ -811,6 +814,9 @@ function ProfileOtherUser({
       setIsRemovingFriend(false);
     }
   };
+
+  // Clear remove friend confirmation when the profile changes
+  useEffect(() => {setRemoveFriendConfirmed(false)}, [userId, isActive, currentUserId])
 
   const selectedPost = selectedPostId && profileData
     ? profileData.posts.find((post) => post.id === selectedPostId) ?? null
@@ -918,6 +924,7 @@ function ProfileOtherUser({
                     return {
                       ...post,
                       ...(updated.data !== undefined ? { data: updated.data } : {}),
+                      ...(updated.text !== undefined ? { text: updated.text } : {}),
                       ...(updated.like_count !== undefined ? { like_count: updated.like_count } : {}),
                       ...(updated.is_liked_by_viewer !== undefined
                         ? { is_liked_by_viewer: updated.is_liked_by_viewer }

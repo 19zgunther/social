@@ -64,6 +64,7 @@ export type ThreadItem = {
   created_at: string;
   owner_user_id: string;
   owner_username: string;
+  participant_count?: number;
   image_id?: string | null;
   image_url?: string | null;
   /** ISO time of the chronologically latest message in the thread, if any. */
@@ -220,6 +221,16 @@ export type PostCreateRequest = {
   data?: unknown;
 };
 export type PostCreateResponse = { post: PostItem };
+export type PostEditRequest = {
+  post_id?: string;
+  text?: string;
+};
+export type PostEditResponse = {
+  post: {
+    id: string;
+    text: string;
+  };
+};
 
 export type ImageUploadSignRequest = {
   phase: "sign";

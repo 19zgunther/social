@@ -441,6 +441,7 @@ export default function Home() {
 
           {viewingUserId && <div className="absolute w-full h-full" style={otherUserProfileStyle}>
             <ProfileOtherUser
+              isActive={activeTab === "other_user_profile"}
               userId={viewingUserId}
               currentUserId={authUser.user_id}
               onBack={() => setActiveTab("profile")}

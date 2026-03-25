@@ -108,6 +108,7 @@ export default function Feed({
     (updated: {
       id: string;
       data?: PostData | null;
+      text?: string;
       like_count?: number;
       is_liked_by_viewer?: boolean;
     }) => {
@@ -119,6 +120,7 @@ export default function Feed({
           return {
             ...post,
             ...(updated.data !== undefined ? { data: updated.data } : {}),
+            ...(updated.text !== undefined ? { text: updated.text } : {}),
             ...(updated.like_count !== undefined ? { like_count: updated.like_count } : {}),
             ...(updated.is_liked_by_viewer !== undefined
               ? { is_liked_by_viewer: updated.is_liked_by_viewer }

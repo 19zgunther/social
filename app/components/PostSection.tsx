@@ -1,12 +1,12 @@
 "use client";
 
 import { memo, UIEvent, useEffect, useMemo, useState } from "react";
-import { Heart, ChevronDown, Trash2 } from "lucide-react";
+import { Heart, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
-import { ApiError, PostCommentNode, PostData, PostItem } from "@/app/types/interfaces";
+import { ApiError, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 
@@ -19,6 +19,7 @@ type PostSectionProps = {
   onPostUpdated?: (updated: {
     id: string;
     data?: PostData | null;
+    text?: string;
     like_count?: number;
     is_liked_by_viewer?: boolean;
   }) => void;
@@ -92,6 +93,10 @@ function PostSectionComponent({
   const [expandedReplyPaths, setExpandedReplyPaths] = useState<string[]>([]);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [isDeletingCommentPath, setIsDeletingCommentPath] = useState<string | null>(null);
+  const [isEditingPostText, setIsEditingPostText] = useState(false);
+  const [postTextDraft, setPostTextDraft] = useState(post.text);
+  const [isSavingPostText, setIsSavingPostText] = useState(false);
+  const [postTextStatusMessage, setPostTextStatusMessage] = useState("");
   const [imageViewer, setImageViewer] = useState<{
     signedUrl: string;
     imageId: string | null;
@@ -144,8 +149,11 @@ function PostSectionComponent({
     setReplyDraftByPath({});
     setActiveReplyPath(null);
     setExpandedReplyPaths([]);
+    setIsEditingPostText(false);
+    setPostTextDraft(post.text);
+    setPostTextStatusMessage("");
     setImageViewer(null);
-  }, [post.data, post.id, post.image_id, post.image_url]);
+  }, [post.data, post.id, post.image_id, post.image_url, post.text]);
 
   useEffect(() => {
     const fallbackLikeCount = Object.values(initialLikes).filter(Boolean).length;
@@ -309,6 +317,50 @@ function PostSectionComponent({
   };
 
   const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
+  const canEditPostText = Boolean(currentUserId) && post.created_by === currentUserId;
+
+  const onSavePostText = async () => {
+    if (!canEditPostText || isSavingPostText) {
+      return;
+    }
+
+    if (postTextDraft === post.text) {
+      setIsEditingPostText(false);
+      return;
+    }
+
+    setIsSavingPostText(true);
+    setPostTextStatusMessage("");
+    try {
+      const response = await fetch("/api/post-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          post_id: post.id,
+          text: postTextDraft,
+        }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as ApiError;
+        setPostTextStatusMessage(body.error?.message ?? "Failed to update post text.");
+        return;
+      }
+      const payload = (await response.json()) as PostEditResponse;
+      const nextText = payload.post.text ?? "";
+      setPostTextDraft(nextText);
+      setIsEditingPostText(false);
+      if (onPostUpdated) {
+        onPostUpdated({
+          id: post.id,
+          text: nextText,
+        });
+      }
+    } catch {
+      setPostTextStatusMessage("Failed to update post text.");
+    } finally {
+      setIsSavingPostText(false);
+    }
+  };
 
   const onDeleteComment = async (commentPath: string[]) => {
     const pathKey = commentPath.join(COMMENT_PATH_SEPARATOR);
@@ -582,8 +634,64 @@ function PostSectionComponent({
         ) : null}
 
         {/** Post Text */}
-        {post.text.trim() ? (
-          <p className="whitespace-pre-wrap text-sm text-foreground break-words">{linkifyHttpsText(post.text)}</p>
+        {isEditingPostText ? (
+          <div className="space-y-2">
+            <textarea
+              value={postTextDraft}
+              onChange={(event) => setPostTextDraft(event.target.value)}
+              placeholder="Write a caption..."
+              className="min-h-24 w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPostTextDraft(post.text);
+                  setIsEditingPostText(false);
+                  setPostTextStatusMessage("");
+                }}
+                disabled={isSavingPostText}
+                className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void onSavePostText();
+                }}
+                disabled={isSavingPostText}
+                className="rounded-lg bg-accent-3 px-3 py-1 text-xs font-semibold text-primary-background disabled:opacity-50"
+              >
+                {isSavingPostText ? "Saving..." : "Save"}
+              </button>
+            </div>
+            {postTextStatusMessage ? <p className="text-xs text-accent-2">{postTextStatusMessage}</p> : null}
+          </div>
+        ) : post.text.trim() || canEditPostText ? (
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              {post.text.trim() ? (
+                <p className="whitespace-pre-wrap text-sm text-foreground break-words">{linkifyHttpsText(post.text)}</p>
+              ) : (
+                <p className="text-sm text-accent-2 italic">No text</p>
+              )}
+            </div>
+            {canEditPostText ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPostTextDraft(post.text);
+                  setIsEditingPostText(true);
+                  setPostTextStatusMessage("");
+                }}
+                aria-label="Edit post text"
+                className="shrink-0 rounded-lg border-none bg-transparent p-1.5 text-accent-2"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         {/** Like Button */}

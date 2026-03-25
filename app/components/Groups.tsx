@@ -659,7 +659,9 @@ function GroupThreadRow({
                 />
               ) : null}
             </div>
-            <p className="mt-0.5 truncate text-sm text-accent-2">Owner: {thread.owner_username}</p>
+            <p className="mt-0.5 truncate text-sm text-accent-2">
+              Members: {thread.participant_count ?? 1}
+            </p>
           </div>
 
           <div className="flex flex-col flex-shrink-0 items-end gap-1 pt-0.5">

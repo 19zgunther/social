@@ -177,6 +177,11 @@ export async function POST(request: Request) {
             username: true,
           },
         },
+        user_thread_access: {
+          select: {
+            user_id: true,
+          },
+        },
       },
     });
 
@@ -213,6 +218,10 @@ export async function POST(request: Request) {
           );
 
           let last_photo_preview: ThreadItem["last_photo_preview"] = null;
+          const participantCount = new Set([
+            thread.owner,
+            ...thread.user_thread_access.map((access) => access.user_id),
+          ]).size;
           if (latest && latest.created_by !== authResult.user_id) {
             if (latest.image_id) {
               try {
@@ -246,6 +255,7 @@ export async function POST(request: Request) {
             created_at: thread.created_at.toISOString(),
             owner_user_id: thread.owner,
             owner_username: thread.users.username,
+            participant_count: participantCount,
             image_id: thread.image_id,
             image_url: imageUrlByThreadId.get(thread.id) ?? null,
             last_message_at,
