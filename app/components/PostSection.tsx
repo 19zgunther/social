@@ -583,7 +583,7 @@ function PostSectionComponent({
 
         {/** Post Text */}
         {post.text.trim() ? (
-          <p className="text-sm text-foreground break-words">{linkifyHttpsText(post.text)}</p>
+          <p className="whitespace-pre-wrap text-sm text-foreground break-words">{linkifyHttpsText(post.text)}</p>
         ) : null}
 
         {/** Like Button */}

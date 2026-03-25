@@ -455,8 +455,8 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
   };
 
   const onPost = async () => {
-    const trimmedComment = comment.trim();
-    if ((images.length === 0 && !trimmedComment) || isPosting) {
+    const hasCommentText = comment.trim().length > 0;
+    if ((images.length === 0 && !hasCommentText) || isPosting) {
       return;
     }
 
@@ -482,7 +482,7 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
 
       const [primaryImageId, ...otherImageIds] = uploadedImageIds;
       const createResponse = await postWithAuth("/api/post-create", {
-        ...(trimmedComment ? { text: trimmedComment } : {}),
+        ...(hasCommentText ? { text: comment } : {}),
         ...(primaryImageId ? { image_id: primaryImageId } : {}),
         ...(otherImageIds.length > 0 ? { data: { other_image_ids: otherImageIds } } : {}),
       });
@@ -543,7 +543,7 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
         <button
           type="button"
           onClick={() => createInputRef.current?.click()}
-          className="mb-3 inline-flex items-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs text-accent-2 hover:text-foreground"
+          className="mb-3 w-full inline-flex items-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-accent-3 hover:text-foreground"
         >
           <Plus className="h-4 w-4" />
           Add photos
@@ -584,16 +584,22 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
                 </button>
               </div>
             ))}
+
+            {images.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-xs text-accent-2">Add photos to your post</p>
+              </div>
+            ) : null}
           </div>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-10">
           <textarea
             ref={textInputRef}
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             placeholder="Write a comment..."
-            className="min-h-28 w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+            className="min-h-[40vh] w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
           />
         </div>
 
