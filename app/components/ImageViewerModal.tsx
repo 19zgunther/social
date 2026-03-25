@@ -8,6 +8,7 @@ import type { ImageOverlayData } from "@/app/types/interfaces";
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
+const SWIPE_DISMISS_THRESHOLD_PX = 120;
 
 const getDistance = (a: React.Touch, b: React.Touch): number =>
   Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
@@ -45,12 +46,19 @@ export default function ImageViewerModal({
   onReply,
 }: ImageViewerModalProps) {
   const [view, setView] = useState<ViewTransform>({ scale: 1, tx: 0, ty: 0 });
+  const [swipeOffsetY, setSwipeOffsetY] = useState(0);
+  const [isSwipeDragging, setIsSwipeDragging] = useState(false);
   const [mounted, setMounted] = useState(false);
   const viewRef = useRef(view);
+  const swipeOffsetYRef = useRef(0);
 
   useEffect(() => {
     viewRef.current = view;
   }, [view]);
+
+  useEffect(() => {
+    swipeOffsetYRef.current = swipeOffsetY;
+  }, [swipeOffsetY]);
 
   const lastDistRef = useRef<number | null>(null);
   const lastMidRef = useRef<{ x: number; y: number } | null>(null);
@@ -60,6 +68,8 @@ export default function ImageViewerModal({
     startTx: number;
     startTy: number;
   } | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const swipeIsVerticalRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     // DOM is unavailable during SSR; defer portal until after mount.
@@ -72,6 +82,10 @@ export default function ImageViewerModal({
       return;
     }
     setView({ scale: 1, tx: 0, ty: 0 });
+    setSwipeOffsetY(0);
+    setIsSwipeDragging(false);
+    swipeStartRef.current = null;
+    swipeIsVerticalRef.current = null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -95,6 +109,9 @@ export default function ImageViewerModal({
   const handleTouchStart = useCallback((event: React.TouchEvent) => {
     if (event.touches.length === 2) {
       panStartRef.current = null;
+      swipeStartRef.current = null;
+      swipeIsVerticalRef.current = null;
+      setIsSwipeDragging(false);
       const [t0, t1] = [event.touches[0], event.touches[1]];
       lastDistRef.current = getDistance(t0, t1);
       lastMidRef.current = getMidpoint(t0, t1);
@@ -112,6 +129,20 @@ export default function ImageViewerModal({
         startTx: tx,
         startTy: ty,
       };
+      swipeStartRef.current = null;
+      swipeIsVerticalRef.current = null;
+      setSwipeOffsetY(0);
+      setIsSwipeDragging(false);
+      return;
+    }
+
+    if (event.touches.length === 1) {
+      const t = event.touches[0];
+      panStartRef.current = null;
+      swipeStartRef.current = { x: t.clientX, y: t.clientY };
+      swipeIsVerticalRef.current = null;
+      setSwipeOffsetY(0);
+      setIsSwipeDragging(false);
     }
   }, []);
 
@@ -160,12 +191,49 @@ export default function ImageViewerModal({
         tx: start.startTx + (t.clientX - start.touchX),
         ty: start.startTy + (t.clientY - start.touchY),
       }));
+      return;
+    }
+
+    if (event.touches.length === 1 && swipeStartRef.current && viewRef.current.scale <= 1) {
+      const t = event.touches[0];
+      const start = swipeStartRef.current;
+      const deltaX = t.clientX - start.x;
+      const deltaY = t.clientY - start.y;
+
+      if (swipeIsVerticalRef.current === null) {
+        if (Math.abs(deltaX) < 6 && Math.abs(deltaY) < 6) {
+          return;
+        }
+        swipeIsVerticalRef.current = Math.abs(deltaY) > Math.abs(deltaX) * 1.1;
+      }
+
+      if (swipeIsVerticalRef.current) {
+        event.preventDefault();
+        setIsSwipeDragging(true);
+        setSwipeOffsetY(deltaY);
+      }
     }
   }, []);
 
   const handleTouchEnd = useCallback((event: React.TouchEvent) => {
     lastDistRef.current = null;
     lastMidRef.current = null;
+
+    if (
+      event.touches.length === 0
+      && swipeStartRef.current
+      && swipeIsVerticalRef.current
+      && viewRef.current.scale <= 1
+      && Math.abs(swipeOffsetYRef.current) >= SWIPE_DISMISS_THRESHOLD_PX
+    ) {
+      swipeStartRef.current = null;
+      swipeIsVerticalRef.current = null;
+      setIsSwipeDragging(false);
+      setSwipeOffsetY(0);
+      onClose();
+      return;
+    }
+
     if (event.touches.length === 1 && viewRef.current.scale > 1) {
       const t = event.touches[0];
       panStartRef.current = {
@@ -176,12 +244,16 @@ export default function ImageViewerModal({
       };
     } else if (event.touches.length === 0) {
       panStartRef.current = null;
+      swipeStartRef.current = null;
+      swipeIsVerticalRef.current = null;
+      setSwipeOffsetY(0);
+      setIsSwipeDragging(false);
     }
     setView((previous) => ({
       ...previous,
       scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, previous.scale)),
     }));
-  }, []);
+  }, [onClose]);
 
   const handleWheel = useCallback((event: React.WheelEvent) => {
     if (!event.ctrlKey && !event.metaKey) {
@@ -211,14 +283,16 @@ export default function ImageViewerModal({
   }
 
   const { scale, tx, ty } = view;
+  const backdropOpacity = Math.max(0.35, 1 - Math.abs(swipeOffsetY) / 320);
 
   const content = (
     <div
-      className="fixed inset-0 z-[2200] touch-none bg-black"
+      className="fixed inset-0 z-[2200] touch-none"
       role="dialog"
       aria-modal="true"
       aria-label="Image viewer"
       onWheel={handleWheel}
+      style={{ backgroundColor: `rgba(0, 0, 0, ${backdropOpacity})` }}
     >
       <button
         type="button"
@@ -238,11 +312,11 @@ export default function ImageViewerModal({
       >
         <div
           style={{
-            transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
+            transform: `translate(${tx}px, ${ty + swipeOffsetY}px) scale(${scale})`,
             transformOrigin: "center center",
             willChange: "transform",
           }}
-          className="relative max-h-[100dvh] max-w-[100vw]"
+          className={`relative max-h-[100dvh] max-w-[100vw] ${isSwipeDragging ? "" : "transition-transform duration-200 ease-out"}`}
         >
           <CachedImage
             signedUrl={signedUrl}
