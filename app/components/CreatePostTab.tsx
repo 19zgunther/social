@@ -2,8 +2,11 @@
 
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Aperture, ArrowLeft, Contrast, Droplets, Palette, PenBoxIcon, Plus, Sun, Thermometer, X } from "lucide-react";
-import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
-import { ApiError, ImageUploadResponse } from "@/app/types/interfaces";
+import {
+  prepareImageForUpload,
+  uploadPreparedImageToMainBucket,
+} from "@/app/components/utils/client_file_storage_utils";
+import { ApiError } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 
 type CreatePostTabProps = {
@@ -462,16 +465,14 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
     try {
       const uploadedImageIds: string[] = [];
       for (const image of images) {
-        const response = await postWithAuth("/api/image-upload", {
-          image_base64_data: image.base64Data,
-          image_mime_type: image.mimeType,
-        });
-        if (!response.ok) {
-          setStatusMessage(await readErrorMessage(response));
-          return;
-        }
-
-        const payload = (await response.json()) as ImageUploadResponse;
+        const payload = await uploadPreparedImageToMainBucket(
+          {
+            base64Data: image.base64Data,
+            mimeType: image.mimeType,
+            previewDataUrl: image.previewDataUrl,
+          },
+          postWithAuth,
+        );
         if (!payload.image_id) {
           setStatusMessage("Image upload failed.");
           return;

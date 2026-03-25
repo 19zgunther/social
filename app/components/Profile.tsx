@@ -565,119 +565,119 @@ function Profile({
             })`}
         </button>
 
-          <div className="mt-3 space-y-3 overflow-hidden transition-all duration-400" style={{ maxHeight: isFriendsExpanded ? "100%" : "0" }}>
-            <p className="text-xs font-semibold text-accent-2">Search for users to add as friends</p>
-            <div className="flex items-center gap-2">
-              <UserSearch
-                value={friendSearchQuery}
-                onValueChange={setFriendSearchQuery}
-                onSelect={onSelectUserFromSearch}
-                searchUsers={searchFriendOptions}
-                placeholder="Search username/email"
-                inputClassName="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-              />
-            </div>
+        <div className="mt-3 space-y-3 overflow-hidden transition-all duration-400" style={{ maxHeight: isFriendsExpanded ? "100%" : "0" }}>
+          <p className="text-xs font-semibold text-accent-2">Search for users to add as friends</p>
+          <div className="flex items-center gap-2">
+            <UserSearch
+              value={friendSearchQuery}
+              onValueChange={setFriendSearchQuery}
+              onSelect={onSelectUserFromSearch}
+              searchUsers={searchFriendOptions}
+              placeholder="Search username/email"
+              inputClassName="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+            />
+          </div>
 
-            <div>
-              {isLoadingFriendRows ? (
-                <p className="text-xs text-accent-2">Loading friends...</p>
-              ) : null}
+          <div>
+            {isLoadingFriendRows ? (
+              <p className="text-xs text-accent-2">Loading friends...</p>
+            ) : null}
 
-              {!isLoadingFriendRows && incomingRequests.length === 0 && acceptedFriends.length === 0 ? (
-                <p className="text-xs text-accent-2">No friends or requests yet.</p>
-              ) : null}
+            {!isLoadingFriendRows && incomingRequests.length === 0 && acceptedFriends.length === 0 ? (
+              <p className="text-xs text-accent-2">No friends or requests yet.</p>
+            ) : null}
 
+            <div className="space-y-2">
+              {incomingRequests.map((requestRow) => (
+                <div
+                  key={requestRow.id}
+                  className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2"
+                >
+                  <p className="text-sm text-foreground">{requestRow.username}</p>
+                  <p className="text-xs text-accent-2">{requestRow.email ?? "No email"}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void onRespondToFriendRequest(requestRow.id, true);
+                      }}
+                      disabled={activeIncomingRequestId === requestRow.id}
+                      className="rounded-lg bg-accent-3 px-2 py-1 text-xs font-semibold text-primary-background disabled:opacity-50"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void onRespondToFriendRequest(requestRow.id, false);
+                      }}
+                      disabled={activeIncomingRequestId === requestRow.id}
+                      className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <p className="mb-1 text-xs font-semibold text-accent-2">Your friends ({acceptedFriends.length})</p>
               <div className="space-y-2">
-                {incomingRequests.map((requestRow) => (
-                  <div
-                    key={requestRow.id}
-                    className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2"
+                {acceptedFriends.map((friend) => (
+                  <button
+                    key={friend.id}
+                    type="button"
+                    onClick={() => { onViewUserProfile(friend.user_id); }}
+                    className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 flex items-center gap-3 transition hover:bg-secondary-background"
                   >
-                    <p className="text-sm text-foreground">{requestRow.username}</p>
-                    <p className="text-xs text-accent-2">{requestRow.email ?? "No email"}</p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void onRespondToFriendRequest(requestRow.id, true);
-                        }}
-                        disabled={activeIncomingRequestId === requestRow.id}
-                        className="rounded-lg bg-accent-3 px-2 py-1 text-xs font-semibold text-primary-background disabled:opacity-50"
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void onRespondToFriendRequest(requestRow.id, false);
-                        }}
-                        disabled={activeIncomingRequestId === requestRow.id}
-                        className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
-                      >
-                        Reject
-                      </button>
+                    <UserProfileImage
+                      userId={friend.user_id}
+                      sizePx={40}
+                      alt={`${friend.username} profile`}
+                      signedUrl={friend.profile_image_url}
+                      imageId={friend.profile_image_id}
+                    />
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-sm font-medium text-foreground truncate">{friend.username}</p>
+                      {friend.email && (
+                        <p className="text-xs text-accent-2 truncate">{friend.email}</p>
+                      )}
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-accent-2 flex-shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {pendingOutgoingRequests.length > 0 ? (
+            <div>
+              <p className="mb-1 text-xs font-semibold text-accent-2">Pending sent requests</p>
+              <div className="space-y-2">
+                {pendingOutgoingRequests.map((row) => (
+                  <div
+                    key={row.id}
+                    className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2 flex items-center gap-3"
+                  >
+                    <UserProfileImage
+                      userId={row.other_user_id}
+                      sizePx={40}
+                      alt={`${row.username} profile`}
+                      signedUrl={row.profile_image_url}
+                      imageId={row.profile_image_id}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{row.username}</p>
+                      {row.email && (
+                        <p className="text-xs text-accent-2 truncate">{row.email}</p>
+                      )}
+                      <p className="mt-0.5 text-xs text-accent-2">Pending</p>
                     </div>
                   </div>
                 ))}
-
-                <p className="mb-1 text-xs font-semibold text-accent-2">Your friends ({acceptedFriends.length})</p>
-                <div className="space-y-2">
-                  {acceptedFriends.map((friend) => (
-                    <button
-                      key={friend.id}
-                      type="button"
-                      onClick={() => { onViewUserProfile(friend.user_id); }}
-                      className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 flex items-center gap-3 transition hover:bg-secondary-background"
-                    >
-                      <UserProfileImage
-                        userId={friend.user_id}
-                        sizePx={40}
-                        alt={`${friend.username} profile`}
-                        signedUrl={friend.profile_image_url}
-                        imageId={friend.profile_image_id}
-                      />
-                      <div className="flex-1 min-w-0 text-left">
-                        <p className="text-sm font-medium text-foreground truncate">{friend.username}</p>
-                        {friend.email && (
-                          <p className="text-xs text-accent-2 truncate">{friend.email}</p>
-                        )}
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-accent-2 flex-shrink-0" />
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
-
-            {pendingOutgoingRequests.length > 0 ? (
-              <div>
-                <p className="mb-1 text-xs font-semibold text-accent-2">Pending sent requests</p>
-                <div className="space-y-2">
-                  {pendingOutgoingRequests.map((row) => (
-                    <div
-                      key={row.id}
-                      className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2 flex items-center gap-3"
-                    >
-                      <UserProfileImage
-                        userId={row.other_user_id}
-                        sizePx={40}
-                        alt={`${row.username} profile`}
-                        signedUrl={row.profile_image_url}
-                        imageId={row.profile_image_id}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{row.username}</p>
-                        {row.email && (
-                          <p className="text-xs text-accent-2 truncate">{row.email}</p>
-                        )}
-                        <p className="mt-0.5 text-xs text-accent-2">Pending</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
+          ) : null}
+        </div>
       </section>
 
       <ProfilePostsSection

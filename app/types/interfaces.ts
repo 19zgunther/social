@@ -221,10 +221,27 @@ export type PostCreateRequest = {
 };
 export type PostCreateResponse = { post: PostItem };
 
-export type ImageUploadRequest = {
-  image_base64_data?: string;
-  image_mime_type?: string;
+export type ImageUploadSignRequest = {
+  phase: "sign";
+  image_mime_type: string;
 };
+export type ImageUploadSignResponse = {
+  image_id: string;
+  signed_upload_url: string;
+  upload_token: string;
+  storage_path: string;
+};
+export type ImageUploadCompleteRequest = {
+  phase: "complete";
+  image_id: string;
+};
+export type ImageUploadRequest =
+  | ImageUploadSignRequest
+  | ImageUploadCompleteRequest
+  | {
+      image_base64_data?: string;
+      image_mime_type?: string;
+    };
 export type ImageUploadResponse = {
   image_id: string;
   image_url: string;

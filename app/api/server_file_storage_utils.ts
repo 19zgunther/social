@@ -1,3 +1,5 @@
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
 const MAIN_BUCKET_NAME = "main";
 
 const getSupabaseUrl = (): string => {
@@ -14,6 +16,40 @@ const getSupabaseServiceRoleKey = (): string => {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured.");
   }
   return key;
+};
+
+let supabaseServiceClient: SupabaseClient | null = null;
+
+const getSupabaseServiceClient = (): SupabaseClient => {
+  if (!supabaseServiceClient) {
+    const url = getSupabaseUrl();
+    const key = getSupabaseServiceRoleKey();
+    supabaseServiceClient = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return supabaseServiceClient;
+};
+
+export const createSignedMainBucketUploadUrl = async (input: {
+  userId: string;
+  imageId: string;
+}): Promise<{ signedUrl: string; token: string; path: string }> => {
+  const objectPath = buildMainBucketObjectPath(input.userId, input.imageId);
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase.storage
+    .from(MAIN_BUCKET_NAME)
+    .createSignedUploadUrl(objectPath, { upsert: true });
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "createSignedUploadUrl failed.");
+  }
+
+  return {
+    signedUrl: data.signedUrl,
+    token: data.token,
+    path: data.path,
+  };
 };
 
 export const buildMainBucketObjectPath = (userId: string, imageId: string): string =>
