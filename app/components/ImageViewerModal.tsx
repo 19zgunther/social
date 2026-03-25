@@ -224,7 +224,7 @@ export default function ImageViewerModal({
         type="button"
         aria-label="Close image viewer"
         onClick={onClose}
-        className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white shadow-lg ring-1 ring-white/25 hover:bg-black/75"
+        className="absolute right-3 top-10 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white shadow-lg ring-1 ring-white/25 hover:bg-black/75"
       >
         <X className="h-6 w-6" strokeWidth={2.5} />
       </button>

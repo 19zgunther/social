@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ChevronDown, ChevronRight, CircleUserRound, Plus, Settings as SettingsIcon, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronRight, CircleUserRound, Settings as SettingsIcon, Trash2 } from "lucide-react";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { PostSection } from "@/app/components/PostSection";
@@ -269,7 +269,7 @@ function Profile({
   const [incomingRequests, setIncomingRequests] = useState<IncomingFriendRequest[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<OutgoingFriendRequest[]>([]);
   const [acceptedFriends, setAcceptedFriends] = useState<AcceptedFriend[]>([]);
-  const [isFriendsExpanded, setIsFriendsExpanded] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<"posts" | "friends">("posts");
   const [isLoadingFriendRows, setIsLoadingFriendRows] = useState(true);
   const [activeFriendUserId, setActiveFriendUserId] = useState<string | null>(null);
   const [activeIncomingRequestId, setActiveIncomingRequestId] = useState<string | null>(null);
@@ -376,27 +376,41 @@ function Profile({
       const users = await runFriendSearch(query);
       return users.map((user) => {
         const relation = user.relation;
-        const hint = relation
-          ? relation.accepted === true
-            ? "Friends"
-            : relation.accepted === false
-              ? "Rejected"
-              : relation.direction === "incoming"
-                ? "Incoming request"
-                : "Request sent"
-          : undefined;
+        const friendshipStatus: UserSearchOption["friendshipStatus"] =
+          user.id === userId
+            ? "self"
+            : relation
+              ? relation.accepted === true
+                ? "friends"
+                : relation.accepted === false
+                  ? "rejected"
+                  : relation.direction === "incoming"
+                    ? "pending_received"
+                    : "pending_sent"
+              : "none";
+
+        const hint = friendshipStatus === "friends"
+          ? "Friends"
+          : friendshipStatus === "pending_sent"
+            ? "Pending request"
+            : friendshipStatus === "pending_received"
+              ? "Incoming request"
+              : friendshipStatus === "self"
+                ? "You"
+                : "Not friends";
 
         return {
           id: user.id,
           username: user.username,
           email: user.email,
           hint,
+          friendshipStatus,
           profile_image_id: user.profile_image_id,
           profile_image_url: user.profile_image_url,
         };
       });
     },
-    [runFriendSearch],
+    [runFriendSearch, userId],
   );
 
   const onSelectUserFromSearch = useCallback((option: UserSearchOption) => {
@@ -430,6 +444,41 @@ function Profile({
       setActiveIncomingRequestId(null);
     }
   };
+
+  const onRequestFollowFromSearch = useCallback(async (option: UserSearchOption): Promise<UserSearchOption | void> => {
+    if (
+      option.friendshipStatus === "self"
+      || option.friendshipStatus === "friends"
+      || option.friendshipStatus === "pending_sent"
+      || option.friendshipStatus === "pending_received"
+    ) {
+      return option;
+    }
+
+    setActiveFriendUserId(option.id);
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/friend-request-create", {
+        other_user_id: option.id,
+      });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+
+      await loadFriendRows();
+      setStatusMessage("Friend request sent.");
+      return {
+        ...option,
+        hint: "Pending request",
+        friendshipStatus: "pending_sent",
+      };
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to send friend request.");
+    } finally {
+      setActiveFriendUserId(null);
+    }
+  }, []);
 
   const [confirmedDeletePost, setConfirmedDeletePost] = useState(false);
   useEffect(() => { setConfirmedDeletePost(false); }, [selectedPost]);
@@ -540,34 +589,35 @@ function Profile({
         setIsProfilePictureEditorOpen={setIsProfilePictureEditorOpen}
       />
 
-      {/** Friends Section */}
-      <section className="border-b border-accent-1 px-3 py-3">
-        <button
-          type="button"
-          onClick={() => {
-            setIsFriendsExpanded((previous) => {
-              if (!previous) {
-                void loadFriendRows();
-              }
-              return !previous;
-            });
-          }}
-          className="flex w-full items-center gap-1 text-left text-sm font-semibold text-foreground"
-        >
-          {isFriendsExpanded ? (
-            <ChevronDown className="h-4 w-4 text-accent-2" aria-hidden />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-accent-2" aria-hidden />
-          )}
-          {isFriendsExpanded
-            ? "Friends"
-            : `Friends (${acceptedFriends.length}), Requests (${incomingRequests.length + pendingOutgoingRequests.length
-            })`}
-        </button>
+      <section className="border-b border-accent-1 px-3 py-2">
+        <div className="flex items-center w-full">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab("posts")}
+            className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold transition ${activeSubTab === "posts"
+              ? "border-accent-3 text-foreground"
+              : "border-transparent text-accent-2 hover:text-foreground"
+              }`}
+          >
+            Posts
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab("friends")}
+            className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold transition ${activeSubTab === "friends"
+              ? "border-accent-3 text-foreground"
+              : "border-transparent text-accent-2 hover:text-foreground"
+              }`}
+          >
+            Friends
+          </button>
+        </div>
+      </section>
 
-        <div className="mt-3 space-y-3 overflow-hidden transition-all duration-400" style={{ maxHeight: isFriendsExpanded ? "100%" : "0" }}>
-          <p className="text-xs font-semibold text-accent-2">Search for users to add as friends</p>
-          <div className="flex items-center gap-2">
+      {activeSubTab === "friends" ? (
+        <section className="border-b border-accent-1 px-3 py-3 w-full">
+          <p className="text-xs font-semibold text-accent-2 mt-1">Search for users to add as friends</p>
+          <div className="mt-3 w-full">
             <UserSearch
               value={friendSearchQuery}
               onValueChange={setFriendSearchQuery}
@@ -575,10 +625,26 @@ function Profile({
               searchUsers={searchFriendOptions}
               placeholder="Search username/email"
               inputClassName="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+              dropdownClassName="min-h-[30vh] max-h-[60vh]"
+              getOptionActionLabel={(option) => {
+                if (option.friendshipStatus === "none" || option.friendshipStatus === "rejected") {
+                  return "Request to Follow";
+                }
+                if (option.friendshipStatus === "pending_sent") {
+                  return "Pending";
+                }
+                return null;
+              }}
+              isOptionActionDisabled={(option) =>
+                activeFriendUserId === option.id
+                || option.friendshipStatus !== "none"
+                && option.friendshipStatus !== "rejected"
+              }
+              onOptionAction={onRequestFollowFromSearch}
             />
           </div>
 
-          <div>
+          <div className="mt-5">
             {isLoadingFriendRows ? (
               <p className="text-xs text-accent-2">Loading friends...</p>
             ) : null}
@@ -650,7 +716,7 @@ function Profile({
           </div>
 
           {pendingOutgoingRequests.length > 0 ? (
-            <div>
+            <div className="mt-3">
               <p className="mb-1 text-xs font-semibold text-accent-2">Pending sent requests</p>
               <div className="space-y-2">
                 {pendingOutgoingRequests.map((row) => (
@@ -677,19 +743,19 @@ function Profile({
               </div>
             </div>
           ) : null}
-        </div>
-      </section>
-
-      <ProfilePostsSection
-        posts={posts}
-        isLoadingPosts={isLoadingPosts}
-        hasMorePosts={hasMorePosts}
-        nextCursorPostId={nextCursorPostId}
-        isLoadingMorePosts={isLoadingMorePosts}
-        loadPosts={loadPosts}
-        setSelectedPostId={setSelectedPostId}
-        onOpenCreatePost={onOpenCreatePost}
-      />
+        </section>
+      ) : (
+        <ProfilePostsSection
+          posts={posts}
+          isLoadingPosts={isLoadingPosts}
+          hasMorePosts={hasMorePosts}
+          nextCursorPostId={nextCursorPostId}
+          isLoadingMorePosts={isLoadingMorePosts}
+          loadPosts={loadPosts}
+          setSelectedPostId={setSelectedPostId}
+          onOpenCreatePost={onOpenCreatePost}
+        />
+      )}
 
       {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
     </div>
