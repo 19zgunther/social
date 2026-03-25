@@ -3,23 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Smile } from "lucide-react";
 import { createPortal } from "react-dom";
-import { ALL_THE_FRICKIN_EMOJIS_I_COULD_FIND } from "./emojiList";
+import emojiKeywordsByEmoji from "emojilib";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./useSwipeBack";
-
-const DEFAULT_EMOJIS = [
-  "😀",
-  "😂",
-  "😍",
-  "🥳",
-  "🔥",
-  "👏",
-  "❤️",
-  "👍",
-  "🙏",
-  "🤔",
-  "😎",
-  "🎉",
-];
 const RECENT_EMOJIS_STORAGE_KEY = "emojiPickerRecentUsage";
 const RECENT_EMOJIS_STORAGE_BACKUP_KEY = "emojiPickerRecentUsageBackup";
 const MAX_RECENT_EMOJIS = 50;
@@ -163,19 +148,49 @@ export default function EmojiPicker({
   const [isMounted, setIsMounted] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [recentEmojiUsage, setRecentEmojiUsage] = useState<EmojiUsageEntry[]>([]);
-  const suggestedEmojiOptions = useMemo(() => DEFAULT_EMOJIS, []);
-  const allEmojiOptions = useMemo(() => ALL_THE_FRICKIN_EMOJIS_I_COULD_FIND, []);
+  const allEmojiOptions = useMemo(() => Object.keys(emojiKeywordsByEmoji), []);
+  
+  const emojiSearchKeywordsByEmoji = useMemo(() => {
+    const keywordsByEmoji = new Map<string, string[]>();
+
+    allEmojiOptions.forEach((emoji) => {
+      const keywords = emojiKeywordsByEmoji[emoji];
+      if (!keywords || keywords.length === 0) {
+        return;
+      }
+
+      keywordsByEmoji.set(
+        emoji,
+        keywords.flatMap((keyword) => [keyword.toLowerCase(), keyword.toLowerCase().replace(/_/g, " ")]),
+      );
+    });
+
+    return keywordsByEmoji;
+  }, [allEmojiOptions]);
   const recentEmojiOptions = useMemo(
     () => recentEmojiUsage.slice(0, MAX_RECENT_EMOJIS).map((entry) => entry.emoji),
     [recentEmojiUsage],
   );
   const filteredEmojiOptions = useMemo(() => {
-    if (!searchTerm.trim()) {
+    const trimmedSearchTerm = searchTerm.trim();
+    if (!trimmedSearchTerm) {
       return allEmojiOptions;
     }
 
-    return allEmojiOptions.filter((emoji) => emoji.includes(searchTerm.trim()));
-  }, [allEmojiOptions, searchTerm]);
+    const normalizedSearchTerm = trimmedSearchTerm.toLowerCase();
+    return allEmojiOptions.filter((emoji) => {
+      if (emoji.includes(trimmedSearchTerm)) {
+        return true;
+      }
+
+      const emojiKeywords = emojiSearchKeywordsByEmoji.get(emoji);
+      if (!emojiKeywords) {
+        return false;
+      }
+
+      return emojiKeywords.some((keyword) => keyword.includes(normalizedSearchTerm));
+    });
+  }, [allEmojiOptions, emojiSearchKeywordsByEmoji, searchTerm]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -276,8 +291,8 @@ export default function EmojiPicker({
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Type or paste an emoji..."
-                  className="w-full rounded-md border border-accent-1 bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-accent-2/70 focus:border-accent-2"
+                  placeholder="Type emoji or keyword (heart, laugh, fire)..."
+                  className="w-full rounded-md border border-accent-1 bg-background px-2 py-1 text-sm text-foreground outline-none placeholder:text-accent-2/70 focus:border-accent-2"
                 />
               </div>
               <p className="mb-1 text-[11px] font-semibold text-accent-2">Recent</p>
@@ -295,20 +310,6 @@ export default function EmojiPicker({
                     </button>
                   ))}
                 </div>
-              </div>
-              <p className="mb-1 text-[11px] font-semibold text-accent-2">Suggested</p>
-              <div className="mb-3 grid grid-cols-6 gap-1">
-                {suggestedEmojiOptions.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => handleSelectEmoji(emoji)}
-                    className="rounded-md px-1 py-1 text-base transition hover:bg-accent-1/40"
-                    aria-label={`Insert ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
               </div>
               <p className="mb-1 text-[11px] font-semibold text-accent-2">All emojis</p>
               <div className="overflow-x-auto overflow-y-hidden pb-1">
