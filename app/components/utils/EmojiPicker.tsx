@@ -269,7 +269,7 @@ export default function EmojiPicker({
   }, [isMounted]);
 
   useEffect(() => {
-    if (!isMounted) {
+    if (!isMounted || !isOpen) {
       return;
     }
     let cancelled = false;
@@ -295,7 +295,7 @@ export default function EmojiPicker({
     return () => {
       cancelled = true;
     };
-  }, [isMounted]);
+  }, [isMounted, isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
