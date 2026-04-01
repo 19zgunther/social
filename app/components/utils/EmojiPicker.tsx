@@ -5,9 +5,15 @@ import { Smile } from "lucide-react";
 import { createPortal } from "react-dom";
 import emojiKeywordsByEmoji from "emojilib";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./useSwipeBack";
+import { EmojiItem, EmojisListResponse } from "@/app/types/interfaces";
 const RECENT_EMOJIS_STORAGE_KEY = "emojiPickerRecentUsage";
 const RECENT_EMOJIS_STORAGE_BACKUP_KEY = "emojiPickerRecentUsageBackup";
 const MAX_RECENT_EMOJIS = 50;
+const CUSTOM_EMOJI_GRID_SIZE = 64;
+const CUSTOM_EMOJI_PIXEL_COUNT = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_GRID_SIZE;
+const B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const CUSTOM_EMOJI_TRANSPARENT_FLAG = 1 << 9;
+const CUSTOM_EMOJI_RGB_MASK = 0b1_1111_1111;
 
 type EmojiUsageEntry = {
   emoji: string;
@@ -133,11 +139,53 @@ const updateUsageWithSelection = (usage: EmojiUsageEntry[], emoji: string, times
   return sortAndTrimUsage(Array.from(usageByEmoji.values()));
 };
 
+const decodeCustomEmojiDataB64 = (dataB64: string): Uint16Array => {
+  const pixels = new Uint16Array(CUSTOM_EMOJI_PIXEL_COUNT);
+  if (dataB64.length !== CUSTOM_EMOJI_PIXEL_COUNT * 2) {
+    return pixels;
+  }
+  for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
+    const first = B64_ALPHABET.indexOf(dataB64[i * 2]);
+    const second = B64_ALPHABET.indexOf(dataB64[i * 2 + 1]);
+    if (first < 0 || second < 0) {
+      continue;
+    }
+    const r = (first >> 3) & 0b111;
+    const g = first & 0b111;
+    const b = (second >> 3) & 0b111;
+    const rgb = (r << 6) | (g << 3) | b;
+    const metadata = second & 0b111;
+    const isTransparent = (metadata & 0b001) === 0b001 || (metadata === 0 && rgb === 0);
+    pixels[i] = rgb | (isTransparent ? CUSTOM_EMOJI_TRANSPARENT_FLAG : 0);
+  }
+  return pixels;
+};
+
+const drawCustomEmojiPreview = (canvas: HTMLCanvasElement, dataB64: string) => {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return;
+  }
+  const pixels = decodeCustomEmojiDataB64(dataB64);
+  const imageData = ctx.createImageData(CUSTOM_EMOJI_GRID_SIZE, CUSTOM_EMOJI_GRID_SIZE);
+  for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
+    const packed = pixels[i] ?? 0;
+    const rgb = packed & CUSTOM_EMOJI_RGB_MASK;
+    imageData.data[i * 4] = Math.round(((rgb >> 6) & 0b111) * (255 / 7));
+    imageData.data[i * 4 + 1] = Math.round(((rgb >> 3) & 0b111) * (255 / 7));
+    imageData.data[i * 4 + 2] = Math.round((rgb & 0b111) * (255 / 7));
+    imageData.data[i * 4 + 3] = (packed & CUSTOM_EMOJI_TRANSPARENT_FLAG) === CUSTOM_EMOJI_TRANSPARENT_FLAG ? 0 : 255;
+  }
+  ctx.putImageData(imageData, 0, 0);
+};
+
 type EmojiPickerProps = {
   onSelectEmoji: (emoji: string) => void;
   className?: string;
   buttonClassName?: string;
 };
+
+const customEmojiToken = (emojiUuid: string): string => `[[emoji:${emojiUuid}]]`;
 
 export default function EmojiPicker({
   onSelectEmoji,
@@ -148,6 +196,7 @@ export default function EmojiPicker({
   const [isMounted, setIsMounted] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [recentEmojiUsage, setRecentEmojiUsage] = useState<EmojiUsageEntry[]>([]);
+  const [customEmojis, setCustomEmojis] = useState<EmojiItem[]>([]);
   const allEmojiOptions = useMemo(() => Object.keys(emojiKeywordsByEmoji), []);
   
   const emojiSearchKeywordsByEmoji = useMemo(() => {
@@ -216,6 +265,35 @@ export default function EmojiPicker({
     window.addEventListener("storage", onStorageChange);
     return () => {
       window.removeEventListener("storage", onStorageChange);
+    };
+  }, [isMounted]);
+
+  useEffect(() => {
+    if (!isMounted) {
+      return;
+    }
+    let cancelled = false;
+    const loadCustomEmojis = async () => {
+      try {
+        const response = await fetch("/api/emojis-list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as EmojisListResponse;
+        if (!cancelled) {
+          setCustomEmojis(payload.emojis);
+        }
+      } catch {
+        // Ignore custom emoji loading failures; default emoji picker still works.
+      }
+    };
+    void loadCustomEmojis();
+    return () => {
+      cancelled = true;
     };
   }, [isMounted]);
 
@@ -311,6 +389,37 @@ export default function EmojiPicker({
                   ))}
                 </div>
               </div>
+              {customEmojis.length > 0 ? (
+                <>
+                  <p className="mb-1 text-[11px] font-semibold text-accent-2">Your custom emojis</p>
+                  <div className="mb-3 overflow-x-auto overflow-y-hidden pb-1">
+                    <div className="grid h-[6.5rem] grid-flow-col grid-rows-3 gap-1">
+                      {customEmojis.map((emoji) => (
+                        <button
+                          key={emoji.uuid}
+                          type="button"
+                          onClick={() => handleSelectEmoji(customEmojiToken(emoji.uuid))}
+                          className="flex h-8 w-8 items-center justify-center rounded-md px-1 py-1 transition hover:bg-accent-1/40"
+                          aria-label={`Insert custom emoji ${emoji.name}`}
+                          title={emoji.name}
+                        >
+                          <canvas
+                            width={CUSTOM_EMOJI_GRID_SIZE}
+                            height={CUSTOM_EMOJI_GRID_SIZE}
+                            ref={(el) => {
+                              if (!el) {
+                                return;
+                              }
+                              drawCustomEmojiPreview(el, emoji.data_b64);
+                            }}
+                            className="h-6 w-6 [image-rendering:pixelated]"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : null}
               <p className="mb-1 text-[11px] font-semibold text-accent-2">All emojis</p>
               <div className="overflow-x-auto overflow-y-hidden pb-1">
                 <div className="grid h-[8.75rem] grid-flow-col grid-rows-4 gap-1">

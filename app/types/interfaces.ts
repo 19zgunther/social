@@ -349,3 +349,28 @@ export type UserProfileResponse = {
   has_more: boolean;
   next_cursor_post_id: string | null;
 };
+
+export type EmojiItem = {
+  uuid: string;
+  created_at: string;
+  name: string;
+  data_b64: string;
+};
+
+export type EmojisListResponse = {
+  emojis: EmojiItem[];
+};
+
+export type EmojiSaveRequest = {
+  emoji_uuid?: string;
+  name?: string;
+  data_b64?: string;
+};
+
+export type EmojiSaveResponse = {
+  emoji: EmojiItem;
+};
+
+export type EmojisResolveResponse = {
+  emojis_by_uuid: Record<string, EmojiItem>;
+};

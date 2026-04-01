@@ -56,6 +56,8 @@ type ThreadProps = {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const BOTTOM_FOLLOW_THRESHOLD_PX = 80;
+const BOTTOM_SWIPE_TRIGGER_PX = 48;
+const MIN_BOTTOM_SWIPE_SPINNER_MS = 1_000;
 /** Hold duration before opening message actions (reply, etc.). */
 const MESSAGE_LONG_PRESS_TO_REPLY_MS = 500;
 const EMOJI_ONLY_MESSAGE_REGEX =
@@ -162,6 +164,7 @@ export default function Thread({
   const [memberIdentifier, setMemberIdentifier] = useState("");
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const [isLoadingBottomSwipeRefresh, setIsLoadingBottomSwipeRefresh] = useState(false);
   const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(false);
   const [oldestLoadedMessageId, setOldestLoadedMessageId] = useState<string | null>(null);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
@@ -195,6 +198,8 @@ export default function Thread({
   const timestampSwipeStartXRef = useRef(0);
   const timestampSwipeStartYRef = useRef(0);
   const timestampSwipeTrackingRef = useRef(false);
+  const bottomSwipeStartYRef = useRef<number | null>(null);
+  const bottomSwipeTriggeredRef = useRef(false);
   const timestampRevealPercentRef = useRef(0);
   const timestampRevealRafRef = useRef<number | null>(null);
   const [timestampRevealPercent, setTimestampRevealPercent] = useState(0);
@@ -503,6 +508,63 @@ export default function Thread({
     timestampSwipeStartYRef.current = touch.clientY;
     timestampSwipeTrackingRef.current = true;
     cancelTimestampRevealAnimation();
+  };
+
+  const triggerBottomSwipeRefresh = async (): Promise<void> => {
+    if (isLoadingBottomSwipeRefresh || isLoadingMessages || isLoadingOlderMessages) {
+      return;
+    }
+
+    const startedAt = Date.now();
+    setIsLoadingBottomSwipeRefresh(true);
+    try {
+      await applyLatestMessagesFromServer("always");
+    } finally {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_BOTTOM_SWIPE_SPINNER_MS) {
+        await sleep(MIN_BOTTOM_SWIPE_SPINNER_MS - elapsed);
+      }
+      setIsLoadingBottomSwipeRefresh(false);
+    }
+  };
+
+  const onBottomSwipeStart = (event: TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    if (!touch) {
+      bottomSwipeStartYRef.current = null;
+      bottomSwipeTriggeredRef.current = false;
+      return;
+    }
+    const container = chatContainerRef.current;
+    if (!container || !isNearBottom(container)) {
+      bottomSwipeStartYRef.current = null;
+      bottomSwipeTriggeredRef.current = false;
+      return;
+    }
+    bottomSwipeStartYRef.current = touch.clientY;
+    bottomSwipeTriggeredRef.current = false;
+  };
+
+  const onBottomSwipeMove = (event: TouchEvent<HTMLDivElement>) => {
+    const startY = bottomSwipeStartYRef.current;
+    if (startY === null || bottomSwipeTriggeredRef.current) {
+      return;
+    }
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+    const deltaY = touch.clientY - startY;
+    if (deltaY > -BOTTOM_SWIPE_TRIGGER_PX) {
+      return;
+    }
+    bottomSwipeTriggeredRef.current = true;
+    void triggerBottomSwipeRefresh();
+  };
+
+  const onBottomSwipeEnd = () => {
+    bottomSwipeStartYRef.current = null;
+    bottomSwipeTriggeredRef.current = false;
   };
 
   const onTimestampSwipeMove = (event: TouchEvent<HTMLDivElement>) => {
@@ -1135,7 +1197,7 @@ export default function Thread({
               <p className="text-xs opacity-60 [-webkit-touch-callout:none]">
                 {isOwnMessage ? "You" : message.username}
               </p>
-              <p className="break-words [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
+              <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
             </>
           ) : null}
           {isImageOnly ? (
@@ -1398,10 +1460,22 @@ export default function Thread({
         <div
           ref={chatContainerRef}
           onScroll={onChatScroll}
-          onTouchStart={onTimestampSwipeStart}
-          onTouchMove={onTimestampSwipeMove}
-          onTouchEnd={onTimestampSwipeEnd}
-          onTouchCancel={onTimestampSwipeEnd}
+          onTouchStart={(event) => {
+            onTimestampSwipeStart(event);
+            onBottomSwipeStart(event);
+          }}
+          onTouchMove={(event) => {
+            onTimestampSwipeMove(event);
+            onBottomSwipeMove(event);
+          }}
+          onTouchEnd={() => {
+            onTimestampSwipeEnd();
+            onBottomSwipeEnd();
+          }}
+          onTouchCancel={() => {
+            onTimestampSwipeEnd();
+            onBottomSwipeEnd();
+          }}
           className="h-full min-h-0 space-y-2 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 touch-pan-y"
         >
           {isLoadingMessages ? (
@@ -1455,6 +1529,16 @@ export default function Thread({
           </button>
         ) : null}
       </div>
+
+      {isLoadingBottomSwipeRefresh ? (
+        <div className="mx-3 mb-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2">
+          <span
+            aria-hidden
+            className="h-3 w-3 animate-spin rounded-full border-2 border-accent-2 border-t-transparent"
+          />
+          <p className="text-xs text-accent-2">Loading latest messages...</p>
+        </div>
+      ) : null}
 
       {editTargetMessageId ? (
         <div className="mx-2 mb-1 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs text-accent-2">
@@ -1535,7 +1619,7 @@ export default function Thread({
           value={messageDraft}
           onChange={(event) => setMessageDraft(event.target.value)}
           onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
-            if (event.key !== "Enter" || event.shiftKey) {
+            if (event.key !== "Enter" || (!event.metaKey && !event.ctrlKey)) {
               return;
             }
             event.preventDefault();

@@ -6,7 +6,7 @@ import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
-import { ApiError, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
+import { ApiError, EmojiItem, EmojisResolveResponse, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 
@@ -28,6 +28,12 @@ type PostSectionProps = {
 const COMMENT_PATH_SEPARATOR = ">";
 const EMOJI_ONLY_COMMENT_REGEX = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
 const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
+const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
+const B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const CUSTOM_EMOJI_GRID_SIZE = 64;
+const CUSTOM_EMOJI_PIXEL_COUNT = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_GRID_SIZE;
+const CUSTOM_EMOJI_TRANSPARENT_FLAG = 1 << 9;
+const CUSTOM_EMOJI_RGB_MASK = 0b1_1111_1111;
 
 const formatPostDate = (value: string): string => {
   const date = new Date(value);
@@ -44,7 +50,55 @@ const formatPostDate = (value: string): string => {
 
 const isEmojiOnlyComment = (value: string): boolean => {
   const trimmed = value.trim();
-  return Boolean(trimmed) && EMOJI_ONLY_COMMENT_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed);
+  return (
+    (Boolean(trimmed) && EMOJI_ONLY_COMMENT_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed))
+    || CUSTOM_EMOJI_TOKEN_REGEX.test(trimmed)
+  );
+};
+
+const customEmojiUuidFromToken = (value: string): string | null => {
+  const match = value.trim().match(CUSTOM_EMOJI_TOKEN_REGEX);
+  return match?.[1] ?? null;
+};
+
+const decodeCustomEmojiDataB64 = (dataB64: string): Uint16Array => {
+  const pixels = new Uint16Array(CUSTOM_EMOJI_PIXEL_COUNT);
+  if (dataB64.length !== CUSTOM_EMOJI_PIXEL_COUNT * 2) {
+    return pixels;
+  }
+  for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
+    const first = B64_ALPHABET.indexOf(dataB64[i * 2]);
+    const second = B64_ALPHABET.indexOf(dataB64[i * 2 + 1]);
+    if (first < 0 || second < 0) {
+      continue;
+    }
+    const r = (first >> 3) & 0b111;
+    const g = first & 0b111;
+    const b = (second >> 3) & 0b111;
+    const rgb = (r << 6) | (g << 3) | b;
+    const metadata = second & 0b111;
+    const isTransparent = (metadata & 0b001) === 0b001 || (metadata === 0 && rgb === 0);
+    pixels[i] = rgb | (isTransparent ? CUSTOM_EMOJI_TRANSPARENT_FLAG : 0);
+  }
+  return pixels;
+};
+
+const drawCustomEmojiCanvas = (canvas: HTMLCanvasElement, dataB64: string) => {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return;
+  }
+  const pixels = decodeCustomEmojiDataB64(dataB64);
+  const imageData = ctx.createImageData(CUSTOM_EMOJI_GRID_SIZE, CUSTOM_EMOJI_GRID_SIZE);
+  for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
+    const packed = pixels[i] ?? 0;
+    const rgb = packed & CUSTOM_EMOJI_RGB_MASK;
+    imageData.data[i * 4] = Math.round(((rgb >> 6) & 0b111) * (255 / 7));
+    imageData.data[i * 4 + 1] = Math.round(((rgb >> 3) & 0b111) * (255 / 7));
+    imageData.data[i * 4 + 2] = Math.round((rgb & 0b111) * (255 / 7));
+    imageData.data[i * 4 + 3] = (packed & CUSTOM_EMOJI_TRANSPARENT_FLAG) === CUSTOM_EMOJI_TRANSPARENT_FLAG ? 0 : 255;
+  }
+  ctx.putImageData(imageData, 0, 0);
 };
 
 const getCommentAtPath = (
@@ -97,6 +151,7 @@ function PostSectionComponent({
   const [postTextDraft, setPostTextDraft] = useState(post.text);
   const [isSavingPostText, setIsSavingPostText] = useState(false);
   const [postTextStatusMessage, setPostTextStatusMessage] = useState("");
+  const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
   const [imageViewer, setImageViewer] = useState<{
     signedUrl: string;
     imageId: string | null;
@@ -118,12 +173,26 @@ function PostSectionComponent({
     [rootCommentEntries],
   );
   const rootEmojiReactions = useMemo(
-    () =>
-      rootCommentEntries
-        .filter(([, comment]) => isEmojiOnlyComment(comment.text))
-        .map(([, comment]) => comment.text.trim()),
+    () => rootCommentEntries.filter(([, comment]) => isEmojiOnlyComment(comment.text)).map(([, comment]) => comment.text.trim()),
     [rootCommentEntries],
   );
+  const customEmojiUuidsInPostData = useMemo(() => {
+    const uuids = new Set<string>();
+    const walk = (comments: Record<string, PostCommentNode> | undefined) => {
+      if (!comments) {
+        return;
+      }
+      Object.values(comments).forEach((comment) => {
+        const uuid = customEmojiUuidFromToken(comment.text);
+        if (uuid) {
+          uuids.add(uuid);
+        }
+        walk(comment.replies);
+      });
+    };
+    walk(postData.comments);
+    return Array.from(uuids);
+  }, [postData.comments]);
   const allPostImageIds = useMemo(() => {
     const ids: string[] = [];
     if (post.image_id) {
@@ -153,7 +222,38 @@ function PostSectionComponent({
     setPostTextDraft(post.text);
     setPostTextStatusMessage("");
     setImageViewer(null);
+    setCustomEmojiByUuid({});
   }, [post.data, post.id, post.image_id, post.image_url, post.text]);
+
+  useEffect(() => {
+    if (customEmojiUuidsInPostData.length === 0) {
+      setCustomEmojiByUuid({});
+      return;
+    }
+    let cancelled = false;
+    const resolveCustomEmojis = async () => {
+      try {
+        const response = await fetch("/api/emojis-resolve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ uuids: customEmojiUuidsInPostData }),
+        });
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as EmojisResolveResponse;
+        if (!cancelled) {
+          setCustomEmojiByUuid(payload.emojis_by_uuid ?? {});
+        }
+      } catch {
+        // Ignore failures; custom emoji reaction falls back to token text.
+      }
+    };
+    void resolveCustomEmojis();
+    return () => {
+      cancelled = true;
+    };
+  }, [customEmojiUuidsInPostData]);
 
   useEffect(() => {
     const fallbackLikeCount = Object.values(initialLikes).filter(Boolean).length;
@@ -319,6 +419,32 @@ function PostSectionComponent({
   const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
   const canEditPostText = Boolean(currentUserId) && post.created_by === currentUserId;
 
+  const renderReactionEmoji = (value: string, key: string) => {
+    const uuid = customEmojiUuidFromToken(value);
+    if (!uuid) {
+      return <span key={key} className="text-base leading-none">{value}</span>;
+    }
+    const customEmoji = customEmojiByUuid[uuid];
+    if (!customEmoji) {
+      return <span key={key} className="text-base leading-none">?</span>;
+    }
+    return (
+      <canvas
+        key={key}
+        width={CUSTOM_EMOJI_GRID_SIZE}
+        height={CUSTOM_EMOJI_GRID_SIZE}
+        ref={(el) => {
+          if (!el) {
+            return;
+          }
+          drawCustomEmojiCanvas(el, customEmoji.data_b64);
+        }}
+        className="h-5 w-5 [image-rendering:pixelated]"
+        title={customEmoji.name}
+      />
+    );
+  };
+
   const onSavePostText = async () => {
     if (!canEditPostText || isSavingPostText) {
       return;
@@ -472,11 +598,9 @@ function PostSectionComponent({
         )}
         {emojiReplyEntries.length > 0 ? (
           <div className="ml-10 flex flex-wrap items-center gap-1">
-            {emojiReplyEntries.map(([childTimestamp, childComment]) => (
-              <span key={childTimestamp} className="text-base leading-none">
-                {childComment.text.trim()}
-              </span>
-            ))}
+            {emojiReplyEntries.map(([childTimestamp, childComment]) =>
+              renderReactionEmoji(childComment.text.trim(), childTimestamp),
+            )}
           </div>
         ) : null}
         <div className="ml-10 flex items-center gap-5">
@@ -718,11 +842,7 @@ function PostSectionComponent({
 
           {rootEmojiReactions.length > 0 ? (
             <div className="flex max-w-[60%] flex-wrap items-center gap-0">
-              {rootEmojiReactions.map((emoji, index) => (
-                <span key={`${emoji}-${index}`} className="text-base leading-none">
-                  {emoji}
-                </span>
-              ))}
+              {rootEmojiReactions.map((emoji, index) => renderReactionEmoji(emoji, `${emoji}-${index}`))}
             </div>
           ) : null}
         </div>

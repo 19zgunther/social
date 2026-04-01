@@ -7,6 +7,7 @@ import CachedImage from "@/app/components/utils/CachedImage";
 import { PostSection } from "@/app/components/PostSection";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
+import EmojiEditorTab from "@/app/components/EmojiEditorTab";
 import {
   AcceptedFriend,
   ApiError,
@@ -269,7 +270,7 @@ function Profile({
   const [incomingRequests, setIncomingRequests] = useState<IncomingFriendRequest[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<OutgoingFriendRequest[]>([]);
   const [acceptedFriends, setAcceptedFriends] = useState<AcceptedFriend[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<"posts" | "friends">("posts");
+  const [activeSubTab, setActiveSubTab] = useState<"posts" | "friends" | "emojis">("posts");
   const [isLoadingFriendRows, setIsLoadingFriendRows] = useState(true);
   const [activeFriendUserId, setActiveFriendUserId] = useState<string | null>(null);
   const [activeIncomingRequestId, setActiveIncomingRequestId] = useState<string | null>(null);
@@ -612,6 +613,16 @@ function Profile({
           >
             Friends
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab("emojis")}
+            className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold transition ${activeSubTab === "emojis"
+              ? "border-accent-3 text-foreground"
+              : "border-transparent text-accent-2 hover:text-foreground"
+              }`}
+          >
+            Emoji Editor
+          </button>
         </div>
       </section>
 
@@ -745,6 +756,8 @@ function Profile({
             </div>
           ) : null}
         </section>
+      ) : activeSubTab === "emojis" ? (
+        <EmojiEditorTab isActive={activeSubTab === "emojis"} />
       ) : (
         <ProfilePostsSection
           posts={posts}

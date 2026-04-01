@@ -8,9 +8,28 @@ type CachedImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
   imageId: string | null;
 };
 
+function LoadingSpinner() {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: 28,
+        height: 28,
+        border: "2.5px solid rgba(100, 110, 125, 0.22)",
+        borderTopColor: "rgba(55, 65, 80, 0.85)",
+        borderRadius: "50%",
+        boxSizing: "border-box",
+        animation: "cached-image-spin 0.65s linear infinite",
+      }}
+    />
+  );
+}
+
 export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedImageProps) {
   const [src, setSrc] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  const { className, style, ...restImgProps } = imgProps;
 
   useEffect(() => {
     let isCancelled = false;
@@ -44,59 +63,69 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
 
   const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
     setIsLoaded(true);
-    imgProps.onLoad?.(event);
+    restImgProps.onLoad?.(event);
   };
 
   const handleError = (event: SyntheticEvent<HTMLImageElement>) => {
     setIsLoaded(true);
-    imgProps.onError?.(event);
+    restImgProps.onError?.(event);
   };
 
   const imageStyle: CSSProperties = {
-    ...imgProps.style,
     opacity: isLoaded ? 1 : 0,
     transition: "opacity 240ms ease-out",
   };
 
-  if (resolvedSrc) {
-    return (
-      <img
-        {...imgProps}
-        src={resolvedSrc}
-        onLoad={handleLoad}
-        onError={handleError}
-        style={imageStyle}
-      />
-    )
-  }
+  const hasSource = Boolean(signedUrl || imageId);
+  const showLoader = hasSource && !(resolvedSrc && isLoaded);
+
+  const wrapperStyle: CSSProperties = {
+    display: "grid",
+    lineHeight: 0,
+    ...style,
+  };
+
+  const gridCell: CSSProperties = {
+    gridArea: "1 / 1",
+  };
 
   return (
     <>
       <style>{`
-        @keyframes cached-image-pulse {
-          0% { opacity: 0.0; }
-          50% { opacity: 0.45; }
-          100% { opacity: 0.0; }
+        @keyframes cached-image-spin {
+          to { transform: rotate(360deg); }
         }
       `}</style>
       <span
-        style={{
-          position: "relative",
-          display: "inline-block",
-          overflow: "hidden",
-          lineHeight: 0,
-        }}
+        className={className}
+        style={wrapperStyle}
+        role={showLoader ? "status" : undefined}
+        aria-busy={showLoader || undefined}
+        aria-label={showLoader ? "Loading image" : undefined}
       >
-        {!isLoaded && (resolvedSrc || signedUrl || imageId) && (
-          <span
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              inset: 0,
-              backgroundColor: "#dfe3e8",
-              animation: "cached-image-pulse 1.1s ease-in-out infinite",
-            }}
+        {resolvedSrc ? (
+          <img
+            {...restImgProps}
+            src={resolvedSrc}
+            onLoad={handleLoad}
+            onError={handleError}
+            className={className}
+            style={{ ...gridCell, zIndex: 2, ...imageStyle }}
           />
+        ) : null}
+        {showLoader && (
+          <span
+            style={{
+              ...gridCell,
+              zIndex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#e8eaed",
+            }}
+          >
+            <LoadingSpinner />
+          </span>
         )}
       </span>
     </>
