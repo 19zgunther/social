@@ -11,6 +11,8 @@ const RECENT_EMOJIS_STORAGE_BACKUP_KEY = "emojiPickerRecentUsageBackup";
 const MAX_RECENT_EMOJIS = 50;
 const CUSTOM_EMOJI_GRID_SIZE = 64;
 const CUSTOM_EMOJI_PIXEL_COUNT = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_GRID_SIZE;
+const CUSTOM_EMOJI_UPSCALE_FACTOR = 4;
+const CUSTOM_EMOJI_RENDER_SIZE = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_UPSCALE_FACTOR;
 const B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const CUSTOM_EMOJI_TRANSPARENT_FLAG = 1 << 9;
 const CUSTOM_EMOJI_RGB_MASK = 0b1_1111_1111;
@@ -166,8 +168,10 @@ const drawCustomEmojiPreview = (canvas: HTMLCanvasElement, dataB64: string) => {
   if (!ctx) {
     return;
   }
+  canvas.width = CUSTOM_EMOJI_RENDER_SIZE;
+  canvas.height = CUSTOM_EMOJI_RENDER_SIZE;
   const pixels = decodeCustomEmojiDataB64(dataB64);
-  const imageData = ctx.createImageData(CUSTOM_EMOJI_GRID_SIZE, CUSTOM_EMOJI_GRID_SIZE);
+  const imageData = new ImageData(CUSTOM_EMOJI_GRID_SIZE, CUSTOM_EMOJI_GRID_SIZE);
   for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
     const packed = pixels[i] ?? 0;
     const rgb = packed & CUSTOM_EMOJI_RGB_MASK;
@@ -176,7 +180,18 @@ const drawCustomEmojiPreview = (canvas: HTMLCanvasElement, dataB64: string) => {
     imageData.data[i * 4 + 2] = Math.round((rgb & 0b111) * (255 / 7));
     imageData.data[i * 4 + 3] = (packed & CUSTOM_EMOJI_TRANSPARENT_FLAG) === CUSTOM_EMOJI_TRANSPARENT_FLAG ? 0 : 255;
   }
-  ctx.putImageData(imageData, 0, 0);
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = CUSTOM_EMOJI_GRID_SIZE;
+  sourceCanvas.height = CUSTOM_EMOJI_GRID_SIZE;
+  const sourceCtx = sourceCanvas.getContext("2d");
+  if (!sourceCtx) {
+    return;
+  }
+  sourceCtx.putImageData(imageData, 0, 0);
+  ctx.clearRect(0, 0, CUSTOM_EMOJI_RENDER_SIZE, CUSTOM_EMOJI_RENDER_SIZE);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(sourceCanvas, 0, 0, CUSTOM_EMOJI_RENDER_SIZE, CUSTOM_EMOJI_RENDER_SIZE);
 };
 
 type EmojiPickerProps = {
@@ -404,8 +419,8 @@ export default function EmojiPicker({
                           title={emoji.name}
                         >
                           <canvas
-                            width={CUSTOM_EMOJI_GRID_SIZE}
-                            height={CUSTOM_EMOJI_GRID_SIZE}
+                            width={CUSTOM_EMOJI_RENDER_SIZE}
+                            height={CUSTOM_EMOJI_RENDER_SIZE}
                             ref={(el) => {
                               if (!el) {
                                 return;
