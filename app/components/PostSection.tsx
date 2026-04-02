@@ -137,6 +137,34 @@ const getCommentAtPath = (
   return null;
 };
 
+function RenderReactionEmoji({value, key, customEmojiByUuid}: {value: string, key: string, customEmojiByUuid: Record<string, EmojiItem>}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const uuid = customEmojiUuidFromToken(value);
+  if (!uuid) {
+    return <span key={key} className="text-xl leading-none">{value}</span>;
+  }
+  const customEmoji = customEmojiByUuid[uuid];
+  if (!customEmoji) {
+    return <span key={key} className="text-xl leading-none">?</span>;
+  }
+  return (
+    <canvas
+      key={key}
+      width={CUSTOM_EMOJI_RENDER_SIZE}
+      height={CUSTOM_EMOJI_RENDER_SIZE}
+      ref={(el) => {
+        if (!el) {
+          return;
+        }
+        drawCustomEmojiCanvas(el, customEmoji.data_b64);
+      }}
+      onPointerDown={() => { setIsExpanded(!isExpanded); setTimeout(() => { setIsExpanded(false); }, 4000); }}
+      className={`h-7 w-7 [image-rendering:pixelated] ${isExpanded ? "h-20 w-20" : ""} transition-all duration-100`}
+      title={customEmoji.name}
+    />
+  );
+};
+
 function PostSectionComponent({
   post,
   currentUserId,
@@ -434,32 +462,6 @@ function PostSectionComponent({
   const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
   const canEditPostText = Boolean(currentUserId) && post.created_by === currentUserId;
 
-  const renderReactionEmoji = (value: string, key: string) => {
-    const uuid = customEmojiUuidFromToken(value);
-    if (!uuid) {
-      return <span key={key} className="text-xl leading-none">{value}</span>;
-    }
-    const customEmoji = customEmojiByUuid[uuid];
-    if (!customEmoji) {
-      return <span key={key} className="text-xl leading-none">?</span>;
-    }
-    return (
-      <canvas
-        key={key}
-        width={CUSTOM_EMOJI_RENDER_SIZE}
-        height={CUSTOM_EMOJI_RENDER_SIZE}
-        ref={(el) => {
-          if (!el) {
-            return;
-          }
-          drawCustomEmojiCanvas(el, customEmoji.data_b64);
-        }}
-        className="h-7 w-7 [image-rendering:pixelated]"
-        title={customEmoji.name}
-      />
-    );
-  };
-
   const onSavePostText = async () => {
     if (!canEditPostText || isSavingPostText) {
       return;
@@ -614,7 +616,7 @@ function PostSectionComponent({
         {emojiReplyEntries.length > 0 ? (
           <div className="ml-10 flex flex-wrap items-center gap-1">
             {emojiReplyEntries.map(([childTimestamp, childComment]) =>
-              renderReactionEmoji(childComment.text.trim(), childTimestamp),
+              <RenderReactionEmoji key={childTimestamp} value={childComment.text.trim()} customEmojiByUuid={customEmojiByUuid} />
             )}
           </div>
         ) : null}
@@ -857,7 +859,7 @@ function PostSectionComponent({
 
           {rootEmojiReactions.length > 0 ? (
             <div className="flex max-w-[60%] flex-wrap items-center gap-0">
-              {rootEmojiReactions.map((emoji, index) => renderReactionEmoji(emoji, `${emoji}-${index}`))}
+              {rootEmojiReactions.map((emoji, index) => <RenderReactionEmoji key={`${emoji}-${index}`} value={emoji} customEmojiByUuid={customEmojiByUuid} />)}
             </div>
           ) : null}
         </div>
