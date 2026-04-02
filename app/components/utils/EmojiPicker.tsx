@@ -13,6 +13,7 @@ const CUSTOM_EMOJI_GRID_SIZE = 64;
 const CUSTOM_EMOJI_PIXEL_COUNT = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_GRID_SIZE;
 const CUSTOM_EMOJI_UPSCALE_FACTOR = 4;
 const CUSTOM_EMOJI_RENDER_SIZE = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_UPSCALE_FACTOR;
+const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
 const B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const CUSTOM_EMOJI_TRANSPARENT_FLAG = 1 << 9;
 const CUSTOM_EMOJI_RGB_MASK = 0b1_1111_1111;
@@ -194,6 +195,11 @@ const drawCustomEmojiPreview = (canvas: HTMLCanvasElement, dataB64: string) => {
   ctx.drawImage(sourceCanvas, 0, 0, CUSTOM_EMOJI_RENDER_SIZE, CUSTOM_EMOJI_RENDER_SIZE);
 };
 
+const customEmojiUuidFromToken = (value: string): string | null => {
+  const match = value.trim().match(CUSTOM_EMOJI_TOKEN_REGEX);
+  return match?.[1] ?? null;
+};
+
 type EmojiPickerProps = {
   onSelectEmoji: (emoji: string) => void;
   className?: string;
@@ -212,6 +218,10 @@ export default function EmojiPicker({
   const [searchTerm, setSearchTerm] = useState("");
   const [recentEmojiUsage, setRecentEmojiUsage] = useState<EmojiUsageEntry[]>([]);
   const [customEmojis, setCustomEmojis] = useState<EmojiItem[]>([]);
+  const customEmojiByUuid = useMemo(
+    () => Object.fromEntries(customEmojis.map((emoji) => [emoji.uuid, emoji])),
+    [customEmojis],
+  );
   const allEmojiOptions = useMemo(() => Object.keys(emojiKeywordsByEmoji), []);
   
   const emojiSearchKeywordsByEmoji = useMemo(() => {
@@ -392,15 +402,45 @@ export default function EmojiPicker({
               <div className="mb-3 overflow-x-auto overflow-y-hidden pb-1">
                 <div className="grid grid-flow-col grid-rows-1 gap-1">
                   {recentEmojiOptions.map((emoji, index) => (
-                    <button
-                      key={`recent-${emoji}-${index}`}
-                      type="button"
-                      onClick={() => handleSelectEmoji(emoji)}
-                      className="h-8 w-8 rounded-md px-1 py-1 text-base transition hover:bg-accent-1/40"
-                      aria-label={`Insert ${emoji}`}
-                    >
-                      {emoji}
-                    </button>
+                    (() => {
+                      const customEmojiUuid = customEmojiUuidFromToken(emoji);
+                      const customEmoji = customEmojiUuid ? customEmojiByUuid[customEmojiUuid] : undefined;
+                      if (customEmoji) {
+                        return (
+                          <button
+                            key={`recent-${emoji}-${index}`}
+                            type="button"
+                            onClick={() => handleSelectEmoji(emoji)}
+                            className="flex h-10 w-10 items-center justify-center rounded-md px-1 py-1 transition hover:bg-accent-1/40"
+                            aria-label={`Insert custom emoji ${customEmoji.name}`}
+                            title={customEmoji.name}
+                          >
+                            <canvas
+                              width={CUSTOM_EMOJI_RENDER_SIZE}
+                              height={CUSTOM_EMOJI_RENDER_SIZE}
+                              ref={(el) => {
+                                if (!el) {
+                                  return;
+                                }
+                                drawCustomEmojiPreview(el, customEmoji.data_b64);
+                              }}
+                              className="h-7 w-7 [image-rendering:pixelated]"
+                            />
+                          </button>
+                        );
+                      }
+                      return (
+                        <button
+                          key={`recent-${emoji}-${index}`}
+                          type="button"
+                          onClick={() => handleSelectEmoji(emoji)}
+                          className="h-10 w-10 rounded-md px-1 py-1 text-lg transition hover:bg-accent-1/40"
+                          aria-label={`Insert ${emoji}`}
+                        >
+                          {emoji}
+                        </button>
+                      );
+                    })()
                   ))}
                 </div>
               </div>
@@ -408,13 +448,13 @@ export default function EmojiPicker({
                 <>
                   <p className="mb-1 text-[11px] font-semibold text-accent-2">Your custom emojis</p>
                   <div className="mb-3 overflow-x-auto overflow-y-hidden pb-1">
-                    <div className="grid h-[6.5rem] grid-flow-col grid-rows-3 gap-1">
+                    <div className="grid grid-flow-col grid-rows-1 gap-1">
                       {customEmojis.map((emoji) => (
                         <button
                           key={emoji.uuid}
                           type="button"
                           onClick={() => handleSelectEmoji(customEmojiToken(emoji.uuid))}
-                          className="flex h-8 w-8 items-center justify-center rounded-md px-1 py-1 transition hover:bg-accent-1/40"
+                          className="flex h-10 w-10 items-center justify-center rounded-md px-1 py-1 transition hover:bg-accent-1/40"
                           aria-label={`Insert custom emoji ${emoji.name}`}
                           title={emoji.name}
                         >
@@ -427,7 +467,7 @@ export default function EmojiPicker({
                               }
                               drawCustomEmojiPreview(el, emoji.data_b64);
                             }}
-                            className="h-6 w-6 [image-rendering:pixelated]"
+                            className="h-7 w-7 [image-rendering:pixelated]"
                           />
                         </button>
                       ))}
@@ -437,13 +477,13 @@ export default function EmojiPicker({
               ) : null}
               <p className="mb-1 text-[11px] font-semibold text-accent-2">All emojis</p>
               <div className="overflow-x-auto overflow-y-hidden pb-1">
-                <div className="grid h-[8.75rem] grid-flow-col grid-rows-4 gap-1">
+                <div className="grid h-[11rem] grid-flow-col grid-rows-4 gap-1">
                   {filteredEmojiOptions.map((emoji, index) => (
                     <button
                       key={`${emoji}-${index}`}
                       type="button"
                       onClick={() => handleSelectEmoji(emoji)}
-                      className="h-8 w-8 rounded-md px-1 py-1 text-base transition hover:bg-accent-1/40"
+                      className="h-10 w-10 rounded-md px-1 py-1 text-lg transition hover:bg-accent-1/40"
                       aria-label={`Insert ${emoji}`}
                     >
                       {emoji}

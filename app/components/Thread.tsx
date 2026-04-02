@@ -8,6 +8,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -33,6 +34,8 @@ import {
   ApiError,
   ImageOverlayData,
   MessageData,
+  EmojiItem,
+  EmojisResolveResponse,
   PoolGameMessageData,
   SyncResponse,
   ThreadItem,
@@ -63,6 +66,14 @@ const MESSAGE_LONG_PRESS_TO_REPLY_MS = 500;
 const EMOJI_ONLY_MESSAGE_REGEX =
   /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
 const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
+const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
+const CUSTOM_EMOJI_GRID_SIZE = 64;
+const CUSTOM_EMOJI_PIXEL_COUNT = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_GRID_SIZE;
+const CUSTOM_EMOJI_UPSCALE_FACTOR = 4;
+const CUSTOM_EMOJI_RENDER_SIZE = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_UPSCALE_FACTOR;
+const B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const CUSTOM_EMOJI_TRANSPARENT_FLAG = 1 << 9;
+const CUSTOM_EMOJI_RGB_MASK = 0b1_1111_1111;
 
 const THREAD_MESSAGES_CACHE_KEY_PREFIX = "thread_messages_v1_";
 const TIMESTAMP_REVEAL_MAX_PX = 68;
@@ -120,7 +131,68 @@ const mergeMessagesById = (
 
 const isEmojiOnlyMessage = (value: string): boolean => {
   const trimmed = value.trim();
-  return Boolean(trimmed) && EMOJI_ONLY_MESSAGE_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed);
+  return (
+    (Boolean(trimmed) && EMOJI_ONLY_MESSAGE_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed))
+    || CUSTOM_EMOJI_TOKEN_REGEX.test(trimmed)
+  );
+};
+
+const customEmojiUuidFromToken = (value: string): string | null => {
+  const match = value.trim().match(CUSTOM_EMOJI_TOKEN_REGEX);
+  return match?.[1] ?? null;
+};
+
+const decodeCustomEmojiDataB64 = (dataB64: string): Uint16Array => {
+  const pixels = new Uint16Array(CUSTOM_EMOJI_PIXEL_COUNT);
+  if (dataB64.length !== CUSTOM_EMOJI_PIXEL_COUNT * 2) {
+    return pixels;
+  }
+  for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
+    const first = B64_ALPHABET.indexOf(dataB64[i * 2]);
+    const second = B64_ALPHABET.indexOf(dataB64[i * 2 + 1]);
+    if (first < 0 || second < 0) {
+      continue;
+    }
+    const r = (first >> 3) & 0b111;
+    const g = first & 0b111;
+    const b = (second >> 3) & 0b111;
+    const rgb = (r << 6) | (g << 3) | b;
+    const metadata = second & 0b111;
+    const isTransparent = (metadata & 0b001) === 0b001 || (metadata === 0 && rgb === 0);
+    pixels[i] = rgb | (isTransparent ? CUSTOM_EMOJI_TRANSPARENT_FLAG : 0);
+  }
+  return pixels;
+};
+
+const drawCustomEmojiCanvas = (canvas: HTMLCanvasElement, dataB64: string) => {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return;
+  }
+  canvas.width = CUSTOM_EMOJI_RENDER_SIZE;
+  canvas.height = CUSTOM_EMOJI_RENDER_SIZE;
+  const pixels = decodeCustomEmojiDataB64(dataB64);
+  const imageData = new ImageData(CUSTOM_EMOJI_GRID_SIZE, CUSTOM_EMOJI_GRID_SIZE);
+  for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
+    const packed = pixels[i] ?? 0;
+    const rgb = packed & CUSTOM_EMOJI_RGB_MASK;
+    imageData.data[i * 4] = Math.round(((rgb >> 6) & 0b111) * (255 / 7));
+    imageData.data[i * 4 + 1] = Math.round(((rgb >> 3) & 0b111) * (255 / 7));
+    imageData.data[i * 4 + 2] = Math.round((rgb & 0b111) * (255 / 7));
+    imageData.data[i * 4 + 3] = (packed & CUSTOM_EMOJI_TRANSPARENT_FLAG) === CUSTOM_EMOJI_TRANSPARENT_FLAG ? 0 : 255;
+  }
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = CUSTOM_EMOJI_GRID_SIZE;
+  sourceCanvas.height = CUSTOM_EMOJI_GRID_SIZE;
+  const sourceCtx = sourceCanvas.getContext("2d");
+  if (!sourceCtx) {
+    return;
+  }
+  sourceCtx.putImageData(imageData, 0, 0);
+  ctx.clearRect(0, 0, CUSTOM_EMOJI_RENDER_SIZE, CUSTOM_EMOJI_RENDER_SIZE);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(sourceCanvas, 0, 0, CUSTOM_EMOJI_RENDER_SIZE, CUSTOM_EMOJI_RENDER_SIZE);
 };
 
 const clampOverlayYRatio = (value: number): number => {
@@ -190,6 +262,7 @@ export default function Thread({
     imageId: string | null;
     alt: string;
   } | null>(null);
+  const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingBottomScrollRef = useRef<ScrollBehavior | null>(null);
@@ -344,6 +417,7 @@ export default function Thread({
     setIsGamesModalOpen(false);
     setPoolSession(null);
     setImageViewer(null);
+    setCustomEmojiByUuid({});
 
     const loadThread = async () => {
       setIsLoadingMessages(true);
@@ -431,6 +505,43 @@ export default function Thread({
       isCancelled = true;
     };
   }, [readThreadMessagesCache, writeThreadMessagesCache]);
+
+  const customEmojiUuidsInMessages = useMemo(() => {
+    const uuids = new Set<string>();
+    messages.forEach((message) => {
+      const uuid = customEmojiUuidFromToken(message.text);
+      if (uuid) {
+        uuids.add(uuid);
+      }
+    });
+    return Array.from(uuids);
+  }, [messages]);
+
+  useEffect(() => {
+    if (customEmojiUuidsInMessages.length === 0) {
+      setCustomEmojiByUuid({});
+      return;
+    }
+    let cancelled = false;
+    const resolveCustomEmojis = async () => {
+      try {
+        const response = await postWithAuth("/api/emojis-resolve", { uuids: customEmojiUuidsInMessages });
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as EmojisResolveResponse;
+        if (!cancelled) {
+          setCustomEmojiByUuid(payload.emojis_by_uuid ?? {});
+        }
+      } catch {
+        // Best effort; unresolved custom emoji falls back to token text.
+      }
+    };
+    void resolveCustomEmojis();
+    return () => {
+      cancelled = true;
+    };
+  }, [customEmojiUuidsInMessages]);
 
   const loadOlderMessages = async () => {
     if (
@@ -1058,6 +1169,8 @@ export default function Thread({
     const messageImageOverlay = toImageOverlayData(message.data);
     const poolGame = getPoolGameFromMessageData(message.data);
     const showPoolCard = poolGame && latestPoolMessageIds.has(message.id);
+    const customEmojiUuid = customEmojiUuidFromToken(message.text);
+    const customEmoji = customEmojiUuid ? customEmojiByUuid[customEmojiUuid] : undefined;
 
     if (showPoolCard && poolGame) {
       const isLockedPlayer =
@@ -1197,7 +1310,22 @@ export default function Thread({
               <p className="text-xs opacity-60 [-webkit-touch-callout:none]">
                 {isOwnMessage ? "You" : message.username}
               </p>
-              <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
+              {customEmoji ? (
+                <canvas
+                  width={CUSTOM_EMOJI_RENDER_SIZE}
+                  height={CUSTOM_EMOJI_RENDER_SIZE}
+                  ref={(el) => {
+                    if (!el) {
+                      return;
+                    }
+                    drawCustomEmojiCanvas(el, customEmoji.data_b64);
+                  }}
+                  className="h-8 w-8 [image-rendering:pixelated]"
+                  title={customEmoji.name}
+                />
+              ) : (
+                <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
+              )}
             </>
           ) : null}
           {isImageOnly ? (
@@ -1250,11 +1378,32 @@ export default function Thread({
 
         {emojiOnlyChildren.length > 0 ? (
           <div className="mt-1 ml-1 flex flex-wrap items-center gap-1">
-            {emojiOnlyChildren.map((childMessage) => (
-              <span key={childMessage.id} className="text-base leading-none">
-                {childMessage.text.trim()}
-              </span>
-            ))}
+            {emojiOnlyChildren.map((childMessage) => {
+              const childCustomEmojiUuid = customEmojiUuidFromToken(childMessage.text);
+              const childCustomEmoji = childCustomEmojiUuid ? customEmojiByUuid[childCustomEmojiUuid] : undefined;
+              if (childCustomEmoji) {
+                return (
+                  <canvas
+                    key={childMessage.id}
+                    width={CUSTOM_EMOJI_RENDER_SIZE}
+                    height={CUSTOM_EMOJI_RENDER_SIZE}
+                    ref={(el) => {
+                      if (!el) {
+                        return;
+                      }
+                      drawCustomEmojiCanvas(el, childCustomEmoji.data_b64);
+                    }}
+                    className="h-5 w-5 [image-rendering:pixelated]"
+                    title={childCustomEmoji.name}
+                  />
+                );
+              }
+              return (
+                <span key={childMessage.id} className="text-base leading-none">
+                  {childMessage.text.trim()}
+                </span>
+              );
+            })}
           </div>
         ) : null}
 
