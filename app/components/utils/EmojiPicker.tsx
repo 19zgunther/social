@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Smile } from "lucide-react";
+import { Smile, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import emojiKeywordsByEmoji from "emojilib";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./useSwipeBack";
@@ -382,7 +382,7 @@ export default function EmojiPicker({
                   onClick={() => setIsOpen(false)}
                   className="rounded-md border border-accent-1 px-2 py-1 text-sm text-accent-2 hover:text-foreground"
                 >
-                  Close
+                  <X className="h-6 w-6" />
                 </button>
               </div>
               <div className="mb-2">
@@ -400,7 +400,7 @@ export default function EmojiPicker({
               </div>
               <p className="mb-1 text-[11px] font-semibold text-accent-2">Recent</p>
               <div className="mb-3 overflow-x-auto overflow-y-hidden pb-1">
-                <div className="grid grid-flow-col grid-rows-1 gap-1">
+                <div className="grid grid-flow-col grid-rows-1 gap-0">
                   {recentEmojiOptions.map((emoji, index) => (
                     (() => {
                       const customEmojiUuid = customEmojiUuidFromToken(emoji);
@@ -448,13 +448,13 @@ export default function EmojiPicker({
                 <>
                   <p className="mb-1 text-[11px] font-semibold text-accent-2">Your custom emojis</p>
                   <div className="mb-3 overflow-x-auto overflow-y-hidden pb-1">
-                    <div className="grid grid-flow-col grid-rows-1 gap-1">
+                    <div className="grid grid-flow-col grid-rows-1 gap-0">
                       {customEmojis.map((emoji) => (
                         <button
                           key={emoji.uuid}
                           type="button"
                           onClick={() => handleSelectEmoji(customEmojiToken(emoji.uuid))}
-                          className="flex h-10 w-10 items-center justify-center rounded-md px-1 py-1 transition hover:bg-accent-1/40"
+                          className="flex h-14 w-14 items-center justify-center rounded-md px-1 py-1 transition hover:bg-accent-1/40"
                           aria-label={`Insert custom emoji ${emoji.name}`}
                           title={emoji.name}
                         >
@@ -477,14 +477,15 @@ export default function EmojiPicker({
               ) : null}
               <p className="mb-1 text-[11px] font-semibold text-accent-2">All emojis</p>
               <div className="overflow-x-auto overflow-y-hidden pb-1">
-                <div className="grid h-[11rem] grid-flow-col grid-rows-4 gap-1">
+                <div className="grid h-[11rem] grid-flow-col grid-rows-4 gap-0">
                   {filteredEmojiOptions.map((emoji, index) => (
                     <button
                       key={`${emoji}-${index}`}
                       type="button"
                       onClick={() => handleSelectEmoji(emoji)}
-                      className="h-10 w-10 rounded-md px-1 py-1 text-lg transition hover:bg-accent-1/40"
+                      className="h-14 w-14 rounded-md px-1 py-1 text-xl transition hover:bg-accent-1/40"
                       aria-label={`Insert ${emoji}`}
+                      style={{ fontSize: "1.5rem" }}
                     >
                       {emoji}
                     </button>

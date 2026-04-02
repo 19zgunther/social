@@ -437,11 +437,11 @@ function PostSectionComponent({
   const renderReactionEmoji = (value: string, key: string) => {
     const uuid = customEmojiUuidFromToken(value);
     if (!uuid) {
-      return <span key={key} className="text-base leading-none">{value}</span>;
+      return <span key={key} className="text-xl leading-none">{value}</span>;
     }
     const customEmoji = customEmojiByUuid[uuid];
     if (!customEmoji) {
-      return <span key={key} className="text-base leading-none">?</span>;
+      return <span key={key} className="text-xl leading-none">?</span>;
     }
     return (
       <canvas
@@ -454,7 +454,7 @@ function PostSectionComponent({
           }
           drawCustomEmojiCanvas(el, customEmoji.data_b64);
         }}
-        className="h-5 w-5 [image-rendering:pixelated]"
+        className="h-7 w-7 [image-rendering:pixelated]"
         title={customEmoji.name}
       />
     );
