@@ -2,6 +2,7 @@
 
 import { CSSProperties, ImgHTMLAttributes, SyntheticEvent, useEffect, useMemo, useState } from "react";
 import { imageCache, getImageUrlFromCache } from "@/app/lib/imageCache";
+import { globalDebugData } from "@/app/components/utils/globalDebugData";
 
 type CachedImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
   signedUrl: string | null;
@@ -28,6 +29,7 @@ function LoadingSpinner() {
 export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedImageProps) {
   const [src, setSrc] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   const { className, style, ...restImgProps } = imgProps;
 
@@ -38,6 +40,8 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
     const load = async () => {
       const resolvedUrl = await imageCache(signedUrl, imageId);
       if (isCancelled) {
+        console.log("load cancelled");
+        globalDebugData.cachedImageLoadCancelleds++;
         return;
       }
 
@@ -50,7 +54,7 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
     void load();
 
     return () => { isCancelled = true; };
-  }, [imageId, signedUrl]);
+  }, [imageId, signedUrl, retry]);
 
   const resolvedSrc = useMemo(
     () => src ?? (imageId ? getImageUrlFromCache(imageId) : undefined),
@@ -88,6 +92,18 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
   const gridCell: CSSProperties = {
     gridArea: "1 / 1",
   };
+
+  // Auto retry...?
+  useEffect(() => {
+    if (showLoader) {
+      const timeout = setTimeout(() => { 
+        console.log("retry"); 
+        globalDebugData.cachedImageLoadRetries++;
+        setRetry(prev => prev + 1);
+      }, 5000);
+      return () => clearTimeout(timeout);
+    }
+  }, [showLoader])
 
   return (
     <>

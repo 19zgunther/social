@@ -1,8 +1,9 @@
 "use client";
 
 import { ArrowLeft, LogOut } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { clearAllCachedImages } from "@/app/lib/imageCache";
+import { globalDebugData } from "./utils/globalDebugData";
 
 type ProfileSettingsProps = {
   onBack: () => void;
@@ -14,6 +15,9 @@ const PUSH_PROMPT_DISMISSED_KEY = "push_prompt_dismissed";
 export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsProps) {
   const [statusMessage, setStatusMessage] = useState("");
   const [isClearingImageCache, setIsClearingImageCache] = useState(false);
+  const [debugDataSnapshot, setDebugDataSnapshot] = useState(
+    JSON.stringify(globalDebugData, null, 2),
+  );
 
   const onResetNotificationPrompt = () => {
     window.localStorage.removeItem(PUSH_PROMPT_DISMISSED_KEY);
@@ -33,6 +37,13 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
       setIsClearingImageCache(false);
     }
   };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDebugDataSnapshot(JSON.stringify(globalDebugData, null, 2));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div
@@ -91,6 +102,15 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
               <LogOut className="h-4 w-4" />
               <p className="font-medium">Log out</p>
             </button>
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold text-foreground mb-3 min-h-100vh overflow-y-scroll min-w-80vw">Debug</h2>
+            <textarea
+              className="min-h-[100vh] overflow-y-scroll min-w-[80vw]"
+              value={debugDataSnapshot}
+              readOnly
+            />
           </div>
         </section>
       </div>
