@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, EmojiItem, EmojisListResponse, EmojiSaveResponse } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { Redo, Redo2, Undo, Undo2 } from "lucide-react";
 
 const GRID_SIZE = 64;
 const PIXEL_COUNT = GRID_SIZE * GRID_SIZE;
@@ -61,6 +62,8 @@ const quantizeRgbFloatTo3Bit = (r: number, g: number, b: number) => ({
   g: Math.max(0, Math.min(7, Math.round(g * 7))),
   b: Math.max(0, Math.min(7, Math.round(b * 7))),
 });
+
+const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 
 const spectrumPositionToRgb3 = (position: number) => {
   const p = Math.max(0, Math.min(1023, position));
@@ -180,6 +183,7 @@ type EmojiEditorTabProps = {
 export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
   const MAX_HISTORY_STEPS = 100;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const strokeStartPixelsRef = useRef<Uint16Array | null>(null);
   const latestPixelsRef = useRef<Uint16Array>(new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
   const [pixels, setPixels] = useState<Uint16Array>(() => new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
@@ -369,6 +373,119 @@ export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
     setStatusMessage("Started a new emoji.");
   };
 
+  const onUploadImage = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setStatusMessage("Please upload an image file.");
+      return;
+    }
+
+    const previousPixels = latestPixelsRef.current.slice();
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      const image = new Image();
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error("Could not load image."));
+        image.src = objectUrl;
+      });
+
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = GRID_SIZE;
+      tempCanvas.height = GRID_SIZE;
+      const tempCtx = tempCanvas.getContext("2d");
+      if (!tempCtx) {
+        URL.revokeObjectURL(objectUrl);
+        setStatusMessage("Could not process image.");
+        return;
+      }
+
+      tempCtx.clearRect(0, 0, GRID_SIZE, GRID_SIZE);
+      tempCtx.imageSmoothingEnabled = true;
+      tempCtx.imageSmoothingQuality = "high";
+      const scale = Math.min(GRID_SIZE / image.width, GRID_SIZE / image.height);
+      const drawWidth = Math.max(1, Math.round(image.width * scale));
+      const drawHeight = Math.max(1, Math.round(image.height * scale));
+      const drawX = Math.floor((GRID_SIZE - drawWidth) / 2);
+      const drawY = Math.floor((GRID_SIZE - drawHeight) / 2);
+      tempCtx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+      URL.revokeObjectURL(objectUrl);
+
+      const imageData = tempCtx.getImageData(0, 0, GRID_SIZE, GRID_SIZE).data;
+      const importedPixels = new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL);
+      const red = new Float32Array(PIXEL_COUNT);
+      const green = new Float32Array(PIXEL_COUNT);
+      const blue = new Float32Array(PIXEL_COUNT);
+      const alpha = new Uint8Array(PIXEL_COUNT);
+      for (let i = 0; i < PIXEL_COUNT; i += 1) {
+        const offset = i * 4;
+        red[i] = (imageData[offset] ?? 0) / 255;
+        green[i] = (imageData[offset + 1] ?? 0) / 255;
+        blue[i] = (imageData[offset + 2] ?? 0) / 255;
+        alpha[i] = imageData[offset + 3] ?? 0;
+      }
+
+      for (let y = 0; y < GRID_SIZE; y += 1) {
+        for (let x = 0; x < GRID_SIZE; x += 1) {
+          const i = y * GRID_SIZE + x;
+          if ((alpha[i] ?? 0) < 96) {
+            importedPixels[i] = TRANSPARENT_PIXEL;
+            continue;
+          }
+
+          const currentR = clamp01(red[i] ?? 0);
+          const currentG = clamp01(green[i] ?? 0);
+          const currentB = clamp01(blue[i] ?? 0);
+          const r3 = Math.round(currentR * 7);
+          const g3 = Math.round(currentG * 7);
+          const b3 = Math.round(currentB * 7);
+          const quantizedR = r3 / 7;
+          const quantizedG = g3 / 7;
+          const quantizedB = b3 / 7;
+
+          let packed = (r3 << 6) | (g3 << 3) | b3;
+          if (packed === 0) {
+            packed |= EXPLICIT_BLACK_FLAG;
+          }
+          importedPixels[i] = packed;
+
+          const errorR = currentR - quantizedR;
+          const errorG = currentG - quantizedG;
+          const errorB = currentB - quantizedB;
+          const spreadError = (targetX: number, targetY: number, weight: number) => {
+            if (targetX < 0 || targetX >= GRID_SIZE || targetY < 0 || targetY >= GRID_SIZE) {
+              return;
+            }
+            const targetIndex = targetY * GRID_SIZE + targetX;
+            red[targetIndex] = clamp01((red[targetIndex] ?? 0) + errorR * weight);
+            green[targetIndex] = clamp01((green[targetIndex] ?? 0) + errorG * weight);
+            blue[targetIndex] = clamp01((blue[targetIndex] ?? 0) + errorB * weight);
+          };
+
+          spreadError(x + 1, y, 7 / 16);
+          spreadError(x - 1, y + 1, 3 / 16);
+          spreadError(x, y + 1, 5 / 16);
+          spreadError(x + 1, y + 1, 1 / 16);
+        }
+      }
+
+      setUndoStack((previous) => {
+        const next = [...previous, previousPixels];
+        return next.length > MAX_HISTORY_STEPS ? next.slice(next.length - MAX_HISTORY_STEPS) : next;
+      });
+      setRedoStack([]);
+      setPixels(importedPixels);
+      if (!selectedEmojiUuid) {
+        const inferredName = file.name.replace(/\.[^/.]+$/, "").trim();
+        if (inferredName) {
+          setEmojiName(inferredName.slice(0, 40));
+        }
+      }
+      setStatusMessage("Imported image into emoji canvas.");
+    } catch {
+      setStatusMessage("Failed to import image.");
+    }
+  };
+
   const onSaveEmoji = async () => {
     setIsSaving(true);
     setStatusMessage("");
@@ -409,27 +526,31 @@ export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onUndo}
-            disabled={undoStack.length === 0}
-            className="rounded-lg border border-accent-1 bg-secondary-background px-3 py-1.5 text-xs text-accent-2 hover:text-foreground disabled:opacity-40"
-          >
-            Undo
-          </button>
-          <button
-            type="button"
-            onClick={onRedo}
-            disabled={redoStack.length === 0}
-            className="rounded-lg border border-accent-1 bg-secondary-background px-3 py-1.5 text-xs text-accent-2 hover:text-foreground disabled:opacity-40"
-          >
-            Redo
-          </button>
-          <button
-            type="button"
             onClick={onNewEmoji}
             className="rounded-lg border border-accent-1 bg-secondary-background px-3 py-1.5 text-xs text-accent-2 hover:text-foreground"
           >
-            New Emoji
+            + New Emoji
           </button>
+          <button
+            type="button"
+            onClick={() => uploadInputRef.current?.click()}
+            className="rounded-lg border border-accent-1 bg-secondary-background px-3 py-1.5 text-xs text-accent-2 hover:text-foreground"
+          >
+            + Upload Image
+          </button>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void onUploadImage(file);
+              }
+              event.currentTarget.value = "";
+            }}
+          />
         </div>
       </div>
 
@@ -446,21 +567,24 @@ export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
         />
       </div>
 
-      <div className="mb-3 flex justify-center rounded-lg border border-accent-1 p-2">
-        <canvas
-          ref={canvasRef}
-          width={GRID_SIZE}
-          height={GRID_SIZE}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          className="mx-1 aspect-square w-[90vw] touch-none rounded border border-accent-1 [image-rendering:pixelated]"
-        />
-      </div>
-
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <div className="rounded-lg border border-accent-1 p-2">
+      <div className="mb-3 flex justify-center gap-2">
+        <button
+          type="button"
+          onClick={onUndo}
+          disabled={undoStack.length === 0}
+          className="rounded-lg border border-accent-1 bg-secondary-background px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-40"
+        >
+          <Undo2 />
+        </button>
+        <button
+          type="button"
+          onClick={onRedo}
+          disabled={redoStack.length === 0}
+          className="rounded-lg border border-accent-1 bg-secondary-background px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-40"
+        >
+          <Redo2 />
+        </button>
+        <div className="px-2 py-0 ml-8">
           <p className="mb-1 text-xs text-accent-2">Brush thickness ({thickness}px)</p>
           <input
             type="range"
@@ -518,6 +642,19 @@ export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
             );
           })}
         </div>
+      </div>
+
+      <div className="mb-3 flex justify-center rounded-lg border border-accent-1 p-2">
+        <canvas
+          ref={canvasRef}
+          width={GRID_SIZE}
+          height={GRID_SIZE}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          className="mx-1 aspect-square w-[90vw] touch-none rounded border border-accent-1 [image-rendering:pixelated]"
+        />
       </div>
 
       <button
