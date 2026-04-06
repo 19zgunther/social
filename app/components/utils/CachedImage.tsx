@@ -16,8 +16,8 @@ function LoadingSpinner() {
       style={{
         width: 28,
         height: 28,
-        border: "2.5px solid rgba(100, 110, 125, 0.22)",
-        borderTopColor: "rgba(55, 65, 80, 0.85)",
+        border: "2.5px solid rgba(255, 255, 255, 0.22)",
+        borderTopColor: "rgba(255, 255, 255, 0.92)",
         borderRadius: "50%",
         boxSizing: "border-box",
         animation: "cached-image-spin 0.65s linear infinite",
@@ -137,7 +137,7 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: "#e8eaed",
+              backgroundColor: "#000000",
             }}
           >
             <LoadingSpinner />

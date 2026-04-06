@@ -297,6 +297,77 @@ export type ThreadMembersResponse = {
   members: ThreadMember[];
 };
 
+export type ThreadEventRsvpStatus = "going" | "maybe" | "not_going";
+
+export type ThreadEventItem = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  thread_id: string;
+  created_by: string;
+  name: string;
+  location: string | null;
+  description: string | null;
+  users_status_map: Record<string, ThreadEventRsvpStatus>;
+  starts_at: string;
+  ends_at: string;
+  background_image_id: string | null;
+  background_image_url: string | null;
+};
+
+export type ThreadEventsListRequest = { thread_id?: string };
+export type ThreadEventsListResponse = { events: ThreadEventItem[] };
+
+export type ThreadEventCreateRequest = {
+  thread_id?: string;
+  name?: string;
+  location?: string;
+  description?: string;
+  /** ISO; optional — defaults to now and one hour later. */
+  starts_at?: string;
+  /** ISO; optional — defaults to one hour after starts. */
+  ends_at?: string;
+};
+export type ThreadEventCreateResponse = { event: ThreadEventItem };
+
+export type ThreadEventUpdateRequest = {
+  thread_id?: string;
+  event_id?: string;
+  name?: string;
+  location?: string;
+  description?: string;
+  starts_at?: string;
+  ends_at?: string;
+};
+export type ThreadEventUpdateResponse = { event: ThreadEventItem };
+
+export type ThreadEventBackgroundSetRequest = {
+  thread_id?: string;
+  event_id?: string;
+  image_base64_data?: string;
+  image_mime_type?: string;
+};
+export type ThreadEventBackgroundSetResponse = { event: ThreadEventItem };
+
+export type ThreadEventBackgroundRemoveRequest = {
+  thread_id?: string;
+  event_id?: string;
+};
+export type ThreadEventBackgroundRemoveResponse = { event: ThreadEventItem };
+
+export type ThreadEventRsvpRequest = {
+  thread_id?: string;
+  event_id?: string;
+  status?: ThreadEventRsvpStatus;
+};
+export type ThreadEventRsvpResponse = { event: ThreadEventItem };
+
+export type ThreadEventDeleteRequest = {
+  thread_id?: string;
+  event_id?: string;
+};
+export type ThreadEventDeleteResponse = { deleted_event_id: string };
+
 export type SyncRequest = { timeout_ms?: number; max_events?: number };
 export type SyncResponse = { events: SyncEvent[] };
 

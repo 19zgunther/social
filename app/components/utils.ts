@@ -8,6 +8,7 @@ type AppTab =
     | "feedback"
     | "thread"
     | "thread_settings"
+    | "thread_event"
     | "profile_settings"
     | "other_user_profile"
     | "create_post";

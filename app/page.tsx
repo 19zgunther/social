@@ -9,6 +9,7 @@ import ProfileSettings from "@/app/components/ProfileSettings";
 import {
   AuthCheckResponse,
   AuthUser,
+  ThreadEventItem,
   ThreadItem,
 } from "@/app/types/interfaces";
 import {
@@ -22,6 +23,7 @@ import SignUpPage from "./components/SignupPage";
 import NavRowButton from "./components/utils/NavRowButton";
 import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
+import ThreadEventPage from "./components/ThreadEventPage";
 import useSwipeBack from "./components/utils/useSwipeBack";
 import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
@@ -30,6 +32,7 @@ import { UserSessionSyncProvider } from "./components/UserSessionSyncContext";
 
 
 const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab | null, back: AppTab | null } } = {
+  thread_event: { forward: null, back: "thread_settings" },
   thread_settings: { forward: null, back: "thread" },
   thread: { forward: null, back: "groups" },
   groups: { forward: "profile", back: "feed" },
@@ -52,6 +55,7 @@ export default function Home() {
   const [profileIncomingRequestCount, setProfileIncomingRequestCount] = useState(0);
   const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
   const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
+  const [threadEventFocus, setThreadEventFocus] = useState<ThreadEventItem | null>(null);
   const [groupsListRefreshNonce, setGroupsListRefreshNonce] = useState(0);
   const [profileReloadSignal, setProfileReloadSignal] = useState(0);
 
@@ -147,6 +151,15 @@ export default function Home() {
         : previous,
     );
   }, [authUser]);
+
+  const previousTabRef = useRef<AppTab | null>(null);
+  useEffect(() => {
+    const prev = previousTabRef.current;
+    if (prev === "thread_event" && activeTab === "thread_settings") {
+      setThreadEventFocus(null);
+    }
+    previousTabRef.current = activeTab;
+  }, [activeTab]);
 
   // Perform an initial auth check on mount to hydrate session user state.
   useEffect(() => {
@@ -301,6 +314,7 @@ export default function Home() {
     groups: DEFAULT_TAB,
     thread: DEFAULT_TAB,
     thread_settings: DEFAULT_TAB,
+    thread_event: DEFAULT_TAB,
     profile: DEFAULT_TAB,
     profile_settings: DEFAULT_TAB,
     other_user_profile: DEFAULT_TAB,
@@ -319,6 +333,7 @@ export default function Home() {
   const groupsStyle = TAB_TO_STYLE["groups"];
   const threadStyle = TAB_TO_STYLE["thread"];
   const threadSettingsStyle = TAB_TO_STYLE["thread_settings"];
+  const threadEventStyle = TAB_TO_STYLE["thread_event"];
   const profileStyle = TAB_TO_STYLE["profile"];
   const profileSettingsStyle = TAB_TO_STYLE["profile_settings"];
   const otherUserProfileStyle = TAB_TO_STYLE["other_user_profile"];
@@ -379,8 +394,17 @@ export default function Home() {
             <ThreadSettings
               thread={selectedThread}
               currentUserId={authUser.user_id}
+              isActive={activeTab === "thread_settings"}
               onBack={() => setActiveTab("thread")}
               onViewUserProfile={onViewUserProfile}
+              onOpenThreadEvent={(event) => {
+                setThreadEventFocus(event);
+                setActiveTab("thread_event");
+              }}
+              onThreadEventCreated={(event) => {
+                setThreadEventFocus(event);
+                setActiveTab("thread_event");
+              }}
               onThreadImageUpdated={(imageId, imageUrl) => {
                 setSelectedThread((previous) => ({
                   ...previous as ThreadItem,
@@ -397,10 +421,32 @@ export default function Home() {
               onThreadDeleted={() => {
                 setGroupsListRefreshNonce((previous) => previous + 1);
                 setSelectedThread(null);
+                setThreadEventFocus(null);
                 setActiveTab("groups");
               }}
             />
           </div>}
+
+          {selectedThread && threadEventFocus ? (
+            <div className="absolute h-full w-full" style={threadEventStyle}>
+              <ThreadEventPage
+                thread={selectedThread}
+                event={threadEventFocus}
+                currentUserId={authUser.user_id}
+                onBack={() => {
+                  setThreadEventFocus(null);
+                  setActiveTab("thread_settings");
+                }}
+                onEventUpdated={(next) => {
+                  setThreadEventFocus(next);
+                }}
+                onEventDeleted={() => {
+                  setThreadEventFocus(null);
+                  setActiveTab("thread_settings");
+                }}
+              />
+            </div>
+          ) : null}
 
           <div className="absolute w-full h-full" style={feedbackStyle}>
             <Feedback currentUserId={authUser.user_id} isActive={activeTab === "feedback"} />

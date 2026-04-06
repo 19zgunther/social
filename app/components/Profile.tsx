@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ArrowLeft, ChevronRight, CircleUserRound, Settings as SettingsIcon, Trash2 } from "lucide-react";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
@@ -62,6 +62,7 @@ function ProfilePictureRow({
   email,
   onOpenSettings,
   setIsProfilePictureEditorOpen,
+  trailingAction,
 }: {
   profileUserId: string;
   isCurrentUsers: boolean;
@@ -71,6 +72,7 @@ function ProfilePictureRow({
   email: string | null;
   onOpenSettings: () => void;
   setIsProfilePictureEditorOpen: (isOpen: boolean) => void;
+  trailingAction?: ReactNode;
 }) {
   return (
     <div className="border-b border-accent-1 px-4 py-4">
@@ -121,7 +123,7 @@ function ProfilePictureRow({
           </div>
         </div>
 
-        {isCurrentUsers && (
+        {isCurrentUsers ? (
           <button
             type="button"
             onClick={onOpenSettings}
@@ -131,6 +133,8 @@ function ProfilePictureRow({
           >
             <SettingsIcon className="h-5 w-5" />
           </button>
+        ) : (
+          trailingAction ?? null
         )}
       </div>
     </div>
@@ -1003,6 +1007,34 @@ function ProfileOtherUser({
         email={null}
         onOpenSettings={() => { }}
         setIsProfilePictureEditorOpen={() => { }}
+        trailingAction={
+          isFriends ? (
+            <button
+              type="button"
+              onClick={() => { void onRemoveFriend(); }}
+              disabled={isRemovingFriend}
+              className={`rounded-full border bg-secondary-background p-2 text-accent-2 transition hover:text-foreground disabled:opacity-50 ${
+                removeFriendConfirmed ? "border-red-500 text-red-500" : "border-accent-1"
+              }`}
+              aria-label={
+                isRemovingFriend
+                  ? "Removing friend"
+                  : removeFriendConfirmed
+                    ? "Confirm remove friend"
+                    : "Remove friend"
+              }
+              title={
+                isRemovingFriend
+                  ? "Removing..."
+                  : removeFriendConfirmed
+                    ? "Tap again to confirm"
+                    : "Remove friend"
+              }
+            >
+              <Trash2 className="h-5 w-5" />
+            </button>
+          ) : undefined
+        }
       />
 
       {!isFriends ? (
@@ -1033,17 +1065,22 @@ function ProfileOtherUser({
         </div>
       ) : (
         <>
-          <div className="border-b border-accent-1 px-4 py-3 flex items-center justify-center">
-            <button
-              type="button"
-              onClick={() => { void onRemoveFriend(); }}
-              disabled={isRemovingFriend}
-              className="rounded-lg border border-red-500 px-4 py-2 text-xs font-medium text-accent-2 transition hover:text-foreground disabled:opacity-50"
-              style={{ color: removeFriendConfirmed ? "red" : undefined }}
-            >
-              {isRemovingFriend ? "Removing..." : removeFriendConfirmed ? "Confirm Remove Friend" : "Remove Friend"}
-            </button>
-          </div>
+          {removeFriendConfirmed ? (
+            <div className="flex items-center justify-between gap-3 border-b border-accent-1 bg-secondary-background px-4 py-2">
+              <p className="min-w-0 text-xs text-accent-2">
+                Tap the trash icon again to remove{" "}
+                <span className="font-medium text-foreground">{profileData.user.username}</span>{" "}
+                as a friend.
+              </p>
+              <button
+                type="button"
+                onClick={() => setRemoveFriendConfirmed(false)}
+                className="shrink-0 rounded-lg border border-accent-1 px-3 py-1 text-xs font-medium text-accent-2 transition hover:text-foreground"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
           <ProfilePostsSection
             posts={profileData.posts}
             isLoadingPosts={false}
