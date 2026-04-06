@@ -4,6 +4,7 @@ type Mode = "login" | "signup";
 type AppTab =
     | "feed"
     | "groups"
+    | "events"
     | "profile"
     | "feedback"
     | "thread"
@@ -29,6 +30,7 @@ const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | n
     let tab: AppTab | null =
         tabParam === "feed" ||
             tabParam === "groups" ||
+            tabParam === "events" ||
             tabParam === "profile" ||
             tabParam === "feedback" ||
             tabParam === "create_post"

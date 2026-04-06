@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { House, MessageSquare, UserRound, Users } from "lucide-react";
+import { Calendar, House, MessageSquare, UserRound, Users } from "lucide-react";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
 import { Profile, ProfileOtherUser } from "@/app/components/Profile";
@@ -11,6 +11,7 @@ import {
   AuthUser,
   ThreadEventItem,
   ThreadItem,
+  UserUpcomingEventListItem,
 } from "@/app/types/interfaces";
 import {
   MOBILE_FRAME_STYLE,
@@ -24,6 +25,7 @@ import NavRowButton from "./components/utils/NavRowButton";
 import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
 import ThreadEventPage from "./components/ThreadEventPage";
+import UpcomingEventsTab from "./components/UpcomingEventsTab";
 import useSwipeBack from "./components/utils/useSwipeBack";
 import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
@@ -31,18 +33,19 @@ import DumbAdvertModal from "./components/DumbAdvertModal";
 import { UserSessionSyncProvider } from "./components/UserSessionSyncContext";
 
 
-const TAB_TO_BACK: { [key in AppTab]: { forward: AppTab | null, back: AppTab | null } } = {
+const TAB_TO_BACK_BASE: { [key in AppTab]: { forward: AppTab | null; back: AppTab | null } } = {
   thread_event: { forward: null, back: "thread_settings" },
   thread_settings: { forward: null, back: "thread" },
   thread: { forward: null, back: "groups" },
-  groups: { forward: "profile", back: "feed" },
+  groups: { forward: "events", back: "feed" },
+  events: { forward: "profile", back: "groups" },
   feed: { forward: "groups", back: null },
-  profile: { forward: null, back: "groups" },
+  profile: { forward: null, back: "events" },
   feedback: { forward: "profile_settings", back: "profile" },
   profile_settings: { forward: null, back: "profile" },
   other_user_profile: { forward: null, back: "profile" },
   create_post: { forward: null, back: "profile" },
-}
+};
 
 
 export default function Home() {
@@ -56,6 +59,9 @@ export default function Home() {
   const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
   const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
   const [threadEventFocus, setThreadEventFocus] = useState<ThreadEventItem | null>(null);
+  const [threadEventReturnTab, setThreadEventReturnTab] = useState<"thread_settings" | "events">(
+    "thread_settings",
+  );
   const [groupsListRefreshNonce, setGroupsListRefreshNonce] = useState(0);
   const [profileReloadSignal, setProfileReloadSignal] = useState(0);
 
@@ -155,11 +161,22 @@ export default function Home() {
   const previousTabRef = useRef<AppTab | null>(null);
   useEffect(() => {
     const prev = previousTabRef.current;
-    if (prev === "thread_event" && activeTab === "thread_settings") {
+    if (
+      prev === "thread_event" &&
+      (activeTab === "thread_settings" || activeTab === "events")
+    ) {
       setThreadEventFocus(null);
     }
     previousTabRef.current = activeTab;
   }, [activeTab]);
+
+  const tabNavigation = useMemo(
+    () => ({
+      ...TAB_TO_BACK_BASE,
+      thread_event: { forward: null, back: threadEventReturnTab },
+    }),
+    [threadEventReturnTab],
+  );
 
   // Perform an initial auth check on mount to hydrate session user state.
   useEffect(() => {
@@ -221,7 +238,7 @@ export default function Home() {
     void run();
     const intervalId = window.setInterval(() => {
       void run();
-    }, 5_000);
+    }, 7_000);
 
     return () => {
       cancelled = true;
@@ -298,7 +315,7 @@ export default function Home() {
   const isSwipingForward = !!swipingForwardPercent;
   const isSwipingBack = !!swipingBackPercent;
 
-  const { forward, back } = TAB_TO_BACK[activeTab] ?? { forward: null, back: null };
+  const { forward, back } = tabNavigation[activeTab] ?? { forward: null, back: null };
 
   const ACTIVE_STYLE = {
     zIndex: 1000,
@@ -312,6 +329,7 @@ export default function Home() {
   let TAB_TO_STYLE: { [key in AppTab]: React.CSSProperties } = {
     feed: DEFAULT_TAB,
     groups: DEFAULT_TAB,
+    events: DEFAULT_TAB,
     thread: DEFAULT_TAB,
     thread_settings: DEFAULT_TAB,
     thread_event: DEFAULT_TAB,
@@ -331,6 +349,7 @@ export default function Home() {
 
   const feedStyle = TAB_TO_STYLE["feed"];
   const groupsStyle = TAB_TO_STYLE["groups"];
+  const eventsStyle = TAB_TO_STYLE["events"];
   const threadStyle = TAB_TO_STYLE["thread"];
   const threadSettingsStyle = TAB_TO_STYLE["thread_settings"];
   const threadEventStyle = TAB_TO_STYLE["thread_event"];
@@ -358,6 +377,19 @@ export default function Home() {
           onTouchMove={onTouchMove}
           onTouchCancel={onTouchCancel}
         >
+          <div className="absolute h-full w-full" style={eventsStyle}>
+            <UpcomingEventsTab
+              currentUserId={authUser.user_id}
+              isActive={activeTab === "events"}
+              onOpenEvent={(item: UserUpcomingEventListItem) => {
+                setSelectedThread(item.thread);
+                setThreadEventFocus(item.event);
+                setThreadEventReturnTab("events");
+                setActiveTab("thread_event");
+              }}
+            />
+          </div>
+
           <div className="absolute w-full h-full" style={groupsStyle}>
             <Groups
               currentUserId={authUser.user_id}
@@ -398,10 +430,12 @@ export default function Home() {
               onBack={() => setActiveTab("thread")}
               onViewUserProfile={onViewUserProfile}
               onOpenThreadEvent={(event) => {
+                setThreadEventReturnTab("thread_settings");
                 setThreadEventFocus(event);
                 setActiveTab("thread_event");
               }}
               onThreadEventCreated={(event) => {
+                setThreadEventReturnTab("thread_settings");
                 setThreadEventFocus(event);
                 setActiveTab("thread_event");
               }}
@@ -435,14 +469,14 @@ export default function Home() {
                 currentUserId={authUser.user_id}
                 onBack={() => {
                   setThreadEventFocus(null);
-                  setActiveTab("thread_settings");
+                  setActiveTab(threadEventReturnTab);
                 }}
                 onEventUpdated={(next) => {
                   setThreadEventFocus(next);
                 }}
                 onEventDeleted={() => {
                   setThreadEventFocus(null);
-                  setActiveTab("thread_settings");
+                  setActiveTab(threadEventReturnTab);
                 }}
               />
             </div>
@@ -509,6 +543,12 @@ export default function Home() {
               isActive={activeTab === "groups"}
               showCircle={groupsUnreadCount > 0}
               onClick={() => setActiveTab("groups")}
+            />
+            <NavRowButton
+              icon={<Calendar aria-hidden className="h-4 w-4" />}
+              isActive={activeTab === "events"}
+              showCircle={false}
+              onClick={() => setActiveTab("events")}
             />
             <NavRowButton
               icon={<UserRound aria-hidden className="h-4 w-4" />}

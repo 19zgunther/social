@@ -7,6 +7,8 @@ type ThreadEventListRowProps = {
   event: ThreadEventItem;
   currentUserId: string;
   onOpen: () => void;
+  /** e.g. group name + time — global upcoming list */
+  metaLine?: string;
 };
 
 function countGoing(usersStatusMap: Record<string, ThreadEventRsvpStatus>): number {
@@ -30,7 +32,12 @@ function viewerRsvpLabel(
   return "Not going";
 }
 
-export default function ThreadEventListRow({ event, currentUserId, onOpen }: ThreadEventListRowProps) {
+export default function ThreadEventListRow({
+  event,
+  currentUserId,
+  onOpen,
+  metaLine,
+}: ThreadEventListRowProps) {
   const goingCount = countGoing(event.users_status_map);
   const youLabel = viewerRsvpLabel(currentUserId, event.users_status_map);
 
@@ -38,7 +45,9 @@ export default function ThreadEventListRow({ event, currentUserId, onOpen }: Thr
     <button
       type="button"
       onClick={onOpen}
-      className="relative h-[15vh] max-h-[15vh] w-full min-h-[3rem] overflow-hidden border-b border-accent-1 text-left last:border-b-0 touch-manipulation active:opacity-90"
+      className={`relative w-full min-h-[3rem] overflow-hidden rounded-xl border border-accent-1/60 text-left shadow-sm shadow-black/20 touch-manipulation active:opacity-90 ${
+        metaLine ? "h-[18vh] max-h-[18vh]" : "h-[15vh] max-h-[15vh]"
+      }`}
     >
       {event.background_image_url ? (
         <CachedImage
@@ -63,6 +72,11 @@ export default function ThreadEventListRow({ event, currentUserId, onOpen }: Thr
           <p className="truncate text-base font-semibold tracking-tight text-foreground [text-shadow:0_2px_10px_rgba(0,0,0,0.88)]">
             {event.name}
           </p>
+          {metaLine ? (
+            <p className="mt-0.5 truncate text-[11px] font-medium leading-snug text-foreground/80 [text-shadow:0_2px_8px_rgba(0,0,0,0.85)]">
+              {metaLine}
+            </p>
+          ) : null}
           <p className="mt-1 truncate text-[11px] font-medium leading-snug text-foreground/90 [text-shadow:0_2px_8px_rgba(0,0,0,0.88)]">
             You: {youLabel}
             <span className="text-foreground/70"> · </span>

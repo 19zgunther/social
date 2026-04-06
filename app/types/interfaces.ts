@@ -318,6 +318,16 @@ export type ThreadEventItem = {
 export type ThreadEventsListRequest = { thread_id?: string };
 export type ThreadEventsListResponse = { events: ThreadEventItem[] };
 
+export type UserUpcomingEventsResponse = {
+  items: UserUpcomingEventListItem[];
+};
+
+/** Global upcoming-events tab: thread context plus event (for navigation and display). */
+export type UserUpcomingEventListItem = {
+  thread: ThreadItem;
+  event: ThreadEventItem;
+};
+
 export type ThreadEventCreateRequest = {
   thread_id?: string;
   name?: string;

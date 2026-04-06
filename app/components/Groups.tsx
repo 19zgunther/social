@@ -331,7 +331,7 @@ export default function Groups({
     void refreshUnread();
     const intervalId = window.setInterval(() => {
       void refreshUnread();
-    }, 5_000);
+    }, 7_000);
 
     return () => {
       cancelled = true;
@@ -623,13 +623,19 @@ function GroupThreadRow({
     thread.last_message_from_self === true;
 
   return (
-    <button
-      key={thread.id}
-      type="button"
+    <div
+      tabIndex={0}
+      aria-label={`Open ${thread.name}`}
       onClick={() => {
         onOpenThread(thread);
       }}
-      className={`relative w-full px-4 py-3 text-left transition border-b border-accent-1/30 ${isUnread
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpenThread(thread);
+        }
+      }}
+      className={`relative w-full cursor-pointer px-4 py-3 text-left transition border-b border-accent-1/30 outline-none focus-visible:ring-2 focus-visible:ring-accent-2/50 focus-visible:ring-offset-2 focus-visible:ring-offset-primary-background ${isUnread
         ? "bg-secondary-background/50"
         : "bg-primary-background hover:bg-secondary-background/20"
         }`}
@@ -703,6 +709,6 @@ function GroupThreadRow({
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

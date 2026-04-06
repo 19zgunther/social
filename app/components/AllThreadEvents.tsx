@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import ThreadEventListRow from "@/app/components/ThreadEventListRow";
 import type {
   ApiError,
@@ -36,6 +37,31 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   }
 };
 
+const REFETCH_TTL_MS = 60_000;
+
+type ThreadEventsSectionCacheEntry = {
+  fetchedAt: number;
+  events: ThreadEventItem[];
+};
+
+const threadEventsSectionCache = new Map<string, ThreadEventsSectionCacheEntry>();
+
+function readFreshThreadEventsSection(threadId: string): ThreadEventItem[] | null {
+  const row = threadEventsSectionCache.get(threadId);
+  if (!row) {
+    return null;
+  }
+  if (Date.now() - row.fetchedAt >= REFETCH_TTL_MS) {
+    threadEventsSectionCache.delete(threadId);
+    return null;
+  }
+  return row.events;
+}
+
+function writeThreadEventsSectionCache(threadId: string, events: ThreadEventItem[]) {
+  threadEventsSectionCache.set(threadId, { fetchedAt: Date.now(), events });
+}
+
 export default function AllThreadEvents({
   threadId,
   currentUserId,
@@ -51,34 +77,57 @@ export default function AllThreadEvents({
 
   const [events, setEvents] = useState<ThreadEventItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshBusy, setRefreshBusy] = useState(false);
+  const eventsRef = useRef<ThreadEventItem[]>([]);
   const [showCreateName, setShowCreateName] = useState(false);
   const [createName, setCreateName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  const loadEvents = useCallback(async () => {
-    setIsLoading(true);
-    setCreateError("");
-    try {
-      const response = await postWithAuth("/api/thread-events-list", { thread_id: threadId });
-      if (!response.ok) {
-        statusRef.current?.(await readErrorMessage(response));
-        setEvents([]);
-        return;
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
+
+  const fetchEvents = useCallback(
+    async (force: boolean) => {
+      if (!force) {
+        const cached = readFreshThreadEventsSection(threadId);
+        if (cached) {
+          setEvents(cached);
+          setIsLoading(false);
+          return;
+        }
       }
-      const payload = (await response.json()) as ThreadEventsListResponse;
-      setEvents(payload.events);
-    } catch (error) {
-      statusRef.current?.(error instanceof Error ? error.message : "Failed to load events.");
-      setEvents([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [threadId]);
+
+      setRefreshBusy(true);
+      if (eventsRef.current.length === 0) {
+        setIsLoading(true);
+      }
+      setCreateError("");
+      try {
+        const response = await postWithAuth("/api/thread-events-list", { thread_id: threadId });
+        if (!response.ok) {
+          statusRef.current?.(await readErrorMessage(response));
+          setEvents([]);
+          return;
+        }
+        const payload = (await response.json()) as ThreadEventsListResponse;
+        setEvents(payload.events);
+        writeThreadEventsSectionCache(threadId, payload.events);
+      } catch (error) {
+        statusRef.current?.(error instanceof Error ? error.message : "Failed to load events.");
+        setEvents([]);
+      } finally {
+        setRefreshBusy(false);
+        setIsLoading(false);
+      }
+    },
+    [threadId],
+  );
 
   useEffect(() => {
-    void loadEvents();
-  }, [loadEvents]);
+    void fetchEvents(false);
+  }, [threadId, fetchEvents]);
 
   const wasInactiveRef = useRef(isActive === false);
   useEffect(() => {
@@ -88,9 +137,9 @@ export default function AllThreadEvents({
     }
     if (wasInactiveRef.current) {
       wasInactiveRef.current = false;
-      void loadEvents();
+      void fetchEvents(false);
     }
-  }, [isActive, loadEvents]);
+  }, [isActive, fetchEvents]);
 
   const onCreate = async () => {
     const name = createName.trim();
@@ -113,6 +162,7 @@ export default function AllThreadEvents({
       const payload = (await response.json()) as ThreadEventCreateResponse;
       setCreateName("");
       setShowCreateName(false);
+      threadEventsSectionCache.delete(threadId);
       onThreadEventCreated(payload.event);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create event.");
@@ -124,7 +174,20 @@ export default function AllThreadEvents({
   return (
     <section className="overflow-hidden rounded-xl border border-accent-1 bg-secondary-background">
       <div className="flex items-center justify-between gap-2 border-b border-accent-1 px-3 py-3">
-        <h2 className="text-sm font-semibold text-foreground">Upcoming events</h2>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <h2 className="truncate text-sm font-semibold text-foreground">Upcoming events</h2>
+          <button
+            type="button"
+            disabled={refreshBusy}
+            onClick={() => {
+              void fetchEvents(true);
+            }}
+            className="shrink-0 rounded-lg border border-accent-1 p-1.5 text-accent-2 transition hover:border-accent-2 hover:text-foreground disabled:opacity-50"
+            aria-label="Refresh events"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshBusy ? "animate-spin" : ""}`} aria-hidden />
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -164,12 +227,12 @@ export default function AllThreadEvents({
         </form>
       ) : null}
 
-      <div className="flex w-full flex-col">
+      <div className="flex w-full flex-col gap-3 px-3 pb-3">
         {isLoading ? (
-          <p className="px-3 py-3 text-xs text-accent-2">Loading events…</p>
+          <p className="py-2 text-xs text-accent-2">Loading events…</p>
         ) : null}
         {!isLoading && events.length === 0 ? (
-          <p className="px-3 py-3 text-xs text-accent-2">No upcoming events.</p>
+          <p className="py-2 text-xs text-accent-2">No upcoming events.</p>
         ) : null}
         {events.map((event) => (
           <ThreadEventListRow

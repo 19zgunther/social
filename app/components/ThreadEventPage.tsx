@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ImagePlus, Pencil, Trash2, X } from "lucide-react";
+import { Check, ImagePlus, Pencil, RefreshCw, Trash2, X } from "lucide-react";
 import BackButton from "@/app/components/utils/BackButton";
 import CachedImage from "@/app/components/utils/CachedImage";
 import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
@@ -14,6 +14,7 @@ import type {
   ThreadEventRsvpResponse,
   ThreadEventRsvpStatus,
   ThreadEventUpdateResponse,
+  ThreadEventsListResponse,
   ThreadItem,
   ThreadMember,
   ThreadMembersResponse,
@@ -71,6 +72,32 @@ const readErrorMessage = async (response: Response): Promise<string> => {
     return "Request failed.";
   }
 };
+
+const REFETCH_TTL_MS = 60_000;
+
+type ThreadEventPageCacheEntry = {
+  fetchedAt: number;
+  members: ThreadMember[];
+  event: ThreadEventItem;
+};
+
+const threadEventPageCache = new Map<string, ThreadEventPageCacheEntry>();
+
+function readFreshPageCache(eventId: string): ThreadEventPageCacheEntry | null {
+  const row = threadEventPageCache.get(eventId);
+  if (!row) {
+    return null;
+  }
+  if (Date.now() - row.fetchedAt >= REFETCH_TTL_MS) {
+    threadEventPageCache.delete(eventId);
+    return null;
+  }
+  return row;
+}
+
+function writePageCache(eventId: string, members: ThreadMember[], event: ThreadEventItem) {
+  threadEventPageCache.set(eventId, { fetchedAt: Date.now(), members, event });
+}
 
 /** Frosted panels over full-bleed event imagery */
 const glassCard =
@@ -180,30 +207,92 @@ export default function ThreadEventPage({
 
   const [members, setMembers] = useState<ThreadMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
+  const [pageRefreshBusy, setPageRefreshBusy] = useState(false);
   const bgInputRef = useRef<HTMLInputElement | null>(null);
+  const membersRef = useRef<ThreadMember[]>([]);
+  const localRef = useRef<ThreadEventItem>(eventProp);
+  const onEventUpdatedRef = useRef(onEventUpdated);
+  const onNotifyRef = useRef(onNotify);
+
+  useEffect(() => {
+    membersRef.current = members;
+  }, [members]);
+
+  useEffect(() => {
+    localRef.current = local;
+  }, [local]);
+
+  useEffect(() => {
+    onEventUpdatedRef.current = onEventUpdated;
+  }, [onEventUpdated]);
+
+  useEffect(() => {
+    onNotifyRef.current = onNotify;
+  }, [onNotify]);
 
   const myStatus = local.users_status_map[currentUserId];
 
-  const loadMembers = useCallback(async () => {
-    setMembersLoading(true);
-    try {
-      const response = await postJson("/api/thread-members", { thread_id: thread.id });
-      if (!response.ok) {
-        setMembers([]);
-        return;
+  const fetchEventPageData = useCallback(
+    async (force: boolean) => {
+      const eventId = eventProp.id;
+      const threadId = thread.id;
+
+      if (!force) {
+        const cached = readFreshPageCache(eventId);
+        if (cached) {
+          setMembers(cached.members);
+          setLocal(cached.event);
+          onEventUpdatedRef.current(cached.event);
+          setMembersLoading(false);
+          return;
+        }
       }
-      const payload = (await response.json()) as ThreadMembersResponse;
-      setMembers(payload.members);
-    } catch {
-      setMembers([]);
-    } finally {
-      setMembersLoading(false);
-    }
-  }, [thread.id]);
+
+      setPageRefreshBusy(true);
+      if (membersRef.current.length === 0) {
+        setMembersLoading(true);
+      }
+      try {
+        const [membersRes, eventsRes] = await Promise.all([
+          postJson("/api/thread-members", { thread_id: threadId }),
+          postJson("/api/thread-events-list", { thread_id: threadId }),
+        ]);
+
+        let nextMembers: ThreadMember[] = [];
+        if (membersRes.ok) {
+          const mPayload = (await membersRes.json()) as ThreadMembersResponse;
+          nextMembers = mPayload.members;
+        } else {
+          nextMembers = [];
+        }
+
+        let nextEvent: ThreadEventItem = localRef.current;
+        if (eventsRes.ok) {
+          const ePayload = (await eventsRes.json()) as ThreadEventsListResponse;
+          const found = ePayload.events.find((e) => e.id === eventId);
+          if (found) {
+            nextEvent = found;
+          }
+        }
+
+        setMembers(nextMembers);
+        setLocal(nextEvent);
+        onEventUpdatedRef.current(nextEvent);
+        writePageCache(eventId, nextMembers, nextEvent);
+      } catch {
+        setMembers([]);
+        onNotifyRef.current?.("Couldn't refresh this event.");
+      } finally {
+        setPageRefreshBusy(false);
+        setMembersLoading(false);
+      }
+    },
+    [eventProp.id, thread.id],
+  );
 
   useEffect(() => {
-    void loadMembers();
-  }, [loadMembers]);
+    void fetchEventPageData(false);
+  }, [eventProp.id, thread.id, fetchEventPageData]);
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.user_id, m])), [members]);
 
@@ -247,6 +336,7 @@ export default function ThreadEventPage({
       const payload = (await response.json()) as ThreadEventUpdateResponse;
       setLocal(payload.event);
       onEventUpdated(payload.event);
+      writePageCache(payload.event.id, membersRef.current, payload.event);
       onNotify?.("Saved.");
     } catch (e) {
       onNotify?.(e instanceof Error ? e.message : "Save failed.");
@@ -270,6 +360,7 @@ export default function ThreadEventPage({
       const payload = (await response.json()) as ThreadEventRsvpResponse;
       setLocal(payload.event);
       onEventUpdated(payload.event);
+      writePageCache(payload.event.id, membersRef.current, payload.event);
     } catch (e) {
       onNotify?.(e instanceof Error ? e.message : "RSVP failed.");
     } finally {
@@ -310,6 +401,7 @@ export default function ThreadEventPage({
       const payload = (await response.json()) as ThreadEventBackgroundSetResponse;
       setLocal(payload.event);
       onEventUpdated(payload.event);
+      writePageCache(payload.event.id, membersRef.current, payload.event);
     } catch (err) {
       onNotify?.(err instanceof Error ? err.message : "Upload failed.");
     } finally {
@@ -332,6 +424,7 @@ export default function ThreadEventPage({
       const payload = (await response.json()) as ThreadEventBackgroundRemoveResponse;
       setLocal(payload.event);
       onEventUpdated(payload.event);
+      writePageCache(payload.event.id, membersRef.current, payload.event);
     } catch (err) {
       onNotify?.(err instanceof Error ? err.message : "Remove failed.");
     } finally {
@@ -352,6 +445,7 @@ export default function ThreadEventPage({
         return;
       }
       await response.json();
+      threadEventPageCache.delete(local.id);
       onEventDeleted();
     } catch (err) {
       onNotify?.(err instanceof Error ? err.message : "Delete failed.");
@@ -385,12 +479,14 @@ export default function ThreadEventPage({
       </div>
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-center justify-between border-b border-white/14 bg-secondary-background/70 px-3 py-3 shadow-[0_8px_36px_rgba(0,0,0,0.48)] backdrop-blur-[28px] backdrop-saturate-150">
-          <BackButton onBack={onBack} backLabel="Events" textOnly />
-          <p className="min-w-0 truncate text-center text-sm font-semibold text-foreground [text-shadow:0_2px_12px_rgba(0,0,0,0.92),0_1px_4px_rgba(0,0,0,0.85)]">
+        <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-white/14 bg-secondary-background/70 px-3 py-3 shadow-[0_8px_36px_rgba(0,0,0,0.48)] backdrop-blur-[28px] backdrop-saturate-150">
+          <div className="flex min-w-0 items-center gap-1 justify-self-start">
+            <BackButton onBack={onBack} backLabel="Events" textOnly />
+          </div>
+          <p className="min-w-0 truncate px-1 text-center text-sm font-semibold text-foreground [text-shadow:0_2px_12px_rgba(0,0,0,0.92),0_1px_4px_rgba(0,0,0,0.85)]">
             Event
           </p>
-          <div className="flex min-w-[72px] shrink-0 justify-end gap-1">
+          <div className="flex min-w-[72px] shrink-0 justify-end justify-self-end gap-1">
             {canEdit ? (
               <>
                 <input
