@@ -1,5 +1,8 @@
 /** Custom emoji token parsing and base64 pixel decoding → 2D canvas (posts, thread messages, reactions). */
 
+import { useEffect, useState } from "react";
+import { EmojiItem } from "../types/interfaces";
+
 export const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
 
 const CUSTOM_EMOJI_GRID_SIZE = 64;
@@ -68,3 +71,32 @@ export const drawCustomEmojiCanvas = (canvas: HTMLCanvasElement, dataB64: string
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(sourceCanvas, 0, 0, CUSTOM_EMOJI_RENDER_SIZE, CUSTOM_EMOJI_RENDER_SIZE);
 };
+
+export const CustomEmoji = ({
+  customEmoji,
+  onPointerDown,
+}: {
+  customEmoji: EmojiItem;
+  onPointerDown?: () => void;
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <canvas
+      width={CUSTOM_EMOJI_RENDER_SIZE}
+      height={CUSTOM_EMOJI_RENDER_SIZE}
+      ref={(el) => {
+        if (!el) {
+          return;
+        }
+        drawCustomEmojiCanvas(el, customEmoji.data_b64);
+      }}
+      onPointerDown={() => { 
+        setIsExpanded(!isExpanded); setTimeout(() => { setIsExpanded(false); }, 4000); 
+        onPointerDown?.();
+      }}
+      className={`h-7 w-7 [image-rendering:pixelated] ${isExpanded ? "h-20 w-20" : ""} transition-all duration-100`}
+      title={customEmoji.name}
+    />
+  )
+}

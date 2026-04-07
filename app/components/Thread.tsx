@@ -52,9 +52,8 @@ import {
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
-  CUSTOM_EMOJI_RENDER_SIZE,
+  CustomEmoji,
   customEmojiUuidFromToken,
-  drawCustomEmojiCanvas,
 } from "@/app/lib/customEmojiCanvas";
 import {
   deleteThreadReplyCollapsed,
@@ -1470,21 +1469,7 @@ export default function Thread({
               const childCustomEmojiUuid = customEmojiUuidFromToken(childMessage.text);
               const childCustomEmoji = childCustomEmojiUuid ? customEmojiByUuid[childCustomEmojiUuid] : undefined;
               if (childCustomEmoji) {
-                return (
-                  <canvas
-                    key={childMessage.id}
-                    width={CUSTOM_EMOJI_RENDER_SIZE}
-                    height={CUSTOM_EMOJI_RENDER_SIZE}
-                    ref={(el) => {
-                      if (!el) {
-                        return;
-                      }
-                      drawCustomEmojiCanvas(el, childCustomEmoji.data_b64);
-                    }}
-                    className="h-5 w-5 [image-rendering:pixelated]"
-                    title={childCustomEmoji.name}
-                  />
-                );
+                return <CustomEmoji key={childMessage.id} customEmoji={childCustomEmoji} />;
               }
               return (
                 <span key={childMessage.id} className="text-base leading-none">

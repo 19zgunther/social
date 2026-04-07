@@ -4,9 +4,8 @@ import type { CSSProperties } from "react";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 import {
-  CUSTOM_EMOJI_RENDER_SIZE,
   customEmojiUuidFromToken,
-  drawCustomEmojiCanvas,
+  CustomEmoji,
 } from "@/app/lib/customEmojiCanvas";
 import type { EmojiItem, ImageOverlayData, ThreadMessage } from "@/app/types/interfaces";
 
@@ -46,16 +45,7 @@ export function ThreadMessageBubbleContent({
             {isOwnMessage ? "You" : message.username}
           </p>
           {customEmoji ? (
-            <canvas
-              width={CUSTOM_EMOJI_RENDER_SIZE}
-              height={CUSTOM_EMOJI_RENDER_SIZE}
-              ref={(el) => { 
-                if (!el) { return; }
-                drawCustomEmojiCanvas(el, customEmoji.data_b64);
-              }}
-              className="h-8 w-8 [image-rendering:pixelated]"
-              title={customEmoji.name}
-            />
+            <CustomEmoji key={message.id} customEmoji={customEmoji} />
           ) : (
             <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
           )}

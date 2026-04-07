@@ -8,9 +8,8 @@ import UserProfileImage from "@/app/components/UserProfileImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
-  CUSTOM_EMOJI_RENDER_SIZE,
+  CustomEmoji,
   customEmojiUuidFromToken,
-  drawCustomEmojiCanvas,
 } from "@/app/lib/customEmojiCanvas";
 import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
@@ -92,7 +91,6 @@ const getCommentAtPath = (
 };
 
 function RenderReactionEmoji({ value, customEmojiByUuid }: { value: string; customEmojiByUuid: Record<string, EmojiItem> }) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const uuid = customEmojiUuidFromToken(value);
   if (!uuid) {
     return <span className="text-xl leading-none">{value}</span>;
@@ -102,19 +100,7 @@ function RenderReactionEmoji({ value, customEmojiByUuid }: { value: string; cust
     return <span className="text-xl leading-none">?</span>;
   }
   return (
-    <canvas
-      width={CUSTOM_EMOJI_RENDER_SIZE}
-      height={CUSTOM_EMOJI_RENDER_SIZE}
-      ref={(el) => {
-        if (!el) {
-          return;
-        }
-        drawCustomEmojiCanvas(el, customEmoji.data_b64);
-      }}
-      onPointerDown={() => { setIsExpanded(!isExpanded); setTimeout(() => { setIsExpanded(false); }, 4000); }}
-      className={`h-7 w-7 [image-rendering:pixelated] ${isExpanded ? "h-20 w-20" : ""} transition-all duration-100`}
-      title={customEmoji.name}
-    />
+    <CustomEmoji customEmoji={customEmoji} />
   );
 };
 

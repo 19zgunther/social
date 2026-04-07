@@ -7,17 +7,11 @@ import emojiKeywordsByEmoji from "emojilib";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./useSwipeBack";
 import { loadAllCustomEmojis } from "@/app/lib/customEmojiCache";
 import { EmojiItem } from "@/app/types/interfaces";
+import { CustomEmoji } from "@/app/lib/customEmojiCanvas";
 const RECENT_EMOJIS_STORAGE_KEY = "emojiPickerRecentUsage";
 const RECENT_EMOJIS_STORAGE_BACKUP_KEY = "emojiPickerRecentUsageBackup";
 const MAX_RECENT_EMOJIS = 50;
-const CUSTOM_EMOJI_GRID_SIZE = 64;
-const CUSTOM_EMOJI_PIXEL_COUNT = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_GRID_SIZE;
-const CUSTOM_EMOJI_UPSCALE_FACTOR = 4;
-const CUSTOM_EMOJI_RENDER_SIZE = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_UPSCALE_FACTOR;
 const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
-const B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const CUSTOM_EMOJI_TRANSPARENT_FLAG = 1 << 9;
-const CUSTOM_EMOJI_RGB_MASK = 0b1_1111_1111;
 
 type EmojiUsageEntry = {
   emoji: string;
@@ -143,59 +137,6 @@ const updateUsageWithSelection = (usage: EmojiUsageEntry[], emoji: string, times
   return sortAndTrimUsage(Array.from(usageByEmoji.values()));
 };
 
-const decodeCustomEmojiDataB64 = (dataB64: string): Uint16Array => {
-  const pixels = new Uint16Array(CUSTOM_EMOJI_PIXEL_COUNT);
-  if (dataB64.length !== CUSTOM_EMOJI_PIXEL_COUNT * 2) {
-    return pixels;
-  }
-  for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
-    const first = B64_ALPHABET.indexOf(dataB64[i * 2]);
-    const second = B64_ALPHABET.indexOf(dataB64[i * 2 + 1]);
-    if (first < 0 || second < 0) {
-      continue;
-    }
-    const r = (first >> 3) & 0b111;
-    const g = first & 0b111;
-    const b = (second >> 3) & 0b111;
-    const rgb = (r << 6) | (g << 3) | b;
-    const metadata = second & 0b111;
-    const isTransparent = (metadata & 0b001) === 0b001 || (metadata === 0 && rgb === 0);
-    pixels[i] = rgb | (isTransparent ? CUSTOM_EMOJI_TRANSPARENT_FLAG : 0);
-  }
-  return pixels;
-};
-
-const drawCustomEmojiPreview = (canvas: HTMLCanvasElement, dataB64: string) => {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    return;
-  }
-  canvas.width = CUSTOM_EMOJI_RENDER_SIZE;
-  canvas.height = CUSTOM_EMOJI_RENDER_SIZE;
-  const pixels = decodeCustomEmojiDataB64(dataB64);
-  const imageData = new ImageData(CUSTOM_EMOJI_GRID_SIZE, CUSTOM_EMOJI_GRID_SIZE);
-  for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
-    const packed = pixels[i] ?? 0;
-    const rgb = packed & CUSTOM_EMOJI_RGB_MASK;
-    imageData.data[i * 4] = Math.round(((rgb >> 6) & 0b111) * (255 / 7));
-    imageData.data[i * 4 + 1] = Math.round(((rgb >> 3) & 0b111) * (255 / 7));
-    imageData.data[i * 4 + 2] = Math.round((rgb & 0b111) * (255 / 7));
-    imageData.data[i * 4 + 3] = (packed & CUSTOM_EMOJI_TRANSPARENT_FLAG) === CUSTOM_EMOJI_TRANSPARENT_FLAG ? 0 : 255;
-  }
-  const sourceCanvas = document.createElement("canvas");
-  sourceCanvas.width = CUSTOM_EMOJI_GRID_SIZE;
-  sourceCanvas.height = CUSTOM_EMOJI_GRID_SIZE;
-  const sourceCtx = sourceCanvas.getContext("2d");
-  if (!sourceCtx) {
-    return;
-  }
-  sourceCtx.putImageData(imageData, 0, 0);
-  ctx.clearRect(0, 0, CUSTOM_EMOJI_RENDER_SIZE, CUSTOM_EMOJI_RENDER_SIZE);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(sourceCanvas, 0, 0, CUSTOM_EMOJI_RENDER_SIZE, CUSTOM_EMOJI_RENDER_SIZE);
-};
-
 const customEmojiUuidFromToken = (value: string): string | null => {
   const match = value.trim().match(CUSTOM_EMOJI_TOKEN_REGEX);
   return match?.[1] ?? null;
@@ -229,7 +170,7 @@ export default function EmojiPicker({
     [customEmojis],
   );
   const allEmojiOptions = useMemo(() => Object.keys(emojiKeywordsByEmoji), []);
-  
+
   const emojiSearchKeywordsByEmoji = useMemo(() => {
     const keywordsByEmoji = new Map<string, string[]>();
 
@@ -377,7 +318,7 @@ export default function EmojiPicker({
               className="w-full max-w-sm overflow-hidden rounded-xl border border-accent-1 bg-secondary-background p-3 shadow-xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-0 flex items-center justify-between">
                 <p className="text-sm font-semibold text-accent-2">Choose an emoji</p>
                 <button
                   type="button"
@@ -400,8 +341,10 @@ export default function EmojiPicker({
                   className="w-full rounded-md border border-accent-1 bg-background px-2 py-1 text-sm text-foreground outline-none placeholder:text-accent-2/70 focus:border-accent-2"
                 />
               </div>
-              <p className="mb-1 text-[11px] font-semibold text-accent-2">Recent</p>
-              <div className="mb-3 overflow-x-auto overflow-y-hidden pb-1">
+
+              {/** Recent emojis */}
+              <p className="text-[11px] font-semibold text-accent-2">Recent</p>
+              <div className="overflow-x-auto overflow-y-hidden mb-2">
                 <div className="grid grid-flow-col grid-rows-1 gap-0">
                   {recentEmojiOptions.map((emoji, index) => (
                     (() => {
@@ -417,17 +360,7 @@ export default function EmojiPicker({
                             aria-label={`Insert custom emoji ${customEmoji.name}`}
                             title={customEmoji.name}
                           >
-                            <canvas
-                              width={CUSTOM_EMOJI_RENDER_SIZE}
-                              height={CUSTOM_EMOJI_RENDER_SIZE}
-                              ref={(el) => {
-                                if (!el) {
-                                  return;
-                                }
-                                drawCustomEmojiPreview(el, customEmoji.data_b64);
-                              }}
-                              className="h-7 w-7 [image-rendering:pixelated]"
-                            />
+                            <CustomEmoji customEmoji={customEmoji} />
                           </button>
                         );
                       }
@@ -446,21 +379,23 @@ export default function EmojiPicker({
                   ))}
                 </div>
               </div>
+
+              {/** Custom emojis */}
               {customEmojis.length > 0 ? (
                 <>
-                  <p className="mb-1 text-[11px] font-semibold text-accent-2">Your custom emojis</p>
-                  <div className="mb-3 overflow-x-auto overflow-y-hidden pb-1">
+                  <p className="text-[11px] font-semibold text-accent-2">Your custom emojis</p>
+                  <div className="mb-1 overflow-x-auto overflow-y-hidden pb-1">
                     <div className="grid grid-flow-col grid-rows-1 gap-0">
                       {customEmojis.map((emoji) => (
                         <button
                           key={emoji.uuid}
                           type="button"
                           onClick={() => handleSelectEmoji(customEmojiToken(emoji.uuid))}
-                          className="flex h-14 w-14 items-center justify-center rounded-md px-1 py-1 transition hover:bg-accent-1/40"
+                          className="flex h-8 w-8 items-center justify-center rounded-md px-1 py-1 transition hover:bg-accent-1/40"
                           aria-label={`Insert custom emoji ${emoji.name}`}
                           title={emoji.name}
                         >
-                          <canvas
+                          {/* <canvas
                             width={CUSTOM_EMOJI_RENDER_SIZE}
                             height={CUSTOM_EMOJI_RENDER_SIZE}
                             ref={(el) => {
@@ -470,13 +405,16 @@ export default function EmojiPicker({
                               drawCustomEmojiPreview(el, emoji.data_b64);
                             }}
                             className="h-7 w-7 [image-rendering:pixelated]"
-                          />
+                          /> */}
+                          <CustomEmoji customEmoji={emoji} />
                         </button>
                       ))}
                     </div>
                   </div>
                 </>
               ) : null}
+
+              {/** All emojis */}
               <p className="mb-1 text-[11px] font-semibold text-accent-2">All emojis</p>
               <div className="overflow-x-auto overflow-y-hidden pb-1">
                 <div className="grid h-[11rem] grid-flow-col grid-rows-4 gap-0">
@@ -485,7 +423,7 @@ export default function EmojiPicker({
                       key={`${emoji}-${index}`}
                       type="button"
                       onClick={() => handleSelectEmoji(emoji)}
-                      className="h-14 w-14 rounded-md px-1 py-1 text-xl transition hover:bg-accent-1/40"
+                      className="h-8 w-8 rounded-md px-1 py-1 text-xl transition hover:bg-accent-1/40"
                       aria-label={`Insert ${emoji}`}
                       style={{ fontSize: "1.5rem" }}
                     >
