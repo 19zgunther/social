@@ -12,7 +12,7 @@ import {
 import { imageCache, getImageUrlFromCache } from "@/app/lib/imageCache";
 import { globalDebugData } from "@/app/components/utils/globalDebugData";
 
-const GIVE_UP_AFTER_RETRY = 5;
+const GIVE_UP_AFTER_RETRY = 10;
 
 type CachedImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
   signedUrl?: string | null;
