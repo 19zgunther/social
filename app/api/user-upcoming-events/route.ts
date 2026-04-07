@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
-import { getSignedMainBucketThreadImageUrl } from "@/app/api/server_file_storage_utils";
+import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import { finalizeThreadEventItem, type ThreadEventRow } from "@/app/lib/threadEvents";
 import type { ThreadItem, UserUpcomingEventsResponse } from "@/app/types/interfaces";
@@ -46,19 +46,20 @@ export async function POST(request: Request) {
     for (const row of rows) {
       const tr = row.threads;
       const { threads: _t, ...eventRow } = row;
-      const event = await finalizeThreadEventItem(eventRow as ThreadEventRow);
+      const event = await finalizeThreadEventItem(eventRow as ThreadEventRow, userId);
 
       const participantCount = new Set([tr.owner, ...tr.user_thread_access.map((a) => a.user_id)]).size;
 
-      let image_url: string | null = null;
+      let image_access_grant: string | null = null;
       if (tr.image_id) {
         try {
-          image_url = await getSignedMainBucketThreadImageUrl({
+          image_access_grant = createThreadBucketImageAccessGrant({
             threadId: tr.id,
             imageId: tr.image_id,
+            viewerUserId: userId,
           });
         } catch (error) {
-          console.error("user_upcoming_events_thread_image_sign_failed", tr.id, error);
+          console.error("user_upcoming_events_thread_image_grant_failed", tr.id, error);
         }
       }
 
@@ -70,7 +71,8 @@ export async function POST(request: Request) {
         owner_username: tr.users.username,
         participant_count: participantCount,
         image_id: tr.image_id,
-        image_url,
+        image_url: null,
+        image_access_grant,
         last_message_at: null,
         last_photo_preview: null,
       };

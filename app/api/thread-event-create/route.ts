@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       },
     });
 
-    const event = await finalizeThreadEventItem(row);
+    const event = await finalizeThreadEventItem(row, authResult.user_id);
     const payload: ThreadEventCreateResponse = { event };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

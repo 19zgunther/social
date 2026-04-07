@@ -126,6 +126,7 @@ const mergeMessagesById = (
       ...existingMessage,
       ...message,
       image_url: message.image_url ?? existingMessage?.image_url ?? null,
+      image_access_grant: message.image_access_grant ?? existingMessage?.image_access_grant ?? null,
     });
   }
 
@@ -137,6 +138,12 @@ const mergeMessagesById = (
     return a.id.localeCompare(b.id);
   });
 };
+
+const threadMessageHasRenderableImage = (message: ThreadMessage): boolean =>
+  Boolean(
+    message.image_id &&
+      (message.image_url || (message.image_access_grant && message.created_by)),
+  );
 
 const isEmojiOnlyMessage = (value: string): boolean => {
   const trimmed = value.trim();
@@ -209,8 +216,11 @@ export default function Thread({
   const [activeOptionsMessageId, setActiveOptionsMessageId] = useState<string | null>(null);
   const [collapsedReplyMessageIds, setCollapsedReplyMessageIds] = useState<string[]>([]);
   const [imageViewer, setImageViewer] = useState<{
-    signedUrl: string;
+    signedUrl: string | null;
     imageId: string | null;
+    imageAccessGrant?: string | null;
+    imageStorageUserId?: string | null;
+    imageThreadId?: string | null;
     alt: string;
   } | null>(null);
   const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
@@ -385,6 +395,9 @@ export default function Thread({
             ...previousThread as ThreadItem,
             name: cached.thread.name,
             owner_user_id: cached.thread.owner_user_id,
+            image_id: cached.thread.image_id ?? previousThread?.image_id ?? null,
+            image_url: cached.thread.image_url ?? null,
+            image_access_grant: cached.thread.image_access_grant ?? null,
           }));
           setMessages(cached.messages);
           setHasMoreOlderMessages(cached.has_more_older);
@@ -407,6 +420,9 @@ export default function Thread({
               ...previousThread as ThreadItem,
               name: payload.thread.name,
               owner_user_id: payload.thread.owner_user_id,
+              image_id: payload.thread.image_id ?? previousThread?.image_id ?? null,
+              image_url: payload.thread.image_url ?? null,
+              image_access_grant: payload.thread.image_access_grant ?? null,
             }));
             setMessages(payload.messages);
             setHasMoreOlderMessages(payload.has_more_older);
@@ -672,6 +688,15 @@ export default function Thread({
       }
 
       const latestPayload = (await latestResponse.json()) as ThreadMessagesResponse;
+
+      setSelectedThread((previousThread: ThreadItem | null) => ({
+        ...(previousThread as ThreadItem),
+        name: latestPayload.thread.name,
+        owner_user_id: latestPayload.thread.owner_user_id,
+        image_id: latestPayload.thread.image_id ?? previousThread?.image_id ?? null,
+        image_url: latestPayload.thread.image_url ?? null,
+        image_access_grant: latestPayload.thread.image_access_grant ?? null,
+      }));
 
       const previousSnapshot = messagesRef.current;
       const prevIds = new Set(previousSnapshot.map((message) => message.id));
@@ -1136,7 +1161,7 @@ export default function Thread({
 
   const visibleMessages = messages.filter((message) => {
     const hasText = message.text.trim().length > 0;
-    const hasImage = Boolean(message.image_url);
+    const hasImage = threadMessageHasRenderableImage(message);
     const hasOverlay = Boolean(toImageOverlayData(message.data));
     const poolGame = getPoolGameFromMessageData(message.data);
     if (poolGame && !latestPoolMessageIds.has(message.id)) {
@@ -1255,7 +1280,10 @@ export default function Thread({
   const copyActiveOptionsMessage = async (message: ThreadMessage) => {
     const text = message.text.trim();
     const fallback = message.image_url?.trim() ?? "";
-    const toCopy = text || fallback;
+    const toCopy =
+      text ||
+      fallback ||
+      (threadMessageHasRenderableImage(message) ? "[Image]" : "");
     if (!toCopy) {
       setStatusMessage("Nothing to copy.");
       closeMessageOptionsOverlay();
@@ -1273,7 +1301,7 @@ export default function Thread({
   const renderOptionsTargetBubble = (message: ThreadMessage, depth: number) => {
     const isOwnMessage = message.created_by === currentUserId;
     const hasText = message.text.trim().length > 0;
-    const hasImage = Boolean(message.image_url);
+    const hasImage = threadMessageHasRenderableImage(message);
     const isImageOnly = hasImage && !hasText;
     const messageImageOverlay = toImageOverlayData(message.data);
 
@@ -1290,8 +1318,10 @@ export default function Thread({
           imageInteraction="options"
           onOpenImageViewer={() => {
             setImageViewer({
-              signedUrl: message.image_url!,
+              signedUrl: message.image_url,
               imageId: message.image_id,
+              imageAccessGrant: message.image_access_grant ?? null,
+              imageStorageUserId: message.created_by,
               alt: "Thread message attachment",
             });
           }}
@@ -1303,7 +1333,7 @@ export default function Thread({
   const renderMessage = (message: ThreadMessage, depth: number) => {
     const isOwnMessage = message.created_by === currentUserId;
     const hasText = message.text.trim().length > 0;
-    const hasImage = Boolean(message.image_url);
+    const hasImage = threadMessageHasRenderableImage(message);
     const isImageOnly = hasImage && !hasText;
     const messageImageOverlay = toImageOverlayData(message.data);
     const poolGame = getPoolGameFromMessageData(message.data);
@@ -1448,8 +1478,10 @@ export default function Thread({
             imageInteraction="chat"
             onOpenImageViewer={() => {
               setImageViewer({
-                signedUrl: message.image_url!,
+                signedUrl: message.image_url,
                 imageId: message.image_id,
+                imageAccessGrant: message.image_access_grant ?? null,
+                imageStorageUserId: message.created_by,
                 alt: "Thread message attachment",
               });
             }}
@@ -1650,21 +1682,26 @@ export default function Thread({
           className="min-w-0 text-center flex items-center gap-2"
           onClick={setThreadSettingsOpen}
         >
-          {selectedThread.image_url ? (
+          {selectedThread.image_id &&
+          (selectedThread.image_url || selectedThread.image_access_grant) ? (
             <button
               type="button"
               className="h-10 w-10 shrink-0 rounded-full border-0 bg-transparent p-0"
               onClick={(event) => {
                 event.stopPropagation();
                 setImageViewer({
-                  signedUrl: selectedThread.image_url!,
+                  signedUrl: selectedThread.image_url ?? null,
                   imageId: selectedThread.image_id ?? null,
+                  imageAccessGrant: selectedThread.image_access_grant ?? null,
+                  imageThreadId: selectedThread.id,
                   alt: "Group photo",
                 });
               }}
             >
               <CachedImage
-                signedUrl={selectedThread.image_url}
+                signedUrl={selectedThread.image_url ?? null}
+                imageAccessGrant={selectedThread.image_access_grant ?? null}
+                imageThreadId={selectedThread.id}
                 imageId={selectedThread.image_id ?? null}
                 alt="Group photo"
                 className="h-10 w-10 rounded-full border border-accent-1 object-cover"
@@ -1791,13 +1828,16 @@ export default function Thread({
       <ImageViewerModal
         key={
           imageViewer
-            ? `${imageViewer.signedUrl}-${imageViewer.imageId ?? ""}`
+            ? `${imageViewer.imageId ?? ""}-${imageViewer.imageAccessGrant?.slice(0, 12) ?? imageViewer.signedUrl ?? ""}`
             : "image-viewer-closed"
         }
         open={imageViewer !== null}
         onClose={() => setImageViewer(null)}
         signedUrl={imageViewer?.signedUrl ?? null}
         imageId={imageViewer?.imageId ?? null}
+        imageAccessGrant={imageViewer?.imageAccessGrant ?? null}
+        imageStorageUserId={imageViewer?.imageStorageUserId ?? null}
+        imageThreadId={imageViewer?.imageThreadId ?? null}
         alt={imageViewer?.alt}
       />
 

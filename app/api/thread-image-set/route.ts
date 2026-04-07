@@ -2,10 +2,8 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-import {
-  getSignedMainBucketThreadImageUrl,
-  uploadThreadImageToMainBucket,
-} from "@/app/api/server_file_storage_utils";
+import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { uploadThreadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import { ThreadImageSetResponse } from "@/app/types/interfaces";
 
 type ThreadImageSetBody = {
@@ -84,15 +82,17 @@ export async function POST(request: Request) {
       },
     });
 
-    const imageUrl = await getSignedMainBucketThreadImageUrl({
+    const image_access_grant = createThreadBucketImageAccessGrant({
       threadId,
       imageId,
+      viewerUserId: authResult.user_id,
     });
 
     const payload: ThreadImageSetResponse = {
       thread_id: thread.id,
       image_id: imageId,
-      image_url: imageUrl,
+      image_url: null,
+      image_access_grant,
     };
 
     return NextResponse.json(payload, { status: 200 });

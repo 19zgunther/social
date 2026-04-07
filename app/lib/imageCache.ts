@@ -91,23 +91,100 @@ const getBlobForImage = async (signedUrl: string, imageId: string): Promise<Blob
   return inFlight;
 };
 
-const __imageURLCache = new Map<string, string>();
-export const imageCache = async (signedUrl: string | null, imageId: string | null): Promise<string | null> => {
-  if (!signedUrl) {
+const resolveSignedUrlFromGrant = async (
+  imageId: string,
+  grant: string,
+  opts: { storageUserId?: string | null; threadId?: string | null },
+): Promise<string | null> => {
+  try {
+    const storageUserId = opts.storageUserId?.trim() || "";
+    const threadId = opts.threadId?.trim() || "";
+    const body: Record<string, string> = {
+      image_id: imageId,
+      grant,
+    };
+    if (storageUserId) {
+      body.storage_user_id = storageUserId;
+    }
+    if (threadId) {
+      body.thread_id = threadId;
+    }
+    const response = await fetch("/api/image-resolve", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const data = (await response.json()) as { signed_url?: string };
+    return data.signed_url ?? null;
+  } catch {
     return null;
   }
+};
 
-  if (!imageId || typeof window === "undefined" || typeof window.indexedDB === "undefined") {
+export type ImageCacheOptions = {
+  grant?: string | null;
+  /** Main-bucket path owner `{userId}/{imageId}`. */
+  storageUserId?: string | null;
+  /** Thread-bucket path `thread/{threadId}/{imageId}` (use with thread-scoped grants). */
+  threadId?: string | null;
+};
+
+const __imageURLCache = new Map<string, string>();
+export const imageCache = async (
+  signedUrl: string | null,
+  imageId: string | null,
+  options?: ImageCacheOptions,
+): Promise<string | null> => {
+  const grant = options?.grant?.trim() || null;
+  const storageUserId = options?.storageUserId?.trim() || null;
+  const threadId = options?.threadId?.trim() || null;
+
+  if (!imageId) {
     return signedUrl;
   }
 
+  if (typeof window === "undefined" || typeof window.indexedDB === "undefined") {
+    if (grant && (storageUserId || threadId)) {
+      return resolveSignedUrlFromGrant(imageId, grant, { storageUserId, threadId });
+    }
+    return signedUrl;
+  }
+
+  const memo = __imageURLCache.get(imageId);
+  if (memo) {
+    return memo;
+  }
+
+  if (!grant && !signedUrl) {
+    return null;
+  }
+
   try {
-    const blob = await getBlobForImage(signedUrl, imageId);
+    const cachedBlob = await readCachedBlob(imageId);
+    if (cachedBlob) {
+      const url = URL.createObjectURL(cachedBlob);
+      __imageURLCache.set(imageId, url);
+      return url;
+    }
+
+    let urlToFetch = signedUrl;
+    if (!urlToFetch && grant && (storageUserId || threadId)) {
+      urlToFetch = await resolveSignedUrlFromGrant(imageId, grant, { storageUserId, threadId });
+    }
+    if (!urlToFetch) {
+      return null;
+    }
+
+    const blob = await getBlobForImage(urlToFetch, imageId);
     const url = URL.createObjectURL(blob);
     __imageURLCache.set(imageId, url);
     return url;
   } catch {
-    return signedUrl;
+    return signedUrl ?? null;
   }
 };
 export const getImageUrlFromCache = (imageId: string): string | undefined => { return __imageURLCache.get(imageId); }

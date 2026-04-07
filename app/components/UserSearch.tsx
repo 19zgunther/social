@@ -11,6 +11,7 @@ export type UserSearchOption = {
   friendshipStatus?: "self" | "friends" | "none" | "pending_sent" | "pending_received" | "rejected";
   profile_image_id?: string | null;
   profile_image_url?: string | null;
+  profile_image_access_grant?: string | null;
 };
 
 type UserSearchProps = {
@@ -147,6 +148,8 @@ export default function UserSearch({
                             sizePx={40}
                             alt={`${option.username} profile`}
                             signedUrl={option.profile_image_url}
+                            imageAccessGrant={option.profile_image_access_grant}
+                            imageStorageUserId={option.id}
                             imageId={option.profile_image_id ?? null}
                           />
                           <div className="min-w-0 flex-1">

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
+import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
-import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
 import { FriendRequestsListResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -101,6 +101,21 @@ export async function POST(request: Request) {
         email: row.users_friends_other_userTousers.email,
         profile_image_id: row.users_friends_other_userTousers.profile_image_id,
         profile_image_url: null,
+        profile_image_access_grant: (() => {
+          const pid = row.users_friends_other_userTousers.profile_image_id;
+          if (!pid) {
+            return null;
+          }
+          try {
+            return createMainBucketImageAccessGrant({
+              imageId: pid,
+              storageUserId: row.other_user,
+              viewerUserId: authResult.user_id,
+            });
+          } catch {
+            return null;
+          }
+        })(),
       })),
       accepted_friends: acceptedRows.map((row) => {
         const other =
@@ -115,48 +130,23 @@ export async function POST(request: Request) {
           accepted_at: row.accepted_at?.toISOString() ?? null,
           profile_image_id: other.profile_image_id,
           profile_image_url: null,
+          profile_image_access_grant: (() => {
+            if (!other.profile_image_id) {
+              return null;
+            }
+            try {
+              return createMainBucketImageAccessGrant({
+                imageId: other.profile_image_id,
+                storageUserId: other.id,
+                viewerUserId: authResult.user_id,
+              });
+            } catch {
+              return null;
+            }
+          })(),
         };
       }),
     };
-
-    const friendsWithImages = await Promise.all(
-      payload.accepted_friends.map(async (friend) => {
-        if (!friend.profile_image_id) {
-          return friend;
-        }
-        try {
-          const signedUrl = await getSignedMainBucketImageUrl({
-            userId: friend.user_id,
-            imageId: friend.profile_image_id,
-          });
-          return { ...friend, profile_image_url: signedUrl };
-        } catch (error) {
-          console.error("friend_profile_image_sign_failed", friend.user_id, error);
-          return friend;
-        }
-      }),
-    );
-
-    const outgoingWithImages = await Promise.all(
-      payload.outgoing_requests.map(async (request) => {
-        if (!request.profile_image_id) {
-          return request;
-        }
-        try {
-          const signedUrl = await getSignedMainBucketImageUrl({
-            userId: request.other_user_id,
-            imageId: request.profile_image_id,
-          });
-          return { ...request, profile_image_url: signedUrl };
-        } catch (error) {
-          console.error("outgoing_request_profile_image_sign_failed", request.other_user_id, error);
-          return request;
-        }
-      }),
-    );
-
-    payload.accepted_friends = friendsWithImages;
-    payload.outgoing_requests = outgoingWithImages;
 
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

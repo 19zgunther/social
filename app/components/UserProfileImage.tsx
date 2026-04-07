@@ -52,6 +52,9 @@ type UserProfileImageProps = {
   alt: string;
   signedUrl?: string | null;
   imageId?: string | null;
+  imageAccessGrant?: string | null;
+  /** Defaults to `userId` when resolving main-bucket profile images. */
+  imageStorageUserId?: string | null;
   className?: string;
 };
 
@@ -61,6 +64,8 @@ export default function UserProfileImage({
   alt,
   signedUrl,
   imageId,
+  imageAccessGrant,
+  imageStorageUserId,
   className,
 }: UserProfileImageProps) {
   const sessionCtx = useContext(UserSessionSyncContext);
@@ -75,15 +80,22 @@ export default function UserProfileImage({
   const circumference = 2 * Math.PI * r;
   const dashLen = ringFrac * circumference;
 
+  const storageForGrant = imageStorageUserId ?? userId;
+  const showPhoto = Boolean(
+    signedUrl || (imageAccessGrant && imageId && storageForGrant),
+  );
+
   return (
     <div
       className={`relative shrink-0 rounded-full bg-secondary-background ${showRing ? "" : "border border-accent-1"} ${className ?? ""}`}
       style={{ width: sizePx, height: sizePx }}
     >
-      {signedUrl ? (
+      {showPhoto ? (
         <CachedImage
-          signedUrl={signedUrl}
+          {...(signedUrl ? { signedUrl } : {})}
           imageId={imageId ?? null}
+          imageAccessGrant={imageAccessGrant ?? null}
+          imageStorageUserId={imageAccessGrant ? storageForGrant : null}
           alt={alt}
           className="h-full w-full rounded-full object-cover"
         />

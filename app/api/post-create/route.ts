@@ -3,10 +3,8 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@/app/generated/prisma/client";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-import {
-  getSignedMainBucketImageUrl,
-  uploadImageToMainBucket,
-} from "@/app/api/server_file_storage_utils";
+import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import { PostCreateRequest, PostCreateResponse, PostData } from "@/app/types/interfaces";
 
 const sanitizePostData = (rawData: unknown): Prisma.InputJsonValue | undefined => {
@@ -86,12 +84,18 @@ export async function POST(request: Request) {
       },
     });
 
-    const imageUrl = post.image_id
-      ? await getSignedMainBucketImageUrl({
-        userId: post.created_by,
-        imageId: post.image_id,
-      })
-      : null;
+    let imageAccessGrant: string | null = null;
+    if (post.image_id) {
+      try {
+        imageAccessGrant = createMainBucketImageAccessGrant({
+          imageId: post.image_id,
+          storageUserId: post.created_by,
+          viewerUserId: authResult.user_id,
+        });
+      } catch (error) {
+        console.error("post_create_image_grant_failed", post.id, error);
+      }
+    }
 
     const author = await prisma.users.findFirst({
       where: {
@@ -101,15 +105,16 @@ export async function POST(request: Request) {
         profile_image_id: true,
       },
     });
-    let authorProfileImageUrl: string | null = null;
+    let authorProfileImageAccessGrant: string | null = null;
     if (author?.profile_image_id) {
       try {
-        authorProfileImageUrl = await getSignedMainBucketImageUrl({
-          userId: authResult.user_id,
+        authorProfileImageAccessGrant = createMainBucketImageAccessGrant({
           imageId: author.profile_image_id,
+          storageUserId: authResult.user_id,
+          viewerUserId: authResult.user_id,
         });
       } catch (error) {
-        console.error("post_create_author_profile_image_sign_failed", authResult.user_id, error);
+        console.error("post_create_author_profile_image_grant_failed", authResult.user_id, error);
       }
     }
 
@@ -119,7 +124,8 @@ export async function POST(request: Request) {
         created_at: post.created_at.toISOString(),
         created_by: post.created_by,
         image_id: post.image_id,
-        image_url: imageUrl,
+        image_url: null,
+        image_access_grant: imageAccessGrant,
         text: post.text ?? "",
         data: post.data as PostData | null,
         like_count: 0,
@@ -127,7 +133,8 @@ export async function POST(request: Request) {
         username: authResult.username,
         email: authResult.email,
         author_profile_image_id: author?.profile_image_id ?? null,
-        author_profile_image_url: authorProfileImageUrl,
+        author_profile_image_url: null,
+        author_profile_image_access_grant: authorProfileImageAccessGrant,
       },
     };
     return NextResponse.json(payload, { status: 200 });

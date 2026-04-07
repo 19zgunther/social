@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
+import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import {
   FeedPostsListRequest,
   FeedPostsListResponse,
@@ -91,43 +91,41 @@ export async function POST(request: Request) {
     const hasMore = postsDesc.length > PAGE_SIZE;
     const pagedPosts = postsDesc.slice(0, PAGE_SIZE);
 
-    const signedUrlEntries = await Promise.all(
-      pagedPosts.map(async (post) => {
-        if (!post.image_id) {
-          return [post.id, null] as const;
-        }
-        try {
-          const signedUrl = await getSignedMainBucketImageUrl({
-            userId: post.created_by,
-            imageId: post.image_id,
-          });
-          return [post.id, signedUrl] as const;
-        } catch (error) {
-          console.error("feed_post_image_sign_failed", post.id, error);
-          return [post.id, null] as const;
-        }
-      }),
-    );
-    const imageUrlByPostId = new Map(signedUrlEntries);
+    const postImageGrantEntries = pagedPosts.map((post) => {
+      if (!post.image_id) {
+        return [post.id, null] as const;
+      }
+      try {
+        const grant = createMainBucketImageAccessGrant({
+          imageId: post.image_id,
+          storageUserId: post.created_by,
+          viewerUserId: authResult.user_id,
+        });
+        return [post.id, grant] as const;
+      } catch (error) {
+        console.error("feed_post_image_grant_failed", post.id, error);
+        return [post.id, null] as const;
+      }
+    });
+    const imageAccessGrantByPostId = new Map(postImageGrantEntries);
 
-    const authorProfileImageUrlEntries = await Promise.all(
-      pagedPosts.map(async (post) => {
-        if (!post.users.profile_image_id) {
-          return [post.id, null] as const;
-        }
-        try {
-          const signedUrl = await getSignedMainBucketImageUrl({
-            userId: post.created_by,
-            imageId: post.users.profile_image_id,
-          });
-          return [post.id, signedUrl] as const;
-        } catch (error) {
-          console.error("feed_post_author_profile_image_sign_failed", post.id, error);
-          return [post.id, null] as const;
-        }
-      }),
-    );
-    const authorProfileImageUrlByPostId = new Map(authorProfileImageUrlEntries);
+    const authorProfileImageGrantEntries = pagedPosts.map((post) => {
+      if (!post.users.profile_image_id) {
+        return [post.id, null] as const;
+      }
+      try {
+        const grant = createMainBucketImageAccessGrant({
+          imageId: post.users.profile_image_id,
+          storageUserId: post.created_by,
+          viewerUserId: authResult.user_id,
+        });
+        return [post.id, grant] as const;
+      } catch (error) {
+        console.error("feed_post_author_profile_image_grant_failed", post.id, error);
+        return [post.id, null] as const;
+      }
+    });
+    const authorProfileImageAccessGrantByPostId = new Map(authorProfileImageGrantEntries);
 
     const payload: FeedPostsListResponse = {
       viewer_user_id: authResult.user_id,
@@ -145,13 +143,16 @@ export async function POST(request: Request) {
         created_at: post.created_at.toISOString(),
         created_by: post.created_by,
         image_id: post.image_id,
-        image_url: imageUrlByPostId.get(post.id) ?? null,
+        image_url: null,
+        image_access_grant: imageAccessGrantByPostId.get(post.id) ?? null,
         text: post.text ?? "",
         data: post.data as PostData | null,
         username: post.users.username,
         email: post.users.email,
         author_profile_image_id: post.users.profile_image_id,
-        author_profile_image_url: authorProfileImageUrlByPostId.get(post.id) ?? null,
+        author_profile_image_url: null,
+        author_profile_image_access_grant:
+          authorProfileImageAccessGrantByPostId.get(post.id) ?? null,
       })),
     };
     return NextResponse.json(payload, { status: 200 });

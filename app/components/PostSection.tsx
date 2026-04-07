@@ -116,9 +116,13 @@ function PostSectionComponent({
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isLoadingAdditionalImages, setIsLoadingAdditionalImages] = useState(false);
   const [hasLoadedAdditionalImages, setHasLoadedAdditionalImages] = useState(false);
-  const [imageUrlById, setImageUrlById] = useState<Record<string, string | null>>(
-    post.image_id ? { [post.image_id]: post.image_url ?? null } : {},
-  );
+  const [imageGrantById, setImageGrantById] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    if (post.image_id && post.image_access_grant) {
+      initial[post.image_id] = post.image_access_grant;
+    }
+    return initial;
+  });
   const initialLikes = useMemo(() => postData.likes ?? {}, [postData.likes]);
   const [isLikedByViewer, setIsLikedByViewer] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -135,8 +139,9 @@ function PostSectionComponent({
   const [postTextStatusMessage, setPostTextStatusMessage] = useState("");
   const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
   const [imageViewer, setImageViewer] = useState<{
-    signedUrl: string;
-    imageId: string | null;
+    imageId: string;
+    imageAccessGrant: string | null;
+    imageStorageUserId: string;
     alt: string;
   } | null>(null);
   const [isPostDateExpanded, setIsPostDateExpanded] = useState(false);
@@ -196,7 +201,13 @@ function PostSectionComponent({
     setActiveImageIndex(0);
     setIsLoadingAdditionalImages(false);
     setHasLoadedAdditionalImages(false);
-    setImageUrlById(post.image_id ? { [post.image_id]: post.image_url ?? null } : {});
+    setImageGrantById(() => {
+      const next: Record<string, string> = {};
+      if (post.image_id && post.image_access_grant) {
+        next[post.image_id] = post.image_access_grant;
+      }
+      return next;
+    });
     setRootCommentDraft("");
     setReplyDraftByPath({});
     setActiveReplyPath(null);
@@ -206,7 +217,7 @@ function PostSectionComponent({
     setPostTextStatusMessage("");
     setImageViewer(null);
     setCustomEmojiByUuid({});
-  }, [post.data, post.id, post.image_id, post.image_url, post.text]);
+  }, [post.data, post.id, post.image_id, post.image_access_grant, post.text]);
 
   useEffect(() => {
     if (customEmojiUuidsInPostData.length === 0) {
@@ -248,7 +259,7 @@ function PostSectionComponent({
 
     setIsLoadingAdditionalImages(true);
     try {
-      const response = await fetch("/api/image-urls", {
+      const response = await fetch("/api/image-access-grants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -259,8 +270,14 @@ function PostSectionComponent({
       if (!response.ok) {
         return;
       }
-      const payload = (await response.json()) as { image_urls_by_id?: Record<string, string | null> };
-      setImageUrlById((previous) => ({ ...previous, ...(payload.image_urls_by_id ?? {}) }));
+      const payload = (await response.json()) as { grants_by_id?: Record<string, string | null> };
+      const merged: Record<string, string> = {};
+      for (const [id, grant] of Object.entries(payload.grants_by_id ?? {})) {
+        if (grant) {
+          merged[id] = grant;
+        }
+      }
+      setImageGrantById((previous) => ({ ...previous, ...merged }));
       setHasLoadedAdditionalImages(true);
     } finally {
       setIsLoadingAdditionalImages(false);
@@ -623,7 +640,8 @@ function PostSectionComponent({
             userId={post.created_by}
             sizePx={40}
             alt={`${post.username} profile`}
-            signedUrl={post.author_profile_image_url}
+            imageAccessGrant={post.author_profile_image_access_grant ?? null}
+            imageStorageUserId={post.created_by}
             imageId={post.author_profile_image_id ?? null}
           />
           {onViewUserProfile ? (
@@ -663,26 +681,28 @@ function PostSectionComponent({
           }}
         >
           {allPostImageIds.map((imageId, index) => {
-            const signedUrl = imageUrlById[imageId] ?? null;
+            const grant = imageGrantById[imageId];
             const isPrimaryImage = index === 0;
             return (
               <div key={imageId} className="w-full shrink-0 snap-center">
-                {signedUrl ? (
+                {grant ? (
                   <button
                     type="button"
                     className="block w-full cursor-zoom-in border-0 bg-transparent p-0"
                     onClick={(event) => {
                       event.stopPropagation();
                       setImageViewer({
-                        signedUrl,
                         imageId,
+                        imageAccessGrant: grant,
+                        imageStorageUserId: post.created_by,
                         alt: "Post attachment",
                       });
                     }}
                   >
                     <CachedImage
-                      signedUrl={signedUrl}
                       imageId={imageId}
+                      imageAccessGrant={grant}
+                      imageStorageUserId={post.created_by}
                       alt="Post attachment"
                       className="pointer-events-none aspect-square w-full overflow-hidden object-cover"
                     />
@@ -839,15 +859,12 @@ function PostSectionComponent({
       </div>
 
       <ImageViewerModal
-        key={
-          imageViewer
-            ? `${imageViewer.signedUrl}-${imageViewer.imageId ?? ""}`
-            : "post-image-viewer-closed"
-        }
+        key={imageViewer ? imageViewer.imageId : "post-image-viewer-closed"}
         open={imageViewer !== null}
         onClose={() => setImageViewer(null)}
-        signedUrl={imageViewer?.signedUrl ?? null}
         imageId={imageViewer?.imageId ?? null}
+        imageAccessGrant={imageViewer?.imageAccessGrant ?? null}
+        imageStorageUserId={imageViewer?.imageStorageUserId ?? null}
         alt={imageViewer?.alt}
       />
     </article>

@@ -1,12 +1,27 @@
 "use client";
 
-import { CSSProperties, ImgHTMLAttributes, SyntheticEvent, useEffect, useMemo, useState } from "react";
+import {
+  CSSProperties,
+  ImgHTMLAttributes,
+  SyntheticEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { imageCache, getImageUrlFromCache } from "@/app/lib/imageCache";
 import { globalDebugData } from "@/app/components/utils/globalDebugData";
 
+const GIVE_UP_AFTER_RETRY = 5;
+
 type CachedImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src"> & {
-  signedUrl: string | null;
+  signedUrl?: string | null;
   imageId: string | null;
+  /** Main-bucket grant from post/profile APIs; pair with `imageStorageUserId` (path owner). */
+  imageAccessGrant?: string | null;
+  imageStorageUserId?: string | null;
+  /** Thread-bucket grant; pair with `imageThreadId` (`thread/{threadId}/{imageId}`). */
+  imageThreadId?: string | null;
 };
 
 function LoadingSpinner() {
@@ -26,19 +41,62 @@ function LoadingSpinner() {
   );
 }
 
-export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedImageProps) {
+export default function CachedImage({
+  signedUrl = null,
+  imageId,
+  imageAccessGrant = null,
+  imageStorageUserId = null,
+  imageThreadId = null,
+  ...imgProps
+}: CachedImageProps) {
   const [src, setSrc] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [giveUp, setGiveUp] = useState(false);
+  const srcRef = useRef<string | null>(null);
+  /** Fresh grant on each render; omit from load effect deps so rotating tokens don't re-run the pipeline. */
+  const grantRef = useRef<string | null>(null);
+  grantRef.current = imageAccessGrant ?? null;
+  const threadIdRef = useRef<string | null>(null);
+  threadIdRef.current = imageThreadId ?? null;
 
   const { className, style, ...restImgProps } = imgProps;
 
+  const expectsRenderableImage = useMemo(
+    () =>
+      Boolean(
+        imageId &&
+          (signedUrl ||
+            (imageAccessGrant && (imageStorageUserId || imageThreadId))),
+      ),
+    [imageId, signedUrl, imageAccessGrant, imageStorageUserId, imageThreadId],
+  );
+
+  useEffect(() => {
+    srcRef.current = src;
+  }, [src]);
+
+  useEffect(() => {
+    setRetry(0);
+    setGiveUp(false);
+  }, [imageId, signedUrl, imageAccessGrant, imageStorageUserId, imageThreadId]);
+
   useEffect(() => {
     let isCancelled = false;
-    let objectUrlToRevoke: string | null = null;
 
     const load = async () => {
-      const resolvedUrl = await imageCache(signedUrl, imageId);
+      if (imageId && srcRef.current) {
+        const memoUrl = getImageUrlFromCache(imageId);
+        if (memoUrl && memoUrl === srcRef.current) {
+          return;
+        }
+      }
+
+      const resolvedUrl = await imageCache(signedUrl ?? null, imageId, {
+        grant: grantRef.current,
+        storageUserId: imageStorageUserId,
+        threadId: threadIdRef.current,
+      });
       if (isCancelled) {
         console.log("load cancelled");
         globalDebugData.cachedImageLoadCancelleds++;
@@ -46,15 +104,17 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
       }
 
       setSrc(resolvedUrl);
-      if (resolvedUrl?.startsWith("blob:")) {
-        objectUrlToRevoke = resolvedUrl;
+      if (!resolvedUrl && expectsRenderableImage && retry >= GIVE_UP_AFTER_RETRY) {
+        setGiveUp(true);
       }
     };
 
     void load();
 
-    return () => { isCancelled = true; };
-  }, [imageId, signedUrl, retry]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [imageId, signedUrl, imageStorageUserId, retry, expectsRenderableImage]);
 
   const resolvedSrc = useMemo(
     () => src ?? (imageId ? getImageUrlFromCache(imageId) : undefined),
@@ -80,8 +140,10 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
     transition: "opacity 240ms ease-out",
   };
 
-  const hasSource = Boolean(signedUrl || imageId);
-  const showLoader = hasSource && !(resolvedSrc && isLoaded);
+  const showLoader =
+    expectsRenderableImage
+    && !giveUp
+    && !(resolvedSrc && isLoaded);
 
   const wrapperStyle: CSSProperties = {
     display: "grid",
@@ -93,17 +155,25 @@ export default function CachedImage({ signedUrl, imageId, ...imgProps }: CachedI
     gridArea: "1 / 1",
   };
 
-  // Auto retry...?
   useEffect(() => {
-    if (showLoader) {
-      const timeout = setTimeout(() => { 
-        console.log("retry"); 
-        globalDebugData.cachedImageLoadRetries++;
-        setRetry(prev => prev + 1);
-      }, 5000);
-      return () => clearTimeout(timeout);
+    if (!expectsRenderableImage) {
+      return;
     }
-  }, [showLoader])
+    if (giveUp) {
+      return;
+    }
+    // Only retry the resolve pipeline when we still have no URL. Do not retry while <img> is decoding
+    // (resolvedSrc set but onLoad not yet fired) — that was causing visible flashes back to the spinner.
+    if (resolvedSrc) {
+      return;
+    }
+    const timeout = setTimeout(() => {
+      console.log("retry");
+      globalDebugData.cachedImageLoadRetries++;
+      setRetry((previous) => previous + 1);
+    }, 5000);
+    return () => clearTimeout(timeout);
+  }, [expectsRenderableImage, giveUp, resolvedSrc, retry]);
 
   return (
     <>

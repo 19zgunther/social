@@ -34,7 +34,10 @@ export type PostItem = {
   created_at: string;
   created_by: string;
   image_id: string | null;
+  /** Always null from list/create APIs; use `image_access_grant` and `/api/image-resolve` via image cache. */
   image_url: string | null;
+  /** Encrypted grant (viewer-bound, expiring); use with `image_id` and `created_by` as storage owner for resolve. */
+  image_access_grant?: string | null;
   text: string;
   data: PostData | null;
   like_count?: number;
@@ -42,7 +45,9 @@ export type PostItem = {
   username: string;
   email: string | null;
   author_profile_image_id?: string | null;
+  /** Legacy; always null from list/create APIs. */
   author_profile_image_url?: string | null;
+  author_profile_image_access_grant?: string | null;
 };
 
 export type ImageOverlayData = {
@@ -55,6 +60,10 @@ export type ThreadLastPhotoPreview = {
   message_id: string;
   image_id: string | null;
   image_url: string | null;
+  /** Main-bucket grant for message photo; use with `image_storage_user_id`. */
+  image_access_grant?: string | null;
+  /** `thread_messages.created_by` — storage owner for the message image. */
+  image_storage_user_id?: string | null;
   image_overlay: ImageOverlayData | null;
 };
 
@@ -67,6 +76,8 @@ export type ThreadItem = {
   participant_count?: number;
   image_id?: string | null;
   image_url?: string | null;
+  /** Thread-scoped grant for `image_id`; resolve with `imageThreadId` = this thread's `id`. */
+  image_access_grant?: string | null;
   /** ISO time of the chronologically latest message in the thread, if any. */
   last_message_at?: string | null;
   /** True when `last_message_at` refers to a message you sent (Groups list affordance). */
@@ -124,6 +135,7 @@ export type ThreadMessage = {
   parent_id: string | null;
   image_id: string | null;
   image_url: string | null;
+  image_access_grant?: string | null;
   data: MessageData | null;
   direct_reply_count: number;
   username: string;
@@ -136,6 +148,7 @@ export type ThreadMember = {
   is_owner: boolean;
   profile_image_id: string | null;
   profile_image_url: string | null;
+  profile_image_access_grant?: string | null;
   friendship_status: ThreadMemberFriendshipStatus;
 };
 
@@ -152,6 +165,7 @@ export type FriendSearchResult = {
   relation: FriendRelation | null;
   profile_image_id: string | null;
   profile_image_url: string | null;
+  profile_image_access_grant?: string | null;
 };
 
 export type IncomingFriendRequest = {
@@ -172,6 +186,7 @@ export type OutgoingFriendRequest = {
   email: string | null;
   profile_image_id: string | null;
   profile_image_url: string | null;
+  profile_image_access_grant?: string | null;
 };
 
 export type AcceptedFriend = {
@@ -182,6 +197,7 @@ export type AcceptedFriend = {
   accepted_at: string | null;
   profile_image_id: string | null;
   profile_image_url: string | null;
+  profile_image_access_grant?: string | null;
 };
 
 export type SyncEvent = {
@@ -271,6 +287,7 @@ export type ThreadMessagesResponse = {
     owner_user_id: string;
     image_id?: string | null;
     image_url?: string | null;
+    image_access_grant?: string | null;
   };
   viewer_user_id: string;
   has_more_older: boolean;
@@ -313,6 +330,7 @@ export type ThreadEventItem = {
   ends_at: string;
   background_image_id: string | null;
   background_image_url: string | null;
+  background_image_access_grant?: string | null;
 };
 
 export type ThreadEventsListRequest = { thread_id?: string };
@@ -403,7 +421,8 @@ export type ProfileImageRemoveResponse = {
 export type ThreadImageSetResponse = {
   thread_id: string;
   image_id: string;
-  image_url: string;
+  image_url: string | null;
+  image_access_grant: string;
 };
 
 export type ThreadImageRemoveResponse = {
@@ -423,6 +442,7 @@ export type UserProfileResponse = {
     username: string;
     profile_image_id: string | null;
     profile_image_url: string | null;
+    profile_image_access_grant?: string | null;
   };
   friendship_status: "none" | "friends" | "pending_sent" | "pending_received" | "rejected";
   friendship_id: string | null;

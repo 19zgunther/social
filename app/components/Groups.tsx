@@ -95,8 +95,10 @@ export default function Groups({
   const [statusMessage, setStatusMessage] = useState("");
   const [groupsPhotoViewer, setGroupsPhotoViewer] = useState<{
     threadId: string;
-    signedUrl: string;
+    signedUrl: string | null;
     imageId: string | null;
+    imageAccessGrant: string | null;
+    imageStorageUserId: string | null;
     imageOverlay: ImageOverlayData | null;
     replyToMessageId: string;
   } | null>(null);
@@ -399,11 +401,17 @@ export default function Groups({
       if (!preview) {
         return;
       }
-      if (preview.image_url) {
+      if (
+        preview.image_id &&
+        (preview.image_url ||
+          (preview.image_access_grant && preview.image_storage_user_id))
+      ) {
         setGroupsPhotoViewer({
           threadId: thread.id,
           signedUrl: preview.image_url,
           imageId: preview.image_id,
+          imageAccessGrant: preview.image_access_grant ?? null,
+          imageStorageUserId: preview.image_storage_user_id ?? null,
           imageOverlay: preview.image_overlay,
           replyToMessageId: preview.message_id,
         });
@@ -576,6 +584,8 @@ export default function Groups({
         }}
         signedUrl={groupsPhotoViewer?.signedUrl ?? null}
         imageId={groupsPhotoViewer?.imageId ?? null}
+        imageAccessGrant={groupsPhotoViewer?.imageAccessGrant ?? null}
+        imageStorageUserId={groupsPhotoViewer?.imageStorageUserId ?? null}
         imageOverlay={groupsPhotoViewer?.imageOverlay ?? null}
         onReply={() => {
           if (!groupsPhotoViewer) {
@@ -614,7 +624,11 @@ function GroupThreadRow({
 }) {
   const preview = thread.last_photo_preview;
   const listTime = formatThreadListTime(thread.last_message_at);
-  const hasPhotoPreview = Boolean(preview?.image_url);
+  const hasPhotoPreview = Boolean(
+    preview?.image_id &&
+      (preview?.image_url ||
+        (preview?.image_access_grant && preview?.image_storage_user_id)),
+  );
   const isUnread = unreadThreadIds.has(thread.id);
   const showSelfLastArrow =
     !preview &&
@@ -641,9 +655,11 @@ function GroupThreadRow({
         }`}
     >
       <div className="flex items-start gap-3">
-        {thread.image_url ? (
+        {thread.image_id && (thread.image_url || thread.image_access_grant) ? (
           <CachedImage
-            signedUrl={thread.image_url}
+            signedUrl={thread.image_url ?? null}
+            imageAccessGrant={thread.image_access_grant ?? null}
+            imageThreadId={thread.id}
             imageId={thread.image_id ?? null}
             alt="Group photo"
             className="h-12 w-12 rounded-full object-cover flex-shrink-0"

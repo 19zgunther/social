@@ -57,6 +57,7 @@ function ProfilePictureRow({
   profileUserId,
   isCurrentUsers,
   localProfileImageUrl,
+  localProfileImageAccessGrant,
   localProfileImageId,
   username,
   email,
@@ -67,6 +68,7 @@ function ProfilePictureRow({
   profileUserId: string;
   isCurrentUsers: boolean;
   localProfileImageUrl: string | null;
+  localProfileImageAccessGrant?: string | null;
   localProfileImageId: string | null;
   username: string;
   email: string | null;
@@ -74,6 +76,9 @@ function ProfilePictureRow({
   setIsProfilePictureEditorOpen: (isOpen: boolean) => void;
   trailingAction?: ReactNode;
 }) {
+  const showProfilePhoto = Boolean(
+    localProfileImageUrl || (localProfileImageAccessGrant && localProfileImageId),
+  );
   return (
     <div className="border-b border-accent-1 px-4 py-4">
       <div className="flex items-start justify-between gap-3">
@@ -85,12 +90,14 @@ function ProfilePictureRow({
               className="cursor-pointer rounded-full"
               aria-label="Edit profile picture"
             >
-              {localProfileImageUrl ? (
+              {showProfilePhoto ? (
                 <UserProfileImage
                   userId={profileUserId}
                   sizePx={64}
                   alt="Profile picture"
                   signedUrl={localProfileImageUrl}
+                  imageAccessGrant={localProfileImageAccessGrant ?? null}
+                  imageStorageUserId={profileUserId}
                   imageId={localProfileImageId}
                 />
               ) : (
@@ -102,12 +109,14 @@ function ProfilePictureRow({
             </button>
           ) : (
             <div>
-              {localProfileImageUrl ? (
+              {showProfilePhoto ? (
                 <UserProfileImage
                   userId={profileUserId}
                   sizePx={64}
                   alt="Profile picture"
                   signedUrl={localProfileImageUrl}
+                  imageAccessGrant={localProfileImageAccessGrant ?? null}
+                  imageStorageUserId={profileUserId}
                   imageId={localProfileImageId}
                 />
               ) : (
@@ -190,7 +199,7 @@ function ProfilePostsSection({
               ? (index + 1) % 3 !== 0
               : index % 3 !== 2;
             const hasImageAttachment = Boolean(post.image_id);
-            const hasSignedImageUrl = Boolean(post.image_url);
+            const hasPostImageSource = Boolean(post.image_id && post.image_access_grant);
             const trimmedPostText = post.text.trim();
             return (
               <button
@@ -200,9 +209,10 @@ function ProfilePostsSection({
                 className={`aspect-square bg-primary-background ${showRightBorder ? "border-r border-accent-1" : ""
                   } border-b border-accent-1`}
               >
-                {hasSignedImageUrl ? (
+                {hasPostImageSource ? (
                   <CachedImage
-                    signedUrl={post.image_url}
+                    imageAccessGrant={post.image_access_grant ?? null}
+                    imageStorageUserId={post.created_by}
                     imageId={post.image_id}
                     alt="Profile post"
                     className="h-full w-full object-cover"
@@ -263,7 +273,7 @@ function Profile({
   onViewUserProfile,
   onOpenCreatePost,
 }: ProfileProps) {
-  const [posts, setPosts] = useStateCached<PostItem[]>([], 'user_profile_posts_cache_v1');
+  const [posts, setPosts] = useStateCached<PostItem[]>([], "user_profile_posts_cache_v2");
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [hasMorePosts, setHasMorePosts] = useState(false);
@@ -412,6 +422,7 @@ function Profile({
           friendshipStatus,
           profile_image_id: user.profile_image_id,
           profile_image_url: user.profile_image_url,
+          profile_image_access_grant: user.profile_image_access_grant ?? null,
         };
       });
     },
@@ -716,6 +727,8 @@ function Profile({
                       sizePx={40}
                       alt={`${friend.username} profile`}
                       signedUrl={friend.profile_image_url}
+                      imageAccessGrant={friend.profile_image_access_grant}
+                      imageStorageUserId={friend.user_id}
                       imageId={friend.profile_image_id}
                     />
                     <div className="flex-1 min-w-0 text-left">
@@ -745,6 +758,8 @@ function Profile({
                       sizePx={40}
                       alt={`${row.username} profile`}
                       signedUrl={row.profile_image_url}
+                      imageAccessGrant={row.profile_image_access_grant}
+                      imageStorageUserId={row.other_user_id}
                       imageId={row.profile_image_id}
                     />
                     <div className="flex-1 min-w-0">
@@ -1002,6 +1017,7 @@ function ProfileOtherUser({
         profileUserId={profileData.user.id}
         isCurrentUsers={false}
         localProfileImageUrl={profileData.user.profile_image_url}
+        localProfileImageAccessGrant={profileData.user.profile_image_access_grant ?? null}
         localProfileImageId={profileData.user.profile_image_id}
         username={profileData.user.username}
         email={null}

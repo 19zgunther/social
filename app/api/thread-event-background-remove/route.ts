@@ -75,7 +75,7 @@ export async function POST(request: Request) {
       data: { background_image_id: null, updated_at: new Date() },
     });
 
-    const event = await finalizeThreadEventItem(row);
+    const event = await finalizeThreadEventItem(row, authResult.user_id);
     const payload: ThreadEventBackgroundRemoveResponse = { event };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
-import { prisma } from "@/app/lib/prisma";
 import {
-  getSignedMainBucketImageUrl,
-  getSignedMainBucketThreadImageUrl,
-} from "@/app/api/server_file_storage_utils";
+  createMainBucketImageAccessGrant,
+  createThreadBucketImageAccessGrant,
+} from "@/app/api/image_access_grant";
+import { prisma } from "@/app/lib/prisma";
 import {
   GroupsListResponse,
   ImageOverlayData,
@@ -185,85 +185,85 @@ export async function POST(request: Request) {
       },
     });
 
-    const imageUrlEntries = await Promise.all(
-      threads.map(async (thread) => {
-        if (!thread.image_id) {
-          return [thread.id, null] as const;
-        }
-
-        try {
-          const signedUrl = await getSignedMainBucketThreadImageUrl({
-            threadId: thread.id,
-            imageId: thread.image_id,
-          });
-          return [thread.id, signedUrl] as const;
-        } catch (error) {
-          console.error("groups_list_thread_image_sign_failed", thread.id, error);
-          return [thread.id, null] as const;
-        }
-      }),
-    );
-    const imageUrlByThreadId = new Map(imageUrlEntries);
+    const threadImageGrantEntries = threads.map((thread) => {
+      if (!thread.image_id) {
+        return [thread.id, null] as const;
+      }
+      try {
+        const grant = createThreadBucketImageAccessGrant({
+          imageId: thread.image_id,
+          threadId: thread.id,
+          viewerUserId: authResult.user_id,
+        });
+        return [thread.id, grant] as const;
+      } catch (error) {
+        console.error("groups_list_thread_image_grant_failed", thread.id, error);
+        return [thread.id, null] as const;
+      }
+    });
+    const imageAccessGrantByThreadId = new Map(threadImageGrantEntries);
 
     const threadIds = threads.map((thread) => thread.id);
     const latestByThreadId = await loadLatestMessageByThreadId(threadIds);
 
     const payload: GroupsListResponse = {
-      threads: await Promise.all(
-        threads.map(async (thread) => {
-          const latest = latestByThreadId.get(thread.id);
-          const last_message_at = latest ? latest.created_at.toISOString() : null;
-          const last_message_from_self = Boolean(
-            latest && latest.created_by === authResult.user_id,
-          );
+      threads: threads.map((thread) => {
+        const latest = latestByThreadId.get(thread.id);
+        const last_message_at = latest ? latest.created_at.toISOString() : null;
+        const last_message_from_self = Boolean(
+          latest && latest.created_by === authResult.user_id,
+        );
 
-          let last_photo_preview: ThreadItem["last_photo_preview"] = null;
-          const participantCount = new Set([
-            thread.owner,
-            ...thread.user_thread_access.map((access) => access.user_id),
-          ]).size;
-          if (latest && latest.created_by !== authResult.user_id) {
-            if (latest.image_id) {
-              try {
-                const signedUrl = await getSignedMainBucketImageUrl({
-                  userId: latest.created_by,
-                  imageId: latest.image_id,
-                });
-                const overlay = parseImageOverlayFromMessageData(latest.data);
-                last_photo_preview = {
-                  message_id: latest.id,
-                  image_id: latest.image_id,
-                  image_url: signedUrl,
-                  image_overlay: overlay,
-                };
-              } catch (error) {
-                console.error("groups_list_last_photo_sign_failed", thread.id, error);
-              }
-            } else if (latest.text?.trim()) {
+        let last_photo_preview: ThreadItem["last_photo_preview"] = null;
+        const participantCount = new Set([
+          thread.owner,
+          ...thread.user_thread_access.map((access) => access.user_id),
+        ]).size;
+        if (latest && latest.created_by !== authResult.user_id) {
+          if (latest.image_id) {
+            try {
+              const previewGrant = createMainBucketImageAccessGrant({
+                imageId: latest.image_id,
+                storageUserId: latest.created_by,
+                viewerUserId: authResult.user_id,
+              });
+              const overlay = parseImageOverlayFromMessageData(latest.data);
               last_photo_preview = {
                 message_id: latest.id,
-                image_id: null,
+                image_id: latest.image_id,
                 image_url: null,
-                image_overlay: null,
+                image_access_grant: previewGrant,
+                image_storage_user_id: latest.created_by,
+                image_overlay: overlay,
               };
+            } catch (error) {
+              console.error("groups_list_last_photo_grant_failed", thread.id, error);
             }
+          } else if (latest.text?.trim()) {
+            last_photo_preview = {
+              message_id: latest.id,
+              image_id: null,
+              image_url: null,
+              image_overlay: null,
+            };
           }
+        }
 
-          return {
-            id: thread.id,
-            name: thread.name,
-            created_at: thread.created_at.toISOString(),
-            owner_user_id: thread.owner,
-            owner_username: thread.users.username,
-            participant_count: participantCount,
-            image_id: thread.image_id,
-            image_url: imageUrlByThreadId.get(thread.id) ?? null,
-            last_message_at,
-            last_message_from_self,
-            last_photo_preview,
-          };
-        }),
-      ),
+        return {
+          id: thread.id,
+          name: thread.name,
+          created_at: thread.created_at.toISOString(),
+          owner_user_id: thread.owner,
+          owner_username: thread.users.username,
+          participant_count: participantCount,
+          image_id: thread.image_id,
+          image_url: null,
+          image_access_grant: imageAccessGrantByThreadId.get(thread.id) ?? null,
+          last_message_at,
+          last_message_from_self,
+          last_photo_preview,
+        };
+      }),
     };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

@@ -7,7 +7,7 @@ type ThreadPictureEditorProps = {
   threadId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSaved: (imageId: string | null, imageUrl: string | null) => void;
+  onSaved: (imageId: string | null, imageUrl: string | null, imageAccessGrant: string | null) => void;
 };
 
 const PREVIEW_SIZE_PX = 280;
@@ -186,7 +186,7 @@ export default function ThreadPictureEditor({
       }
 
       const payload = (await response.json()) as ThreadImageSetResponse;
-      onSaved(payload.image_id, payload.image_url);
+      onSaved(payload.image_id, payload.image_url, payload.image_access_grant);
       onClose();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to save group image.");
@@ -211,7 +211,7 @@ export default function ThreadPictureEditor({
       }
 
       const payload = (await response.json()) as ThreadImageRemoveResponse;
-      onSaved(payload.image_id, payload.image_url);
+      onSaved(payload.image_id, payload.image_url, null);
       onClose();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to remove group image.");

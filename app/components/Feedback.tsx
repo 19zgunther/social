@@ -17,6 +17,7 @@ export type FeedbackItem = {
   username: string;
   image_id: string | null;
   image_url: string | null;
+  image_access_grant?: string | null;
 };
 
 type PendingComposeImage = {
@@ -74,8 +75,10 @@ export default function Feedback({
   const [statusMessage, setStatusMessage] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [imageViewer, setImageViewer] = useState<{
-    signedUrl: string;
+    signedUrl: string | null;
     imageId: string | null;
+    imageAccessGrant: string | null;
+    imageStorageUserId: string;
     alt: string;
   } | null>(null);
 
@@ -316,7 +319,10 @@ export default function Feedback({
               const isResolved = item.status === "resolved";
               const busy = pendingId === item.id;
               const canDelete = item.created_by === currentUserId;
-              const hasImage = Boolean(item.image_url && item.image_id);
+              const hasImage = Boolean(
+                item.image_id &&
+                  (item.image_url || (item.image_access_grant && item.created_by)),
+              );
               return (
                 <li
                   key={item.id}
@@ -357,14 +363,18 @@ export default function Feedback({
                           onClick={(e) => {
                             e.stopPropagation();
                             setImageViewer({
-                              signedUrl: item.image_url!,
+                              signedUrl: item.image_url,
                               imageId: item.image_id,
+                              imageAccessGrant: item.image_access_grant ?? null,
+                              imageStorageUserId: item.created_by,
                               alt: "Feedback attachment",
                             });
                           }}
                         >
                           <CachedImage
-                            signedUrl={item.image_url!}
+                            signedUrl={item.image_url}
+                            imageAccessGrant={item.image_access_grant ?? null}
+                            imageStorageUserId={item.created_by}
                             imageId={item.image_id}
                             alt="Feedback attachment"
                             className="pointer-events-none max-h-32 max-w-full rounded-md border border-accent-1 object-contain"
@@ -395,13 +405,15 @@ export default function Feedback({
       <ImageViewerModal
         key={
           imageViewer
-            ? `${imageViewer.signedUrl}-${imageViewer.imageId ?? ""}`
+            ? `${imageViewer.imageId ?? ""}-${imageViewer.imageAccessGrant?.slice(0, 12) ?? imageViewer.signedUrl ?? ""}`
             : "feedback-image-viewer-closed"
         }
         open={imageViewer !== null}
         onClose={() => setImageViewer(null)}
         signedUrl={imageViewer?.signedUrl ?? null}
         imageId={imageViewer?.imageId ?? null}
+        imageAccessGrant={imageViewer?.imageAccessGrant ?? null}
+        imageStorageUserId={imageViewer?.imageStorageUserId ?? null}
         alt={imageViewer?.alt}
       />
     </div>

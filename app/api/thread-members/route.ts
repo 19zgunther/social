@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
+import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
-import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
 import { threadMemberFriendshipStatusesForMany } from "@/app/lib/threadMemberFriendship";
 import { ThreadMembersRequest, ThreadMembersResponse } from "@/app/types/interfaces";
 
@@ -63,39 +63,36 @@ export async function POST(request: Request) {
       },
     });
 
-    const membersPayload = members.map((member) => ({
-      user_id: member.user_id,
-      username: member.users.username,
-      email: member.users.email,
-      is_owner: member.user_id === thread.owner,
-      profile_image_id: member.users.profile_image_id,
-      profile_image_url: null as string | null,
-    }));
-
-    const membersWithImages = await Promise.all(
-      membersPayload.map(async (row) => {
-        if (!row.profile_image_id) {
-          return row;
-        }
+    const membersPayload = members.map((member) => {
+      let profile_image_access_grant: string | null = null;
+      if (member.users.profile_image_id) {
         try {
-          const signedUrl = await getSignedMainBucketImageUrl({
-            userId: row.user_id,
-            imageId: row.profile_image_id,
+          profile_image_access_grant = createMainBucketImageAccessGrant({
+            imageId: member.users.profile_image_id,
+            storageUserId: member.user_id,
+            viewerUserId: authResult.user_id,
           });
-          return { ...row, profile_image_url: signedUrl };
         } catch (error) {
-          console.error("thread_member_profile_image_sign_failed", row.user_id, error);
-          return row;
+          console.error("thread_member_profile_image_grant_failed", member.user_id, error);
         }
-      }),
-    );
+      }
+      return {
+        user_id: member.user_id,
+        username: member.users.username,
+        email: member.users.email,
+        is_owner: member.user_id === thread.owner,
+        profile_image_id: member.users.profile_image_id,
+        profile_image_url: null as string | null,
+        profile_image_access_grant,
+      };
+    });
 
     const friendshipByUserId = await threadMemberFriendshipStatusesForMany(
       authResult.user_id,
-      membersWithImages.map((m) => m.user_id),
+      membersPayload.map((m) => m.user_id),
     );
 
-    const membersWithFriendship = membersWithImages.map((row) => ({
+    const membersWithFriendship = membersPayload.map((row) => ({
       ...row,
       friendship_status: friendshipByUserId.get(row.user_id) ?? "none",
     }));

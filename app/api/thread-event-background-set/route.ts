@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       data: { background_image_id: imageId, updated_at: new Date() },
     });
 
-    const event = await finalizeThreadEventItem(row);
+    const event = await finalizeThreadEventItem(row, authResult.user_id);
     const payload: ThreadEventBackgroundSetResponse = { event };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

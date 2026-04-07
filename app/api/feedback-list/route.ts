@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
+import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
-import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -26,31 +26,31 @@ export async function POST(request: Request) {
       },
     });
 
-    const items = await Promise.all(
-      rows.map(async (row) => {
-        let imageUrl: string | null = null;
-        if (row.image_id) {
-          try {
-            imageUrl = await getSignedMainBucketImageUrl({
-              userId: row.created_by,
-              imageId: row.image_id,
-            });
-          } catch (error) {
-            console.error("feedback_list_image_sign_failed", row.id, error);
-          }
+    const items = rows.map((row) => {
+      let image_access_grant: string | null = null;
+      if (row.image_id) {
+        try {
+          image_access_grant = createMainBucketImageAccessGrant({
+            imageId: row.image_id,
+            storageUserId: row.created_by,
+            viewerUserId: authResult.user_id,
+          });
+        } catch (error) {
+          console.error("feedback_list_image_grant_failed", row.id, error);
         }
-        return {
-          id: row.id,
-          created_at: row.created_at.toISOString(),
-          created_by: row.created_by,
-          text: row.text,
-          status: row.status === "resolved" ? "resolved" : "unresolved",
-          username: row.users.username,
-          image_id: row.image_id,
-          image_url: imageUrl,
-        };
-      }),
-    );
+      }
+      return {
+        id: row.id,
+        created_at: row.created_at.toISOString(),
+        created_by: row.created_by,
+        text: row.text,
+        status: row.status === "resolved" ? "resolved" : "unresolved",
+        username: row.users.username,
+        image_id: row.image_id,
+        image_url: null as string | null,
+        image_access_grant,
+      };
+    });
 
     return NextResponse.json({ items }, { status: 200 });
   } catch (error) {

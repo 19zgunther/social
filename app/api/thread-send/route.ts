@@ -5,10 +5,8 @@ import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@/app/generated/prisma/client";
 import { publishThreadMessagePosted } from "@/app/lib/sync";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
-import {
-  getSignedMainBucketImageUrl,
-  uploadImageToMainBucket,
-} from "@/app/api/server_file_storage_utils";
+import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import {
   MessageData,
   PoolBallState,
@@ -378,12 +376,17 @@ export async function POST(request: Request) {
       created_by: message.created_by,
     });
 
-    let imageUrl: string | null = null;
+    let image_access_grant: string | null = null;
     if (message.image_id) {
-      imageUrl = await getSignedMainBucketImageUrl({
-        userId: message.created_by,
-        imageId: message.image_id,
-      });
+      try {
+        image_access_grant = createMainBucketImageAccessGrant({
+          imageId: message.image_id,
+          storageUserId: message.created_by,
+          viewerUserId: authResult.user_id,
+        });
+      } catch (error) {
+        console.error("thread_send_image_grant_failed", message.id, error);
+      }
     }
 
     const payload: ThreadSendResponse = {
@@ -394,7 +397,8 @@ export async function POST(request: Request) {
         created_by: message.created_by,
         parent_id: message.parent_id,
         image_id: message.image_id,
-        image_url: imageUrl,
+        image_url: null,
+        image_access_grant,
         data: message.data as MessageData | null,
         direct_reply_count: 0,
         username: messageAuthor?.username ?? "unknown",

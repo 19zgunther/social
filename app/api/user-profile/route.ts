@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
-import { PostData } from "@/app/types/interfaces";
+import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { PostData, PostItem } from "@/app/types/interfaces";
 
 const PAGE_SIZE = 24;
 
@@ -92,33 +92,20 @@ export async function POST(request: Request) {
 
     const isFriends = friendshipStatus === "friends";
 
-    let profileImageUrl: string | null = null;
-    if (targetUser.profile_image_id) {
+    let profileImageAccessGrant: string | null = null;
+    if (isFriends && targetUser.profile_image_id) {
       try {
-        profileImageUrl = await getSignedMainBucketImageUrl({
-          userId: targetUserId,
+        profileImageAccessGrant = createMainBucketImageAccessGrant({
           imageId: targetUser.profile_image_id,
+          storageUserId: targetUserId,
+          viewerUserId: authResult.user_id,
         });
       } catch (error) {
-        console.error("user_profile_image_sign_failed", targetUserId, error);
+        console.error("user_profile_image_grant_failed", targetUserId, error);
       }
     }
 
-    let posts: Array<{
-      id: string;
-      created_at: string;
-      created_by: string;
-      image_id: string | null;
-      image_url: string | null;
-      text: string;
-      data: PostData | null;
-      like_count?: number;
-      is_liked_by_viewer?: boolean;
-      username: string;
-      email: string | null;
-      author_profile_image_id: string | null;
-      author_profile_image_url: string | null;
-    }> = [];
+    let posts: PostItem[] = [];
     let hasMore = false;
     let nextCursorPostId: string | null = null;
 
@@ -157,43 +144,41 @@ export async function POST(request: Request) {
       hasMore = postsDesc.length > PAGE_SIZE;
       const pagedPosts = postsDesc.slice(0, PAGE_SIZE);
 
-      const signedUrlEntries = await Promise.all(
-        pagedPosts.map(async (post) => {
-          if (!post.image_id) {
-            return [post.id, null] as const;
-          }
-          try {
-            const signedUrl = await getSignedMainBucketImageUrl({
-              userId: post.created_by,
-              imageId: post.image_id,
-            });
-            return [post.id, signedUrl] as const;
-          } catch (error) {
-            console.error("user_profile_post_image_sign_failed", post.id, error);
-            return [post.id, null] as const;
-          }
-        }),
-      );
-      const imageUrlByPostId = new Map(signedUrlEntries);
+      const postImageGrantEntries = pagedPosts.map((post) => {
+        if (!post.image_id) {
+          return [post.id, null] as const;
+        }
+        try {
+          const grant = createMainBucketImageAccessGrant({
+            imageId: post.image_id,
+            storageUserId: post.created_by,
+            viewerUserId: authResult.user_id,
+          });
+          return [post.id, grant] as const;
+        } catch (error) {
+          console.error("user_profile_post_image_grant_failed", post.id, error);
+          return [post.id, null] as const;
+        }
+      });
+      const imageAccessGrantByPostId = new Map(postImageGrantEntries);
 
-      const authorProfileImageUrlEntries = await Promise.all(
-        pagedPosts.map(async (post) => {
-          if (!post.users.profile_image_id) {
-            return [post.id, null] as const;
-          }
-          try {
-            const signedUrl = await getSignedMainBucketImageUrl({
-              userId: post.created_by,
-              imageId: post.users.profile_image_id,
-            });
-            return [post.id, signedUrl] as const;
-          } catch (error) {
-            console.error("user_profile_post_author_profile_image_sign_failed", post.id, error);
-            return [post.id, null] as const;
-          }
-        }),
-      );
-      const authorProfileImageUrlByPostId = new Map(authorProfileImageUrlEntries);
+      const authorProfileImageGrantEntries = pagedPosts.map((post) => {
+        if (!post.users.profile_image_id) {
+          return [post.id, null] as const;
+        }
+        try {
+          const grant = createMainBucketImageAccessGrant({
+            imageId: post.users.profile_image_id,
+            storageUserId: post.created_by,
+            viewerUserId: authResult.user_id,
+          });
+          return [post.id, grant] as const;
+        } catch (error) {
+          console.error("user_profile_post_author_profile_image_grant_failed", post.id, error);
+          return [post.id, null] as const;
+        }
+      });
+      const authorProfileImageAccessGrantByPostId = new Map(authorProfileImageGrantEntries);
 
       posts = pagedPosts.map((post) => ({
         ...(() => {
@@ -207,13 +192,16 @@ export async function POST(request: Request) {
         created_at: post.created_at.toISOString(),
         created_by: post.created_by,
         image_id: post.image_id,
-        image_url: imageUrlByPostId.get(post.id) ?? null,
+        image_url: null,
+        image_access_grant: imageAccessGrantByPostId.get(post.id) ?? null,
         text: post.text ?? "",
         data: post.data as PostData | null,
         username: post.users.username,
         email: post.users.email,
         author_profile_image_id: post.users.profile_image_id,
-        author_profile_image_url: authorProfileImageUrlByPostId.get(post.id) ?? null,
+        author_profile_image_url: null,
+        author_profile_image_access_grant:
+          authorProfileImageAccessGrantByPostId.get(post.id) ?? null,
       }));
 
       nextCursorPostId = pagedPosts.length > 0 ? pagedPosts[pagedPosts.length - 1].id : null;
@@ -224,7 +212,8 @@ export async function POST(request: Request) {
         id: targetUser.id,
         username: targetUser.username,
         profile_image_id: targetUser.profile_image_id,
-        profile_image_url: profileImageUrl,
+        profile_image_url: null,
+        profile_image_access_grant: profileImageAccessGrant,
       },
       friendship_status: friendshipStatus,
       friendship_id: friendshipId,

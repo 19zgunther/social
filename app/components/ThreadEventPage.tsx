@@ -458,9 +458,12 @@ export default function ThreadEventPage({
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-        {local.background_image_url ? (
+        {local.background_image_id &&
+        (local.background_image_url || local.background_image_access_grant) ? (
           <CachedImage
             signedUrl={local.background_image_url}
+            imageAccessGrant={local.background_image_access_grant ?? null}
+            imageThreadId={local.thread_id}
             imageId={local.background_image_id}
             alt=""
             aria-hidden

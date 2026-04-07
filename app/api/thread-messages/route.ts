@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
+import {
+  createMainBucketImageAccessGrant,
+  createThreadBucketImageAccessGrant,
+} from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
-import { getSignedMainBucketImageUrl, getSignedMainBucketThreadImageUrl } from "@/app/api/server_file_storage_utils";
 import { MessageData, ThreadMessagesRequest, ThreadMessagesResponse } from "@/app/types/interfaces";
 
 const PAGE_SIZE = 100;
@@ -128,39 +131,36 @@ export async function POST(request: Request) {
       );
     }
 
-    const threadImageUrl = thread.image_id
-      ? await (async () => {
-          try {
-            return await getSignedMainBucketThreadImageUrl({
-              threadId: thread.id,
-              imageId: thread.image_id!,
-            });
-          } catch (error) {
-            console.error("thread_image_sign_failed", thread.id, error);
-            return null;
-          }
-        })()
-      : null;
+    let threadImageAccessGrant: string | null = null;
+    if (thread.image_id) {
+      try {
+        threadImageAccessGrant = createThreadBucketImageAccessGrant({
+          imageId: thread.image_id,
+          threadId: thread.id,
+          viewerUserId: authResult.user_id,
+        });
+      } catch (error) {
+        console.error("thread_image_grant_failed", thread.id, error);
+      }
+    }
 
-    const signedUrlEntries = await Promise.all(
-      allMessages.map(async (message) => {
-        if (!message.image_id) {
-          return [message.id, null] as const;
-        }
-
-        try {
-          const signedUrl = await getSignedMainBucketImageUrl({
-            userId: message.created_by,
-            imageId: message.image_id,
-          });
-          return [message.id, signedUrl] as const;
-        } catch (error) {
-          console.error("thread_message_image_sign_failed", message.id, error);
-          return [message.id, null] as const;
-        }
-      }),
-    );
-    const imageUrlByMessageId = new Map(signedUrlEntries);
+    const messageGrantEntries = allMessages.map((message) => {
+      if (!message.image_id) {
+        return [message.id, null] as const;
+      }
+      try {
+        const grant = createMainBucketImageAccessGrant({
+          imageId: message.image_id,
+          storageUserId: message.created_by,
+          viewerUserId: authResult.user_id,
+        });
+        return [message.id, grant] as const;
+      } catch (error) {
+        console.error("thread_message_image_grant_failed", message.id, error);
+        return [message.id, null] as const;
+      }
+    });
+    const imageAccessGrantByMessageId = new Map(messageGrantEntries);
 
     const payload: ThreadMessagesResponse = {
       thread: {
@@ -168,7 +168,8 @@ export async function POST(request: Request) {
         name: thread.name,
         owner_user_id: thread.owner,
         image_id: thread.image_id ?? null,
-        image_url: threadImageUrl,
+        image_url: null,
+        image_access_grant: threadImageAccessGrant,
       },
       viewer_user_id: authResult.user_id,
       has_more_older: hasMoreOlder,
@@ -180,7 +181,8 @@ export async function POST(request: Request) {
         created_by: message.created_by,
         parent_id: message.parent_id,
         image_id: message.image_id,
-        image_url: imageUrlByMessageId.get(message.id) ?? null,
+        image_url: null,
+        image_access_grant: imageAccessGrantByMessageId.get(message.id) ?? null,
         data: message.data as MessageData | null,
         direct_reply_count: directReplyCountByParentId.get(message.id) ?? 0,
         username: message.users.username,

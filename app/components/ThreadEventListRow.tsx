@@ -49,9 +49,12 @@ export default function ThreadEventListRow({
         metaLine ? "h-[18vh] max-h-[18vh]" : "h-[15vh] max-h-[15vh]"
       }`}
     >
-      {event.background_image_url ? (
+      {event.background_image_id &&
+      (event.background_image_url || event.background_image_access_grant) ? (
         <CachedImage
           signedUrl={event.background_image_url}
+          imageAccessGrant={event.background_image_access_grant ?? null}
+          imageThreadId={event.thread_id}
           imageId={event.background_image_id}
           alt=""
           aria-hidden

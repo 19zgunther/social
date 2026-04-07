@@ -1,4 +1,4 @@
-import { getSignedMainBucketThreadImageUrl } from "@/app/api/server_file_storage_utils";
+import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma/client";
 import type { ThreadEventItem, ThreadEventRsvpStatus } from "@/app/types/interfaces";
@@ -55,19 +55,23 @@ export function toThreadEventItem(row: ThreadEventRow): ThreadEventItem {
   };
 }
 
-export async function finalizeThreadEventItem(row: ThreadEventRow): Promise<ThreadEventItem> {
+export async function finalizeThreadEventItem(
+  row: ThreadEventRow,
+  viewerUserId: string,
+): Promise<ThreadEventItem> {
   const base = toThreadEventItem(row);
   if (!row.background_image_id) {
     return base;
   }
   try {
-    const background_image_url = await getSignedMainBucketThreadImageUrl({
+    const background_image_access_grant = createThreadBucketImageAccessGrant({
       threadId: row.thread_id,
       imageId: row.background_image_id,
+      viewerUserId,
     });
-    return { ...base, background_image_url };
+    return { ...base, background_image_access_grant };
   } catch (error) {
-    console.error("thread_event_background_sign_failed", row.id, error);
+    console.error("thread_event_background_grant_failed", row.id, error);
     return base;
   }
 }

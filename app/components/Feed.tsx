@@ -5,7 +5,7 @@ import { PostSection} from "@/app/components/PostSection";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
 import { LoaderCircle, Plus } from "lucide-react";
-const FEED_CACHE_KEY = "feed_cache_v1";
+const FEED_CACHE_KEY = "feed_cache_v2";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
 

@@ -1,12 +1,18 @@
 "use client";
 
-import { Dispatch, SetStateAction, useCallback, useEffect, useState } from "react";
+import { Dispatch, SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 
 type UseStateCachedReturn<T> = [T, Dispatch<SetStateAction<T>>];
 
 export function useStateCached<T>(initialValue: T, cacheKey: string): UseStateCachedReturn<T> {
   const [value, setValue] = useState<T>(initialValue);
+  /** Once true, ignore async cache hydration so it cannot overwrite fresher network data. */
+  const wroteFromAppRef = useRef(false);
+
+  useEffect(() => {
+    wroteFromAppRef.current = false;
+  }, [cacheKey]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -14,7 +20,12 @@ export function useStateCached<T>(initialValue: T, cacheKey: string): UseStateCa
     const load = async () => {
       try {
         const cached = await readCacheValue<T>(cacheKey);
-        if (!isCancelled && cached !== null && cached !== undefined) {
+        if (
+          !isCancelled
+          && cached !== null
+          && cached !== undefined
+          && !wroteFromAppRef.current
+        ) {
           setValue(cached);
         }
       } catch {
@@ -31,6 +42,7 @@ export function useStateCached<T>(initialValue: T, cacheKey: string): UseStateCa
 
   const setAndCache = useCallback(
     (updater: SetStateAction<T>) => {
+      wroteFromAppRef.current = true;
       setValue((previous) => {
         const nextValue =
           typeof updater === "function" ? (updater as (prev: T) => T)(previous) : updater;

@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       data: { users_status_map: nextMap, updated_at: new Date() },
     });
 
-    const event = await finalizeThreadEventItem(row);
+    const event = await finalizeThreadEventItem(row, authResult.user_id);
     const payload: ThreadEventRsvpResponse = { event };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
+import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
-import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
 import { FriendSearchRequest, FriendSearchResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -90,6 +90,18 @@ export async function POST(request: Request) {
     const payload: FriendSearchResponse = {
       users: users.map((user) => {
         const relation = relationByOtherUserId.get(user.id);
+        let profile_image_access_grant: string | null = null;
+        if (user.profile_image_id) {
+          try {
+            profile_image_access_grant = createMainBucketImageAccessGrant({
+              imageId: user.profile_image_id,
+              storageUserId: user.id,
+              viewerUserId: authResult.user_id,
+            });
+          } catch (error) {
+            console.error("friend_search_profile_image_grant_failed", user.id, error);
+          }
+        }
         return {
           id: user.id,
           username: user.username,
@@ -103,29 +115,10 @@ export async function POST(request: Request) {
             : null,
           profile_image_id: user.profile_image_id,
           profile_image_url: null,
+          profile_image_access_grant,
         };
       }),
     };
-
-    const usersWithImages = await Promise.all(
-      payload.users.map(async (user) => {
-        if (!user.profile_image_id) {
-          return user;
-        }
-        try {
-          const signedUrl = await getSignedMainBucketImageUrl({
-            userId: user.id,
-            imageId: user.profile_image_id,
-          });
-          return { ...user, profile_image_url: signedUrl };
-        } catch (error) {
-          console.error("friend_search_profile_image_sign_failed", user.id, error);
-          return user;
-        }
-      }),
-    );
-
-    payload.users = usersWithImages;
 
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

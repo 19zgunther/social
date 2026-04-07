@@ -32,7 +32,10 @@ export function ThreadMessageBubbleContent({
 }: ThreadMessageBubbleContentProps) {
   const isOwnMessage = message.created_by === currentUserId;
   const hasText = message.text.trim().length > 0;
-  const hasImage = Boolean(message.image_url);
+  const hasImage = Boolean(
+    message.image_id &&
+      (message.image_url || (message.image_access_grant && message.created_by)),
+  );
   const isImageOnly = hasImage && !hasText;
   const customEmojiUuid = customEmojiUuidFromToken(message.text);
   const customEmoji = customEmojiUuid ? customEmojiByUuid[customEmojiUuid] : undefined;
@@ -56,7 +59,7 @@ export function ThreadMessageBubbleContent({
           {isOwnMessage ? "You" : message.username}
         </p>
       ) : null}
-      {message.image_url ? (
+      {hasImage ? (
         <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
           <button
             type="button"
@@ -71,6 +74,8 @@ export function ThreadMessageBubbleContent({
           >
             <CachedImage
               signedUrl={message.image_url}
+              imageAccessGrant={message.image_access_grant ?? null}
+              imageStorageUserId={message.created_by}
               imageId={message.image_id}
               alt="Thread message attachment"
               className="max-h-[100vh] w-full rounded-xl object-cover"

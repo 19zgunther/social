@@ -27,8 +27,12 @@ type ViewTransform = {
 export type ImageViewerModalProps = {
   open: boolean;
   onClose: () => void;
-  signedUrl: string | null;
+  signedUrl?: string | null;
   imageId: string | null;
+  imageAccessGrant?: string | null;
+  imageStorageUserId?: string | null;
+  /** Thread-bucket image; use with `imageAccessGrant` from thread APIs. */
+  imageThreadId?: string | null;
   alt?: string;
   /** Banner-style text overlay (same semantics as thread photo messages). */
   imageOverlay?: ImageOverlayData | null;
@@ -39,8 +43,11 @@ export type ImageViewerModalProps = {
 export default function ImageViewerModal({
   open,
   onClose,
-  signedUrl,
+  signedUrl = null,
   imageId,
+  imageAccessGrant = null,
+  imageStorageUserId = null,
+  imageThreadId = null,
   alt = "",
   imageOverlay = null,
   onReply,
@@ -278,7 +285,10 @@ export default function ImageViewerModal({
     });
   }, []);
 
-  if (!mounted || !open || !signedUrl) {
+  const hasImageSource = Boolean(
+    imageId && (signedUrl || (imageAccessGrant && imageStorageUserId)),
+  );
+  if (!mounted || !open || !hasImageSource) {
     return null;
   }
 
@@ -321,6 +331,9 @@ export default function ImageViewerModal({
           <CachedImage
             signedUrl={signedUrl}
             imageId={imageId}
+            imageAccessGrant={imageAccessGrant}
+            imageStorageUserId={imageStorageUserId}
+            imageThreadId={imageThreadId}
             alt={alt}
             draggable={false}
             className="max-h-[100dvh] max-w-[100vw] select-none object-contain"

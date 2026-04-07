@@ -22,7 +22,7 @@ type ThreadSettingsProps = {
   currentUserId: string;
   isActive?: boolean;
   onBack: () => void;
-  onThreadImageUpdated: (imageId: string | null, imageUrl: string | null) => void;
+  onThreadImageUpdated: (imageId: string | null, imageUrl: string | null, imageAccessGrant: string | null) => void;
   onThreadRenamed: (name: string) => void;
   onThreadDeleted: () => void;
   onViewUserProfile: (userId: string) => void;
@@ -68,6 +68,9 @@ export default function ThreadSettings({
   const [isPictureEditorOpen, setIsPictureEditorOpen] = useState(false);
   const [localImageId, setLocalImageId] = useState<string | null>(thread.image_id ?? null);
   const [localImageUrl, setLocalImageUrl] = useState<string | null>(thread.image_url ?? null);
+  const [localImageAccessGrant, setLocalImageAccessGrant] = useState<string | null>(
+    thread.image_access_grant ?? null,
+  );
   const [localName, setLocalName] = useState(thread.name);
   const [isEditingName, setIsEditingName] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -109,6 +112,10 @@ export default function ThreadSettings({
   }, [thread.image_url]);
 
   useEffect(() => {
+    setLocalImageAccessGrant(thread.image_access_grant ?? null);
+  }, [thread.image_access_grant]);
+
+  useEffect(() => {
     setLocalName(thread.name);
   }, [thread.name]);
 
@@ -132,6 +139,9 @@ export default function ThreadSettings({
       id: user.id,
       username: user.username,
       email: user.email,
+      profile_image_id: user.profile_image_id,
+      profile_image_url: user.profile_image_url,
+      profile_image_access_grant: user.profile_image_access_grant ?? null,
     }));
   };
 
@@ -293,11 +303,12 @@ export default function ThreadSettings({
         threadId={thread.id}
         isOpen={isPictureEditorOpen}
         onClose={() => setIsPictureEditorOpen(false)}
-        onSaved={(nextImageId, nextImageUrl) => {
+        onSaved={(nextImageId, nextImageUrl, nextGrant) => {
           setLocalImageId(nextImageId);
           setLocalImageUrl(nextImageUrl);
-          onThreadImageUpdated(nextImageId, nextImageUrl);
-          setStatusMessage(nextImageUrl ? "Group photo updated." : "Group photo removed.");
+          setLocalImageAccessGrant(nextGrant);
+          onThreadImageUpdated(nextImageId, nextImageUrl, nextGrant);
+          setStatusMessage(nextImageId ? "Group photo updated." : "Group photo removed.");
         }}
       />
 
@@ -320,9 +331,11 @@ export default function ThreadSettings({
               className="overflow-hidden rounded-full border border-accent-1 bg-primary-background"
               aria-label="Edit group photo"
             >
-              {localImageUrl ? (
+              {localImageId && (localImageUrl || localImageAccessGrant) ? (
                 <CachedImage
                   signedUrl={localImageUrl}
+                  imageAccessGrant={localImageAccessGrant}
+                  imageThreadId={thread.id}
                   imageId={localImageId}
                   alt="Group photo"
                   className="h-16 w-16 object-cover"
@@ -476,6 +489,8 @@ export default function ThreadSettings({
                       sizePx={40}
                       alt={`${member.username} profile`}
                       signedUrl={member.profile_image_url}
+                      imageAccessGrant={member.profile_image_access_grant}
+                      imageStorageUserId={member.user_id}
                       imageId={member.profile_image_id}
                     />
                     <div className="min-w-0 flex-1">

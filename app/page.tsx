@@ -437,11 +437,12 @@ export default function Home() {
                 setThreadEventFocus(event);
                 setActiveTab("thread_event");
               }}
-              onThreadImageUpdated={(imageId, imageUrl) => {
+              onThreadImageUpdated={(imageId, imageUrl, imageAccessGrant) => {
                 setSelectedThread((previous) => ({
                   ...previous as ThreadItem,
                   image_id: imageId,
                   image_url: imageUrl,
+                  image_access_grant: imageAccessGrant,
                 }));
               }}
               onThreadRenamed={(name) => {

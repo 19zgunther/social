@@ -39,7 +39,9 @@ export async function POST(request: Request) {
       orderBy: { starts_at: "asc" },
     });
 
-    const events = await Promise.all(rows.map((row) => finalizeThreadEventItem(row)));
+    const events = await Promise.all(
+      rows.map((row) => finalizeThreadEventItem(row, authResult.user_id)),
+    );
     const payload: ThreadEventsListResponse = { events };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
