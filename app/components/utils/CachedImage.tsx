@@ -105,15 +105,14 @@ export default function CachedImage({
 
       setSrc(resolvedUrl);
       if (!resolvedUrl && expectsRenderableImage && retry >= GIVE_UP_AFTER_RETRY) {
+        console.log("give up", imageId);
         setGiveUp(true);
       }
     };
 
     void load();
 
-    return () => {
-      isCancelled = true;
-    };
+    return () => { isCancelled = true; };
   }, [imageId, signedUrl, imageStorageUserId, retry, expectsRenderableImage]);
 
   const resolvedSrc = useMemo(
@@ -156,9 +155,9 @@ export default function CachedImage({
   };
 
   useEffect(() => {
-    if (!expectsRenderableImage) {
-      return;
-    }
+    // if (!expectsRenderableImage) {
+    //   return;
+    // }
     if (giveUp) {
       return;
     }
