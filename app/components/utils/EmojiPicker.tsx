@@ -205,6 +205,7 @@ type EmojiPickerProps = {
   onSelectEmoji: (emoji: string) => void;
   className?: string;
   buttonClassName?: string;
+  buttonSmileIconClassName?: string;
 };
 
 const customEmojiToken = (emojiUuid: string): string => `[[emoji:${emojiUuid}]]`;
@@ -213,6 +214,7 @@ export default function EmojiPicker({
   onSelectEmoji,
   className,
   buttonClassName,
+  buttonSmileIconClassName,
 }: EmojiPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -352,7 +354,7 @@ export default function EmojiPicker({
         className={`rounded-lg border border-accent-1 px-2 py-1 text-accent-2 transition hover:text-foreground ${buttonClassName ?? ""}`}
         aria-label="Add emoji"
       >
-        <Smile className="h-4 w-4" />
+        <Smile className={`h-4 w-4 ${buttonSmileIconClassName ?? ""}`} />
       </button>
 
       {isMounted && isOpen

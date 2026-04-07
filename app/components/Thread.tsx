@@ -46,6 +46,11 @@ import {
 } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
+import {
+  deleteThreadReplyCollapsed,
+  readThreadReplyCollapsedSet,
+  writeThreadReplyCollapsed,
+} from "@/app/lib/threadReplyCollapseCache";
 import BackButton from "./utils/BackButton";
 
 type ThreadProps = {
@@ -256,7 +261,7 @@ export default function Thread({
   const [replyTargetMessageId, setReplyTargetMessageId] = useState<string | null>(null);
   const [editTargetMessageId, setEditTargetMessageId] = useState<string | null>(null);
   const [activeOptionsMessageId, setActiveOptionsMessageId] = useState<string | null>(null);
-  const [expandedReplyRootIds, setExpandedReplyRootIds] = useState<string[]>([]);
+  const [collapsedReplyMessageIds, setCollapsedReplyMessageIds] = useState<string[]>([]);
   const [imageViewer, setImageViewer] = useState<{
     signedUrl: string;
     imageId: string | null;
@@ -418,6 +423,7 @@ export default function Thread({
     setPoolSession(null);
     setImageViewer(null);
     setCustomEmojiByUuid({});
+    setCollapsedReplyMessageIds([]);
 
     const loadThread = async () => {
       setIsLoadingMessages(true);
@@ -894,12 +900,24 @@ export default function Thread({
       setShowNewMessagesButton(false);
       isFollowingBottomRef.current = true;
       if (effectiveReplyTargetMessageId) {
-        const rootMessageId = getRootMessageIdForMessage(effectiveReplyTargetMessageId);
-        if (rootMessageId) {
-          setExpandedReplyRootIds((previous) =>
-            previous.includes(rootMessageId) ? previous : [...previous, rootMessageId],
-          );
+        const toUncollapse: string[] = [];
+        let cursor: ThreadMessage | undefined = messageById.get(effectiveReplyTargetMessageId);
+        let safety = 0;
+        while (cursor && safety < 100) {
+          toUncollapse.push(cursor.id);
+          if (!cursor.parent_id || cursor.parent_id === selectedThread.id) {
+            break;
+          }
+          cursor = messageById.get(cursor.parent_id);
+          safety += 1;
         }
+        for (const id of toUncollapse) {
+          void deleteThreadReplyCollapsed(id);
+        }
+        setCollapsedReplyMessageIds((previous) => {
+          const drop = new Set(toUncollapse);
+          return previous.filter((id) => !drop.has(id));
+        });
       }
       setReplyTargetMessageId(null);
       pendingBottomScrollRef.current = "smooth";
@@ -1033,6 +1051,71 @@ export default function Thread({
 
   const messageById = new Map(messages.map((message) => [message.id, message]));
 
+  const messageIdsFingerprint = useMemo(
+    () =>
+      [...new Set(messages.map((message) => message.id))]
+        .sort()
+        .join(","),
+    [messages],
+  );
+
+  const collapsedReplyIdSet = useMemo(
+    () => new Set(collapsedReplyMessageIds),
+    [collapsedReplyMessageIds],
+  );
+
+  useEffect(() => {
+    const unique = [...new Set(messages.map((message) => message.id))];
+    if (unique.length === 0) {
+      setCollapsedReplyMessageIds([]);
+      return;
+    }
+
+    let cancelled = false;
+    void readThreadReplyCollapsedSet(unique).then((fromDb) => {
+      if (cancelled) {
+        return;
+      }
+      setCollapsedReplyMessageIds((previous) => {
+        const next = new Set<string>(fromDb);
+        for (const id of previous) {
+          if (unique.includes(id)) {
+            next.add(id);
+          }
+        }
+        return [...next];
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedThread.id, messageIdsFingerprint]);
+
+  const isHiddenUnderCollapsedParent = (message: ThreadMessage): boolean => {
+    let cursorId: string | null = message.parent_id;
+    let safety = 0;
+    while (cursorId && cursorId !== selectedThread.id && safety < 100) {
+      if (collapsedReplyIdSet.has(cursorId)) {
+        return true;
+      }
+      cursorId = messageById.get(cursorId)?.parent_id ?? null;
+      safety += 1;
+    }
+    return false;
+  };
+
+  const toggleRepliesCollapsedForMessageId = (messageId: string) => {
+    setCollapsedReplyMessageIds((previous) => {
+      if (previous.includes(messageId)) {
+        void deleteThreadReplyCollapsed(messageId);
+        return previous.filter((id) => id !== messageId);
+      }
+      void writeThreadReplyCollapsed(messageId);
+      return [...previous, messageId];
+    });
+  };
+
   const latestPoolByGameId = latestPoolMessagesByGameId(messages);
   const latestPoolMessageIds = new Set(
     Array.from(latestPoolByGameId.values()).map((entry) => entry.message.id),
@@ -1063,19 +1146,6 @@ export default function Thread({
     childMessagesByParentId.set(message.parent_id, existing);
   }
 
-  const getRootMessageIdForMessage = (messageId: string): string | null => {
-    let cursor = messageById.get(messageId);
-    let safety = 0;
-    while (cursor && cursor.parent_id && safety < 100) {
-      if (cursor.parent_id === selectedThread.id) {
-        return cursor.id;
-      }
-      cursor = messageById.get(cursor.parent_id);
-      safety += 1;
-    }
-    return null;
-  };
-
   const cancelPressTimer = () => {
     if (pressTimerRef.current) {
       clearTimeout(pressTimerRef.current);
@@ -1088,14 +1158,6 @@ export default function Thread({
     pressTimerRef.current = setTimeout(() => {
       setActiveOptionsMessageId(messageId);
     }, MESSAGE_LONG_PRESS_TO_REPLY_MS);
-  };
-
-  const toggleRepliesForRootMessageId = (rootMessageId: string) => {
-    setExpandedReplyRootIds((previous) =>
-      previous.includes(rootMessageId)
-        ? previous.filter((id) => id !== rootMessageId)
-        : [...previous, rootMessageId],
-    );
   };
 
   const onEditMessage = async () => {
@@ -1167,6 +1229,10 @@ export default function Thread({
     const showPoolCard = poolGame && latestPoolMessageIds.has(message.id);
     const customEmojiUuid = customEmojiUuidFromToken(message.text);
     const customEmoji = customEmojiUuid ? customEmojiByUuid[customEmojiUuid] : undefined;
+
+    if (depth > 0 && isHiddenUnderCollapsedParent(message)) {
+      return null;
+    }
 
     if (showPoolCard && poolGame) {
       const isLockedPlayer =
@@ -1264,19 +1330,12 @@ export default function Thread({
       );
     }
 
-    const rootMessageId = getRootMessageIdForMessage(message.id);
     const children = childMessagesByParentId.get(message.id) ?? [];
     const emojiOnlyChildren = children.filter((childMessage) => isEmojiOnlyMessage(childMessage.text));
     const threadedChildren = children.filter((childMessage) => !isEmojiOnlyMessage(childMessage.text));
-    const isRootMessage = rootMessageId === message.id;
-    const isRootRepliesExpanded =
-      rootMessageId !== null && expandedReplyRootIds.includes(rootMessageId);
+    const isRepliesSubtreeExpanded = !collapsedReplyIdSet.has(message.id);
     const isActiveOptionsMessage = activeOptionsMessageId === message.id;
     const isReplyTargetMessage = replyTargetMessageId === message.id;
-
-    if (depth > 0 && !isRootRepliesExpanded) {
-      return null;
-    }
 
     return (
       <div key={message.id}>
@@ -1372,7 +1431,7 @@ export default function Thread({
           </p>
         </div>
 
-        {emojiOnlyChildren.length > 0 ? (
+        {emojiOnlyChildren.length > 0 && isRepliesSubtreeExpanded ? (
           <div className="mt-1 ml-1 flex flex-wrap items-center gap-1">
             {emojiOnlyChildren.map((childMessage) => {
               const childCustomEmojiUuid = customEmojiUuidFromToken(childMessage.text);
@@ -1403,17 +1462,17 @@ export default function Thread({
           </div>
         ) : null}
 
-        {isRootMessage && threadedChildren.length > 0 ? (
+        {threadedChildren.length > 0 ? (
           <button
             type="button"
-            onClick={() => toggleRepliesForRootMessageId(message.id)}
+            onClick={() => toggleRepliesCollapsedForMessageId(message.id)}
             className="mt-1 ml-1 text-xs text-accent-2 underline underline-offset-2 hover:text-foreground"
           >
-            {isRootRepliesExpanded ? "Hide replies" : `${threadedChildren.length} replies`}
+            {isRepliesSubtreeExpanded ? "Hide replies" : `${threadedChildren.length} replies`}
           </button>
         ) : null}
 
-        {threadedChildren.length > 0 ? (
+        {threadedChildren.length > 0 && isRepliesSubtreeExpanded ? (
           <div className="mt-1 mx-2 space-y-1 border-l border-r border-accent-1/60">
             {threadedChildren.map((childMessage) => renderMessage(childMessage, depth + 1))}
           </div>

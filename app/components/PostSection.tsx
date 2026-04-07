@@ -138,7 +138,7 @@ const getCommentAtPath = (
   return null;
 };
 
-function RenderReactionEmoji({value, key, customEmojiByUuid}: {value: string, key: string, customEmojiByUuid: Record<string, EmojiItem>}) {
+function RenderReactionEmoji({ value, key, customEmojiByUuid }: { value: string, key: string, customEmojiByUuid: Record<string, EmojiItem> }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const uuid = customEmojiUuidFromToken(value);
   if (!uuid) {
@@ -580,6 +580,7 @@ function PostSectionComponent({
     const isDeletedPlaceholder = Boolean(comment.deleted);
     const canDeleteComment =
       Boolean(currentUserId) && !isDeletedPlaceholder && comment.user_id === currentUserId;
+    const replyTargetDisplayName = comment.username || comment.user_id || "this comment";
 
     return (
       <div key={pathKey} className={`${depth > 0 ? "ml-4 border-l border-accent-1/70 pl-2" : ""}`}>
@@ -632,8 +633,9 @@ function PostSectionComponent({
             type="button"
             onClick={() => setActiveReplyPath(isReplyInputOpen ? null : pathKey)}
             className="text-xs text-accent-2 underline underline-offset-2 hover:text-foreground opacity-50"
+            aria-label={isReplyInputOpen ? "Cancel reply" : "Reply to comment"}
           >
-            Reply
+            {isReplyInputOpen ? "Cancel reply" : "Reply"}
           </button>
 
           <EmojiPicker
@@ -644,25 +646,18 @@ function PostSectionComponent({
 
 
         {isReplyInputOpen ? (
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex items-center gap-2 ml-10">
             <input
               value={replyDraft}
-              onChange={(event) =>
-                setReplyDraftByPath((previous) => ({
-                  ...previous,
-                  [pathKey]: event.target.value,
-                }))
-              }
-              placeholder="Write a reply..."
-              className="flex-1 rounded-lg border border-accent-1 bg-secondary-background px-2 py-1 text-sm text-foreground outline-none focus:border-accent-2"
+              onChange={(event) => setReplyDraftByPath((previous) => ({ ...previous, [pathKey]: event.target.value }))}
+              placeholder={`Replying to ${replyTargetDisplayName}...`}
+              className="flex-1 rounded-lg border border-accent-1 px-2 py-2 text-sm text-foreground outline-none focus:border-accent-2"
             />
             <button
               type="button"
-              onClick={() => {
-                void onSubmitComment(path);
-              }}
-              disabled={isSubmittingComment}
-              className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
+              onClick={() => { void onSubmitComment(path); }}
+              disabled={isSubmittingComment || replyDraft.trim().length === 0}
+              className="rounded-lg border border-accent-1 px-2 py-2 text-sm text-accent-2 hover:text-foreground disabled:opacity-50"
             >
               Send
             </button>
@@ -680,7 +675,7 @@ function PostSectionComponent({
   };
 
   return (
-    <article className={`w-full border-t border-accent-1 bg-primary-background mb-10 ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME: ""}`}>
+    <article className={`w-full border-t border-accent-1 bg-primary-background mb-10 ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}>
       <header className="px-2 py-2">
         <div className="flex items-center gap-2">
           <UserProfileImage
@@ -759,9 +754,8 @@ function PostSectionComponent({
             {allPostImageIds.map((imageId, index) => (
               <span
                 key={`${imageId}-dot`}
-                className={`h-1.5 w-1.5 rounded-full transition ${
-                  index === activeImageIndex ? "bg-foreground" : "bg-accent-1"
-                }`}
+                className={`h-1.5 w-1.5 rounded-full transition ${index === activeImageIndex ? "bg-foreground" : "bg-accent-1"
+                  }`}
               />
             ))}
           </div>
@@ -828,30 +822,30 @@ function PostSectionComponent({
           </div>
         ) : null}
 
-        {/** Like Button */}
-        <div className="mt-1 flex items-center gap-2">
-
+        {/** Like Button, Emoji Picker, Reaction Emojis */}
+        <div className="mt-1 flex items-center gap-2 max-w-[90vw] h-8">
           <button
             type="button"
             onClick={() => {
               void onToggleLike();
             }}
             disabled={isUpdatingLike}
-            className="h-5 inline-flex items-center gap-1 rounded-lg px-1 py-1 text-xs text-accent-2 transition hover:text-foreground disabled:opacity-50"
+            className="inline-flex h-6 min-h-6 items-center justify-center gap-1 rounded-lg px-1.5 py-0 text-xs leading-none text-accent-2 transition hover:text-foreground disabled:opacity-50"
           >
             <Heart
-              className={`h-4 w-4 ${isLikedByViewer ? "fill-accent-3 text-accent-3" : "text-accent-2"}`}
+              className={`h-5 w-5 shrink-0 ${isLikedByViewer ? "fill-accent-3 text-accent-3" : "text-accent-2"}`}
             />
-            <span>{likeCount}</span>
+            <span className="text-sm leading-none tabular-nums">{likeCount}</span>
           </button>
 
           <EmojiPicker
             onSelectEmoji={handlePostEmojiReply}
-            buttonClassName="h-5 border-none pt-0.5"
+            buttonClassName="h-6 border-none pt-0.5"
+            buttonSmileIconClassName="h-5 w-5"
           />
 
           {rootEmojiReactions.length > 0 ? (
-            <div className="flex max-w-[60%] flex-wrap items-center gap-0">
+            <div className="flex max-w-[60%] flex-wrap items-center gap-0 ml-3">
               {rootEmojiReactions.map((emoji, index) => <RenderReactionEmoji key={`${emoji}-${index}`} value={emoji} customEmojiByUuid={customEmojiByUuid} />)}
             </div>
           ) : null}
@@ -871,11 +865,9 @@ function PostSectionComponent({
               />
               <button
                 type="button"
-                onClick={() => {
-                  void onSubmitComment([]);
-                }}
-                disabled={isSubmittingComment}
-                className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
+                onClick={() => { void onSubmitComment([]); }}
+                disabled={isSubmittingComment || rootCommentDraft.trim().length === 0}
+                className="rounded-lg border border-accent-1 px-2 py-2 text-sm text-accent-2 hover:text-foreground disabled:opacity-50"
               >
                 Send
               </button>
@@ -883,7 +875,7 @@ function PostSectionComponent({
 
             {/** Comment Tree */}
             {rootTextCommentEntries.length === 0 ? (
-              <p className="text-xs text-accent-2">No comments yet.</p>
+              <p className="text-xs text-accent-2">No comments yet...</p>
             ) : (
               <div className="space-y-2">
                 {rootTextCommentEntries.map(([commentTimestamp, comment]) =>
