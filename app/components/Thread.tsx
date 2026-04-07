@@ -24,13 +24,17 @@ import {
   latestPoolMessagesByGameId,
   withSecondPlayerClaimed,
 } from "@/app/components/games/poolGameUtils";
-import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import VideoCall from "@/app/components/VideoCall";
+import {
+  ThreadMessageBubbleContent,
+  threadMessageBubbleShellClassName,
+  threadMessageBubbleShellStyle,
+} from "@/app/components/ThreadMessageBubbleContent";
 import {
   ApiError,
   ImageOverlayData,
@@ -47,6 +51,11 @@ import {
 } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
+import {
+  CUSTOM_EMOJI_RENDER_SIZE,
+  customEmojiUuidFromToken,
+  drawCustomEmojiCanvas,
+} from "@/app/lib/customEmojiCanvas";
 import {
   deleteThreadReplyCollapsed,
   readThreadReplyCollapsedSet,
@@ -76,15 +85,6 @@ const MESSAGE_OPTIONS_OVERLAY_Z = 1950;
 const EMOJI_ONLY_MESSAGE_REGEX =
   /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
 const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
-const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
-const CUSTOM_EMOJI_GRID_SIZE = 64;
-const CUSTOM_EMOJI_PIXEL_COUNT = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_GRID_SIZE;
-const CUSTOM_EMOJI_UPSCALE_FACTOR = 4;
-const CUSTOM_EMOJI_RENDER_SIZE = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_UPSCALE_FACTOR;
-const B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const CUSTOM_EMOJI_TRANSPARENT_FLAG = 1 << 9;
-const CUSTOM_EMOJI_RGB_MASK = 0b1_1111_1111;
-
 const THREAD_MESSAGES_CACHE_KEY_PREFIX = "thread_messages_v1_";
 const TIMESTAMP_REVEAL_MAX_PX = 68;
 const TIMESTAMP_REVEAL_SETTLE_MS = 180;
@@ -143,66 +143,8 @@ const isEmojiOnlyMessage = (value: string): boolean => {
   const trimmed = value.trim();
   return (
     (Boolean(trimmed) && EMOJI_ONLY_MESSAGE_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed))
-    || CUSTOM_EMOJI_TOKEN_REGEX.test(trimmed)
+    || customEmojiUuidFromToken(trimmed) !== null
   );
-};
-
-const customEmojiUuidFromToken = (value: string): string | null => {
-  const match = value.trim().match(CUSTOM_EMOJI_TOKEN_REGEX);
-  return match?.[1] ?? null;
-};
-
-const decodeCustomEmojiDataB64 = (dataB64: string): Uint16Array => {
-  const pixels = new Uint16Array(CUSTOM_EMOJI_PIXEL_COUNT);
-  if (dataB64.length !== CUSTOM_EMOJI_PIXEL_COUNT * 2) {
-    return pixels;
-  }
-  for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
-    const first = B64_ALPHABET.indexOf(dataB64[i * 2]);
-    const second = B64_ALPHABET.indexOf(dataB64[i * 2 + 1]);
-    if (first < 0 || second < 0) {
-      continue;
-    }
-    const r = (first >> 3) & 0b111;
-    const g = first & 0b111;
-    const b = (second >> 3) & 0b111;
-    const rgb = (r << 6) | (g << 3) | b;
-    const metadata = second & 0b111;
-    const isTransparent = (metadata & 0b001) === 0b001 || (metadata === 0 && rgb === 0);
-    pixels[i] = rgb | (isTransparent ? CUSTOM_EMOJI_TRANSPARENT_FLAG : 0);
-  }
-  return pixels;
-};
-
-const drawCustomEmojiCanvas = (canvas: HTMLCanvasElement, dataB64: string) => {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    return;
-  }
-  canvas.width = CUSTOM_EMOJI_RENDER_SIZE;
-  canvas.height = CUSTOM_EMOJI_RENDER_SIZE;
-  const pixels = decodeCustomEmojiDataB64(dataB64);
-  const imageData = new ImageData(CUSTOM_EMOJI_GRID_SIZE, CUSTOM_EMOJI_GRID_SIZE);
-  for (let i = 0; i < CUSTOM_EMOJI_PIXEL_COUNT; i += 1) {
-    const packed = pixels[i] ?? 0;
-    const rgb = packed & CUSTOM_EMOJI_RGB_MASK;
-    imageData.data[i * 4] = Math.round(((rgb >> 6) & 0b111) * (255 / 7));
-    imageData.data[i * 4 + 1] = Math.round(((rgb >> 3) & 0b111) * (255 / 7));
-    imageData.data[i * 4 + 2] = Math.round((rgb & 0b111) * (255 / 7));
-    imageData.data[i * 4 + 3] = (packed & CUSTOM_EMOJI_TRANSPARENT_FLAG) === CUSTOM_EMOJI_TRANSPARENT_FLAG ? 0 : 255;
-  }
-  const sourceCanvas = document.createElement("canvas");
-  sourceCanvas.width = CUSTOM_EMOJI_GRID_SIZE;
-  sourceCanvas.height = CUSTOM_EMOJI_GRID_SIZE;
-  const sourceCtx = sourceCanvas.getContext("2d");
-  if (!sourceCtx) {
-    return;
-  }
-  sourceCtx.putImageData(imageData, 0, 0);
-  ctx.clearRect(0, 0, CUSTOM_EMOJI_RENDER_SIZE, CUSTOM_EMOJI_RENDER_SIZE);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(sourceCanvas, 0, 0, CUSTOM_EMOJI_RENDER_SIZE, CUSTOM_EMOJI_RENDER_SIZE);
 };
 
 const clampOverlayYRatio = (value: number): number => {
@@ -275,6 +217,8 @@ export default function Thread({
   const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const activeOptionsMessageIdRef = useRef<string | null>(null);
+  const editTargetMessageIdRef = useRef<string | null>(null);
   const pendingBottomScrollRef = useRef<ScrollBehavior | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesRef = useRef<ThreadMessage[]>([]);
@@ -925,6 +869,7 @@ export default function Thread({
         });
       }
       setReplyTargetMessageId(null);
+      setActiveOptionsMessageId(null);
       pendingBottomScrollRef.current = "smooth";
     } finally {
       setIsSendingMessage(false);
@@ -1103,15 +1048,37 @@ export default function Thread({
     };
   }, [selectedThread.id, messageIdsFingerprint]);
 
+  activeOptionsMessageIdRef.current = activeOptionsMessageId;
+  editTargetMessageIdRef.current = editTargetMessageId;
+
+  const closeMessageOptionsOverlay = useCallback(() => {
+    const activeId = activeOptionsMessageIdRef.current;
+    const editId = editTargetMessageIdRef.current;
+    setActiveOptionsMessageId(null);
+    if (activeId !== null) {
+      setReplyTargetMessageId((reply) => (reply === activeId ? null : reply));
+      if (editId === activeId) {
+        setEditTargetMessageId(null);
+        setMessageDraft("");
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!activeOptionsMessageId) {
       return;
     }
     const exists = messages.some((m) => m.id === activeOptionsMessageId);
     if (!exists) {
+      const missingId = activeOptionsMessageId;
       setActiveOptionsMessageId(null);
+      setReplyTargetMessageId((reply) => (reply === missingId ? null : reply));
+      setEditTargetMessageId((edit) => (edit === missingId ? null : edit));
+      if (editTargetMessageId === missingId) {
+        setMessageDraft("");
+      }
     }
-  }, [activeOptionsMessageId, messages]);
+  }, [activeOptionsMessageId, messages, editTargetMessageId]);
 
   useEffect(() => {
     if (!activeOptionsMessageId) {
@@ -1119,14 +1086,14 @@ export default function Thread({
     }
     const onKeyDown = (event: WindowEventMap["keydown"]) => {
       if (event.key === "Escape") {
-        setActiveOptionsMessageId(null);
+        closeMessageOptionsOverlay();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [activeOptionsMessageId]);
+  }, [activeOptionsMessageId, closeMessageOptionsOverlay]);
 
   useEffect(() => {
     if (!activeOptionsMessageId) {
@@ -1204,11 +1171,14 @@ export default function Thread({
     cancelPressTimer();
     pressTimerRef.current = setTimeout(() => {
       setActiveOptionsMessageId(messageId);
+      setReplyTargetMessageId(messageId);
+      setEditTargetMessageId(null);
     }, MESSAGE_LONG_PRESS_TO_REPLY_MS);
   };
 
   const onEditMessage = async () => {
-    if (!editTargetMessageId || !messageDraft.trim()) {
+    const editingId = editTargetMessageId;
+    if (!editingId || !messageDraft.trim()) {
       return;
     }
 
@@ -1218,7 +1188,7 @@ export default function Thread({
     try {
       const response = await postWithAuth("/api/thread-edit", {
         thread_id: selectedThread.id,
-        message_id: editTargetMessageId,
+        message_id: editingId,
         text: messageDraft,
       });
       if (!response.ok) {
@@ -1239,6 +1209,8 @@ export default function Thread({
       );
       setMessageDraft("");
       setEditTargetMessageId(null);
+      setActiveOptionsMessageId((active) => (active === editingId ? null : active));
+      setReplyTargetMessageId((reply) => (reply === editingId ? null : reply));
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to edit message.");
     } finally {
@@ -1264,10 +1236,6 @@ export default function Thread({
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to send emoji reply.");
     }
-  };
-
-  const closeMessageOptionsOverlay = () => {
-    setActiveOptionsMessageId(null);
   };
 
   const onMessageOptionsOverlayRootClick = (event: MouseEvent<HTMLDivElement>) => {
@@ -1309,79 +1277,26 @@ export default function Thread({
     const hasImage = Boolean(message.image_url);
     const isImageOnly = hasImage && !hasText;
     const messageImageOverlay = toImageOverlayData(message.data);
-    const customEmojiUuid = customEmojiUuidFromToken(message.text);
-    const customEmoji = customEmojiUuid ? customEmojiByUuid[customEmojiUuid] : undefined;
 
     return (
       <div
-        className={`relative max-w-[85%] select-none text-sm ${isImageOnly
-          ? `${isOwnMessage ? "ml-auto" : ""}`
-          : `rounded-2xl px-3 py-1 shadow-sm ${isOwnMessage
-            ? "ml-auto rounded-br-sm bg-accent-3 text-primary-background"
-            : "rounded-bl-sm bg-secondary-background text-foreground"
-          }`
-          } ${depth > 0 ? "ml-5 border-l border-accent-1/60" : ""}`}
-        style={depth > 0 ? { width: "calc(85% - 1.25rem)" } : undefined}
+        className={threadMessageBubbleShellClassName(isOwnMessage, isImageOnly, depth, "static")}
+        style={threadMessageBubbleShellStyle(depth)}
       >
-        {!isImageOnly ? (
-          <>
-            <p className="text-xs opacity-60 [-webkit-touch-callout:none]">
-              {isOwnMessage ? "You" : message.username}
-            </p>
-            {customEmoji ? (
-              <canvas
-                width={CUSTOM_EMOJI_RENDER_SIZE}
-                height={CUSTOM_EMOJI_RENDER_SIZE}
-                ref={(el) => {
-                  if (!el) {
-                    return;
-                  }
-                  drawCustomEmojiCanvas(el, customEmoji.data_b64);
-                }}
-                className="h-8 w-8 [image-rendering:pixelated]"
-                title={customEmoji.name}
-              />
-            ) : (
-              <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
-            )}
-          </>
-        ) : null}
-        {isImageOnly ? (
-          <p className="mb-1 px-1 text-xs opacity-60 [-webkit-touch-callout:none]">
-            {isOwnMessage ? "You" : message.username}
-          </p>
-        ) : null}
-        {message.image_url ? (
-          <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
-            <button
-              type="button"
-              className="block w-full cursor-zoom-in rounded-xl border-0 bg-transparent p-0"
-              onClick={() => {
-                setImageViewer({
-                  signedUrl: message.image_url!,
-                  imageId: message.image_id,
-                  alt: "Thread message attachment",
-                });
-              }}
-            >
-              <CachedImage
-                signedUrl={message.image_url}
-                imageId={message.image_id}
-                alt="Thread message attachment"
-                className="max-h-[100vh] w-full rounded-xl object-cover"
-                loading="lazy"
-              />
-            </button>
-            {messageImageOverlay ? (
-              <div
-                className="pointer-events-none absolute left-0 right-0 -translate-y-1/2 bg-black/45 px-3 py-2 text-center text-sm font-semibold text-white"
-                style={{ top: `${messageImageOverlay.y_ratio * 100}%` }}
-              >
-                {messageImageOverlay.text}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+        <ThreadMessageBubbleContent
+          message={message}
+          currentUserId={currentUserId}
+          customEmojiByUuid={customEmojiByUuid}
+          messageImageOverlay={messageImageOverlay}
+          imageInteraction="options"
+          onOpenImageViewer={() => {
+            setImageViewer({
+              signedUrl: message.image_url!,
+              imageId: message.image_id,
+              alt: "Thread message attachment",
+            });
+          }}
+        />
       </div>
     );
   };
@@ -1394,8 +1309,6 @@ export default function Thread({
     const messageImageOverlay = toImageOverlayData(message.data);
     const poolGame = getPoolGameFromMessageData(message.data);
     const showPoolCard = poolGame && latestPoolMessageIds.has(message.id);
-    const customEmojiUuid = customEmojiUuidFromToken(message.text);
-    const customEmoji = customEmojiUuid ? customEmojiByUuid[customEmojiUuid] : undefined;
 
     if (depth > 0 && isHiddenUnderCollapsedParent(message)) {
       return null;
@@ -1522,80 +1435,27 @@ export default function Thread({
             event.preventDefault();
             event.stopPropagation();
             setActiveOptionsMessageId(message.id);
+            setReplyTargetMessageId(message.id);
+            setEditTargetMessageId(null);
           }}
-          className={`relative max-w-[85%] touch-pan-y select-none [-webkit-touch-callout:none] text-sm ${isImageOnly
-            ? `${isOwnMessage ? "ml-auto" : ""}`
-            : `rounded-2xl px-3 py-1 shadow-sm ${isOwnMessage
-              ? "ml-auto rounded-br-sm bg-accent-3 text-primary-background"
-              : "rounded-bl-sm bg-secondary-background text-foreground"
-            }`
-            } ${depth > 0 ? "ml-5 border-l border-accent-1/60" : ""}`}
-          style={depth > 0 ? { width: "calc(85% - 1.25rem)" } : undefined}
+          className={threadMessageBubbleShellClassName(isOwnMessage, isImageOnly, depth, "chat")}
+          style={threadMessageBubbleShellStyle(depth)}
         >
-          {!isImageOnly ? (
-            <>
-              <p className="text-xs opacity-60 [-webkit-touch-callout:none]">
-                {isOwnMessage ? "You" : message.username}
-              </p>
-              {customEmoji ? (
-                <canvas
-                  width={CUSTOM_EMOJI_RENDER_SIZE}
-                  height={CUSTOM_EMOJI_RENDER_SIZE}
-                  ref={(el) => {
-                    if (!el) {
-                      return;
-                    }
-                    drawCustomEmojiCanvas(el, customEmoji.data_b64);
-                  }}
-                  className="h-8 w-8 [image-rendering:pixelated]"
-                  title={customEmoji.name}
-                />
-              ) : (
-                <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
-              )}
-            </>
-          ) : null}
-          {isImageOnly ? (
-            <p className="mb-1 px-1 text-xs opacity-60 [-webkit-touch-callout:none]">
-              {isOwnMessage ? "You" : message.username}
-            </p>
-          ) : null}
-          {message.image_url ? (
-            <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
-              <button
-                type="button"
-                className="block w-full cursor-zoom-in rounded-xl border-0 bg-transparent p-0"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setImageViewer({
-                    signedUrl: message.image_url!,
-                    imageId: message.image_id,
-                    alt: "Thread message attachment",
-                  });
-                }}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                }}
-              >
-                <CachedImage
-                  signedUrl={message.image_url}
-                  imageId={message.image_id}
-                  alt="Thread message attachment"
-                  className="max-h-[100vh] w-full rounded-xl object-cover"
-                  loading="lazy"
-                  onLoad={handleMessageImageLoad}
-                />
-              </button>
-              {messageImageOverlay ? (
-                <div
-                  className="pointer-events-none absolute left-0 right-0 -translate-y-1/2 bg-black/45 px-3 py-2 text-center text-sm font-semibold text-white"
-                  style={{ top: `${messageImageOverlay.y_ratio * 100}%` }}
-                >
-                  {messageImageOverlay.text}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+          <ThreadMessageBubbleContent
+            message={message}
+            currentUserId={currentUserId}
+            customEmojiByUuid={customEmojiByUuid}
+            messageImageOverlay={messageImageOverlay}
+            imageInteraction="chat"
+            onOpenImageViewer={() => {
+              setImageViewer({
+                signedUrl: message.image_url!,
+                imageId: message.image_id,
+                alt: "Thread message attachment",
+              });
+            }}
+            onImageLoaded={handleMessageImageLoad}
+          />
           <p
             className="pointer-events-none absolute right-[-68px] top-1/2 w-16 -translate-y-1/2 text-right text-[11px] text-accent-2/90 transition-opacity duration-75"
             style={{ opacity: timestampRevealPercent }}
@@ -1716,7 +1576,13 @@ export default function Thread({
         rows={1}
         className={`min-h-10 resize-none overflow-hidden rounded-2xl border border-accent-1 bg-secondary-background px-4 py-2 text-sm leading-normal text-foreground break-words outline-none focus:border-accent-2 transition-[border-color] duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
           }`}
-        placeholder="Type a message..."
+        placeholder={
+          editTargetMessageId
+            ? "Edit message..."
+            : activeOptionsMessageId
+              ? "Reply to message..."
+              : "Type a message..."
+        }
         value={messageDraft}
         onChange={(event) => setMessageDraft(event.target.value)}
         onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1788,31 +1654,6 @@ export default function Thread({
     }
     return depth;
   })();
-
-  // if (isSettingsOpen) {
-  //   return (
-  //     <ThreadSettings
-  //       thread={selectedThread}
-  //       currentUserId={currentUserId}
-  //       onBack={() => {
-  //         setIsSettingsOpen(false);
-  //       }}
-  //       onThreadImageUpdated={(imageId, imageUrl) => {
-  //         setSelectedThread((previous: ThreadItem | null) => ({
-  //           ...previous as ThreadItem,
-  //           image_id: imageId,
-  //           image_url: imageUrl,
-  //         }));
-  //       }}
-  //       onThreadRenamed={(name) => {
-  //         setSelectedThread((previous: ThreadItem | null) => ({
-  //           ...previous as ThreadItem,
-  //           name,
-  //         }));
-  //       }}
-  //     />
-  //   );
-  // }
 
   return (
     <div
@@ -2057,7 +1898,7 @@ export default function Thread({
                     </div>
 
                     {/** Held message bubble */}
-                    <div className="rounded-2xl border border-accent-1 bg-secondary-background px-3 py-3 shadow-lg">
+                    <div className="border-none bg-transparent px-3 py-3 shadow-lg">
                       <div
                         className={`flex w-full ${activeOptionsMessage.created_by === currentUserId ? "justify-end" : "justify-start"}`}
                       >
@@ -2067,18 +1908,6 @@ export default function Thread({
 
                     {/** Actions row */}
                     <div className="flex flex-col gap-1 mt-4 rounded-2xl border border-accent-1 bg-secondary-background px-2 py-2 shadow-lg">
-                      <button
-                        type="button"
-                        className="w-full border-b border-accent-1 px-4 py-1 text-left text-sm font-medium text-foreground"
-                        onClick={() => {
-                          setReplyTargetMessageId(activeOptionsMessage.id);
-                          setEditTargetMessageId(null);
-                          closeMessageOptionsOverlay();
-                          requestAnimationFrame(() => { composerTextareaRef.current?.focus(); });
-                        }}
-                      >
-                        Reply
-                      </button>
                       {activeOptionsMessage.created_by === currentUserId ? (
                         <button
                           type="button"
@@ -2087,11 +1916,16 @@ export default function Thread({
                             setMessageDraft(activeOptionsMessage.text);
                             setEditTargetMessageId(activeOptionsMessage.id);
                             setReplyTargetMessageId(null);
-                            closeMessageOptionsOverlay();
-                            requestAnimationFrame(() => { composerTextareaRef.current?.focus();});
+                            setIsComposerFocused(true);
+                            requestAnimationFrame(() => {
+                              const area = composerTextareaRef.current;
+                              area?.focus();
+                              const len = area?.value.length ?? 0;
+                              area?.setSelectionRange(len, len);
+                            });
                           }}
                         >
-                          Edit
+                          Edit message
                         </button>
                       ) : null}
                       <button
@@ -2114,6 +1948,9 @@ export default function Thread({
                           setEditTargetMessageId(null);
                           setMessageDraft("");
                           setIsComposerFocused(false);
+                          if (activeOptionsMessageId) {
+                            setReplyTargetMessageId(activeOptionsMessageId);
+                          }
                         }}
                         className="ml-2 p-2 underline underline-offset-2 hover:text-foreground"
                       >
