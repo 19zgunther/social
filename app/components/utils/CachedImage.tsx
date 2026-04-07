@@ -53,8 +53,7 @@ export default function CachedImage({
   const [isLoaded, setIsLoaded] = useState(false);
   const [retry, setRetry] = useState(0);
   const [giveUp, setGiveUp] = useState(false);
-  const srcRef = useRef<string | null>(null);
-  /** Fresh grant on each render; omit from load effect deps so rotating tokens don't re-run the pipeline. */
+
   const grantRef = useRef<string | null>(null);
   grantRef.current = imageAccessGrant ?? null;
   const threadIdRef = useRef<string | null>(null);
@@ -62,67 +61,50 @@ export default function CachedImage({
 
   const { className, style, ...restImgProps } = imgProps;
 
-  const expectsRenderableImage = useMemo(
-    () =>
-      Boolean(
-        imageId &&
-          (signedUrl ||
-            (imageAccessGrant && (imageStorageUserId || imageThreadId))),
-      ),
-    [imageId, signedUrl, imageAccessGrant, imageStorageUserId, imageThreadId],
-  );
-
-  useEffect(() => {
-    srcRef.current = src;
-  }, [src]);
-
   useEffect(() => {
     setRetry(0);
     setGiveUp(false);
   }, [imageId, signedUrl, imageAccessGrant, imageStorageUserId, imageThreadId]);
 
+  const isDismounted = useRef(false);
   useEffect(() => {
-    let isCancelled = false;
+    isDismounted.current = false;
+    return () => { isDismounted.current = true; };
+  }, [])
+
+  useEffect(() => {
+    // Early return if the image is already cached
+    if (src || (imageId && getImageUrlFromCache(imageId))) {
+      return;
+    }
 
     const load = async () => {
-      if (imageId && srcRef.current) {
-        const memoUrl = getImageUrlFromCache(imageId);
-        if (memoUrl && memoUrl === srcRef.current) {
-          return;
-        }
-      }
-
-      const resolvedUrl = await imageCache(signedUrl ?? null, imageId, {
+      const resolvedUrl = await imageCache({
+        signedUrl: signedUrl ?? null,
+        imageId: imageId,
         grant: grantRef.current,
         storageUserId: imageStorageUserId,
         threadId: threadIdRef.current,
       });
-      if (isCancelled) {
-        console.log("load cancelled");
+
+      // If the component is dismounted, don't set the src
+      if (isDismounted.current) {
+        console.log("load cancelled - comp dismounted");
         globalDebugData.cachedImageLoadCancelleds++;
         return;
       }
 
+      // If the resolved url is null, set the give up flag
       setSrc(resolvedUrl);
-      if (!resolvedUrl && expectsRenderableImage && retry >= GIVE_UP_AFTER_RETRY) {
+      if (!resolvedUrl && retry >= GIVE_UP_AFTER_RETRY) {
         console.log("give up", imageId);
         setGiveUp(true);
       }
     };
+    load();
+  }, [imageId, signedUrl, imageStorageUserId, retry, src]);
 
-    void load();
-
-    return () => { isCancelled = true; };
-  }, [imageId, signedUrl, imageStorageUserId, retry, expectsRenderableImage]);
-
-  const resolvedSrc = useMemo(
-    () => src ?? (imageId ? getImageUrlFromCache(imageId) : undefined),
-    [imageId, src],
-  );
-
-  useEffect(() => {
-    setIsLoaded(false);
-  }, [resolvedSrc]);
+  const resolvedSrc = src ?? (imageId ? getImageUrlFromCache(imageId) : null);
 
   const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
     setIsLoaded(true);
@@ -135,14 +117,11 @@ export default function CachedImage({
   };
 
   const imageStyle: CSSProperties = {
-    opacity: isLoaded ? 1 : 0,
+    opacity: isLoaded ? 1 : 0.01,
     transition: "opacity 240ms ease-out",
   };
 
-  const showLoader =
-    expectsRenderableImage
-    && !giveUp
-    && !(resolvedSrc && isLoaded);
+  const showLoader = !resolvedSrc;
 
   const wrapperStyle: CSSProperties = {
     display: "grid",
@@ -155,24 +134,18 @@ export default function CachedImage({
   };
 
   useEffect(() => {
-    // if (!expectsRenderableImage) {
-    //   return;
-    // }
-    if (giveUp) {
+    // Don't retry if we've given up or we already have a resolved src
+    if (giveUp || resolvedSrc) {
       return;
     }
-    // Only retry the resolve pipeline when we still have no URL. Do not retry while <img> is decoding
-    // (resolvedSrc set but onLoad not yet fired) — that was causing visible flashes back to the spinner.
-    if (resolvedSrc) {
-      return;
-    }
+
     const timeout = setTimeout(() => {
       console.log("retry");
       globalDebugData.cachedImageLoadRetries++;
       setRetry((previous) => previous + 1);
     }, 5000);
     return () => clearTimeout(timeout);
-  }, [expectsRenderableImage, giveUp, resolvedSrc, retry]);
+  }, [giveUp, resolvedSrc, retry]);
 
   return (
     <>

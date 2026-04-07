@@ -134,36 +134,28 @@ export type ImageCacheOptions = {
 };
 
 const __imageURLCache = new Map<string, string>();
-export const imageCache = async (
+export const imageCache = async ({
+  signedUrl,
+  imageId,
+  grant,
+  storageUserId,
+  threadId,
+}: {
   signedUrl: string | null,
   imageId: string | null,
-  options?: ImageCacheOptions,
-): Promise<string | null> => {
-  const grant = options?.grant?.trim() || null;
-  const storageUserId = options?.storageUserId?.trim() || null;
-  const threadId = options?.threadId?.trim() || null;
-
-  if (!imageId) {
-    return signedUrl;
-  }
-
-  if (typeof window === "undefined" || typeof window.indexedDB === "undefined") {
-    if (grant && (storageUserId || threadId)) {
-      return resolveSignedUrlFromGrant(imageId, grant, { storageUserId, threadId });
-    }
-    return signedUrl;
-  }
-
-  const memo = __imageURLCache.get(imageId);
-  if (memo) {
-    return memo;
-  }
-
-  if (!grant && !signedUrl) {
-    return null;
-  }
-
+  grant?: string | null;
+  storageUserId?: string | null;
+  threadId?: string | null;
+}): Promise<string | null> => {
   try {
+    // If we don't have an image id, return the signed url
+    if (!imageId) { return signedUrl; }
+
+    // If the image is already cached, return the cached url
+    const memo = __imageURLCache.get(imageId);
+    if (memo) { return memo; }
+
+    // If the image is already cached, return the cached url
     const cachedBlob = await readCachedBlob(imageId);
     if (cachedBlob) {
       const url = URL.createObjectURL(cachedBlob);
@@ -171,14 +163,14 @@ export const imageCache = async (
       return url;
     }
 
+    // If we have a signed url, use it, otherwise resolve a signed url from the grant
     let urlToFetch = signedUrl;
     if (!urlToFetch && grant && (storageUserId || threadId)) {
       urlToFetch = await resolveSignedUrlFromGrant(imageId, grant, { storageUserId, threadId });
     }
-    if (!urlToFetch) {
-      return null;
-    }
+    if (!urlToFetch) { return null; }
 
+    // Fetch the blob and cache it
     const blob = await getBlobForImage(urlToFetch, imageId);
     const url = URL.createObjectURL(blob);
     __imageURLCache.set(imageId, url);
