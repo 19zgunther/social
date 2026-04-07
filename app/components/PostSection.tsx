@@ -38,14 +38,29 @@ const CUSTOM_EMOJI_RENDER_SIZE = CUSTOM_EMOJI_GRID_SIZE * CUSTOM_EMOJI_UPSCALE_F
 const CUSTOM_EMOJI_TRANSPARENT_FLAG = 1 << 9;
 const CUSTOM_EMOJI_RGB_MASK = 0b1_1111_1111;
 
-const formatPostDate = (value: string): string => {
+const parsePostDate = (value: string): Date | null => {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatPostDateCollapsed = (value: string): string => {
+  const date = parsePostDate(value);
+  if (!date) { return ""; }
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric"};
+  if (date.getFullYear() !== now.getFullYear()) { options.year = "numeric"; }
+  return date.toLocaleString(undefined, options);
+};
+
+const formatPostDateExpanded = (value: string): string => {
+  const date = parsePostDate(value);
+  if (!date) {
     return "";
   }
   return date.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
+    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
@@ -201,6 +216,7 @@ function PostSectionComponent({
     imageId: string | null;
     alt: string;
   } | null>(null);
+  const [isPostDateExpanded, setIsPostDateExpanded] = useState(false);
 
   const rootCommentEntries = useMemo(
     () =>
@@ -696,7 +712,17 @@ function PostSectionComponent({
           ) : (
             <p className="text-sm font-semibold text-foreground">{post.username}</p>
           )}
-          <p className="text-[11px] text-accent-2">{formatPostDate(post.created_at)}</p>
+          <button
+            type="button"
+            aria-expanded={isPostDateExpanded}
+            aria-label={isPostDateExpanded ? "Hide post time" : "Show full post time"}
+            onClick={() => setIsPostDateExpanded((previous) => !previous)}
+            className="text-left text-[11px] text-accent-2 hover:underline"
+          >
+            {isPostDateExpanded
+              ? formatPostDateExpanded(post.created_at)
+              : formatPostDateCollapsed(post.created_at)}
+          </button>
         </div>
 
       </header>
