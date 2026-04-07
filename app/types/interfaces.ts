@@ -434,12 +434,20 @@ export type UserProfileResponse = {
 export type EmojiItem = {
   uuid: string;
   created_at: string;
+  updated_at: string;
   name: string;
   data_b64: string;
 };
 
+export type EmojisListRequest = {
+  client_known?: Array<{ uuid: string; updated_at: string }>;
+};
+
 export type EmojisListResponse = {
+  /** New or changed rows since the client’s known revisions. */
   emojis: EmojiItem[];
+  /** UUIDs the client had cached but no longer exist for this user. */
+  removed_uuids?: string[];
 };
 
 export type EmojiSaveRequest = {

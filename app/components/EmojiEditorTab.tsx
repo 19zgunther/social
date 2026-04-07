@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, EmojiItem, EmojisListResponse, EmojiSaveResponse } from "@/app/types/interfaces";
+import { loadAllCustomEmojis, putEmojiInCache } from "@/app/lib/customEmojiCache";
+import { ApiError, EmojiItem, EmojiSaveResponse } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import { Redo, Redo2, Undo, Undo2 } from "lucide-react";
 
@@ -227,17 +228,8 @@ export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
     setIsLoading(true);
     setStatusMessage("");
     try {
-      const response = await fetch("/api/emojis-list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
-        return;
-      }
-      const payload = (await response.json()) as EmojisListResponse;
-      setEmojis(payload.emojis);
+      const emojis = await loadAllCustomEmojis();
+      setEmojis(emojis);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to load emojis.");
     } finally {
@@ -506,6 +498,7 @@ export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
 
       const payload = (await response.json()) as EmojiSaveResponse;
       const saved = payload.emoji;
+      await putEmojiInCache(saved);
       setSelectedEmojiUuid(saved.uuid);
       setEmojis((previous) => {
         const remaining = previous.filter((row) => row.uuid !== saved.uuid);

@@ -5,7 +5,8 @@ import { Smile, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import emojiKeywordsByEmoji from "emojilib";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./useSwipeBack";
-import { EmojiItem, EmojisListResponse } from "@/app/types/interfaces";
+import { loadAllCustomEmojis } from "@/app/lib/customEmojiCache";
+import { EmojiItem } from "@/app/types/interfaces";
 const RECENT_EMOJIS_STORAGE_KEY = "emojiPickerRecentUsage";
 const RECENT_EMOJIS_STORAGE_BACKUP_KEY = "emojiPickerRecentUsageBackup";
 const MAX_RECENT_EMOJIS = 50;
@@ -300,17 +301,9 @@ export default function EmojiPicker({
     let cancelled = false;
     const loadCustomEmojis = async () => {
       try {
-        const response = await fetch("/api/emojis-list", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        if (!response.ok) {
-          return;
-        }
-        const payload = (await response.json()) as EmojisListResponse;
+        const emojis = await loadAllCustomEmojis();
         if (!cancelled) {
-          setCustomEmojis(payload.emojis);
+          setCustomEmojis(emojis);
         }
       } catch {
         // Ignore custom emoji loading failures; default emoji picker still works.

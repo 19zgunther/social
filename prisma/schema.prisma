@@ -9,12 +9,13 @@ datasource db {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model emojis {
-  uuid       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  created_by String   @db.Uuid
+  uuid       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  created_by String    @db.Uuid
   data       String
   name       String
-  users      users    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  users      users     @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

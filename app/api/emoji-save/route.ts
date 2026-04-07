@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
+import { emojiUpdatedAtIso } from "@/app/api/emoji_row_utils";
 import { prisma } from "@/app/lib/prisma";
 import { EmojiSaveRequest, EmojiSaveResponse } from "@/app/types/interfaces";
 
@@ -44,18 +45,21 @@ export async function POST(request: Request) {
         );
       }
 
+      const now = new Date();
       const updated = await prisma.emojis.update({
         where: { uuid: emojiUuid },
         data: {
           name: cleanName,
           data: dataB64,
+          updated_at: now,
         },
-        select: { uuid: true, created_at: true, name: true, data: true },
+        select: { uuid: true, created_at: true, updated_at: true, name: true, data: true },
       });
       const payload: EmojiSaveResponse = {
         emoji: {
           uuid: updated.uuid,
           created_at: updated.created_at.toISOString(),
+          updated_at: emojiUpdatedAtIso(updated),
           name: updated.name?.trim() || "Untitled",
           data_b64: updated.data ?? "",
         },
@@ -63,15 +67,18 @@ export async function POST(request: Request) {
       return NextResponse.json(payload, { status: 200 });
     }
 
+    const now = new Date();
     const created = await prisma.emojis.create({
       data: {
         created_by: authResult.user_id,
         name: cleanName,
         data: dataB64,
+        updated_at: now,
       },
       select: {
         uuid: true,
         created_at: true,
+        updated_at: true,
         name: true,
         data: true,
       },
@@ -81,6 +88,7 @@ export async function POST(request: Request) {
       emoji: {
         uuid: created.uuid,
         created_at: created.created_at.toISOString(),
+        updated_at: emojiUpdatedAtIso(created),
         name: created.name?.trim() || "Untitled",
         data_b64: created.data ?? "",
       },

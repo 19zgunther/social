@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
+import { emojiUpdatedAtIso } from "@/app/api/emoji_row_utils";
 import { prisma } from "@/app/lib/prisma";
 import { EmojisResolveResponse } from "@/app/types/interfaces";
 
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       select: {
         uuid: true,
         created_at: true,
+        updated_at: true,
         name: true,
         data: true,
       },
@@ -42,6 +44,7 @@ export async function POST(request: Request) {
           {
             uuid: row.uuid,
             created_at: row.created_at.toISOString(),
+            updated_at: emojiUpdatedAtIso(row),
             name: row.name?.trim() || "Untitled",
             data_b64: row.data ?? "",
           },

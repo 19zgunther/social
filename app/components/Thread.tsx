@@ -35,7 +35,6 @@ import {
   ImageOverlayData,
   MessageData,
   EmojiItem,
-  EmojisResolveResponse,
   PoolGameMessageData,
   SyncResponse,
   ThreadItem,
@@ -46,6 +45,7 @@ import {
   ThreadSendResponse,
 } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
+import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import BackButton from "./utils/BackButton";
 
 type ThreadProps = {
@@ -525,13 +525,9 @@ export default function Thread({
     let cancelled = false;
     const resolveCustomEmojis = async () => {
       try {
-        const response = await postWithAuth("/api/emojis-resolve", { uuids: customEmojiUuidsInMessages });
-        if (!response.ok) {
-          return;
-        }
-        const payload = (await response.json()) as EmojisResolveResponse;
+        const merged = await resolveEmojisByUuid(customEmojiUuidsInMessages);
         if (!cancelled) {
-          setCustomEmojiByUuid(payload.emojis_by_uuid ?? {});
+          setCustomEmojiByUuid(merged);
         }
       } catch {
         // Best effort; unresolved custom emoji falls back to token text.

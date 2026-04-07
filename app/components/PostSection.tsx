@@ -6,7 +6,8 @@ import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
-import { ApiError, EmojiItem, EmojisResolveResponse, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
+import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
+import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 
@@ -276,17 +277,9 @@ function PostSectionComponent({
     let cancelled = false;
     const resolveCustomEmojis = async () => {
       try {
-        const response = await fetch("/api/emojis-resolve", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ uuids: customEmojiUuidsInPostData }),
-        });
-        if (!response.ok) {
-          return;
-        }
-        const payload = (await response.json()) as EmojisResolveResponse;
+        const merged = await resolveEmojisByUuid(customEmojiUuidsInPostData);
         if (!cancelled) {
-          setCustomEmojiByUuid(payload.emojis_by_uuid ?? {});
+          setCustomEmojiByUuid(merged);
         }
       } catch {
         // Ignore failures; custom emoji reaction falls back to token text.

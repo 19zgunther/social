@@ -2,6 +2,7 @@
 
 import { ArrowLeft, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
+import { clearAllCachedCustomEmojis } from "@/app/lib/customEmojiCache";
 import { clearAllCachedImages } from "@/app/lib/imageCache";
 import { globalDebugData } from "./utils/globalDebugData";
 
@@ -15,6 +16,7 @@ const PUSH_PROMPT_DISMISSED_KEY = "push_prompt_dismissed";
 export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsProps) {
   const [statusMessage, setStatusMessage] = useState("");
   const [isClearingImageCache, setIsClearingImageCache] = useState(false);
+  const [isClearingEmojiCache, setIsClearingEmojiCache] = useState(false);
   const [debugDataSnapshot, setDebugDataSnapshot] = useState(
     JSON.stringify(globalDebugData, null, 2),
   );
@@ -35,6 +37,20 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
       setStatusMessage("Image cache cleared.");
     } finally {
       setIsClearingImageCache(false);
+    }
+  };
+
+  const onClearCustomEmojiCache = async () => {
+    if (isClearingEmojiCache) {
+      return;
+    }
+
+    setIsClearingEmojiCache(true);
+    try {
+      await clearAllCachedCustomEmojis();
+      setStatusMessage("Custom emoji cache cleared.");
+    } finally {
+      setIsClearingEmojiCache(false);
     }
   };
 
@@ -88,6 +104,17 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
               <p className="font-medium">{isClearingImageCache ? "Clearing image cache..." : "Clear cached images"}</p>
               <p className="text-xs text-accent-2 mt-1">
                 Remove all locally cached images and reload them as needed
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => { void onClearCustomEmojiCache(); }}
+              disabled={isClearingEmojiCache}
+              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-4 py-3 text-left text-sm text-foreground hover:bg-accent-1/30 transition disabled:cursor-not-allowed disabled:opacity-60 mt-2"
+            >
+              <p className="font-medium">{isClearingEmojiCache ? "Clearing custom emoji cache..." : "Clear cached custom emojis"}</p>
+              <p className="text-xs text-accent-2 mt-1">
+                Remove locally cached custom emoji pixel data (they reload from the server when needed)
               </p>
             </button>
           </div>
