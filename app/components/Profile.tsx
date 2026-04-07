@@ -641,7 +641,7 @@ function Profile({
               searchUsers={searchFriendOptions}
               placeholder="Search username/email"
               inputClassName="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-              dropdownClassName="min-h-[30vh] max-h-[60vh]"
+              dropdownClassName="min-h-[30vh] max-h-[30vh]"
               getOptionActionLabel={(option) => {
                 if (option.friendshipStatus === "none" || option.friendshipStatus === "rejected") {
                   return "Request to Follow";

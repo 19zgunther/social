@@ -121,7 +121,7 @@ export default function UserSearch({
       />
 
       {shouldShowDropdown ? (
-        <div className={`absolute z-30 mt-1 w-full overflow-y-auto rounded-lg border border-accent-1 bg-primary-background shadow-lg shadow-black/25 ${dropdownClassName ?? "max-h-[70vh]"}`}>
+        <div className={`absolute z-30 mt-1 w-full overflow-y-auto rounded-lg border border-accent-1 bg-primary-background shadow-lg shadow-black/25 ${dropdownClassName ?? "max-h-[40vh]"}`}>
           {isLoading && results.length === 0 ? (
             <p className="px-3 py-2 text-xs text-accent-2">Loading users…</p>
           ) : results.length === 0 ? (
