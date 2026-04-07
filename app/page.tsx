@@ -29,7 +29,6 @@ import UpcomingEventsTab from "./components/UpcomingEventsTab";
 import useSwipeBack from "./components/utils/useSwipeBack";
 import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
-import DumbAdvertModal from "./components/DumbAdvertModal";
 import { UserSessionSyncProvider } from "./components/UserSessionSyncContext";
 
 
@@ -367,7 +366,6 @@ export default function Home() {
         className="flex h-full max-h-dvh flex-col overflow-hidden shadow-xl shadow-black/25 relative"
       >
         <AutoNotificationPrompt authUser={authUser} showNotificationsPrompt={showNotificationsPrompt} setShowNotificationsPrompt={setShowNotificationsPrompt} />
-        <DumbAdvertModal currentUserId={authUser.user_id} />
 
         {/** Main Content Container */}
         <div
