@@ -1463,8 +1463,8 @@ export default function Thread({
           </p>
         </div>
 
-        {emojiOnlyChildren.length > 0 && isRepliesSubtreeExpanded ? (
-          <div className="mt-1 ml-1 flex flex-wrap items-center gap-1">
+        {emojiOnlyChildren.length > 0 && (
+          <div className="ml-1 flex flex-wrap items-center gap-1 transform translate-y-[-4px]">
             {emojiOnlyChildren.map((childMessage) => {
               const childCustomEmojiUuid = customEmojiUuidFromToken(childMessage.text);
               const childCustomEmoji = childCustomEmojiUuid ? customEmojiByUuid[childCustomEmojiUuid] : undefined;
@@ -1478,7 +1478,7 @@ export default function Thread({
               );
             })}
           </div>
-        ) : null}
+        )}
 
         {threadedChildren.length > 0 ? (
           <button

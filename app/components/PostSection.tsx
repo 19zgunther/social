@@ -602,6 +602,8 @@ function PostSectionComponent({
             </button>
           </div>
         ) : null}
+
+        
         {hasThreadedReplies && isExpanded ? (
           <div className="mt-1 space-y-2">
             {threadedReplyEntries.map(([childTimestamp, childComment]) =>

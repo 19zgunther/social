@@ -1,6 +1,6 @@
 /** Custom emoji token parsing and base64 pixel decoding → 2D canvas (posts, thread messages, reactions). */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { EmojiItem } from "../types/interfaces";
 
 export const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
@@ -95,7 +95,7 @@ export const CustomEmoji = ({
         setIsExpanded(!isExpanded); setTimeout(() => { setIsExpanded(false); }, 4000); 
         onPointerDown?.();
       }}
-      className={`h-7 w-7 [image-rendering:pixelated] ${isExpanded ? "h-20 w-20" : ""} transition-all duration-100`}
+      className={`h-7 w-7 rounded-md [image-rendering:pixelated] ${isExpanded ? "h-20 w-20" : ""} transition-all duration-100`}
       title={customEmoji.name}
     />
   )
