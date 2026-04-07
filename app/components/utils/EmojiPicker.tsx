@@ -206,6 +206,8 @@ type EmojiPickerProps = {
   className?: string;
   buttonClassName?: string;
   buttonSmileIconClassName?: string;
+  /** Fires when the full-screen emoji picker opens or closes (for host UI like overlays). */
+  onOpenChange?: (open: boolean) => void;
 };
 
 const customEmojiToken = (emojiUuid: string): string => `[[emoji:${emojiUuid}]]`;
@@ -215,6 +217,7 @@ export default function EmojiPicker({
   className,
   buttonClassName,
   buttonSmileIconClassName,
+  onOpenChange,
 }: EmojiPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -316,6 +319,10 @@ export default function EmojiPicker({
       cancelled = true;
     };
   }, [isMounted, isOpen]);
+
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   useEffect(() => {
     if (!isOpen) {

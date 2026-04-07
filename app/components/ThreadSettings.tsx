@@ -302,7 +302,7 @@ export default function ThreadSettings({
       />
 
       <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
-        <BackButton onBack={onBack} backLabel="Thread" textOnly />
+        <BackButton onBack={onBack} backLabel="" textOnly />
         <div className="min-w-0 text-center">
           <p className="truncate text-sm font-semibold text-foreground">Group Settings</p>
         </div>

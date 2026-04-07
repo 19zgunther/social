@@ -153,19 +153,18 @@ const getCommentAtPath = (
   return null;
 };
 
-function RenderReactionEmoji({ value, key, customEmojiByUuid }: { value: string, key: string, customEmojiByUuid: Record<string, EmojiItem> }) {
+function RenderReactionEmoji({ value, customEmojiByUuid }: { value: string; customEmojiByUuid: Record<string, EmojiItem> }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const uuid = customEmojiUuidFromToken(value);
   if (!uuid) {
-    return <span key={key} className="text-xl leading-none">{value}</span>;
+    return <span className="text-xl leading-none">{value}</span>;
   }
   const customEmoji = customEmojiByUuid[uuid];
   if (!customEmoji) {
-    return <span key={key} className="text-xl leading-none">?</span>;
+    return <span className="text-xl leading-none">?</span>;
   }
   return (
     <canvas
-      key={key}
       width={CUSTOM_EMOJI_RENDER_SIZE}
       height={CUSTOM_EMOJI_RENDER_SIZE}
       ref={(el) => {

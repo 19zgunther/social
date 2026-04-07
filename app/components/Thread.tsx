@@ -3,6 +3,7 @@
 import {
   FormEvent,
   KeyboardEvent,
+  MouseEvent,
   SetStateAction,
   TouchEvent,
   useCallback,
@@ -68,6 +69,10 @@ const BOTTOM_SWIPE_TRIGGER_PX = 48;
 const MIN_BOTTOM_SWIPE_SPINNER_MS = 1_000;
 /** Hold duration before opening message actions (reply, etc.). */
 const MESSAGE_LONG_PRESS_TO_REPLY_MS = 500;
+/** Quick reactions shown on the message options overlay (before EmojiPicker). */
+const MESSAGE_OPTIONS_QUICK_EMOJIS = ["❤️", "👍", "😄", "😂", "❓", "‼️"] as const;
+/** Portal stack: below EmojiPicker (2000) and games (2100). */
+const MESSAGE_OPTIONS_OVERLAY_Z = 1950;
 const EMOJI_ONLY_MESSAGE_REGEX =
   /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
 const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
@@ -1051,6 +1056,12 @@ export default function Thread({
 
   const messageById = new Map(messages.map((message) => [message.id, message]));
 
+  const activeOptionsMessage = useMemo(
+    () =>
+      activeOptionsMessageId ? messages.find((m) => m.id === activeOptionsMessageId) ?? null : null,
+    [activeOptionsMessageId, messages],
+  );
+
   const messageIdsFingerprint = useMemo(
     () =>
       [...new Set(messages.map((message) => message.id))]
@@ -1091,6 +1102,42 @@ export default function Thread({
       cancelled = true;
     };
   }, [selectedThread.id, messageIdsFingerprint]);
+
+  useEffect(() => {
+    if (!activeOptionsMessageId) {
+      return;
+    }
+    const exists = messages.some((m) => m.id === activeOptionsMessageId);
+    if (!exists) {
+      setActiveOptionsMessageId(null);
+    }
+  }, [activeOptionsMessageId, messages]);
+
+  useEffect(() => {
+    if (!activeOptionsMessageId) {
+      return;
+    }
+    const onKeyDown = (event: WindowEventMap["keydown"]) => {
+      if (event.key === "Escape") {
+        setActiveOptionsMessageId(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activeOptionsMessageId]);
+
+  useEffect(() => {
+    if (!activeOptionsMessageId) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [activeOptionsMessageId]);
 
   const isHiddenUnderCollapsedParent = (message: ThreadMessage): boolean => {
     let cursorId: string | null = message.parent_id;
@@ -1219,6 +1266,126 @@ export default function Thread({
     }
   };
 
+  const closeMessageOptionsOverlay = () => {
+    setActiveOptionsMessageId(null);
+  };
+
+  const onMessageOptionsOverlayRootClick = (event: MouseEvent<HTMLDivElement>) => {
+    const { target } = event;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    if (
+      target.closest(
+        'button, a, input, textarea, select, label, [role="button"], [contenteditable="true"], canvas, form',
+      )
+    ) {
+      return;
+    }
+    closeMessageOptionsOverlay();
+  };
+
+  const copyActiveOptionsMessage = async (message: ThreadMessage) => {
+    const text = message.text.trim();
+    const fallback = message.image_url?.trim() ?? "";
+    const toCopy = text || fallback;
+    if (!toCopy) {
+      setStatusMessage("Nothing to copy.");
+      closeMessageOptionsOverlay();
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(toCopy);
+      setStatusMessage("Copied.");
+      closeMessageOptionsOverlay();
+    } catch {
+      setStatusMessage("Could not copy.");
+    }
+  };
+
+  const renderOptionsTargetBubble = (message: ThreadMessage, depth: number) => {
+    const isOwnMessage = message.created_by === currentUserId;
+    const hasText = message.text.trim().length > 0;
+    const hasImage = Boolean(message.image_url);
+    const isImageOnly = hasImage && !hasText;
+    const messageImageOverlay = toImageOverlayData(message.data);
+    const customEmojiUuid = customEmojiUuidFromToken(message.text);
+    const customEmoji = customEmojiUuid ? customEmojiByUuid[customEmojiUuid] : undefined;
+
+    return (
+      <div
+        className={`relative max-w-[85%] select-none text-sm ${isImageOnly
+          ? `${isOwnMessage ? "ml-auto" : ""}`
+          : `rounded-2xl px-3 py-1 shadow-sm ${isOwnMessage
+            ? "ml-auto rounded-br-sm bg-accent-3 text-primary-background"
+            : "rounded-bl-sm bg-secondary-background text-foreground"
+          }`
+          } ${depth > 0 ? "ml-5 border-l border-accent-1/60" : ""}`}
+        style={depth > 0 ? { width: "calc(85% - 1.25rem)" } : undefined}
+      >
+        {!isImageOnly ? (
+          <>
+            <p className="text-xs opacity-60 [-webkit-touch-callout:none]">
+              {isOwnMessage ? "You" : message.username}
+            </p>
+            {customEmoji ? (
+              <canvas
+                width={CUSTOM_EMOJI_RENDER_SIZE}
+                height={CUSTOM_EMOJI_RENDER_SIZE}
+                ref={(el) => {
+                  if (!el) {
+                    return;
+                  }
+                  drawCustomEmojiCanvas(el, customEmoji.data_b64);
+                }}
+                className="h-8 w-8 [image-rendering:pixelated]"
+                title={customEmoji.name}
+              />
+            ) : (
+              <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
+            )}
+          </>
+        ) : null}
+        {isImageOnly ? (
+          <p className="mb-1 px-1 text-xs opacity-60 [-webkit-touch-callout:none]">
+            {isOwnMessage ? "You" : message.username}
+          </p>
+        ) : null}
+        {message.image_url ? (
+          <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
+            <button
+              type="button"
+              className="block w-full cursor-zoom-in rounded-xl border-0 bg-transparent p-0"
+              onClick={() => {
+                setImageViewer({
+                  signedUrl: message.image_url!,
+                  imageId: message.image_id,
+                  alt: "Thread message attachment",
+                });
+              }}
+            >
+              <CachedImage
+                signedUrl={message.image_url}
+                imageId={message.image_id}
+                alt="Thread message attachment"
+                className="max-h-[100vh] w-full rounded-xl object-cover"
+                loading="lazy"
+              />
+            </button>
+            {messageImageOverlay ? (
+              <div
+                className="pointer-events-none absolute left-0 right-0 -translate-y-1/2 bg-black/45 px-3 py-2 text-center text-sm font-semibold text-white"
+                style={{ top: `${messageImageOverlay.y_ratio * 100}%` }}
+              >
+                {messageImageOverlay.text}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderMessage = (message: ThreadMessage, depth: number) => {
     const isOwnMessage = message.created_by === currentUserId;
     const hasText = message.text.trim().length > 0;
@@ -1334,7 +1501,6 @@ export default function Thread({
     const emojiOnlyChildren = children.filter((childMessage) => isEmojiOnlyMessage(childMessage.text));
     const threadedChildren = children.filter((childMessage) => !isEmojiOnlyMessage(childMessage.text));
     const isRepliesSubtreeExpanded = !collapsedReplyIdSet.has(message.id);
-    const isActiveOptionsMessage = activeOptionsMessageId === message.id;
     const isReplyTargetMessage = replyTargetMessageId === message.id;
 
     return (
@@ -1343,15 +1509,21 @@ export default function Thread({
           onMouseDown={() => startLongPress(message.id)}
           onMouseUp={cancelPressTimer}
           onMouseLeave={cancelPressTimer}
+          onMouseMove={(event) => {
+            if (event.buttons === 1) {
+              cancelPressTimer();
+            }
+          }}
           onTouchStart={() => startLongPress(message.id)}
           onTouchEnd={cancelPressTimer}
           onTouchMove={cancelPressTimer}
           onTouchCancel={cancelPressTimer}
           onContextMenu={(event) => {
             event.preventDefault();
+            event.stopPropagation();
             setActiveOptionsMessageId(message.id);
           }}
-          className={`relative max-w-[85%] select-none text-sm ${isImageOnly
+          className={`relative max-w-[85%] touch-pan-y select-none [-webkit-touch-callout:none] text-sm ${isImageOnly
             ? `${isOwnMessage ? "ml-auto" : ""}`
             : `rounded-2xl px-3 py-1 shadow-sm ${isOwnMessage
               ? "ml-auto rounded-br-sm bg-accent-3 text-primary-background"
@@ -1401,8 +1573,9 @@ export default function Thread({
                     alt: "Thread message attachment",
                   });
                 }}
-                onPointerDown={(event) => event.stopPropagation()}
-                onTouchStart={(event) => event.stopPropagation()}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                }}
               >
                 <CachedImage
                   signedUrl={message.image_url}
@@ -1478,56 +1651,6 @@ export default function Thread({
           </div>
         ) : null}
 
-        {isActiveOptionsMessage ? (
-          <div
-            className="mt-1 ml-1 mr-2 rounded-xl border border-accent-1 bg-secondary-background p-2 text-xs text-foreground"
-            style={{ boxShadow: "0 0 10px 0 rgba(246, 243, 50, 0.88)" }}
-          >
-            <p className="mb-2 text-accent-2 p-2">Message options</p>
-            <div className="flex flex-wrap gap-2 w-full">
-              <button
-                type="button"
-                onClick={() => {
-                  setReplyTargetMessageId(message.id);
-                  setEditTargetMessageId(null);
-                  setActiveOptionsMessageId(null);
-                }}
-                className="flex-1 rounded-lg border border-accent-1 px-4 py-2 hover:text-foreground"
-              >
-                Reply
-              </button>
-              <EmojiPicker
-                onSelectEmoji={(emoji) => {
-                  void onSendEmojiReply(message.id, emoji);
-                }}
-                className="flex-1"
-                buttonClassName="h-full w-full rounded-lg border border-accent-1 px-4 py-2"
-              />
-              {isOwnMessage ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMessageDraft(message.text);
-                    setEditTargetMessageId(message.id);
-                    setReplyTargetMessageId(null);
-                    setActiveOptionsMessageId(null);
-                  }}
-                  className="flex-1 rounded-lg border border-accent-1 px-4 py-2 hover:text-foreground"
-                >
-                  Edit
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setActiveOptionsMessageId(null)}
-                className="flex-1 rounded-lg border border-accent-1 px-4 py-2 hover:text-foreground"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        ) : null}
-
         {isReplyTargetMessage ? (
           <div className="mt-1 ml-1 text-xs text-accent-2">
             Replying to this message
@@ -1544,7 +1667,6 @@ export default function Thread({
     );
   };
 
-  const isOwner = selectedThread.owner_user_id === currentUserId;
   const isComposerExpanded =
     isComposerFocused || Boolean(editTargetMessageId) || messageDraft.trim().length > 0;
   const messagesRevealOffsetPx = Math.round(timestampRevealPercent * TIMESTAMP_REVEAL_MAX_PX);
@@ -1587,6 +1709,85 @@ export default function Thread({
     );
   }
 
+  const messageComposerForm = (
+    <form onSubmit={onSendMessage} className="mx-2 mb-2 mt-1 flex items-end gap-2">
+      <textarea
+        ref={composerTextareaRef}
+        rows={1}
+        className={`min-h-10 resize-none overflow-hidden rounded-2xl border border-accent-1 bg-secondary-background px-4 py-2 text-sm leading-normal text-foreground break-words outline-none focus:border-accent-2 transition-[border-color] duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
+          }`}
+        placeholder="Type a message..."
+        value={messageDraft}
+        onChange={(event) => setMessageDraft(event.target.value)}
+        onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
+          if (event.key !== "Enter" || (!event.metaKey && !event.ctrlKey)) {
+            return;
+          }
+          event.preventDefault();
+          const form = event.currentTarget.form;
+          if (!form || isSendingMessage || !messageDraft.trim()) {
+            return;
+          }
+          form.requestSubmit();
+        }}
+        onFocus={() => setIsComposerFocused(true)}
+        onBlur={() => {
+          if (!messageDraft.trim() && !editTargetMessageId) {
+            setIsComposerFocused(false);
+          }
+        }}
+      />
+
+      {!isComposerExpanded ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              openCameraModal();
+            }}
+            disabled={Boolean(editTargetMessageId)}
+            className="flex-1 rounded-full border border-accent-1 px-3 py-3 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
+            aria-label="Take photo"
+          >
+            <Camera className="mx-auto h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsGamesModalOpen(true)}
+            disabled={Boolean(editTargetMessageId)}
+            className="flex shrink-0 items-center justify-center rounded-full border border-accent-1 px-3 py-3 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
+            aria-label="Games"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </>
+      ) : (
+        <button
+          type="submit"
+          disabled={isSendingMessage || !messageDraft.trim()}
+          className="rounded-full bg-accent-3 px-4 py-3 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+        >
+          {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}
+        </button>
+      )}
+    </form>
+  );
+
+  const activeOptionsTargetDepth = (() => {
+    if (!activeOptionsMessage) {
+      return 0;
+    }
+    let depth = 0;
+    let cursor: ThreadMessage | undefined = activeOptionsMessage;
+    let safety = 0;
+    while (cursor?.parent_id && cursor.parent_id !== selectedThread.id && safety < 100) {
+      depth += 1;
+      const parentId = cursor.parent_id;
+      cursor = messageById.get(parentId);
+      safety += 1;
+    }
+    return depth;
+  })();
 
   // if (isSettingsOpen) {
   //   return (
@@ -1618,7 +1819,7 @@ export default function Thread({
       className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background"
     >
       <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
-        <BackButton onBack={onBack} backLabel="Groups" textOnly />
+        <BackButton onBack={onBack} backLabel="" textOnly />
         <div
           className="min-w-0 text-center flex items-center gap-2"
           onClick={setThreadSettingsOpen}
@@ -1744,7 +1945,7 @@ export default function Thread({
         </div>
       ) : null}
 
-      {editTargetMessageId ? (
+      {editTargetMessageId && !activeOptionsMessageId ? (
         <div className="mx-2 mb-1 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs text-accent-2">
           Editing message
           <button
@@ -1812,71 +2013,124 @@ export default function Thread({
         )
         : null}
 
-      <form onSubmit={onSendMessage} className="mx-2 mb-2 mt-1 flex items-end gap-2">
-        {/** Main message input */}
-        <textarea
-          ref={composerTextareaRef}
-          rows={1}
-          className={`min-h-10 resize-none overflow-hidden rounded-2xl border border-accent-1 bg-secondary-background px-4 py-2 text-sm leading-normal text-foreground break-words outline-none focus:border-accent-2 transition-[border-color] duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
-            }`}
-          placeholder="Type a message..."
-          value={messageDraft}
-          onChange={(event) => setMessageDraft(event.target.value)}
-          onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
-            if (event.key !== "Enter" || (!event.metaKey && !event.ctrlKey)) {
-              return;
-            }
-            event.preventDefault();
-            const form = event.currentTarget.form;
-            if (!form || isSendingMessage || !messageDraft.trim()) {
-              return;
-            }
-            form.requestSubmit();
-          }}
-          onFocus={() => setIsComposerFocused(true)}
-          onBlur={() => {
-            if (!messageDraft.trim() && !editTargetMessageId) {
-              setIsComposerFocused(false);
-            }
-          }}
-        />
+      {activeOptionsMessage && activeOptionsMessageId
+        ? createPortal(
+          <div
+            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 flex flex-col`}
+            style={{ zIndex: MESSAGE_OPTIONS_OVERLAY_Z }}
+            onClick={onMessageOptionsOverlayRootClick}
+          >
+            <div className="absolute inset-0 bg-black/35 backdrop-blur-md" aria-hidden />
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col pointer-events-none">
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Message options"
+                className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden"
+              >
+                {/** Upper half: emoji, held message, and actions — separate cards with gaps so blur shows through. */}
+                <div className="flex max-h-[min(52vh,100%)] min-h-0 w-full flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden px-4 py-4">
+                  <div className="flex w-full max-w-lg flex-col gap-0">
+                    {/** Emojis row */}
+                    <div className="w-full max-w-lg overflow-x-auto overflow-y-hidden [scrollbar-width:thin]">
+                      <div className="mx-auto flex w-max flex-nowrap items-center justify-center gap-2 py-0.5">
+                        {MESSAGE_OPTIONS_QUICK_EMOJIS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            className="flex h-7 w-7 shrink-0 items-center justify-center text-xl bg-transparent border-none"
+                            aria-label={`React with ${emoji}`}
+                            onClick={() => { onSendEmojiReply(activeOptionsMessage.id, emoji); }}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                        <EmojiPicker
+                          onSelectEmoji={(emoji) => {
+                            void onSendEmojiReply(activeOptionsMessage.id, emoji);
+                          }}
+                          className="shrink-0"
+                          buttonClassName="flex h-11 w-11 shrink-0 items-center justify-center bg-transparent border-none"
+                          buttonSmileIconClassName="h-5 w-5"
+                        />
+                      </div>
+                    </div>
 
-        {/** Camera button & Plus Games button */}
-        {!isComposerExpanded ? (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                openCameraModal();
-              }}
-              disabled={Boolean(editTargetMessageId)}
-              className="flex-1 rounded-full border border-accent-1 px-3 py-3 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
-              aria-label="Take photo"
-            >
-              <Camera className="mx-auto h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsGamesModalOpen(true)}
-              disabled={Boolean(editTargetMessageId)}
-              className="flex shrink-0 items-center justify-center rounded-full border border-accent-1 px-3 py-3 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
-              aria-label="Games"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="submit"
-              disabled={isSendingMessage || !messageDraft.trim()}
-              className="rounded-full bg-accent-3 px-4 py-3 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
-            >
-              {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}
-            </button>
-          </>
-        )}
-      </form>
+                    {/** Held message bubble */}
+                    <div className="rounded-2xl border border-accent-1 bg-secondary-background px-3 py-3 shadow-lg">
+                      <div
+                        className={`flex w-full ${activeOptionsMessage.created_by === currentUserId ? "justify-end" : "justify-start"}`}
+                      >
+                        {renderOptionsTargetBubble(activeOptionsMessage, activeOptionsTargetDepth)}
+                      </div>
+                    </div>
+
+                    {/** Actions row */}
+                    <div className="flex flex-col gap-1 mt-4 rounded-2xl border border-accent-1 bg-secondary-background px-2 py-2 shadow-lg">
+                      <button
+                        type="button"
+                        className="w-full border-b border-accent-1 px-4 py-1 text-left text-sm font-medium text-foreground"
+                        onClick={() => {
+                          setReplyTargetMessageId(activeOptionsMessage.id);
+                          setEditTargetMessageId(null);
+                          closeMessageOptionsOverlay();
+                          requestAnimationFrame(() => { composerTextareaRef.current?.focus(); });
+                        }}
+                      >
+                        Reply
+                      </button>
+                      {activeOptionsMessage.created_by === currentUserId ? (
+                        <button
+                          type="button"
+                          className="w-full border-b border-accent-1 px-4 py-1 text-left text-sm font-medium text-foreground"
+                          onClick={() => {
+                            setMessageDraft(activeOptionsMessage.text);
+                            setEditTargetMessageId(activeOptionsMessage.id);
+                            setReplyTargetMessageId(null);
+                            closeMessageOptionsOverlay();
+                            requestAnimationFrame(() => { composerTextareaRef.current?.focus();});
+                          }}
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="w-full border-none border-accent-1 px-4 py-1 text-left text-sm font-medium text-foreground"
+                        onClick={() => { copyActiveOptionsMessage(activeOptionsMessage); }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="pointer-events-auto mt-auto shrink-0 border-t border-accent-1 bg-primary-background pt-1">
+                  {editTargetMessageId ? (
+                    <div className="mx-2 mb-1 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs text-accent-2">
+                      Editing message
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditTargetMessageId(null);
+                          setMessageDraft("");
+                          setIsComposerFocused(false);
+                        }}
+                        className="ml-2 p-2 underline underline-offset-2 hover:text-foreground"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : null}
+                  {messageComposerForm}
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+        : null}
+
+      {!activeOptionsMessageId ? messageComposerForm : null}
 
       {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
     </div>

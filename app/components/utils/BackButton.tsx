@@ -1,3 +1,5 @@
+import { ArrowLeft } from "lucide-react";
+
 export default function BackButton({
     onBack,
     backLabel,
@@ -17,7 +19,7 @@ export default function BackButton({
           onClick={onBack}
           className={buttonClassName}
         >
-          {"<"} {backLabel}
+          <ArrowLeft className="h-4 w-4" /> {backLabel}
         </button>
     );
 }
