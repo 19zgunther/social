@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
 import type { ImageOverlayData } from "@/app/types/interfaces";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
@@ -297,7 +298,7 @@ export default function ImageViewerModal({
 
   const content = (
     <div
-      className="fixed inset-0 z-[2200] touch-none"
+      className={`fixed inset-0 z-[2200] touch-none ${DONT_SWIPE_TABS_CLASSNAME}`}
       role="dialog"
       aria-modal="true"
       aria-label="Image viewer"

@@ -179,9 +179,11 @@ const pixelsEqual = (a: Uint16Array, b: Uint16Array): boolean => {
 
 type EmojiEditorTabProps = {
   isActive: boolean;
+  /** Called after a successful save so hosts can refresh cached emoji lists. */
+  onSaved?: () => void;
 };
 
-export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
+export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProps) {
   const MAX_HISTORY_STEPS = 100;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -505,6 +507,7 @@ export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
         return [saved, ...remaining];
       });
       setStatusMessage("Emoji saved.");
+      onSaved?.();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to save emoji.");
     } finally {
@@ -512,11 +515,15 @@ export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
     }
   };
 
+  const sectionClass = `border-b border-accent-1 px-3 py-3 ${DONT_SWIPE_TABS_CLASSNAME}`;
+  const canvasClass = "mx-1 aspect-square w-[90vw] touch-none rounded border border-accent-1 [image-rendering:pixelated]";
+  const thumbBoxClass = "mb-1 h-[20vw] w-[20vw] overflow-hidden rounded";
+
   return (
-    <section className={`border-b border-accent-1 px-3 py-3 ${DONT_SWIPE_TABS_CLASSNAME}`}>
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <section className={sectionClass}>
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-semibold text-foreground">Emoji Editor</p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={onNewEmoji}
@@ -646,7 +653,7 @@ export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
-          className="mx-1 aspect-square w-[90vw] touch-none rounded border border-accent-1 [image-rendering:pixelated]"
+          className={canvasClass}
         />
       </div>
 
@@ -671,7 +678,7 @@ export default function EmojiEditorTab({ isActive }: EmojiEditorTabProps) {
             onClick={() => onSelectEmoji(emoji)}
             className={`rounded-lg p-2 text-left ${selectedEmojiUuid === emoji.uuid ? "border border-accent-3" : "border-accent-1"}`}
           >
-            <div className="mb-1 h-[20vw] w-[20vw] overflow-hidden rounded">
+            <div className={thumbBoxClass}>
               <canvas
                 width={GRID_SIZE}
                 height={GRID_SIZE}
