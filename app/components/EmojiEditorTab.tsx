@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadAllCustomEmojis, putEmojiInCache } from "@/app/lib/customEmojiCache";
 import { ApiError, EmojiItem, EmojiSaveResponse } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
-import { Redo, Redo2, Undo, Undo2 } from "lucide-react";
+import { Brush, Eraser, Hand, Redo2, RotateCcw, Undo2 } from "lucide-react";
 
 const GRID_SIZE = 64;
 const PIXEL_COUNT = GRID_SIZE * GRID_SIZE;
@@ -13,6 +13,11 @@ const TRANSPARENT_FLAG = 1 << 9;
 const EXPLICIT_BLACK_FLAG = 1 << 10;
 const RGB_MASK = 0b1_1111_1111;
 const TRANSPARENT_PIXEL = TRANSPARENT_FLAG;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 16;
+
+type EditorTool = "draw" | "move" | "erase";
+type ViewportPan = { x: number; y: number };
 
 const readErrorMessage = async (response: Response): Promise<string> => {
   try {
@@ -66,26 +71,55 @@ const quantizeRgbFloatTo3Bit = (r: number, g: number, b: number) => ({
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 
-const spectrumPositionToRgb3 = (position: number) => {
+/** Full-chroma RGB in 0–1 space (same path as the hue slider, before shade toward black). */
+const spectrumPositionToRgbFloat = (position: number): { r: number; g: number; b: number } => {
   const p = Math.max(0, Math.min(1023, position));
 
   // Segment 1: black -> red
   if (p < 128) {
     const t = p / 127;
-    return quantizeRgbFloatTo3Bit(t, 0, 0);
+    return { r: t, g: 0, b: 0 };
   }
 
-  // Segment 2: red -> orange -> ... -> pink -> red (full hue wheel)
+  // Segment 2: full hue wheel at S=1, V=1
   if (p < 896) {
     const t = (p - 128) / 767;
     const hue = t * 360;
-    const rgb = hsvToRgb(hue, 1, 1);
-    return quantizeRgbFloatTo3Bit(rgb.r, rgb.g, rgb.b);
+    return hsvToRgb(hue, 1, 1);
   }
 
   // Segment 3: red -> white
   const t = (p - 896) / 127;
-  return quantizeRgbFloatTo3Bit(1, t, t);
+  return { r: 1, g: t, b: t };
+};
+
+const BRIGHTNESS_MAX = 1023;
+
+/** Fade selected hue toward black; then quantize to 3-bit channels (enables browns and other dark tones). */
+const rgb3FromSpectrumAndBrightness = (position: number, brightnessValue: number) => {
+  const base = spectrumPositionToRgbFloat(position);
+  const factor = clamp01(brightnessValue / BRIGHTNESS_MAX);
+  return quantizeRgbFloatTo3Bit(base.r * factor, base.g * factor, base.b * factor);
+};
+
+/** Pick spectrum + brightness so preset swatches stay consistent with the two sliders. */
+const bestSpectrumAndBrightnessForRgb3 = (rr: number, gg: number, bb: number): { position: number; brightness: number } => {
+  const mx = Math.max(rr, gg, bb);
+  if (mx === 0) {
+    return { position: 0, brightness: 0 };
+  }
+  const brightness = Math.round((mx / 7) * BRIGHTNESS_MAX);
+  let bestP = 0;
+  let bestScore = Infinity;
+  for (let p = 0; p <= BRIGHTNESS_MAX; p += 1) {
+    const { r: pr, g: pg, b: pb } = rgb3FromSpectrumAndBrightness(p, brightness);
+    const score = (pr - rr) ** 2 + (pg - gg) ** 2 + (pb - bb) ** 2;
+    if (score < bestScore) {
+      bestScore = score;
+      bestP = p;
+    }
+  }
+  return { position: bestP, brightness };
 };
 
 const decodeDataB64 = (dataB64: string): Uint16Array => {
@@ -156,10 +190,17 @@ const drawPixelsToCanvas = (canvas: HTMLCanvasElement, pixels: Uint16Array) => {
   ctx.putImageData(imageData, 0, 0);
 };
 
-const getPixelPosition = (event: PointerEvent | React.PointerEvent, canvas: HTMLCanvasElement) => {
+const getPixelPosition = (
+  event: PointerEvent | React.PointerEvent,
+  canvas: HTMLCanvasElement,
+  pan: ViewportPan,
+  zoom: number,
+) => {
   const rect = canvas.getBoundingClientRect();
-  const xRatio = (event.clientX - rect.left) / rect.width;
-  const yRatio = (event.clientY - rect.top) / rect.height;
+  const adjustedX = (event.clientX - rect.left - pan.x) / zoom;
+  const adjustedY = (event.clientY - rect.top - pan.y) / zoom;
+  const xRatio = adjustedX / rect.width;
+  const yRatio = adjustedY / rect.height;
   const x = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(xRatio * GRID_SIZE)));
   const y = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(yRatio * GRID_SIZE)));
   return { x, y };
@@ -186,19 +227,42 @@ type EmojiEditorTabProps = {
 export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProps) {
   const MAX_HISTORY_STEPS = 100;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const strokeStartPixelsRef = useRef<Uint16Array | null>(null);
+  const panStartClientRef = useRef<{ x: number; y: number } | null>(null);
   const latestPixelsRef = useRef<Uint16Array>(new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
   const [pixels, setPixels] = useState<Uint16Array>(() => new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
   const [emojiName, setEmojiName] = useState("Untitled");
   const [selectedEmojiUuid, setSelectedEmojiUuid] = useState<string | null>(null);
   const [thickness, setThickness] = useState(2);
-  const [r, setR] = useState(7);
-  const [g, setG] = useState(7);
-  const [b, setB] = useState(7);
+  const [spectrumPosition, setSpectrumPosition] = useState(1023);
+  /** 0 = black, BRIGHTNESS_MAX = full strength of the current hue slider position. */
+  const [brightness, setBrightness] = useState(BRIGHTNESS_MAX);
+  const { r, g, b } = useMemo(
+    () => rgb3FromSpectrumAndBrightness(spectrumPosition, brightness),
+    [spectrumPosition, brightness],
+  );
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
   const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null);
-  const [spectrumPosition, setSpectrumPosition] = useState(512);
+  const [activeTool, setActiveTool] = useState<EditorTool>("draw");
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState<ViewportPan>({ x: 0, y: 0 });
+  const clampPan = useCallback((candidate: ViewportPan, currentZoom: number): ViewportPan => {
+    const viewport = canvasViewportRef.current;
+    if (!viewport || currentZoom <= 1) {
+      return { x: 0, y: 0 };
+    }
+    const { width, height } = viewport.getBoundingClientRect();
+    const minX = width - width * currentZoom;
+    const minY = height - height * currentZoom;
+    return {
+      x: Math.min(0, Math.max(minX, candidate.x)),
+      y: Math.min(0, Math.max(minY, candidate.y)),
+    };
+  }, []);
+
   const [emojis, setEmojis] = useState<EmojiItem[]>([]);
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -211,12 +275,10 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     return rgb === 0 ? rgb | EXPLICIT_BLACK_FLAG : rgb;
   }, [r, g, b]);
 
-  const setRgbFromSpectrumPosition = useCallback((position: number) => {
-    const { r: nextR, g: nextG, b: nextB } = spectrumPositionToRgb3(position);
-    setR(nextR);
-    setG(nextG);
-    setB(nextB);
-  }, []);
+  const shadeSliderTrackEndColor = useMemo(() => {
+    const base = spectrumPositionToRgbFloat(spectrumPosition);
+    return `rgb(${Math.round(base.r * 255)}, ${Math.round(base.g * 255)}, ${Math.round(base.b * 255)})`;
+  }, [spectrumPosition]);
 
   useEffect(() => {
     latestPixelsRef.current = pixels;
@@ -263,7 +325,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   }, []);
 
   const drawLine = useCallback(
-    (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    (from: { x: number; y: number }, to: { x: number; y: number }, packed: number) => {
       setPixels((previous) => {
         const draft = previous.slice();
         const dx = to.x - from.x;
@@ -273,32 +335,59 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
         for (let i = 0; i <= steps; i += 1) {
           const x = Math.round(from.x + (dx * i) / steps);
           const y = Math.round(from.y + (dy * i) / steps);
-          stampCircle(draft, x, y, radius, currentColorPacked);
+          stampCircle(draft, x, y, radius, packed);
         }
         return draft;
       });
     },
-    [currentColorPacked, stampCircle, thickness],
+    [stampCircle, thickness],
   );
+
+  const resetViewport = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
 
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) {
       return;
     }
+    if (activeTool === "move") {
+      panStartClientRef.current = { x: event.clientX, y: event.clientY };
+      setIsPanning(true);
+      canvasRef.current.setPointerCapture(event.pointerId);
+      return;
+    }
     strokeStartPixelsRef.current = latestPixelsRef.current.slice();
-    const point = getPixelPosition(event, canvasRef.current);
+    const point = getPixelPosition(event, canvasRef.current, pan, zoom);
+    const packed = activeTool === "erase" ? TRANSPARENT_PIXEL : currentColorPacked;
     setIsDrawing(true);
     setLastPoint(point);
-    drawLine(point, point);
+    drawLine(point, point, packed);
     canvasRef.current.setPointerCapture(event.pointerId);
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !lastPoint || !canvasRef.current) {
+    if (!canvasRef.current) {
       return;
     }
-    const point = getPixelPosition(event, canvasRef.current);
-    drawLine(lastPoint, point);
+    if (isPanning && activeTool === "move") {
+      const start = panStartClientRef.current;
+      if (!start) {
+        return;
+      }
+      const deltaX = event.clientX - start.x;
+      const deltaY = event.clientY - start.y;
+      panStartClientRef.current = { x: event.clientX, y: event.clientY };
+      setPan((previous) => clampPan({ x: previous.x + deltaX, y: previous.y + deltaY }, zoom));
+      return;
+    }
+    if (!isDrawing || !lastPoint) {
+      return;
+    }
+    const point = getPixelPosition(event, canvasRef.current, pan, zoom);
+    const packed = activeTool === "erase" ? TRANSPARENT_PIXEL : currentColorPacked;
+    drawLine(lastPoint, point, packed);
     setLastPoint(point);
   };
 
@@ -308,7 +397,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     }
     const strokeStartPixels = strokeStartPixelsRef.current;
     const strokeEndPixels = latestPixelsRef.current;
-    if (strokeStartPixels && !pixelsEqual(strokeStartPixels, strokeEndPixels)) {
+    if (activeTool !== "move" && strokeStartPixels && !pixelsEqual(strokeStartPixels, strokeEndPixels)) {
       setUndoStack((previous) => {
         const next = [...previous, strokeStartPixels];
         return next.length > MAX_HISTORY_STEPS ? next.slice(next.length - MAX_HISTORY_STEPS) : next;
@@ -316,8 +405,36 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
       setRedoStack([]);
     }
     strokeStartPixelsRef.current = null;
+    panStartClientRef.current = null;
     setIsDrawing(false);
+    setIsPanning(false);
     setLastPoint(null);
+  };
+
+  const onCanvasWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current || activeTool !== "move") {
+      return;
+    }
+    event.preventDefault();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const localX = event.clientX - rect.left;
+    const localY = event.clientY - rect.top;
+    const zoomFactor = Math.exp(-event.deltaY * 0.0015);
+    const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * zoomFactor));
+    if (Math.abs(nextZoom - zoom) < 0.0001) {
+      return;
+    }
+    const worldX = (localX - pan.x) / zoom;
+    const worldY = (localY - pan.y) / zoom;
+    const nextPan = clampPan(
+      {
+        x: localX - worldX * nextZoom,
+        y: localY - worldY * nextZoom,
+      },
+      nextZoom,
+    );
+    setZoom(nextZoom);
+    setPan(nextPan);
   };
 
   const onUndo = useCallback(() => {
@@ -355,6 +472,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     setPixels(decodeDataB64(emoji.data_b64));
     setUndoStack([]);
     setRedoStack([]);
+    resetViewport();
     setStatusMessage(`Loaded "${emoji.name || "Untitled"}".`);
   };
 
@@ -364,6 +482,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     setPixels(new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
     setUndoStack([]);
     setRedoStack([]);
+    resetViewport();
     setStatusMessage("Started a new emoji.");
   };
 
@@ -468,6 +587,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
       });
       setRedoStack([]);
       setPixels(importedPixels);
+      resetViewport();
       if (!selectedEmojiUuid) {
         const inferredName = file.name.replace(/\.[^/.]+$/, "").trim();
         if (inferredName) {
@@ -516,8 +636,17 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   };
 
   const sectionClass = `border-b border-accent-1 px-3 py-3 ${DONT_SWIPE_TABS_CLASSNAME}`;
-  const canvasClass = "mx-1 aspect-square w-[90vw] touch-none rounded border border-accent-1 [image-rendering:pixelated]";
+  const canvasClass = "h-full w-full touch-none rounded border border-accent-1 [image-rendering:pixelated]";
   const thumbBoxClass = "mb-1 h-[20vw] w-[20vw] overflow-hidden rounded";
+
+  useEffect(() => {
+    // Avoid leaving transient drag state active when switching tools.
+    setIsDrawing(false);
+    setIsPanning(false);
+    setLastPoint(null);
+    panStartClientRef.current = null;
+    strokeStartPixelsRef.current = null;
+  }, [activeTool]);
 
   return (
     <section className={sectionClass}>
@@ -584,21 +713,10 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
         >
           <Redo2 />
         </button>
-        <div className="px-2 py-0 ml-8">
-          <p className="mb-1 text-xs text-accent-2">Brush thickness ({thickness}px)</p>
-          <input
-            type="range"
-            min={1}
-            max={8}
-            step={1}
-            value={thickness}
-            onChange={(event) => setThickness(Number(event.target.value))}
-            className="w-full"
-          />
-        </div>
       </div>
 
       <div className="mb-3 rounded-lg border border-accent-1 p-2" style={{ borderColor: rgb3ToHex(r, g, b), borderWidth: "3px" }}>
+        <label className="mb-1 block text-xs text-accent-2" htmlFor="emoji-color-slider">Hue</label>
         <input
           id="emoji-color-slider"
           type="range"
@@ -607,9 +725,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
           step={1}
           value={spectrumPosition}
           onChange={(event) => {
-            const position = Number(event.target.value);
-            setSpectrumPosition(position);
-            setRgbFromSpectrumPosition(position);
+            setSpectrumPosition(Number(event.target.value));
           }}
           className="w-full"
           style={{
@@ -619,8 +735,8 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
         />
         <div className="mt-2 grid grid-cols-12 gap-1">
           {[
-            "#000000", "#ff0000", "#ff7a00", "#ffff00", "#00ff00", "#66ffff",
-            "#0066ff", "#6b00ff", "#a300ff", "#ff4da6", "#ff0000", "#ffffff",
+            "#000000", "#ff0000", "#ff7a00", "#8b4513", "#ffff00", "#00ff00", "#66ffff",
+            "#0066ff", "#6b00ff", "#a300ff", "#ff4da6", "#ffffff",
           ].map((hex, index) => {
             const rr = Math.round((parseInt(hex.slice(1, 3), 16) / 255) * 7);
             const gg = Math.round((parseInt(hex.slice(3, 5), 16) / 255) * 7);
@@ -631,9 +747,9 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                 key={`${hex}-${index}`}
                 type="button"
                 onClick={() => {
-                  setR(rr);
-                  setG(gg);
-                  setB(bb);
+                  const { position, brightness: nextBrightness } = bestSpectrumAndBrightnessForRgb3(rr, gg, bb);
+                  setSpectrumPosition(position);
+                  setBrightness(nextBrightness);
                 }}
                 className={`aspect-square rounded border border-accent-1 ${selected ? "ring-2 ring-accent-3" : ""}`}
                 style={{ backgroundColor: hex }}
@@ -642,19 +758,105 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
             );
           })}
         </div>
+        
+        <div className="mt-1 flex gap-1">
+          <div className="mt-1 flex-1">
+            <label className="block text-xs text-accent-2" htmlFor="emoji-shade-slider">
+              Shade
+            </label>
+            <input
+              id="emoji-shade-slider"
+              type="range"
+              min={0}
+              max={BRIGHTNESS_MAX}
+              step={1}
+              value={brightness}
+              onChange={(event) => {
+                setBrightness(Number(event.target.value));
+              }}
+              className="w-full"
+              style={{
+                background: `linear-gradient(90deg, #000000 0%, ${shadeSliderTrackEndColor} 100%)`,
+              }}
+            />
+          </div>
+          <div className="mt-1 flex-1">
+            <label className="block text-xs text-accent-2" htmlFor="emoji-shade-slider">
+              Thickness
+            </label>
+            <input
+              type="range"
+              min={1}
+              max={8}
+              step={1}
+              value={thickness}
+              onChange={(event) => setThickness(Number(event.target.value))}
+              className="w-full"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="mb-3 flex justify-center rounded-lg border border-accent-1 p-2">
-        <canvas
-          ref={canvasRef}
-          width={GRID_SIZE}
-          height={GRID_SIZE}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          className={canvasClass}
-        />
+        <div className="w-[90vw]">
+          <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-accent-2">
+            <div className="flex items-center gap-1 rounded-lg border border-accent-1 bg-secondary-background">
+              {[
+                { id: "draw" as const, label: "Draw", icon: Brush },
+                { id: "move" as const, label: "Move", icon: Hand },
+                { id: "erase" as const, label: "Erase", icon: Eraser },
+              ].map((tool) => {
+                const Icon = tool.icon;
+                const selected = activeTool === tool.id;
+                return (
+                  <button
+                    key={tool.id}
+                    type="button"
+                    onClick={() => setActiveTool(tool.id)}
+                    className={`flex items-center gap-1 rounded-md px-1 py-1 text-xs ${
+                      selected ? "bg-accent-3 text-primary-background" : "text-accent-2 hover:text-foreground"
+                    }`}
+                    title={tool.label}
+                  >
+                    <Icon size={14} />
+                    <span>{tool.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <span>Z: {zoom.toFixed(2)}x</span>
+              <div className="rounded-lg border border-accent-1 bg-secondary-background">
+                <button
+                  type="button"
+                  onClick={resetViewport}
+                  className="flex items-center gap-1 rounded-md px-1 py-1 text-xs text-accent-2 hover:text-foreground"
+                  title="Reset view"
+                >
+                  <span>Reset View</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div ref={canvasViewportRef} className="relative aspect-square overflow-hidden rounded">
+            <canvas
+              ref={canvasRef}
+              width={GRID_SIZE}
+              height={GRID_SIZE}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onWheel={onCanvasWheel}
+              style={{
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                transformOrigin: "top left",
+                cursor: activeTool === "move" ? (isPanning ? "grabbing" : "grab") : "crosshair",
+              }}
+              className={canvasClass}
+            />
+          </div>
+        </div>
       </div>
 
       <button
