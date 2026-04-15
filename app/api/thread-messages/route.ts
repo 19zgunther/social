@@ -42,6 +42,7 @@ export async function POST(request: Request) {
         owner: true,
         image_id: true,
         created_by_event: true,
+        is_direct: true,
       },
     });
 
@@ -199,6 +200,7 @@ export async function POST(request: Request) {
         image_access_grant: threadImageAccessGrant,
         event_background_image_id: eventBackgroundImageId,
         event_background_image_access_grant: eventBackgroundImageAccessGrant,
+        is_direct: thread.is_direct === true,
       },
       viewer_user_id: authResult.user_id,
       has_more_older: hasMoreOlder,

@@ -400,6 +400,7 @@ export default function Thread({
             image_access_grant: cached.thread.image_access_grant ?? null,
             event_background_image_id: cached.thread.event_background_image_id ?? null,
             event_background_image_access_grant: cached.thread.event_background_image_access_grant ?? null,
+            is_direct: cached.thread.is_direct ?? previousThread?.is_direct,
           }));
           setMessages(cached.messages);
           setHasMoreOlderMessages(cached.has_more_older);
@@ -427,6 +428,7 @@ export default function Thread({
               image_access_grant: payload.thread.image_access_grant ?? null,
               event_background_image_id: payload.thread.event_background_image_id ?? null,
               event_background_image_access_grant: payload.thread.event_background_image_access_grant ?? null,
+              is_direct: payload.thread.is_direct ?? previousThread?.is_direct,
             }));
             setMessages(payload.messages);
             setHasMoreOlderMessages(payload.has_more_older);
@@ -702,6 +704,7 @@ export default function Thread({
         image_access_grant: latestPayload.thread.image_access_grant ?? null,
         event_background_image_id: latestPayload.thread.event_background_image_id ?? null,
         event_background_image_access_grant: latestPayload.thread.event_background_image_access_grant ?? null,
+        is_direct: latestPayload.thread.is_direct ?? previousThread?.is_direct,
       }));
 
       const previousSnapshot = messagesRef.current;
@@ -1734,7 +1737,9 @@ export default function Thread({
               <Image className="h-10 w-10 text-accent-2" />
             </div>
           )}
-          <p className="truncate text-sm font-semibold text-foreground">{selectedThread.name}</p>
+          <p className="truncate text-sm font-semibold text-foreground">
+            {selectedThread.name}
+          </p>
         </div>
         <button
           type="button"

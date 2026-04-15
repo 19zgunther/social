@@ -42,12 +42,25 @@ export async function POST(request: Request) {
       select: {
         id: true,
         owner: true,
+        is_direct: true,
       },
     });
 
     if (!thread) {
       return NextResponse.json(
         { error: { code: "forbidden", message: "You must be a member of the thread to add users." } },
+        { status: 403 },
+      );
+    }
+
+    if (thread.is_direct === true) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "direct_thread_readonly",
+            message: "Direct message threads cannot add more participants.",
+          },
+        },
         { status: 403 },
       );
     }

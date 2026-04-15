@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       },
       select: {
         id: true,
+        is_direct: true,
       },
     });
 
@@ -53,6 +54,18 @@ export async function POST(request: Request) {
           },
         },
         { status: 404 },
+      );
+    }
+
+    if (thread.is_direct === true) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "direct_thread_readonly",
+            message: "Direct conversations use the other person's name and cannot be renamed.",
+          },
+        },
+        { status: 403 },
       );
     }
 

@@ -107,6 +107,7 @@ model threads {
   name                                                  String
   image_id                                              String?                    @db.Uuid
   created_by_event                                      String?                    @db.Uuid
+  is_direct                                             Boolean?
   thread_events_thread_events_thread_idTothreads        thread_events[]            @relation("thread_events_thread_idTothreads")
   thread_events_threads_created_by_eventTothread_events thread_events?             @relation("threads_created_by_eventTothread_events", fields: [created_by_event], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users                                                 users                      @relation(fields: [owner], references: [id], onDelete: NoAction, onUpdate: NoAction)

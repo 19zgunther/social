@@ -72,6 +72,7 @@ export default function ThreadSettings({
   const [sendingFriendUserId, setSendingFriendUserId] = useState<string | null>(null);
 
   const isOwner = currentUserId === thread.owner_user_id;
+  const isDirect = thread.is_direct === true;
 
   const loadMembers = useCallback(async () => {
     setIsLoadingMembers(true);
@@ -114,6 +115,7 @@ export default function ThreadSettings({
   useEffect(() => {
     setConfirmDeleteThread(false);
     setConfirmedRemoveMember(null);
+    setIsEditingName(false);
   }, [thread.id]);
 
   useEffect(() => {
@@ -339,7 +341,9 @@ export default function ThreadSettings({
               )}
             </button>
             <div className="min-w-0 flex-1 space-y-1">
-              {isEditingName ? (
+              {isDirect ? (
+                <p className="min-w-0 truncate text-sm font-semibold text-foreground">{localName}</p>
+              ) : isEditingName ? (
                 <form
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -407,44 +411,46 @@ export default function ThreadSettings({
 
         <section className="rounded-xl border border-accent-1 bg-secondary-background p-3">
           <div className="space-y-3">
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void onAddMember();
-              }}
-              className="flex items-center gap-2"
-            >
-              <div className="flex-1">
-                <UserSearch
-                  value={memberIdentifier}
-                  onValueChange={(value) => {
-                    setMemberIdentifier(value);
-                    if (memberFormError) {
-                      setMemberFormError("");
-                    }
-                  }}
-                  onSelect={(option) => {
-                    setMemberIdentifier(option.username);
-                    if (memberFormError) {
-                      setMemberFormError("");
-                    }
-                  }}
-                  searchUsers={searchThreadMemberOptions}
-                  placeholder="Username or email"
-                  inputClassName="w-full rounded-xl border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-                />
-                {memberFormError ? (
-                  <p className="mt-1 text-xs text-accent-2">{memberFormError}</p>
-                ) : null}
-              </div>
-              <button
-                type="submit"
-                disabled={isUpdatingMembers}
-                className="rounded-xl bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+            {!isDirect ? (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void onAddMember();
+                }}
+                className="flex items-center gap-2"
               >
-                Add
-              </button>
-            </form>
+                <div className="flex-1">
+                  <UserSearch
+                    value={memberIdentifier}
+                    onValueChange={(value) => {
+                      setMemberIdentifier(value);
+                      if (memberFormError) {
+                        setMemberFormError("");
+                      }
+                    }}
+                    onSelect={(option) => {
+                      setMemberIdentifier(option.username);
+                      if (memberFormError) {
+                        setMemberFormError("");
+                      }
+                    }}
+                    searchUsers={searchThreadMemberOptions}
+                    placeholder="Username or email"
+                    inputClassName="w-full rounded-xl border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+                  />
+                  {memberFormError ? (
+                    <p className="mt-1 text-xs text-accent-2">{memberFormError}</p>
+                  ) : null}
+                </div>
+                <button
+                  type="submit"
+                  disabled={isUpdatingMembers}
+                  className="rounded-xl bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+                >
+                  Add
+                </button>
+              </form>
+            ) : null}
 
             <div className="space-y-2">
               {isLoadingMembers ? <p className="text-xs text-accent-2">Loading members...</p> : null}

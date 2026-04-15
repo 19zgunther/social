@@ -676,7 +676,9 @@ function GroupThreadRow({
         <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <p className="truncate text-base font-semibold text-foreground">{thread.name}</p>
+              <p className="truncate text-base font-semibold text-foreground">
+                {thread.name}
+              </p>
               {isUnread ? (
                 <span
                   aria-label="Unread messages"
@@ -684,9 +686,9 @@ function GroupThreadRow({
                 />
               ) : null}
             </div>
-            <p className="mt-0.5 truncate text-sm text-accent-2">
+            {thread.is_direct ? null : <p className="mt-0.5 truncate text-sm text-accent-2">
               Members: {thread.participant_count ?? 1}
-            </p>
+            </p>}
           </div>
 
           <div className="flex flex-col flex-shrink-0 items-end gap-1 pt-0.5">

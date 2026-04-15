@@ -173,6 +173,7 @@ export async function POST(request: Request) {
         owner: true,
         image_id: true,
         created_at: true,
+        is_direct: true,
         users: {
           select: {
             username: true,
@@ -256,6 +257,7 @@ export async function POST(request: Request) {
           created_at: thread.created_at.toISOString(),
           owner_user_id: thread.owner,
           owner_username: thread.users.username,
+          is_direct: thread.is_direct === true,
           participant_count: participantCount,
           image_id: thread.image_id,
           image_url: null,

@@ -61,7 +61,9 @@ export default function Home() {
   const [threadEventReturnTab, setThreadEventReturnTab] = useState<"thread_settings" | "events">(
     "thread_settings",
   );
-  const [threadReturnTab, setThreadReturnTab] = useState<"groups" | "thread_event">("groups");
+  const [threadReturnTab, setThreadReturnTab] = useState<
+    "groups" | "thread_event" | "other_user_profile"
+  >("groups");
   const [eventsRefreshNonce, setEventsRefreshNonce] = useState(0);
   const [groupsListRefreshNonce, setGroupsListRefreshNonce] = useState(0);
   const [profileReloadSignal, setProfileReloadSignal] = useState(0);
@@ -440,6 +442,10 @@ export default function Home() {
                   setActiveTab("thread_event");
                   return;
                 }
+                if (threadReturnTab === "other_user_profile") {
+                  setActiveTab("other_user_profile");
+                  return;
+                }
                 setSelectedThread(null);
                 setActiveTab("groups");
               }}
@@ -555,6 +561,12 @@ export default function Home() {
               userId={viewingUserId}
               currentUserId={authUser.user_id}
               onBack={() => setActiveTab("profile")}
+              onOpenDirectThread={(thread) => {
+                setSelectedThread(thread);
+                setThreadReturnTab("other_user_profile");
+                setGroupsListRefreshNonce((previous) => previous + 1);
+                setActiveTab("thread");
+              }}
             />
           </div>}
 

@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, ChevronRight, CircleUserRound, Settings as SettingsIcon, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  CircleUserRound,
+  MessageSquare,
+  Settings as SettingsIcon,
+  Trash2,
+} from "lucide-react";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { PostSection } from "@/app/components/PostSection";
@@ -18,6 +25,7 @@ import {
   OutgoingFriendRequest,
   PostItem,
   ProfilePostsListResponse,
+  ThreadItem,
   UserProfileResponse,
 } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
@@ -800,11 +808,13 @@ function ProfileOtherUser({
   userId,
   currentUserId,
   onBack,
+  onOpenDirectThread,
 }: {
   isActive: boolean;
   userId: string;
   currentUserId: string;
   onBack: () => void;
+  onOpenDirectThread: (thread: ThreadItem) => void;
 }) {
   const [profileData, setProfileData] = useState<UserProfileResponse | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -812,6 +822,7 @@ function ProfileOtherUser({
   const [statusMessage, setStatusMessage] = useState("");
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [isSendingRequest, setIsSendingRequest] = useState(false);
+  const [isOpeningDirectThread, setIsOpeningDirectThread] = useState(false);
 
   const [removeFriendConfirmed, setRemoveFriendConfirmed] = useState(false);
   const [isRemovingFriend, setIsRemovingFriend] = useState(false);
@@ -897,6 +908,26 @@ function ProfileOtherUser({
   useEffect(() => {
     setRemoveFriendConfirmed(false);
   }, [profileData?.friendship_status]);
+
+  const onOpenMessage = async () => {
+    setIsOpeningDirectThread(true);
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/thread-direct-open", {
+        other_user_id: userId,
+      });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+      const payload = (await response.json()) as { thread: ThreadItem };
+      onOpenDirectThread(payload.thread);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Could not open message thread.");
+    } finally {
+      setIsOpeningDirectThread(false);
+    }
+  };
 
   const onSendFriendRequest = async () => {
     if (!profileData) {
@@ -1025,30 +1056,42 @@ function ProfileOtherUser({
         setIsProfilePictureEditorOpen={() => { }}
         trailingAction={
           isFriends ? (
-            <button
-              type="button"
-              onClick={() => { void onRemoveFriend(); }}
-              disabled={isRemovingFriend}
-              className={`rounded-full border bg-secondary-background p-2 text-accent-2 transition hover:text-foreground disabled:opacity-50 ${
-                removeFriendConfirmed ? "border-red-500 text-red-500" : "border-accent-1"
-              }`}
-              aria-label={
-                isRemovingFriend
-                  ? "Removing friend"
-                  : removeFriendConfirmed
-                    ? "Confirm remove friend"
-                    : "Remove friend"
-              }
-              title={
-                isRemovingFriend
-                  ? "Removing..."
-                  : removeFriendConfirmed
-                    ? "Tap again to confirm"
-                    : "Remove friend"
-              }
-            >
-              <Trash2 className="h-5 w-5" />
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { void onOpenMessage(); }}
+                disabled={isOpeningDirectThread}
+                className="rounded-full border border-accent-1 bg-secondary-background p-2 text-accent-2 transition hover:text-foreground disabled:opacity-50"
+                aria-label={isOpeningDirectThread ? "Opening messages" : "Message"}
+                title={isOpeningDirectThread ? "Opening..." : "Message"}
+              >
+                <MessageSquare className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => { void onRemoveFriend(); }}
+                disabled={isRemovingFriend}
+                className={`rounded-full border bg-secondary-background p-2 text-accent-2 transition hover:text-foreground disabled:opacity-50 ${
+                  removeFriendConfirmed ? "border-red-500 text-red-500" : "border-accent-1"
+                }`}
+                aria-label={
+                  isRemovingFriend
+                    ? "Removing friend"
+                    : removeFriendConfirmed
+                      ? "Confirm remove friend"
+                      : "Remove friend"
+                }
+                title={
+                  isRemovingFriend
+                    ? "Removing..."
+                    : removeFriendConfirmed
+                      ? "Tap again to confirm"
+                      : "Remove friend"
+                }
+              >
+                <Trash2 className="h-5 w-5" />
+              </button>
+            </div>
           ) : undefined
         }
       />

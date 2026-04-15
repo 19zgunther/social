@@ -73,6 +73,8 @@ export type ThreadItem = {
   created_at: string;
   owner_user_id: string;
   owner_username: string;
+  /** True when this is a 1:1 direct message thread. */
+  is_direct?: boolean;
   participant_count?: number;
   image_id?: string | null;
   image_url?: string | null;
@@ -294,6 +296,7 @@ export type ThreadMessagesResponse = {
     image_access_grant?: string | null;
     event_background_image_id?: string | null;
     event_background_image_access_grant?: string | null;
+    is_direct?: boolean;
   };
   viewer_user_id: string;
   has_more_older: boolean;
