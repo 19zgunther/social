@@ -6,6 +6,7 @@ import { threadMemberFriendshipStatusForPair } from "@/app/lib/threadMemberFrien
 
 type ThreadMemberAddBody = {
   thread_id?: string;
+  event_id?: string;
   identifier?: string;
 };
 
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as ThreadMemberAddBody;
     const threadId = body.thread_id?.trim();
+    const eventId = body.event_id?.trim();
     const identifier = body.identifier?.trim();
 
     if (!threadId || !identifier) {
@@ -47,6 +49,30 @@ export async function POST(request: Request) {
         { error: { code: "forbidden", message: "You must be a member of the thread to add users." } },
         { status: 403 },
       );
+    }
+
+    if (eventId) {
+      const event = await prisma.thread_events.findFirst({
+        where: {
+          id: eventId,
+          thread_id: thread.id,
+        },
+        select: {
+          id: true,
+        },
+      });
+      if (!event) {
+        return NextResponse.json(
+          { error: { code: "event_not_found", message: "Event not found for this thread." } },
+          { status: 404 },
+        );
+      }
+      if (thread.owner !== authResult.user_id) {
+        return NextResponse.json(
+          { error: { code: "forbidden", message: "Only the event owner can add users." } },
+          { status: 403 },
+        );
+      }
     }
 
     const user = await prisma.users.findFirst({

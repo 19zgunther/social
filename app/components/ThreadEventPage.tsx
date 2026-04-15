@@ -189,6 +189,7 @@ export default function ThreadEventPage({
   const canEdit =
     currentUserId === local.created_by || currentUserId === thread.owner_user_id;
   const canDelete = canEdit;
+  const canAddMembers = currentUserId === thread.owner_user_id;
 
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -476,7 +477,7 @@ export default function ThreadEventPage({
   };
 
   const onAddMember = async () => {
-    if (!memberIdentifier.trim() || isUpdatingMembers) {
+    if (!canAddMembers || !memberIdentifier.trim() || isUpdatingMembers) {
       return;
     }
     setIsUpdatingMembers(true);
@@ -484,6 +485,7 @@ export default function ThreadEventPage({
     try {
       const response = await postJson("/api/thread-member-add", {
         thread_id: thread.id,
+        event_id: local.id,
         identifier: memberIdentifier,
       });
       if (!response.ok) {
@@ -590,7 +592,7 @@ export default function ThreadEventPage({
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y">
           <div className="space-y-4 px-3 py-4">
-            <div className={`${glassCard} p-4`}>
+            <div className={`${glassCard} relative z-20 p-4`}>
               <div className="mb-1 flex items-center justify-between gap-2">
                 <p className={sectionLabel}>Name</p>
                 {canEdit && !editingTitle ? (
@@ -820,47 +822,50 @@ export default function ThreadEventPage({
               </div>
             </div>
 
-            <div className={`${glassCard} p-4`}>
-              <p className={`mb-2 ${sectionLabel}`}>Add people</p>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void onAddMember();
-                }}
-                className="flex items-center gap-2"
-              >
-                <div className="flex-1">
-                  <UserSearch
-                    value={memberIdentifier}
-                    onValueChange={(value) => {
-                      setMemberIdentifier(value);
-                      if (memberFormError) {
-                        setMemberFormError("");
-                      }
-                    }}
-                    onSelect={(option) => {
-                      setMemberIdentifier(option.username);
-                      if (memberFormError) {
-                        setMemberFormError("");
-                      }
-                    }}
-                    searchUsers={searchThreadMemberOptions}
-                    placeholder="Username or email"
-                    inputClassName={`w-full rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2 ${fieldGlass}`}
-                  />
-                  {memberFormError ? <p className={`mt-1 text-xs ${readableText}`}>{memberFormError}</p> : null}
-                </div>
-                <button
-                  type="submit"
-                  disabled={isUpdatingMembers}
-                  className={`${ghostActionBtn} px-3`}
+            {canAddMembers ? (
+              <div className={`${glassCard} relative z-40 p-4`}>
+                <p className={`mb-2 ${sectionLabel}`}>Add people</p>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void onAddMember();
+                  }}
+                  className="flex items-center gap-2"
                 >
-                  {isUpdatingMembers ? "Adding..." : "Add"}
-                </button>
-              </form>
-            </div>
+                  <div className="flex-1">
+                    <UserSearch
+                      value={memberIdentifier}
+                      onValueChange={(value) => {
+                        setMemberIdentifier(value);
+                        if (memberFormError) {
+                          setMemberFormError("");
+                        }
+                      }}
+                      onSelect={(option) => {
+                        setMemberIdentifier(option.username);
+                        if (memberFormError) {
+                          setMemberFormError("");
+                        }
+                      }}
+                      searchUsers={searchThreadMemberOptions}
+                      placeholder="Username or email"
+                      inputClassName={`w-full rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2 ${fieldGlass}`}
+                      dropdownClassName="z-[10000] max-h-[40vh]"
+                    />
+                    {memberFormError ? <p className={`mt-1 text-xs ${readableText}`}>{memberFormError}</p> : null}
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isUpdatingMembers}
+                    className={`${ghostActionBtn} px-3`}
+                  >
+                    {isUpdatingMembers ? "Adding..." : "Add"}
+                  </button>
+                </form>
+              </div>
+            ) : null}
 
-            <div className={`${glassCard} p-4`}>
+            <div className={`${glassCard} relative z-0 p-4`}>
               <p className={`mb-2 ${sectionLabel}`}>Who&apos;s Going</p>
               {membersLoading ? (
                 <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
@@ -884,7 +889,7 @@ export default function ThreadEventPage({
               )}
             </div>
 
-            <div className={`${glassCard} p-4`}>
+            <div className={`${glassCard} relative z-0 p-4`}>
               <p className={`mb-2 ${sectionLabel}`}>Who hasn&apos;t decided yet</p>
               {membersLoading ? (
                 <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
@@ -908,7 +913,7 @@ export default function ThreadEventPage({
               )}
             </div>
 
-            <div className={`${glassCard} p-4`}>
+            <div className={`${glassCard} relative z-0 p-4`}>
               <p className={`mb-2 ${sectionLabel}`}>Who&apos;s missing out</p>
               {membersLoading ? (
                 <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
@@ -932,7 +937,7 @@ export default function ThreadEventPage({
               )}
             </div>
 
-            <div className={`${glassCard} p-4`}>
+            <div className={`${glassCard} relative z-0 p-4`}>
             <p className={`mb-2 ${sectionLabel}`}>Your RSVP</p>
             <div className="flex gap-2">
               {RSVP_OPTIONS.map(({ status, label }) => {
@@ -958,7 +963,7 @@ export default function ThreadEventPage({
             </div>
 
           {canDelete ? (
-            <div className={`${glassCard} p-4`}>
+            <div className={`${glassCard} relative z-0 p-4`}>
               {!deleteConfirm ? (
                 <button
                   type="button"
