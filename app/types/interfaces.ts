@@ -358,6 +358,20 @@ export type ThreadEventCreateRequest = {
 };
 export type ThreadEventCreateResponse = { event: ThreadEventItem };
 
+export type EventCreateRequest = {
+  name?: string;
+  location?: string;
+  description?: string;
+  /** ISO; optional — defaults to now and one hour later. */
+  starts_at?: string;
+  /** ISO; optional — defaults to one hour after starts. */
+  ends_at?: string;
+};
+export type EventCreateResponse = {
+  thread: ThreadItem;
+  event: ThreadEventItem;
+};
+
 export type ThreadEventUpdateRequest = {
   thread_id?: string;
   event_id?: string;

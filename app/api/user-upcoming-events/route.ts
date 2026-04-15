@@ -18,25 +18,31 @@ export async function POST(request: Request) {
     void (await request.json().catch(() => ({})));
 
     const now = new Date();
+    const accessibleThreads = await prisma.threads.findMany({
+      where: {
+        OR: [{ owner: userId }, { user_thread_access: { some: { user_id: userId } } }],
+      },
+      select: {
+        id: true,
+        name: true,
+        created_at: true,
+        owner: true,
+        image_id: true,
+        users: { select: { username: true } },
+        user_thread_access: { select: { user_id: true } },
+      },
+    });
+    const threadById = new Map(accessibleThreads.map((thread) => [thread.id, thread]));
+    const threadIds = accessibleThreads.map((thread) => thread.id);
+    if (threadIds.length === 0) {
+      const payload: UserUpcomingEventsResponse = { items: [] };
+      return NextResponse.json(payload, { status: 200 });
+    }
+
     const rows = await prisma.thread_events.findMany({
       where: {
         ends_at: { gt: now },
-        threads: {
-          OR: [{ owner: userId }, { user_thread_access: { some: { user_id: userId } } }],
-        },
-      },
-      include: {
-        threads: {
-          select: {
-            id: true,
-            name: true,
-            created_at: true,
-            owner: true,
-            image_id: true,
-            users: { select: { username: true } },
-            user_thread_access: { select: { user_id: true } },
-          },
-        },
+        thread_id: { in: threadIds },
       },
       orderBy: { starts_at: "asc" },
     });
@@ -44,9 +50,11 @@ export async function POST(request: Request) {
     const items: UserUpcomingEventsResponse["items"] = [];
 
     for (const row of rows) {
-      const tr = row.threads;
-      const { threads: _t, ...eventRow } = row;
-      const event = await finalizeThreadEventItem(eventRow as ThreadEventRow, userId);
+      const tr = threadById.get(row.thread_id);
+      if (!tr) {
+        continue;
+      }
+      const event = await finalizeThreadEventItem(row as ThreadEventRow, userId);
 
       const participantCount = new Set([tr.owner, ...tr.user_thread_access.map((a) => a.user_id)]).size;
 

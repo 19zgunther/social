@@ -24,6 +24,7 @@ type GroupsProps = {
   selectedThread: ThreadItem | null;
   setSelectedThread: (thread: ThreadItem | null) => void;
   setActiveTab: (tab: AppTab) => void;
+  onOpenThreadFromGroups?: () => void;
   isActiveTab: boolean;
   /** Increment to refetch the groups list (e.g. after a thread is deleted elsewhere). */
   groupsListRefreshNonce?: number;
@@ -82,6 +83,7 @@ export default function Groups({
   selectedThread,
   setSelectedThread,
   setActiveTab,
+  onOpenThreadFromGroups,
   isActiveTab,
   groupsListRefreshNonce = 0,
 }: GroupsProps) {
@@ -387,11 +389,12 @@ export default function Groups({
 
   const onOpenThread = useCallback(
     (thread: ThreadItem) => {
+      onOpenThreadFromGroups?.();
       setSelectedThread(thread);
       setActiveTab("thread");
       markThreadRead(thread);
     },
-    [markThreadRead],
+    [markThreadRead, onOpenThreadFromGroups],
   );
 
   const onLastMessagePreviewClick = useCallback(

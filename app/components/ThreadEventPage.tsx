@@ -1,13 +1,15 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ImagePlus, Pencil, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, ImagePlus, Pencil, Trash2, X } from "lucide-react";
 import BackButton from "@/app/components/utils/BackButton";
 import CachedImage from "@/app/components/utils/CachedImage";
 import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
 import UserProfileImage from "@/app/components/UserProfileImage";
+import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import type {
   ApiError,
+  FriendSearchResponse,
   ThreadEventBackgroundRemoveResponse,
   ThreadEventBackgroundSetResponse,
   ThreadEventItem,
@@ -25,6 +27,7 @@ type ThreadEventPageProps = {
   event: ThreadEventItem;
   currentUserId: string;
   onBack: () => void;
+  onOpenThread?: () => void;
   onEventUpdated: (event: ThreadEventItem) => void;
   onEventDeleted: () => void;
   onNotify?: (message: string) => void;
@@ -173,6 +176,7 @@ export default function ThreadEventPage({
   event: eventProp,
   currentUserId,
   onBack,
+  onOpenThread,
   onEventUpdated,
   onEventDeleted,
   onNotify,
@@ -207,7 +211,9 @@ export default function ThreadEventPage({
 
   const [members, setMembers] = useState<ThreadMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
-  const [pageRefreshBusy, setPageRefreshBusy] = useState(false);
+  const [isUpdatingMembers, setIsUpdatingMembers] = useState(false);
+  const [memberIdentifier, setMemberIdentifier] = useState("");
+  const [memberFormError, setMemberFormError] = useState("");
   const bgInputRef = useRef<HTMLInputElement | null>(null);
   const membersRef = useRef<ThreadMember[]>([]);
   const localRef = useRef<ThreadEventItem>(eventProp);
@@ -248,7 +254,6 @@ export default function ThreadEventPage({
         }
       }
 
-      setPageRefreshBusy(true);
       if (membersRef.current.length === 0) {
         setMembersLoading(true);
       }
@@ -283,7 +288,6 @@ export default function ThreadEventPage({
         setMembers([]);
         onNotifyRef.current?.("Couldn't refresh this event.");
       } finally {
-        setPageRefreshBusy(false);
         setMembersLoading(false);
       }
     },
@@ -295,6 +299,22 @@ export default function ThreadEventPage({
   }, [eventProp.id, thread.id, fetchEventPageData]);
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.user_id, m])), [members]);
+
+  const searchThreadMemberOptions = useCallback(async (query: string): Promise<UserSearchOption[]> => {
+    const response = await postJson("/api/friend-search", { query });
+    if (!response.ok) {
+      return [];
+    }
+    const payload = (await response.json()) as FriendSearchResponse;
+    return payload.users.map((user) => ({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      profile_image_id: user.profile_image_id,
+      profile_image_url: user.profile_image_url,
+      profile_image_access_grant: user.profile_image_access_grant ?? null,
+    }));
+  }, []);
 
   const goingEntries = useMemo(
     () => rosterEntriesForStatus(local.users_status_map, "going", memberById),
@@ -455,6 +475,37 @@ export default function ThreadEventPage({
     }
   };
 
+  const onAddMember = async () => {
+    if (!memberIdentifier.trim() || isUpdatingMembers) {
+      return;
+    }
+    setIsUpdatingMembers(true);
+    setMemberFormError("");
+    try {
+      const response = await postJson("/api/thread-member-add", {
+        thread_id: thread.id,
+        identifier: memberIdentifier,
+      });
+      if (!response.ok) {
+        setMemberFormError(await readErrorMessage(response));
+        return;
+      }
+      const payload = (await response.json()) as { member: ThreadMember };
+      setMembers((previousMembers) => {
+        const exists = previousMembers.some((member) => member.user_id === payload.member.user_id);
+        if (exists) {
+          return previousMembers;
+        }
+        return [...previousMembers, payload.member];
+      });
+      setMemberIdentifier("");
+    } catch (error) {
+      setMemberFormError(error instanceof Error ? error.message : "Failed to add member.");
+    } finally {
+      setIsUpdatingMembers(false);
+    }
+  };
+
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
@@ -490,6 +541,15 @@ export default function ThreadEventPage({
             Event
           </p>
           <div className="flex min-w-[72px] shrink-0 justify-end justify-self-end gap-1">
+            {onOpenThread ? (
+              <button
+                type="button"
+                onClick={onOpenThread}
+                className="rounded-lg border border-white/24 bg-primary-background/58 px-2 py-1 text-[11px] font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.55),0_2px_8px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-primary-background/76"
+              >
+                Open Thread
+              </button>
+            ) : null}
             {canEdit ? (
               <>
                 <input
@@ -761,11 +821,51 @@ export default function ThreadEventPage({
             </div>
 
             <div className={`${glassCard} p-4`}>
-              <p className={`mb-2 ${sectionLabel}`}>Who's Going</p>
+              <p className={`mb-2 ${sectionLabel}`}>Add people</p>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void onAddMember();
+                }}
+                className="flex items-center gap-2"
+              >
+                <div className="flex-1">
+                  <UserSearch
+                    value={memberIdentifier}
+                    onValueChange={(value) => {
+                      setMemberIdentifier(value);
+                      if (memberFormError) {
+                        setMemberFormError("");
+                      }
+                    }}
+                    onSelect={(option) => {
+                      setMemberIdentifier(option.username);
+                      if (memberFormError) {
+                        setMemberFormError("");
+                      }
+                    }}
+                    searchUsers={searchThreadMemberOptions}
+                    placeholder="Username or email"
+                    inputClassName={`w-full rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2 ${fieldGlass}`}
+                  />
+                  {memberFormError ? <p className={`mt-1 text-xs ${readableText}`}>{memberFormError}</p> : null}
+                </div>
+                <button
+                  type="submit"
+                  disabled={isUpdatingMembers}
+                  className={`${ghostActionBtn} px-3`}
+                >
+                  {isUpdatingMembers ? "Adding..." : "Add"}
+                </button>
+              </form>
+            </div>
+
+            <div className={`${glassCard} p-4`}>
+              <p className={`mb-2 ${sectionLabel}`}>Who&apos;s Going</p>
               {membersLoading ? (
                 <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
               ) : goingEntries.length === 0 ? (
-                <p className={readableText}>Nobody's marked going yet.</p>
+                <p className={readableText}>Nobody&apos;s marked going yet.</p>
               ) : (
                 <ul className="space-y-2">
                   {goingEntries.map((entry) => (
@@ -785,7 +885,7 @@ export default function ThreadEventPage({
             </div>
 
             <div className={`${glassCard} p-4`}>
-              <p className={`mb-2 ${sectionLabel}`}>Who hasn't decided yet</p>
+              <p className={`mb-2 ${sectionLabel}`}>Who hasn&apos;t decided yet</p>
               {membersLoading ? (
                 <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
               ) : commitmentIssuesEntries.length === 0 ? (
@@ -809,11 +909,11 @@ export default function ThreadEventPage({
             </div>
 
             <div className={`${glassCard} p-4`}>
-              <p className={`mb-2 ${sectionLabel}`}>Who's missing out</p>
+              <p className={`mb-2 ${sectionLabel}`}>Who&apos;s missing out</p>
               {membersLoading ? (
                 <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
               ) : lameEntries.length === 0 ? (
-                <p className={readableText}>Nobody's bailed. Respect.</p>
+                <p className={readableText}>Nobody&apos;s bailed. Respect.</p>
               ) : (
                 <ul className="space-y-2">
                   {lameEntries.map((entry) => (

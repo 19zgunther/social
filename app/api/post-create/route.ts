@@ -122,7 +122,7 @@ export async function POST(request: Request) {
       void sendPushToUsers({
         recipientUserIds,
         payload: {
-          title: `${authResult.username} posted`,
+          title: `${authResult.username} make a post`,
           body: previewText,
           url: "/?tab=feed",
         },

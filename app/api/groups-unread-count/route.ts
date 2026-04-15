@@ -98,6 +98,7 @@ export async function POST(request: Request) {
   try {
     const threads = await prisma.threads.findMany({
       where: {
+        created_by_event: null,
         OR: [
           { owner: authResult.user_id },
           { user_thread_access: { some: { user_id: authResult.user_id } } },

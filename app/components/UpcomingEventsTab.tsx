@@ -3,12 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import ThreadEventListRow from "@/app/components/ThreadEventListRow";
-import type { ApiError, UserUpcomingEventListItem, UserUpcomingEventsResponse } from "@/app/types/interfaces";
+import type {
+  ApiError,
+  EventCreateResponse,
+  UserUpcomingEventListItem,
+  UserUpcomingEventsResponse,
+} from "@/app/types/interfaces";
 
 type UpcomingEventsTabProps = {
   currentUserId: string;
   isActive: boolean;
   onOpenEvent: (item: UserUpcomingEventListItem) => void;
+  onEventCreated: (item: UserUpcomingEventListItem) => void;
 };
 
 function formatEventRangeShort(startsAtIso: string, endsAtIso: string): string {
@@ -86,10 +92,14 @@ export default function UpcomingEventsTab({
   currentUserId,
   isActive,
   onOpenEvent,
+  onEventCreated,
 }: UpcomingEventsTabProps) {
   const [items, setItems] = useState<UserUpcomingEventListItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createError, setCreateError] = useState("");
   const [error, setError] = useState("");
   const itemsRef = useRef<UserUpcomingEventListItem[]>([]);
 
@@ -148,6 +158,35 @@ export default function UpcomingEventsTab({
     }
   }, [isActive, fetchUpcoming]);
 
+  const onCreateEvent = async () => {
+    const name = createName.trim();
+    if (!name || isCreating) {
+      return;
+    }
+    setIsCreating(true);
+    setCreateError("");
+    try {
+      const response = await postWithAuth("/api/event-create", { name });
+      if (!response.ok) {
+        setCreateError(await readErrorMessage(response));
+        return;
+      }
+      const payload = (await response.json()) as EventCreateResponse;
+      const createdItem: UserUpcomingEventListItem = {
+        thread: payload.thread,
+        event: payload.event,
+      };
+      setItems((previous) => [createdItem, ...previous]);
+      writeUpcomingTabCache([createdItem, ...itemsRef.current]);
+      setCreateName("");
+      onEventCreated(createdItem);
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : "Failed to create event.");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-black">
       <header className="shrink-0 border-b border-white/10 px-3 py-3">
@@ -166,6 +205,37 @@ export default function UpcomingEventsTab({
           </button>
         </div>
         <p className="mt-0.5 text-xs text-zinc-400">Across all your groups</p>
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            type="text"
+            value={createName}
+            onChange={(event) => {
+              setCreateName(event.target.value);
+              if (createError) {
+                setCreateError("");
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void onCreateEvent();
+              }
+            }}
+            placeholder="Event name"
+            className="min-w-0 flex-1 rounded-lg border border-white/20 bg-black px-3 py-2 text-sm text-white outline-none focus:border-white/45"
+          />
+          <button
+            type="button"
+            disabled={isCreating || !createName.trim()}
+            onClick={() => {
+              void onCreateEvent();
+            }}
+            className="shrink-0 rounded-lg bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-50"
+          >
+            {isCreating ? "Creating..." : "Create"}
+          </button>
+        </div>
+        {createError ? <p className="mt-1 text-xs text-zinc-400">{createError}</p> : null}
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-black">

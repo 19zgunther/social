@@ -14,7 +14,7 @@ model emojis {
   created_by String    @db.Uuid
   data       String
   name       String
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
   users      users     @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
@@ -69,20 +69,21 @@ model shared_feedback {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model thread_events {
-  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at          DateTime @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime @db.Timestamptz(6)
-  created_by          String   @db.Uuid
-  name                String
-  location            String?
-  description         String?
-  users_status_map    Json     @db.Json
-  starts_at           DateTime @db.Timestamptz(6)
-  ends_at             DateTime @db.Timestamptz(6)
-  background_image_id String?  @db.Uuid
-  thread_id           String   @db.Uuid
-  users               users    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  threads             threads  @relation(fields: [thread_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                                              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at                                      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at                                      DateTime  @db.Timestamptz(6)
+  created_by                                      String    @db.Uuid
+  name                                            String
+  location                                        String?
+  description                                     String?
+  users_status_map                                Json      @db.Json
+  starts_at                                       DateTime  @db.Timestamptz(6)
+  ends_at                                         DateTime  @db.Timestamptz(6)
+  background_image_id                             String?   @db.Uuid
+  thread_id                                       String    @db.Uuid
+  users                                           users     @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  threads_thread_events_thread_idTothreads        threads   @relation("thread_events_thread_idTothreads", fields: [thread_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  threads_threads_created_by_eventTothread_events threads[] @relation("threads_created_by_eventTothread_events")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -100,15 +101,17 @@ model thread_messages {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model threads {
-  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
-  owner                    String                     @db.Uuid
-  name                     String
-  image_id                 String?                    @db.Uuid
-  thread_events            thread_events[]
-  users                    users                      @relation(fields: [owner], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  user_thread_access       user_thread_access[]
-  user_thread_last_read_at user_thread_last_read_at[]
+  id                                                    String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at                                            DateTime                   @default(now()) @db.Timestamptz(6)
+  owner                                                 String                     @db.Uuid
+  name                                                  String
+  image_id                                              String?                    @db.Uuid
+  created_by_event                                      String?                    @db.Uuid
+  thread_events_thread_events_thread_idTothreads        thread_events[]            @relation("thread_events_thread_idTothreads")
+  thread_events_threads_created_by_eventTothread_events thread_events?             @relation("threads_created_by_eventTothread_events", fields: [created_by_event], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                                                 users                      @relation(fields: [owner], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user_thread_access                                    user_thread_access[]
+  user_thread_last_read_at                              user_thread_last_read_at[]
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

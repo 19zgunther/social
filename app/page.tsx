@@ -61,6 +61,7 @@ export default function Home() {
   const [threadEventReturnTab, setThreadEventReturnTab] = useState<"thread_settings" | "events">(
     "thread_settings",
   );
+  const [threadReturnTab, setThreadReturnTab] = useState<"groups" | "thread_event">("groups");
   const [groupsListRefreshNonce, setGroupsListRefreshNonce] = useState(0);
   const [profileReloadSignal, setProfileReloadSignal] = useState(0);
 
@@ -385,6 +386,12 @@ export default function Home() {
                 setThreadEventReturnTab("events");
                 setActiveTab("thread_event");
               }}
+              onEventCreated={(item: UserUpcomingEventListItem) => {
+                setSelectedThread(item.thread);
+                setThreadEventFocus(item.event);
+                setThreadEventReturnTab("events");
+                setActiveTab("thread_event");
+              }}
             />
           </div>
 
@@ -399,6 +406,9 @@ export default function Home() {
               setActiveTab={setActiveTab}
               isActiveTab={activeTab === "groups"}
               groupsListRefreshNonce={groupsListRefreshNonce}
+              onOpenThreadFromGroups={() => {
+                setThreadReturnTab("groups");
+              }}
             />
           </div>
 
@@ -415,7 +425,14 @@ export default function Home() {
               setSelectedThread={setSelectedThread}
               currentUserId={authUser.user_id}
               currentUsername={authUser.username}
-              onBack={() => { setSelectedThread(null); setActiveTab("groups"); }}
+              onBack={() => {
+                if (threadReturnTab === "thread_event" && threadEventFocus) {
+                  setActiveTab("thread_event");
+                  return;
+                }
+                setSelectedThread(null);
+                setActiveTab("groups");
+              }}
               setThreadSettingsOpen={() => { setActiveTab("thread_settings") }}
             />
           </div>}
@@ -424,19 +441,8 @@ export default function Home() {
             <ThreadSettings
               thread={selectedThread}
               currentUserId={authUser.user_id}
-              isActive={activeTab === "thread_settings"}
               onBack={() => setActiveTab("thread")}
               onViewUserProfile={onViewUserProfile}
-              onOpenThreadEvent={(event) => {
-                setThreadEventReturnTab("thread_settings");
-                setThreadEventFocus(event);
-                setActiveTab("thread_event");
-              }}
-              onThreadEventCreated={(event) => {
-                setThreadEventReturnTab("thread_settings");
-                setThreadEventFocus(event);
-                setActiveTab("thread_event");
-              }}
               onThreadImageUpdated={(imageId, imageUrl, imageAccessGrant) => {
                 setSelectedThread((previous) => ({
                   ...previous as ThreadItem,
@@ -469,6 +475,10 @@ export default function Home() {
                 onBack={() => {
                   setThreadEventFocus(null);
                   setActiveTab(threadEventReturnTab);
+                }}
+                onOpenThread={() => {
+                  setThreadReturnTab("thread_event");
+                  setActiveTab("thread");
                 }}
                 onEventUpdated={(next) => {
                   setThreadEventFocus(next);

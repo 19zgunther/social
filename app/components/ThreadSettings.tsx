@@ -7,11 +7,9 @@ import UserProfileImage from "@/app/components/UserProfileImage";
 import ThreadPictureEditor from "@/app/components/ThreadPictureEditor";
 import BackButton from "@/app/components/utils/BackButton";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
-import AllThreadEvents from "@/app/components/AllThreadEvents";
 import {
   ApiError,
   FriendSearchResponse,
-  ThreadEventItem,
   ThreadItem,
   ThreadMember,
   ThreadMembersResponse,
@@ -20,14 +18,11 @@ import {
 type ThreadSettingsProps = {
   thread: ThreadItem;
   currentUserId: string;
-  isActive?: boolean;
   onBack: () => void;
   onThreadImageUpdated: (imageId: string | null, imageUrl: string | null, imageAccessGrant: string | null) => void;
   onThreadRenamed: (name: string) => void;
   onThreadDeleted: () => void;
   onViewUserProfile: (userId: string) => void;
-  onOpenThreadEvent: (event: ThreadEventItem) => void;
-  onThreadEventCreated: (event: ThreadEventItem) => void;
 };
 
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
@@ -50,14 +45,11 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 export default function ThreadSettings({
   thread,
   currentUserId,
-  isActive,
   onBack,
   onThreadImageUpdated,
   onThreadRenamed,
   onThreadDeleted,
   onViewUserProfile,
-  onOpenThreadEvent,
-  onThreadEventCreated,
 }: ThreadSettingsProps) {
   const [members, setMembers] = useState<ThreadMember[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
@@ -412,17 +404,6 @@ export default function ThreadSettings({
             </div>
           </div>
         </section>
-
-        <AllThreadEvents
-          threadId={thread.id}
-          currentUserId={currentUserId}
-          isActive={isActive}
-          onOpenEvent={onOpenThreadEvent}
-          onThreadEventCreated={onThreadEventCreated}
-          onStatusMessage={(message) => {
-            setStatusMessage(message);
-          }}
-        />
 
         <section className="rounded-xl border border-accent-1 bg-secondary-background p-3">
           <div className="space-y-3">
