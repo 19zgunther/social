@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { sendPushToUsers } from "@/app/lib/push_notifications";
 import {
   findThreadAccessibleByUser,
   isValidRsvpStatus,
@@ -62,6 +63,23 @@ export async function POST(request: Request) {
       where: { id: existing.id },
       data: { users_status_map: nextMap, updated_at: new Date() },
     });
+
+    const ownerUserId = thread.owner;
+    if (ownerUserId !== authResult.user_id) {
+      const statusLabel =
+        status === "going" ? "Going" : status === "maybe" ? "Maybe" : "Not Going";
+      void sendPushToUsers({
+        recipientUserIds: [ownerUserId],
+        payload: {
+          title: `${authResult.username} RSVP'd`,
+          body: `${authResult.username} is ${statusLabel} for ${row.name}.`,
+          url: "/?tab=events",
+          thread_id: thread.id,
+        },
+      }).catch((error) => {
+        console.error("thread_event_rsvp_push_dispatch_failed", error);
+      });
+    }
 
     const event = await finalizeThreadEventItem(row, authResult.user_id);
     const payload: ThreadEventRsvpResponse = { event };

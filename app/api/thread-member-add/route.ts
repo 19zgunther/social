@@ -3,6 +3,7 @@ import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
 import { threadMemberFriendshipStatusForPair } from "@/app/lib/threadMemberFriendship";
+import { sendPushToUsers } from "@/app/lib/push_notifications";
 
 type ThreadMemberAddBody = {
   thread_id?: string;
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
       );
     }
 
+    let eventName: string | null = null;
     if (eventId) {
       const event = await prisma.thread_events.findFirst({
         where: {
@@ -59,6 +61,7 @@ export async function POST(request: Request) {
         },
         select: {
           id: true,
+          name: true,
         },
       });
       if (!event) {
@@ -73,6 +76,7 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       }
+      eventName = event.name;
     }
 
     const user = await prisma.users.findFirst({
@@ -112,6 +116,21 @@ export async function POST(request: Request) {
           created_at: new Date(),
         },
       });
+
+      if (eventId) {
+        const eventTitle = eventName ?? "an event";
+        void sendPushToUsers({
+          recipientUserIds: [user.id],
+          payload: {
+            title: `Added to ${eventTitle}`,
+            body: `${authResult.username} added you to ${eventTitle}.`,
+            url: "/?tab=events",
+            thread_id: thread.id,
+          },
+        }).catch((error) => {
+          console.error("thread_member_add_event_push_dispatch_failed", error);
+        });
+      }
     }
 
     let profile_image_url: string | null = null;
