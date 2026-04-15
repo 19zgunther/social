@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@/app/generated/prisma/client";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { sendPushToUsers } from "@/app/lib/push_notifications";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import { PostCreateRequest, PostCreateResponse, PostData } from "@/app/types/interfaces";
@@ -12,6 +13,18 @@ const sanitizePostData = (rawData: unknown): Prisma.InputJsonValue | undefined =
     return undefined;
   }
   return rawData as Prisma.InputJsonValue;
+};
+
+const POST_PUSH_PREVIEW_MAX_LENGTH = 120;
+const getPostPushPreviewText = (postText: string | null, hasImage: boolean): string => {
+  const trimmedText = postText?.trim();
+  if (trimmedText) {
+    return trimmedText.slice(0, POST_PUSH_PREVIEW_MAX_LENGTH);
+  }
+  if (hasImage) {
+    return "Shared a photo";
+  }
+  return "Shared a new post";
 };
 
 export async function POST(request: Request) {
@@ -83,6 +96,39 @@ export async function POST(request: Request) {
         data: true,
       },
     });
+
+    const acceptedFriendRows = await prisma.friends.findMany({
+      where: {
+        accepted: true,
+        OR: [{ requesting_user: authResult.user_id }, { other_user: authResult.user_id }],
+      },
+      select: {
+        requesting_user: true,
+        other_user: true,
+      },
+    });
+    const recipientUserIds = Array.from(
+      new Set(
+        acceptedFriendRows
+          .map((row) =>
+            row.requesting_user === authResult.user_id ? row.other_user : row.requesting_user,
+          )
+          .filter((userId) => userId !== authResult.user_id),
+      ),
+    );
+    if (recipientUserIds.length > 0) {
+      const previewText = getPostPushPreviewText(post.text, Boolean(post.image_id));
+      void sendPushToUsers({
+        recipientUserIds,
+        payload: {
+          title: `${authResult.username} posted`,
+          body: previewText,
+          url: "/?tab=feed",
+        },
+      }).catch((error) => {
+        console.error("post_create_push_dispatch_failed", error);
+      });
+    }
 
     let imageAccessGrant: string | null = null;
     if (post.image_id) {
