@@ -3,6 +3,7 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
+import { sanitizeNotificationText } from "@/app/lib/notification_text";
 
 type FeedPostCommentBody = {
   post_id?: string;
@@ -165,7 +166,10 @@ export async function POST(request: Request) {
     // Send a push notification to the recipient of the comment (either the post owner or the comment author)
     const notificationRecipientUserId = parentPath.length === 0 ? post.created_by : replyTargetAuthorUserId;
     if (notificationRecipientUserId && notificationRecipientUserId !== authResult.user_id) {
-      const previewText = message.length > 80 ? `${message.slice(0, 77)}...` : message;
+      const sanitizedMessage = sanitizeNotificationText(message);
+      const previewSource = sanitizedMessage || "Sent a reply";
+      const previewText =
+        previewSource.length > 80 ? `${previewSource.slice(0, 77)}...` : previewSource;
       const body =
         parentPath.length === 0
           ? `${authResult.username} replied to your post: ${previewText}`

@@ -4,6 +4,7 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
+import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import { PostCreateRequest, PostCreateResponse, PostData } from "@/app/types/interfaces";
@@ -17,9 +18,9 @@ const sanitizePostData = (rawData: unknown): Prisma.InputJsonValue | undefined =
 
 const POST_PUSH_PREVIEW_MAX_LENGTH = 120;
 const getPostPushPreviewText = (postText: string | null, hasImage: boolean): string => {
-  const trimmedText = postText?.trim();
-  if (trimmedText) {
-    return trimmedText.slice(0, POST_PUSH_PREVIEW_MAX_LENGTH);
+  const sanitizedText = sanitizeNotificationText(postText);
+  if (sanitizedText) {
+    return sanitizedText.slice(0, POST_PUSH_PREVIEW_MAX_LENGTH);
   }
   if (hasImage) {
     return "Shared a photo";

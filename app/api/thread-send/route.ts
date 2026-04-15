@@ -5,6 +5,7 @@ import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@/app/generated/prisma/client";
 import { publishThreadMessagePosted } from "@/app/lib/sync";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
+import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import {
@@ -356,7 +357,8 @@ export async function POST(request: Request) {
     const recipientUserIds = threadMemberUserIds.filter((userId) => userId !== authResult.user_id);
     const shouldSendPush = Boolean(text || imageId);
     if (recipientUserIds.length > 0 && shouldSendPush) {
-      const previewText = text?.trim() || (imageId ? "Sent a photo" : "Sent a message");
+      const sanitizedText = sanitizeNotificationText(text);
+      const previewText = sanitizedText || (imageId ? "Sent a photo" : "Sent a message");
       void sendPushToUsers({
         recipientUserIds,
         payload: {
