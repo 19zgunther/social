@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadAllCustomEmojis, putEmojiInCache } from "@/app/lib/customEmojiCache";
 import { ApiError, EmojiItem, EmojiSaveResponse } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
-import { Brush, Eraser, Hand, Redo2, RotateCcw, Undo2 } from "lucide-react";
+import { Brush, Eraser, Hand, Redo2, Undo2 } from "lucide-react";
 
 const GRID_SIZE = 64;
 const PIXEL_COUNT = GRID_SIZE * GRID_SIZE;
@@ -13,8 +13,31 @@ const TRANSPARENT_FLAG = 1 << 9;
 const EXPLICIT_BLACK_FLAG = 1 << 10;
 const RGB_MASK = 0b1_1111_1111;
 const TRANSPARENT_PIXEL = TRANSPARENT_FLAG;
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 16;
+
+/**
+ * Map brush thickness (slider) to stamp radius in grid pixels.
+ * Radius 0 draws a single cell; larger values expand the circular stamp (odd-ish diameters).
+ */
+const radiusFromThickness = (thickness: number): number => {
+  const t = Number(thickness);
+  if (!Number.isFinite(t)) {
+    return 0;
+  }
+  return Math.max(0, Math.round((t - 1) / 2));
+};
+
+/** Discrete zoom steps (emoji editor canvas). */
+const EDITOR_ZOOM_LEVELS = [1, 2, 4] as const;
+
+const zoomLevelLabel = (z: number): string => {
+  if (z === 1) {
+    return "1×";
+  }
+  if (z === 2) {
+    return "2×";
+  }
+  return `${z}×`;
+};
 
 type EditorTool = "draw" | "move" | "erase";
 type ViewportPan = { x: number; y: number };
@@ -190,17 +213,17 @@ const drawPixelsToCanvas = (canvas: HTMLCanvasElement, pixels: Uint16Array) => {
   ctx.putImageData(imageData, 0, 0);
 };
 
-const getPixelPosition = (
-  event: PointerEvent | React.PointerEvent,
-  canvas: HTMLCanvasElement,
-  pan: ViewportPan,
-  zoom: number,
-) => {
+/**
+ * Map pointer to grid coords. Uses `getBoundingClientRect()` only — that rect is already
+ * after CSS `translate` + `scale`, so we must not subtract pan or divide by zoom again.
+ */
+const getPixelPosition = (event: PointerEvent | React.PointerEvent, canvas: HTMLCanvasElement) => {
   const rect = canvas.getBoundingClientRect();
-  const adjustedX = (event.clientX - rect.left - pan.x) / zoom;
-  const adjustedY = (event.clientY - rect.top - pan.y) / zoom;
-  const xRatio = adjustedX / rect.width;
-  const yRatio = adjustedY / rect.height;
+  if (rect.width <= 0 || rect.height <= 0) {
+    return { x: 0, y: 0 };
+  }
+  const xRatio = (event.clientX - rect.left) / rect.width;
+  const yRatio = (event.clientY - rect.top) / rect.height;
   const x = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(xRatio * GRID_SIZE)));
   const y = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(yRatio * GRID_SIZE)));
   return { x, y };
@@ -331,7 +354,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
         const dx = to.x - from.x;
         const dy = to.y - from.y;
         const steps = Math.max(Math.abs(dx), Math.abs(dy), 1);
-        const radius = Math.max(1, Math.round(thickness / 2));
+        const radius = radiusFromThickness(thickness);
         for (let i = 0; i <= steps; i += 1) {
           const x = Math.round(from.x + (dx * i) / steps);
           const y = Math.round(from.y + (dy * i) / steps);
@@ -344,9 +367,48 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   );
 
   const resetViewport = useCallback(() => {
-    setZoom(1);
+    setZoom(EDITOR_ZOOM_LEVELS[0]);
     setPan({ x: 0, y: 0 });
   }, []);
+
+  const cycleZoom = useCallback(() => {
+    const idx = EDITOR_ZOOM_LEVELS.findIndex((level) => Math.abs(level - zoom) < 1e-6);
+    const nextZoom = EDITOR_ZOOM_LEVELS[idx >= 0 ? (idx + 1) % EDITOR_ZOOM_LEVELS.length : 0];
+
+    // At 1× there is nothing to pan (canvas fills the viewport); clear offset explicitly.
+    if (nextZoom <= 1) {
+      setZoom(EDITOR_ZOOM_LEVELS[0]);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+
+    const viewport = canvasViewportRef.current;
+    if (!viewport) {
+      setZoom(nextZoom);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+    const { width, height } = viewport.getBoundingClientRect();
+    const cx = width / 2;
+    const cy = height / 2;
+    const worldX = (cx - pan.x) / zoom;
+    const worldY = (cy - pan.y) / zoom;
+    const nextPan = clampPan(
+      {
+        x: cx - worldX * nextZoom,
+        y: cy - worldY * nextZoom,
+      },
+      nextZoom,
+    );
+    setZoom(nextZoom);
+    setPan(nextPan);
+  }, [clampPan, pan.x, pan.y, zoom]);
+
+  useEffect(() => {
+    if (zoom <= 1) {
+      setPan({ x: 0, y: 0 });
+    }
+  }, [zoom]);
 
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) {
@@ -359,7 +421,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
       return;
     }
     strokeStartPixelsRef.current = latestPixelsRef.current.slice();
-    const point = getPixelPosition(event, canvasRef.current, pan, zoom);
+    const point = getPixelPosition(event, canvasRef.current);
     const packed = activeTool === "erase" ? TRANSPARENT_PIXEL : currentColorPacked;
     setIsDrawing(true);
     setLastPoint(point);
@@ -385,7 +447,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     if (!isDrawing || !lastPoint) {
       return;
     }
-    const point = getPixelPosition(event, canvasRef.current, pan, zoom);
+    const point = getPixelPosition(event, canvasRef.current);
     const packed = activeTool === "erase" ? TRANSPARENT_PIXEL : currentColorPacked;
     drawLine(lastPoint, point, packed);
     setLastPoint(point);
@@ -409,32 +471,6 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     setIsDrawing(false);
     setIsPanning(false);
     setLastPoint(null);
-  };
-
-  const onCanvasWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || activeTool !== "move") {
-      return;
-    }
-    event.preventDefault();
-    const rect = canvasRef.current.getBoundingClientRect();
-    const localX = event.clientX - rect.left;
-    const localY = event.clientY - rect.top;
-    const zoomFactor = Math.exp(-event.deltaY * 0.0015);
-    const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * zoomFactor));
-    if (Math.abs(nextZoom - zoom) < 0.0001) {
-      return;
-    }
-    const worldX = (localX - pan.x) / zoom;
-    const worldY = (localY - pan.y) / zoom;
-    const nextPan = clampPan(
-      {
-        x: localX - worldX * nextZoom,
-        y: localY - worldY * nextZoom,
-      },
-      nextZoom,
-    );
-    setZoom(nextZoom);
-    setPan(nextPan);
   };
 
   const onUndo = useCallback(() => {
@@ -786,9 +822,9 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
             </label>
             <input
               type="range"
-              min={1}
+              min={0.01}
               max={8}
-              step={1}
+              step={0.01}
               value={thickness}
               onChange={(event) => setThickness(Number(event.target.value))}
               className="w-full"
@@ -825,15 +861,14 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
               })}
             </div>
             <div className="flex items-center gap-2">
-              <span>Z: {zoom.toFixed(2)}x</span>
               <div className="rounded-lg border border-accent-1 bg-secondary-background">
                 <button
                   type="button"
-                  onClick={resetViewport}
-                  className="flex items-center gap-1 rounded-md px-1 py-1 text-xs text-accent-2 hover:text-foreground"
-                  title="Reset view"
+                  onClick={cycleZoom}
+                  className="flex min-w-[3.25rem] items-center justify-center rounded-md px-2 py-1 text-xs text-accent-2 hover:text-foreground"
+                  title="Cycle zoom: 1× → 1.25× → 1.5× → 2×"
                 >
-                  <span>Reset View</span>
+                  {zoomLevelLabel(zoom)} Zoom
                 </button>
               </div>
             </div>
@@ -847,7 +882,6 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
-              onWheel={onCanvasWheel}
               style={{
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                 transformOrigin: "top left",
