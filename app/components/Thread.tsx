@@ -398,6 +398,8 @@ export default function Thread({
             image_id: cached.thread.image_id ?? previousThread?.image_id ?? null,
             image_url: cached.thread.image_url ?? null,
             image_access_grant: cached.thread.image_access_grant ?? null,
+            event_background_image_id: cached.thread.event_background_image_id ?? null,
+            event_background_image_access_grant: cached.thread.event_background_image_access_grant ?? null,
           }));
           setMessages(cached.messages);
           setHasMoreOlderMessages(cached.has_more_older);
@@ -423,6 +425,8 @@ export default function Thread({
               image_id: payload.thread.image_id ?? previousThread?.image_id ?? null,
               image_url: payload.thread.image_url ?? null,
               image_access_grant: payload.thread.image_access_grant ?? null,
+              event_background_image_id: payload.thread.event_background_image_id ?? null,
+              event_background_image_access_grant: payload.thread.event_background_image_access_grant ?? null,
             }));
             setMessages(payload.messages);
             setHasMoreOlderMessages(payload.has_more_older);
@@ -696,6 +700,8 @@ export default function Thread({
         image_id: latestPayload.thread.image_id ?? previousThread?.image_id ?? null,
         image_url: latestPayload.thread.image_url ?? null,
         image_access_grant: latestPayload.thread.image_access_grant ?? null,
+        event_background_image_id: latestPayload.thread.event_background_image_id ?? null,
+        event_background_image_access_grant: latestPayload.thread.event_background_image_access_grant ?? null,
       }));
 
       const previousSnapshot = messagesRef.current;
@@ -1674,8 +1680,24 @@ export default function Thread({
 
   return (
     <div
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background"
+      className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background"
     >
+      {selectedThread.event_background_image_id &&
+      selectedThread.event_background_image_access_grant ? (
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          <CachedImage
+            signedUrl={null}
+            imageAccessGrant={selectedThread.event_background_image_access_grant}
+            imageThreadId={selectedThread.id}
+            imageId={selectedThread.event_background_image_id}
+            alt=""
+            aria-hidden
+            className="h-full w-full object-cover object-center"
+          />
+          <div className="absolute inset-0 bg-primary-background/62" aria-hidden />
+        </div>
+      ) : null}
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
         <BackButton onBack={onBack} backLabel="" textOnly />
         <div
@@ -1995,6 +2017,7 @@ export default function Thread({
       {!activeOptionsMessageId ? messageComposerForm : null}
 
       {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
+      </div>
     </div>
   );
 }

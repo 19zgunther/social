@@ -67,8 +67,19 @@ export async function POST(request: Request) {
       );
     }
 
-    await prisma.thread_events.delete({
-      where: { id: event.id },
+    await prisma.$transaction(async (tx) => {
+      await tx.threads.updateMany({
+        where: {
+          created_by_event: event.id,
+        },
+        data: {
+          created_by_event: null,
+        },
+      });
+
+      await tx.thread_events.delete({
+        where: { id: event.id },
+      });
     });
 
     const payload: ThreadEventDeleteResponse = { deleted_event_id: event.id };

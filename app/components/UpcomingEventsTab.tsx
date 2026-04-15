@@ -13,6 +13,7 @@ import type {
 type UpcomingEventsTabProps = {
   currentUserId: string;
   isActive: boolean;
+  refreshNonce?: number;
   onOpenEvent: (item: UserUpcomingEventListItem) => void;
   onEventCreated: (item: UserUpcomingEventListItem) => void;
 };
@@ -91,6 +92,7 @@ function writeUpcomingTabCache(items: UserUpcomingEventListItem[]) {
 export default function UpcomingEventsTab({
   currentUserId,
   isActive,
+  refreshNonce = 0,
   onOpenEvent,
   onEventCreated,
 }: UpcomingEventsTabProps) {
@@ -157,6 +159,13 @@ export default function UpcomingEventsTab({
       void fetchUpcoming(false);
     }
   }, [isActive, fetchUpcoming]);
+
+  useEffect(() => {
+    if (refreshNonce <= 0) {
+      return;
+    }
+    void fetchUpcoming(true);
+  }, [refreshNonce, fetchUpcoming]);
 
   const onCreateEvent = async () => {
     const name = createName.trim();

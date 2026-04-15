@@ -41,6 +41,7 @@ export async function POST(request: Request) {
         name: true,
         owner: true,
         image_id: true,
+        created_by_event: true,
       },
     });
 
@@ -144,6 +145,32 @@ export async function POST(request: Request) {
       }
     }
 
+    let eventBackgroundImageId: string | null = null;
+    let eventBackgroundImageAccessGrant: string | null = null;
+    if (thread.created_by_event) {
+      const creatorEvent = await prisma.thread_events.findFirst({
+        where: {
+          id: thread.created_by_event,
+          thread_id: thread.id,
+        },
+        select: {
+          background_image_id: true,
+        },
+      });
+      eventBackgroundImageId = creatorEvent?.background_image_id ?? null;
+      if (eventBackgroundImageId) {
+        try {
+          eventBackgroundImageAccessGrant = createThreadBucketImageAccessGrant({
+            imageId: eventBackgroundImageId,
+            threadId: thread.id,
+            viewerUserId: authResult.user_id,
+          });
+        } catch (error) {
+          console.error("thread_event_background_grant_failed", thread.id, error);
+        }
+      }
+    }
+
     const messageGrantEntries = allMessages.map((message) => {
       if (!message.image_id) {
         return [message.id, null] as const;
@@ -170,6 +197,8 @@ export async function POST(request: Request) {
         image_id: thread.image_id ?? null,
         image_url: null,
         image_access_grant: threadImageAccessGrant,
+        event_background_image_id: eventBackgroundImageId,
+        event_background_image_access_grant: eventBackgroundImageAccessGrant,
       },
       viewer_user_id: authResult.user_id,
       has_more_older: hasMoreOlder,

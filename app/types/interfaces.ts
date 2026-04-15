@@ -84,6 +84,10 @@ export type ThreadItem = {
   last_message_from_self?: boolean;
   /** Present when the latest message is from someone else: image (tap to preview) or text-only (tap to reply with a photo). */
   last_photo_preview?: ThreadLastPhotoPreview | null;
+  /** Present when this thread was created by an event with a background image. */
+  event_background_image_id?: string | null;
+  /** Thread-scoped grant for the event background image; resolve with `imageThreadId` = this thread's `id`. */
+  event_background_image_access_grant?: string | null;
 };
 
 import type { VideoCallSignal } from "@/app/components/utils/webrtcVideoCall";
@@ -288,6 +292,8 @@ export type ThreadMessagesResponse = {
     image_id?: string | null;
     image_url?: string | null;
     image_access_grant?: string | null;
+    event_background_image_id?: string | null;
+    event_background_image_access_grant?: string | null;
   };
   viewer_user_id: string;
   has_more_older: boolean;

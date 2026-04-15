@@ -62,6 +62,7 @@ export default function Home() {
     "thread_settings",
   );
   const [threadReturnTab, setThreadReturnTab] = useState<"groups" | "thread_event">("groups");
+  const [eventsRefreshNonce, setEventsRefreshNonce] = useState(0);
   const [groupsListRefreshNonce, setGroupsListRefreshNonce] = useState(0);
   const [profileReloadSignal, setProfileReloadSignal] = useState(0);
 
@@ -380,6 +381,7 @@ export default function Home() {
             <UpcomingEventsTab
               currentUserId={authUser.user_id}
               isActive={activeTab === "events"}
+              refreshNonce={eventsRefreshNonce}
               onOpenEvent={(item: UserUpcomingEventListItem) => {
                 setSelectedThread(item.thread);
                 setThreadEventFocus(item.event);
@@ -485,6 +487,7 @@ export default function Home() {
                 }}
                 onEventDeleted={() => {
                   setThreadEventFocus(null);
+                  setEventsRefreshNonce((previous) => previous + 1);
                   setActiveTab(threadEventReturnTab);
                 }}
               />

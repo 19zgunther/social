@@ -29,7 +29,7 @@ type ThreadEventPageProps = {
   onBack: () => void;
   onOpenThread?: () => void;
   onEventUpdated: (event: ThreadEventItem) => void;
-  onEventDeleted: () => void;
+  onEventDeleted: (deletedEventId: string) => void;
   onNotify?: (message: string) => void;
 };
 
@@ -465,9 +465,9 @@ export default function ThreadEventPage({
         setDeleteConfirm(false);
         return;
       }
-      await response.json();
+      const payload = (await response.json()) as { deleted_event_id: string };
       threadEventPageCache.delete(local.id);
-      onEventDeleted();
+      onEventDeleted(payload.deleted_event_id);
     } catch (err) {
       onNotify?.(err instanceof Error ? err.message : "Delete failed.");
       setDeleteConfirm(false);
