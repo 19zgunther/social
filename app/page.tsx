@@ -383,13 +383,21 @@ export default function Home() {
               isActive={activeTab === "events"}
               refreshNonce={eventsRefreshNonce}
               onOpenEvent={(item: UserUpcomingEventListItem) => {
-                setSelectedThread(item.thread);
+                setSelectedThread({
+                  ...item.thread,
+                  event_background_image_id: item.event.background_image_id,
+                  event_background_image_access_grant: item.event.background_image_access_grant ?? null,
+                });
                 setThreadEventFocus(item.event);
                 setThreadEventReturnTab("events");
                 setActiveTab("thread_event");
               }}
               onEventCreated={(item: UserUpcomingEventListItem) => {
-                setSelectedThread(item.thread);
+                setSelectedThread({
+                  ...item.thread,
+                  event_background_image_id: item.event.background_image_id,
+                  event_background_image_access_grant: item.event.background_image_access_grant ?? null,
+                });
                 setThreadEventFocus(item.event);
                 setThreadEventReturnTab("events");
                 setActiveTab("thread_event");
@@ -479,6 +487,16 @@ export default function Home() {
                   setActiveTab(threadEventReturnTab);
                 }}
                 onOpenThread={() => {
+                  setSelectedThread((previous) =>
+                    previous
+                      ? {
+                          ...previous,
+                          event_background_image_id: threadEventFocus.background_image_id,
+                          event_background_image_access_grant:
+                            threadEventFocus.background_image_access_grant ?? null,
+                        }
+                      : previous,
+                  );
                   setThreadReturnTab("thread_event");
                   setActiveTab("thread");
                 }}
