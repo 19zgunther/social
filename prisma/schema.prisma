@@ -68,6 +68,16 @@ model shared_feedback {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model temp_passwords {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  expires_at DateTime @db.Timestamptz(6)
+  was_used   Boolean
+  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model thread_events {
   id                                              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at                                      DateTime  @default(now()) @db.Timestamptz(6)
@@ -157,6 +167,7 @@ model users {
   posts                                  posts[]
   push_subscriptions                     push_subscriptions[]
   shared_feedback                        shared_feedback[]
+  temp_passwords                         temp_passwords[]
   thread_events                          thread_events[]
   thread_messages                        thread_messages[]
   threads                                threads[]
