@@ -217,6 +217,8 @@ export type SyncEvent = {
 export type AuthCheckResponse = AuthUser;
 export type LoginRequest = { identifier?: string; password?: string };
 export type LoginResponse = { token: string; user: AuthUser };
+export type TempLoginEmailRequest = { identifier?: string };
+export type TempLoginEmailResponse = { message: string };
 export type SignupRequest = { username?: string; email?: string; password?: string };
 export type SignupResponse = { token: string; user: AuthUser };
 

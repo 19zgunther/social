@@ -11,9 +11,9 @@ export async function POST(request: Request) {
     const email = body.email?.trim().toLowerCase() ?? "";
     const password = body.password ?? "";
 
-    if (!username || !password) {
+    if (!username || !email || !password) {
       return NextResponse.json(
-        { error: { code: "invalid_request", message: "Username and password are required." } },
+        { error: { code: "invalid_request", message: "Username, email, and password are required." } },
         { status: 400 },
       );
     }
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
     const existingUser = await prisma.users.findFirst({
       where: {
-        OR: [{ username }, ...(email ? [{ email }] : [])],
+        OR: [{ username }, { email }],
       },
       select: {
         id: true,
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const createdUser = await prisma.users.create({
       data: {
         username,
-        email: email || null,
+        email,
         password_hash: passwordHash,
         created_at: new Date(),
       },
