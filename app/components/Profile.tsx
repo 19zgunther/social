@@ -574,6 +574,7 @@ function Profile({
                   return {
                     ...post,
                     ...(updated.data !== undefined ? { data: updated.data } : {}),
+                    ...(updated.group_sections !== undefined ? { group_sections: updated.group_sections } : {}),
                     ...(updated.text !== undefined ? { text: updated.text } : {}),
                     ...(updated.like_count !== undefined ? { like_count: updated.like_count } : {}),
                     ...(updated.is_liked_by_viewer !== undefined
@@ -987,6 +988,7 @@ function ProfileOtherUser({
                     return {
                       ...post,
                       ...(updated.data !== undefined ? { data: updated.data } : {}),
+                      ...(updated.group_sections !== undefined ? { group_sections: updated.group_sections } : {}),
                       ...(updated.text !== undefined ? { text: updated.text } : {}),
                       ...(updated.like_count !== undefined ? { like_count: updated.like_count } : {}),
                       ...(updated.is_liked_by_viewer !== undefined

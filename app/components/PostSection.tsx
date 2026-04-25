@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, UIEvent, useEffect, useMemo, useState } from "react";
+import { Dispatch, memo, SetStateAction, UIEvent, useEffect, useMemo, useState } from "react";
 import { Heart, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
@@ -11,7 +11,7 @@ import {
   CustomEmoji,
   customEmojiUuidFromToken,
 } from "@/app/lib/customEmojiCanvas";
-import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
+import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostGroupSection, PostItem } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 
@@ -24,6 +24,7 @@ type PostSectionProps = {
   onPostUpdated?: (updated: {
     id: string;
     data?: PostData | null;
+    group_sections?: PostGroupSection[];
     text?: string;
     like_count?: number;
     is_liked_by_viewer?: boolean;
@@ -42,7 +43,7 @@ const formatPostDateCollapsed = (value: string): string => {
   const date = parsePostDate(value);
   if (!date) { return ""; }
   const now = new Date();
-  const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric"};
+  const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
   if (date.getFullYear() !== now.getFullYear()) { options.year = "numeric"; }
   return date.toLocaleString(undefined, options);
 };
@@ -113,6 +114,7 @@ function PostSectionComponent({
   onPostUpdated,
 }: PostSectionProps) {
   const [postData, setPostData] = useState<PostData>(post.data ?? {});
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(post.group_sections?.[0]?.id ?? null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isLoadingAdditionalImages, setIsLoadingAdditionalImages] = useState(false);
   const [hasLoadedAdditionalImages, setHasLoadedAdditionalImages] = useState(false);
@@ -138,13 +140,14 @@ function PostSectionComponent({
   const [isSavingPostText, setIsSavingPostText] = useState(false);
   const [postTextStatusMessage, setPostTextStatusMessage] = useState("");
   const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
-  const [imageViewer, setImageViewer] = useState<{
-    imageId: string;
-    imageAccessGrant: string | null;
-    imageStorageUserId: string;
-    alt: string;
-  } | null>(null);
   const [isPostDateExpanded, setIsPostDateExpanded] = useState(false);
+  const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
+  const canEditPostText = Boolean(currentUserId) && post.created_by === currentUserId;
+
+  const activeSection = useMemo(
+    () => post.group_sections?.find((section) => section.id === activeSectionId) ?? post.group_sections?.[0] ?? null,
+    [activeSectionId, post.group_sections],
+  );
 
   const rootCommentEntries = useMemo(
     () =>
@@ -156,14 +159,17 @@ function PostSectionComponent({
       }),
     [postData.comments],
   );
+
   const rootTextCommentEntries = useMemo(
     () => rootCommentEntries.filter(([, comment]) => !isEmojiOnlyComment(comment.text)),
     [rootCommentEntries],
   );
+
   const rootEmojiReactions = useMemo(
     () => rootCommentEntries.filter(([, comment]) => isEmojiOnlyComment(comment.text)).map(([, comment]) => comment.text.trim()),
     [rootCommentEntries],
   );
+
   const customEmojiUuidsInPostData = useMemo(() => {
     const uuids = new Set<string>();
     const walk = (comments: Record<string, PostCommentNode> | undefined) => {
@@ -181,6 +187,7 @@ function PostSectionComponent({
     walk(postData.comments);
     return Array.from(uuids);
   }, [postData.comments]);
+
   const allPostImageIds = useMemo(() => {
     const ids: string[] = [];
     if (post.image_id) {
@@ -194,18 +201,20 @@ function PostSectionComponent({
     }
     return ids;
   }, [post.image_id, postData.other_image_ids]);
+
   const hasMultipleImages = allPostImageIds.length > 1;
 
   useEffect(() => {
-    setPostData(post.data ?? {});
+    setActiveSectionId(post.group_sections?.[0]?.id ?? null);
+    setPostData((post.group_sections?.[0]?.data ?? post.data) ?? {});
     setActiveImageIndex(0);
     setIsLoadingAdditionalImages(false);
     setHasLoadedAdditionalImages(false);
     setImageGrantById(() => {
       const next: Record<string, string> = {};
-      if (post.image_id && post.image_access_grant) {
+    if (post.image_id && post.image_access_grant) {
         next[post.image_id] = post.image_access_grant;
-      }
+    }
       return next;
     });
     setRootCommentDraft("");
@@ -215,9 +224,12 @@ function PostSectionComponent({
     setIsEditingPostText(false);
     setPostTextDraft(post.text);
     setPostTextStatusMessage("");
-    setImageViewer(null);
     setCustomEmojiByUuid({});
-  }, [post.data, post.id, post.image_id, post.image_access_grant, post.text]);
+  }, [post.data, post.group_sections, post.id, post.image_id, post.image_access_grant, post.text]);
+
+  useEffect(() => {
+    setPostData(activeSection?.data ?? post.data ?? {});
+  }, [activeSection?.data, post.data]);
 
   useEffect(() => {
     if (customEmojiUuidsInPostData.length === 0) {
@@ -243,9 +255,9 @@ function PostSectionComponent({
 
   useEffect(() => {
     const fallbackLikeCount = Object.values(initialLikes).filter(Boolean).length;
-    setLikeCount(post.like_count ?? fallbackLikeCount);
-    setIsLikedByViewer(Boolean(post.is_liked_by_viewer));
-  }, [initialLikes, post.is_liked_by_viewer, post.like_count]);
+    setLikeCount(activeSection?.like_count ?? post.like_count ?? fallbackLikeCount);
+    setIsLikedByViewer(Boolean(activeSection?.is_liked_by_viewer ?? post.is_liked_by_viewer));
+  }, [activeSection?.is_liked_by_viewer, activeSection?.like_count, initialLikes, post.is_liked_by_viewer, post.like_count]);
 
   const loadAdditionalImages = async () => {
     if (!hasMultipleImages || hasLoadedAdditionalImages || isLoadingAdditionalImages) {
@@ -303,6 +315,9 @@ function PostSectionComponent({
     if (isUpdatingLike) {
       return;
     }
+    if (!activeSection?.id) {
+      return;
+    }
 
     const nextLikedState = !isLikedByViewer;
     const previousLikedState = isLikedByViewer;
@@ -317,6 +332,7 @@ function PostSectionComponent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           post_id: post.id,
+          section_id: activeSection.id,
           like: nextLikedState,
         }),
       });
@@ -336,11 +352,22 @@ function PostSectionComponent({
         setPostData(payload.data);
       }
       if (onPostUpdated) {
+        const nextSections = (post.group_sections ?? []).map((section) =>
+          section.id === activeSection.id
+            ? {
+              ...section,
+              data: payload.data ?? section.data,
+              like_count: payload.like_count ?? section.like_count,
+              is_liked_by_viewer: payload.is_liked_by_viewer ?? section.is_liked_by_viewer,
+            }
+            : section,
+        );
         onPostUpdated({
           id: post.id,
           like_count: payload.like_count,
           is_liked_by_viewer: payload.is_liked_by_viewer,
           data: payload.data,
+          group_sections: nextSections,
         });
       }
     } catch {
@@ -358,6 +385,9 @@ function PostSectionComponent({
     if (!message || isSubmittingComment) {
       return;
     }
+    if (!activeSection?.id) {
+      return;
+    }
 
     setIsSubmittingComment(true);
     try {
@@ -366,6 +396,7 @@ function PostSectionComponent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           post_id: post.id,
+          section_id: activeSection.id,
           parent_path: parentPath,
           message,
         }),
@@ -377,9 +408,15 @@ function PostSectionComponent({
       const payload = (await response.json()) as { data?: PostData | null };
       setPostData(payload.data ?? {});
       if (onPostUpdated) {
+        const nextSections = (post.group_sections ?? []).map((section) =>
+          section.id === activeSection.id
+            ? { ...section, data: payload.data ?? section.data }
+            : section,
+        );
         onPostUpdated({
           id: post.id,
           data: payload.data ?? {},
+          group_sections: nextSections,
         });
       }
       if (parentPath.length === 0) {
@@ -403,13 +440,9 @@ function PostSectionComponent({
     );
   };
 
-
   const handlePostEmojiReply = (emoji: string, path?: string[]) => {
     void onSubmitComment(path ?? [], emoji);
   };
-
-  const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
-  const canEditPostText = Boolean(currentUserId) && post.created_by === currentUserId;
 
   const onSavePostText = async () => {
     if (!canEditPostText || isSavingPostText) {
@@ -459,6 +492,9 @@ function PostSectionComponent({
     if (!pathKey || isDeletingCommentPath) {
       return;
     }
+    if (!activeSection?.id) {
+      return;
+    }
 
     if (!aboutToDeleteCommentPath || aboutToDeleteCommentPath !== pathKey) {
       setAboutToDeleteCommentPath(pathKey);
@@ -472,6 +508,7 @@ function PostSectionComponent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           post_id: post.id,
+          section_id: activeSection.id,
           comment_path: commentPath,
         }),
       });
@@ -483,9 +520,15 @@ function PostSectionComponent({
       const nextComments = payload.data?.comments;
       setPostData(payload.data ?? {});
       if (onPostUpdated) {
+        const nextSections = (post.group_sections ?? []).map((section) =>
+          section.id === activeSection.id
+            ? { ...section, data: payload.data ?? section.data }
+            : section,
+        );
         onPostUpdated({
           id: post.id,
           data: payload.data ?? {},
+          group_sections: nextSections,
         });
       }
 
@@ -514,6 +557,170 @@ function PostSectionComponent({
     }
   };
 
+  return (
+    <PostSectionComponentRenderer
+      className={className}
+      hasMultipleImages={hasMultipleImages}
+      post={post}
+      onViewUserProfile={onViewUserProfile}
+      isPostDateExpanded={isPostDateExpanded}
+      setIsPostDateExpanded={setIsPostDateExpanded}
+      activeSection={activeSection}
+      setActiveSectionId={setActiveSectionId}
+      allPostImageIds={allPostImageIds}
+      onCarouselScroll={onCarouselScroll}
+      loadAdditionalImages={loadAdditionalImages}
+      imageGrantById={imageGrantById}
+      isLoadingAdditionalImages={isLoadingAdditionalImages}
+      activeImageIndex={activeImageIndex}
+      canEditPostText={canEditPostText}
+      postTextDraft={postTextDraft}
+      setPostTextDraft={setPostTextDraft}
+      isSavingPostText={isSavingPostText}
+      postTextStatusMessage={postTextStatusMessage}
+      isEditingPostText={isEditingPostText}
+      setIsEditingPostText={setIsEditingPostText}
+      onSavePostText={onSavePostText}
+      rootCommentDraft={rootCommentDraft}
+      setRootCommentDraft={setRootCommentDraft}
+      isSubmittingComment={isSubmittingComment}
+      onToggleLike={onToggleLike}
+      isUpdatingLike={isUpdatingLike}
+      isLikedByViewer={isLikedByViewer}
+      likeCount={likeCount}
+      rootEmojiReactions={rootEmojiReactions}
+      customEmojiByUuid={customEmojiByUuid}
+      showComments={showComments}
+      onSubmitComment={onSubmitComment}
+      setPostTextStatusMessage={setPostTextStatusMessage}
+      rootTextCommentEntries={rootTextCommentEntries}
+      handlePostEmojiReply={handlePostEmojiReply}
+      onDeleteComment={onDeleteComment}
+      toggleReplies={toggleReplies}
+      currentUserId={currentUserId ?? null}
+      expandedReplyPaths={expandedReplyPaths}
+      activeReplyPath={activeReplyPath}
+      replyDraftByPath={replyDraftByPath}
+      isDeletingCommentPath={isDeletingCommentPath}
+      aboutToDeleteCommentPath={aboutToDeleteCommentPath}
+      setActiveReplyPath={setActiveReplyPath}
+      setReplyDraftByPath={setReplyDraftByPath}
+      setIsDeletingCommentPath={setIsDeletingCommentPath}
+      setAboutToDeleteCommentPath={setAboutToDeleteCommentPath}
+    />
+  );
+}
+
+
+export function PostSectionComponentRenderer({
+  className,
+  hasMultipleImages,
+  post,
+  onViewUserProfile,
+  isPostDateExpanded,
+  setIsPostDateExpanded,
+  activeSection,
+  setActiveSectionId,
+  allPostImageIds,
+  onCarouselScroll,
+  loadAdditionalImages,
+  imageGrantById,
+  isLoadingAdditionalImages,
+  activeImageIndex,
+  canEditPostText,
+  postTextDraft,
+  setPostTextDraft,
+  isSavingPostText,
+  postTextStatusMessage,
+  isEditingPostText,
+  setIsEditingPostText,
+  onSavePostText,
+  rootCommentDraft,
+  setRootCommentDraft,
+  isSubmittingComment,
+  onToggleLike,
+  isUpdatingLike,
+  isLikedByViewer,
+  likeCount,
+  rootEmojiReactions,
+  customEmojiByUuid,
+  showComments,
+  onSubmitComment,
+  setPostTextStatusMessage,
+  rootTextCommentEntries,
+  handlePostEmojiReply,
+  onDeleteComment,
+  toggleReplies,
+  currentUserId,
+  expandedReplyPaths,
+  activeReplyPath,
+  replyDraftByPath,
+  isDeletingCommentPath,
+  aboutToDeleteCommentPath,
+  setActiveReplyPath,
+  setReplyDraftByPath,
+  onAddPostImage,
+  onRemovePostImage,
+}: {
+  className?: string;
+  hasMultipleImages?: boolean;
+  post: PostItem;
+  onViewUserProfile?: (userId: string) => void;
+  isPostDateExpanded: boolean;
+  setIsPostDateExpanded: Dispatch<SetStateAction<boolean>>;
+  activeSection: PostGroupSection | null;
+  setActiveSectionId: (sectionId: string | null) => void;
+  allPostImageIds: string[];
+  onCarouselScroll: (event: UIEvent<HTMLDivElement>) => void;
+  loadAdditionalImages: () => void;
+  imageGrantById: Record<string, string>;
+  isLoadingAdditionalImages: boolean;
+  activeImageIndex: number;
+  canEditPostText: boolean;
+  postTextDraft: string;
+  setPostTextDraft: Dispatch<SetStateAction<string>>;
+  isSavingPostText: boolean;
+  postTextStatusMessage: string;
+  isEditingPostText: boolean;
+  setIsEditingPostText: Dispatch<SetStateAction<boolean>>;
+  onSavePostText: () => void;
+  rootCommentDraft: string;
+  setRootCommentDraft: Dispatch<SetStateAction<string>>;
+  isSubmittingComment: boolean;
+  onToggleLike: () => void;
+  isUpdatingLike: boolean;
+  isLikedByViewer: boolean;
+  likeCount: number;
+  rootEmojiReactions: string[];
+  customEmojiByUuid: Record<string, EmojiItem>;
+  showComments: boolean;
+  onSubmitComment: (parentPath: string[], emoji?: string) => void;
+  setPostTextStatusMessage: Dispatch<SetStateAction<string>>;
+  rootTextCommentEntries: [string, PostCommentNode][];
+  handlePostEmojiReply: (emoji: string, path?: string[]) => void;
+  onDeleteComment: (path: string[]) => void;
+  toggleReplies: (pathKey: string) => void;
+  currentUserId: string | null;
+  expandedReplyPaths: string[];
+  activeReplyPath: string | null;
+  replyDraftByPath: Record<string, string>;
+  isDeletingCommentPath: string | null;
+  aboutToDeleteCommentPath: string | null;
+  setAboutToDeleteCommentPath: Dispatch<SetStateAction<string | null>>;
+  setActiveReplyPath: Dispatch<SetStateAction<string | null>>;
+  setReplyDraftByPath: Dispatch<SetStateAction<Record<string, string>>>;
+  setIsDeletingCommentPath: Dispatch<SetStateAction<string | null>>;
+  onAddPostImage?: () => void;
+  onRemovePostImage?: () => void;
+}) {
+
+  const [imageViewer, setImageViewer] = useState<{
+    imageId: string;
+    imageAccessGrant: string | null;
+    imageStorageUserId: string;
+    alt: string;
+  } | null>(null);
+
   const renderCommentTree = (
     commentTimestamp: string,
     comment: PostCommentNode,
@@ -534,8 +741,7 @@ function PostSectionComponent({
     const isReplyInputOpen = activeReplyPath === pathKey;
     const replyDraft = replyDraftByPath[pathKey] ?? "";
     const isDeletedPlaceholder = Boolean(comment.deleted);
-    const canDeleteComment =
-      Boolean(currentUserId) && !isDeletedPlaceholder && comment.user_id === currentUserId;
+    const canDeleteComment = Boolean(currentUserId) && !isDeletedPlaceholder && comment.user_id === currentUserId;
     const replyTargetDisplayName = comment.username || comment.user_id || "this comment";
 
     return (
@@ -550,9 +756,7 @@ function PostSectionComponent({
               <button
                 type="button"
                 className="ml-auto shrink-0"
-                onClick={() => {
-                  void onDeleteComment(path);
-                }}
+                onClick={() => { onDeleteComment(path); }}
                 disabled={isDeletingCommentPath === pathKey}
                 aria-label={aboutToDeleteCommentPath === pathKey ? "Confirm delete comment" : "Delete comment"}
               >
@@ -620,7 +824,7 @@ function PostSectionComponent({
           </div>
         ) : null}
 
-        
+
         {hasThreadedReplies && isExpanded ? (
           <div className="mt-1 space-y-2">
             {threadedReplyEntries.map(([childTimestamp, childComment]) =>
@@ -632,8 +836,11 @@ function PostSectionComponent({
     );
   };
 
+
   return (
     <article className={`w-full border-t border-accent-1 bg-primary-background mb-10 ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}>
+      
+      {/** Post Header (Profile Img, Username, Post Date) */}
       <header className="px-2 py-2">
         <div className="flex items-center gap-2">
           <UserProfileImage
@@ -667,8 +874,24 @@ function PostSectionComponent({
               : formatPostDateCollapsed(post.created_at)}
           </button>
         </div>
-
+        {post.group_sections && post.group_sections.length > 1 ? (
+          <div className="mt-2">
+            <select
+              value={activeSection?.id ?? ""}
+              onChange={(event) => setActiveSectionId(event.target.value)}
+              className="rounded-md border border-accent-1 bg-secondary-background px-2 py-1 text-xs text-foreground"
+            >
+              {post.group_sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.thread_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
       </header>
+
+      {/** Post Images */}
       {allPostImageIds.length > 0 ? (
         <div
           className="flex w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth"
@@ -718,8 +941,33 @@ function PostSectionComponent({
         </div>
       ) : null}
 
-      {/** Post Content */}
+      {/** Post Images Add/Remove Buttons */}
+      {onAddPostImage || onRemovePostImage ? (
+        <div className="flex flex-wrap gap-2 border-b border-accent-1 bg-secondary-background px-3 py-2">
+          {onAddPostImage ? (
+            <button
+              type="button"
+              onClick={onAddPostImage}
+              className="rounded-lg border border-accent-1 bg-primary-background px-3 py-1.5 text-sm text-foreground hover:border-accent-2"
+            >
+              Add image
+            </button>
+          ) : null}
+          {onRemovePostImage ? (
+            <button
+              type="button"
+              onClick={onRemovePostImage}
+              className="rounded-lg border border-accent-1 bg-primary-background px-3 py-1.5 text-sm text-foreground hover:border-accent-2 disabled:opacity-50"
+            >
+              Remove image
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/** Post Buttom Bar (Description, Like Button Row, Emoji Picker, Reaction Emojis, Comments) */}
       <div className="px-3 py-1">
+        {/** Post Images Dot Indicator */}
         {hasMultipleImages ? (
           <div className="mb-2 flex justify-center gap-1">
             {allPostImageIds.map((imageId, index) => (
@@ -868,7 +1116,6 @@ function PostSectionComponent({
         alt={imageViewer?.alt}
       />
     </article>
-  );
+  )
 }
-
 export const PostSection = memo(PostSectionComponent);

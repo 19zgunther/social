@@ -540,6 +540,7 @@ export default function Home() {
           <div className="absolute w-full h-full" style={createPostStyle}>
             <CreatePostTab
               isActive={activeTab === "create_post"}
+              authUser={authUser}
               onCancel={() => setActiveTab("profile")}
               onPosted={() => {
                 setProfileReloadSignal((previous) => previous + 1);

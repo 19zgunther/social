@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { getPostSectionRootMessageRows } from "@/app/api/post_section_path_utils";
 import { PostEditRequest, PostEditResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -20,21 +21,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const post = await prisma.posts.findFirst({
-      where: { id: postId },
-      select: {
-        id: true,
-        created_by: true,
-        image_id: true,
-      },
-    });
-    if (!post) {
+    const postRoots = await getPostSectionRootMessageRows(postId);
+    if (postRoots.length === 0) {
       return NextResponse.json(
         { error: { code: "post_not_found", message: "Post not found." } },
         { status: 404 },
       );
     }
-    if (post.created_by !== authResult.user_id) {
+    if (postRoots.some((row) => row.created_by !== authResult.user_id)) {
       return NextResponse.json(
         { error: { code: "not_allowed", message: "You can only edit your own posts." } },
         { status: 403 },
@@ -42,28 +36,23 @@ export async function POST(request: Request) {
     }
 
     const nextText = body.text ?? "";
-    if (!post.image_id && !nextText.trim()) {
+    const hasAnyImage = postRoots.some((row) => Boolean(row.image_id));
+    if (!hasAnyImage && !nextText.trim()) {
       return NextResponse.json(
         { error: { code: "invalid_request", message: "Post text cannot be empty." } },
         { status: 400 },
       );
     }
 
-    const updated = await prisma.posts.update({
-      where: { id: post.id },
-      data: {
-        text: nextText.trim().length > 0 ? nextText : null,
-      },
-      select: {
-        id: true,
-        text: true,
-      },
+    await prisma.thread_messages.updateMany({
+      where: { id: { in: postRoots.map((r) => r.id) } },
+      data: { text: nextText.trim().length > 0 ? nextText : null },
     });
 
     const payload: PostEditResponse = {
       post: {
-        id: updated.id,
-        text: updated.text ?? "",
+        id: postId,
+        text: nextText.trim().length > 0 ? nextText : "",
       },
     };
     return NextResponse.json(payload, { status: 200 });

@@ -2,9 +2,9 @@
 
 import { TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState } from "react";
 import { PostSection} from "@/app/components/PostSection";
-import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
+import { ApiError, FeedPostsListResponse, PostItem, PostData, PostGroupSection } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
-import { LoaderCircle, Plus } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 const FEED_CACHE_KEY = "feed_cache_v2";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
@@ -108,6 +108,7 @@ export default function Feed({
     (updated: {
       id: string;
       data?: PostData | null;
+      group_sections?: PostGroupSection[];
       text?: string;
       like_count?: number;
       is_liked_by_viewer?: boolean;
@@ -120,6 +121,7 @@ export default function Feed({
           return {
             ...post,
             ...(updated.data !== undefined ? { data: updated.data } : {}),
+            ...(updated.group_sections !== undefined ? { group_sections: updated.group_sections } : {}),
             ...(updated.text !== undefined ? { text: updated.text } : {}),
             ...(updated.like_count !== undefined ? { like_count: updated.like_count } : {}),
             ...(updated.is_liked_by_viewer !== undefined

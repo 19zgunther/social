@@ -520,7 +520,7 @@ export default function Groups({
       {createThreadIsVisible && <form onSubmit={onCreateThread} className="w-full block relative">
         <input
           className="flex-1 w-full rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-          placeholder="New thread name"
+          placeholder="New Group Name"
           value={threadName}
           onChange={(event) => setThreadName(event.target.value)}
           required
@@ -550,7 +550,7 @@ export default function Groups({
             aria-hidden
             className="h-3 w-3 animate-spin rounded-full border-2 border-accent-2 border-t-transparent"
           />
-          <span>Loading threads...</span>
+          <span>Loading groups...</span>
         </div>
       ) : null}
 
@@ -564,7 +564,7 @@ export default function Groups({
         className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y"
       >
         {!isLoadingThreads && threads.length === 0 ? (
-          <p className="text-xs text-accent-2 px-4">No threads yet. Create your first one.</p>
+          <p className="text-xs text-accent-2 px-4">No groups yet. Create your first one.</p>
         ) : null}
 
         {threads.map((thread) => (

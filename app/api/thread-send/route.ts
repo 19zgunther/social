@@ -8,6 +8,7 @@ import { sendPushToUsers } from "@/app/lib/push_notifications";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
+import { computeThreadReplyRootParentId } from "@/app/api/thread_message_root_parent";
 import {
   MessageData,
   PoolBallState,
@@ -260,6 +261,7 @@ export async function POST(request: Request) {
     }
 
     let parentMessageId = thread.id;
+    let newRootParentId: string | null = null;
     if (replyToMessageId) {
       const replyTarget = await prisma.thread_messages.findFirst({
         where: {
@@ -268,6 +270,7 @@ export async function POST(request: Request) {
         select: {
           id: true,
           parent_id: true,
+          root_parent_id: true,
         },
       });
 
@@ -308,6 +311,11 @@ export async function POST(request: Request) {
       }
 
       parentMessageId = replyToMessageId;
+      newRootParentId = computeThreadReplyRootParentId(thread.id, {
+        id: replyTarget.id,
+        parent_id: replyTarget.parent_id,
+        root_parent_id: replyTarget.root_parent_id,
+      });
     }
 
     const imageId = imageBase64Data ? randomUUID() : null;
@@ -324,6 +332,7 @@ export async function POST(request: Request) {
       data: {
         created_by: authResult.user_id,
         parent_id: parentMessageId,
+        root_parent_id: newRootParentId,
         text: text ?? null,
         image_id: imageId,
         ...(messageData ? { data: messageData } : {}),

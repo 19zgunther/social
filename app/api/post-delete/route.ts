@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@/app/generated/prisma/client";
 import { authCheck } from "@/app/api/auth_utils";
+import { getPostSectionRootMessageRows } from "@/app/api/post_section_path_utils";
 import { prisma } from "@/app/lib/prisma";
 
 type PostDeleteBody = {
@@ -23,36 +25,32 @@ export async function POST(request: Request) {
       );
     }
 
-    const post = await prisma.posts.findFirst({
-      where: {
-        id: postId,
-      },
-      select: {
-        id: true,
-        created_by: true,
-      },
-    });
-    if (!post) {
+    const postRoots = await getPostSectionRootMessageRows(postId);
+    if (postRoots.length === 0) {
       return NextResponse.json(
         { error: { code: "post_not_found", message: "Post not found." } },
         { status: 404 },
       );
     }
 
-    if (post.created_by !== authResult.user_id) {
+    if (postRoots.some((row) => row.created_by !== authResult.user_id)) {
       return NextResponse.json(
         { error: { code: "not_allowed", message: "You can only delete your own posts." } },
         { status: 403 },
       );
     }
 
-    await prisma.posts.delete({
-      where: {
-        id: post.id,
+    await prisma.thread_messages.updateMany({
+      where: { id: { in: postRoots.map((r) => r.id) } },
+      data: {
+        text: null,
+        data: {
+          post_kind: "post_deleted",
+        } as Prisma.InputJsonValue,
       },
     });
 
-    return NextResponse.json({ ok: true, post_id: post.id }, { status: 200 });
+    return NextResponse.json({ ok: true, post_id: postId }, { status: 200 });
   } catch (error) {
     console.error("post_delete_failed", error);
     return NextResponse.json(

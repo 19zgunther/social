@@ -42,6 +42,9 @@ export async function POST(request: Request) {
     const imageBase64Data = body.image_base64_data?.trim();
     const imageMimeType = body.image_mime_type?.trim();
     const data = sanitizePostData(body.data);
+    const threadIds = Array.isArray(body.thread_ids)
+      ? Array.from(new Set(body.thread_ids.map((value) => value?.trim()).filter(Boolean) as string[]))
+      : [];
     const hasText = Boolean(text);
     const hasProvidedImageId = Boolean(providedImageId);
     const hasImageUploadPayload = Boolean(imageBase64Data || imageMimeType);
@@ -52,6 +55,17 @@ export async function POST(request: Request) {
           error: {
             code: "invalid_request",
             message: "text and/or image_id or image_base64_data with image_mime_type is required.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+    if (threadIds.length === 0) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_request",
+            message: "thread_ids is required.",
           },
         },
         { status: 400 },
@@ -81,44 +95,57 @@ export async function POST(request: Request) {
       });
     }
 
-    const post = await prisma.posts.create({
-      data: {
-        created_by: authResult.user_id,
-        image_id: imageId,
-        text: text ?? null,
-        ...(data ? { data } : {}),
+    const accessibleThreads = await prisma.threads.findMany({
+      where: {
+        id: { in: threadIds },
+        OR: [{ owner: authResult.user_id }, { user_thread_access: { some: { user_id: authResult.user_id } } }],
       },
       select: {
         id: true,
-        created_at: true,
-        created_by: true,
-        image_id: true,
-        text: true,
-        data: true,
+        name: true,
+        user_thread_access: {
+          select: { user_id: true },
+        },
+        owner: true,
       },
+    });
+    if (accessibleThreads.length !== threadIds.length) {
+      return NextResponse.json(
+        { error: { code: "thread_not_found", message: "One or more groups are not accessible." } },
+        { status: 404 },
+      );
+    }
+    const postId = randomUUID();
+    const createdAt = new Date();
+    const sectionRowByThreadId = new Map(
+      accessibleThreads.map((thread) => {
+        const id = randomUUID();
+        return [thread.id, { id, thread }] as const;
+      }),
+    );
+    await prisma.thread_messages.createMany({
+      data: accessibleThreads.map((thread) => {
+        const row = sectionRowByThreadId.get(thread.id)!;
+        return {
+          id: row.id,
+          created_at: createdAt,
+          updated_at: createdAt,
+          created_by: authResult.user_id,
+          parent_id: thread.id,
+          post_id: postId,
+          image_id: imageId,
+          text: text ?? null,
+          root_parent_id: null,
+          ...(data ? { data } : {}),
+        };
+      }),
     });
 
-    const acceptedFriendRows = await prisma.friends.findMany({
-      where: {
-        accepted: true,
-        OR: [{ requesting_user: authResult.user_id }, { other_user: authResult.user_id }],
-      },
-      select: {
-        requesting_user: true,
-        other_user: true,
-      },
-    });
-    const recipientUserIds = Array.from(
-      new Set(
-        acceptedFriendRows
-          .map((row) =>
-            row.requesting_user === authResult.user_id ? row.other_user : row.requesting_user,
-          )
-          .filter((userId) => userId !== authResult.user_id),
-      ),
-    );
+    const recipientUserIds = Array.from(new Set(
+      accessibleThreads.flatMap((thread) => [thread.owner, ...thread.user_thread_access.map((row) => row.user_id)]),
+    )).filter((userId) => userId !== authResult.user_id);
     if (recipientUserIds.length > 0) {
-      const previewText = getPostPushPreviewText(post.text, Boolean(post.image_id));
+      const previewText = getPostPushPreviewText(text ?? null, Boolean(imageId));
       void sendPushToUsers({
         recipientUserIds,
         payload: {
@@ -132,15 +159,15 @@ export async function POST(request: Request) {
     }
 
     let imageAccessGrant: string | null = null;
-    if (post.image_id) {
+    if (imageId) {
       try {
         imageAccessGrant = createMainBucketImageAccessGrant({
-          imageId: post.image_id,
-          storageUserId: post.created_by,
+          imageId: imageId,
+          storageUserId: authResult.user_id,
           viewerUserId: authResult.user_id,
         });
       } catch (error) {
-        console.error("post_create_image_grant_failed", post.id, error);
+        console.error("post_create_image_grant_failed", postId, error);
       }
     }
 
@@ -167,14 +194,14 @@ export async function POST(request: Request) {
 
     const payload: PostCreateResponse = {
       post: {
-        id: post.id,
-        created_at: post.created_at.toISOString(),
-        created_by: post.created_by,
-        image_id: post.image_id,
+        id: postId,
+        created_at: createdAt.toISOString(),
+        created_by: authResult.user_id,
+        image_id: imageId,
         image_url: null,
         image_access_grant: imageAccessGrant,
-        text: post.text ?? "",
-        data: post.data as PostData | null,
+        text: text ?? "",
+        data: (data as PostData | undefined) ?? null,
         like_count: 0,
         is_liked_by_viewer: false,
         username: authResult.username,
@@ -182,6 +209,15 @@ export async function POST(request: Request) {
         author_profile_image_id: author?.profile_image_id ?? null,
         author_profile_image_url: null,
         author_profile_image_access_grant: authorProfileImageAccessGrant,
+        group_sections: accessibleThreads.map((thread) => ({
+          id: sectionRowByThreadId.get(thread.id)!.id,
+          thread_id: thread.id,
+          thread_name: thread.name,
+          created_at: createdAt.toISOString(),
+          data: (data as PostData | undefined) ?? {},
+          like_count: 0,
+          is_liked_by_viewer: false,
+        })),
       },
     };
     return NextResponse.json(payload, { status: 200 });

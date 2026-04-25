@@ -29,6 +29,16 @@ export type PostData = {
   other_image_ids?: string[];
 };
 
+export type PostGroupSection = {
+  id: string;
+  thread_id: string;
+  thread_name: string;
+  created_at: string;
+  data: PostData | null;
+  like_count?: number;
+  is_liked_by_viewer?: boolean;
+};
+
 export type PostItem = {
   id: string;
   created_at: string;
@@ -48,6 +58,7 @@ export type PostItem = {
   /** Legacy; always null from list/create APIs. */
   author_profile_image_url?: string | null;
   author_profile_image_access_grant?: string | null;
+  group_sections?: PostGroupSection[];
 };
 
 export type ImageOverlayData = {
@@ -131,6 +142,7 @@ export type MessageData = {
   image_overlay?: ImageOverlayData;
   video_call_signal?: VideoCallSignal;
   pool_game?: PoolGameMessageData;
+  post_kind?: "post_like" | "post_deleted";
 };
 
 export type ThreadMessage = {
@@ -145,6 +157,7 @@ export type ThreadMessage = {
   data: MessageData | null;
   direct_reply_count: number;
   username: string;
+  post_id?: string | null;
 };
 
 export type ThreadMember = {
@@ -243,6 +256,7 @@ export type PostCreateRequest = {
   image_base64_data?: string;
   image_mime_type?: string;
   data?: unknown;
+  thread_ids?: string[];
 };
 export type PostCreateResponse = { post: PostItem };
 export type PostEditRequest = {
@@ -459,6 +473,20 @@ export type ThreadImageRemoveResponse = {
 export type UserProfileRequest = {
   user_id?: string;
   cursor_post_id?: string;
+};
+
+export type FeedPostLikeRequest = {
+  post_id?: string;
+  section_id?: string;
+  like?: boolean;
+};
+
+export type FeedPostCommentRequest = {
+  post_id?: string;
+  section_id?: string;
+  parent_path?: string[];
+  message?: string;
+  comment_path?: string[];
 };
 
 export type UserProfileResponse = {

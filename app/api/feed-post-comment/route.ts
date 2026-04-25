@@ -1,61 +1,78 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@/app/generated/prisma/client";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
+import { computePostSectionReplyRootParentId } from "@/app/api/thread_message_root_parent";
+import { resolveValidatedCommentTarget, resolveValidatedReplyParent } from "@/app/api/post_section_path_utils";
+import { FeedPostCommentRequest, PostData, PostCommentNode } from "@/app/types/interfaces";
 
-type FeedPostCommentBody = {
-  post_id?: string;
-  parent_path?: string[];
-  message?: string;
-  comment_path?: string[];
-};
+const asMessageDataObject = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 
-type CommentNode = {
-  username: string;
-  user_id: string;
-  text: string;
-  replies: Record<string, CommentNode>;
-  deleted?: boolean;
-};
-
-type PostData = {
-  likes?: Record<string, boolean>;
-  comments?: Record<string, CommentNode>;
-};
-
-const asPostDataObject = (value: Prisma.JsonValue | null): PostData => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  return value as PostData;
-};
-
-const cloneCommentTree = (comments: Record<string, CommentNode>): Record<string, CommentNode> => {
-  const cloned: Record<string, CommentNode> = {};
-  for (const [key, comment] of Object.entries(comments)) {
-    cloned[key] = {
-      username: comment.username,
-      user_id: comment.user_id,
-      text: comment.text,
-      replies: cloneCommentTree(comment.replies ?? {}),
-      ...(comment.deleted ? { deleted: true } : {}),
-    };
-  }
-  return cloned;
-};
-
-const createCommentKey = (existingMap: Record<string, CommentNode>): string => {
-  const base = new Date().toISOString();
-  if (!existingMap[base]) {
-    return base;
-  }
-  let suffix = 1;
-  while (existingMap[`${base}-${suffix}`]) {
-    suffix += 1;
-  }
-  return `${base}-${suffix}`;
+const buildSectionData = async (sectionId: string): Promise<PostData> => {
+  const rows = await prisma.thread_messages.findMany({
+    where: {
+      OR: [
+        { id: sectionId },
+        { root_parent_id: sectionId },
+        { AND: [{ parent_id: sectionId }, { root_parent_id: null }] },
+      ],
+    },
+    select: {
+      id: true,
+      parent_id: true,
+      root_parent_id: true,
+      created_by: true,
+      created_at: true,
+      text: true,
+      data: true,
+      users: { select: { username: true } },
+    },
+  });
+  const byParent = new Map<string, typeof rows>();
+  rows.forEach((row) => {
+    if (!row.parent_id) return;
+    const list = byParent.get(row.parent_id) ?? [];
+    list.push(row);
+    byParent.set(row.parent_id, list);
+  });
+  const latestLikeByUser = new Map<string, { ts: number; value: boolean }>();
+  const buildTree = (parentId: string): Record<string, PostCommentNode> => {
+    const children = (byParent.get(parentId) ?? []).sort((a, b) =>
+      a.created_at.getTime() - b.created_at.getTime() || a.id.localeCompare(b.id),
+    );
+    const out: Record<string, PostCommentNode> = {};
+    children.forEach((child) => {
+      const data = asMessageDataObject(child.data);
+      if (data.post_kind === "post_like") {
+        const ts = child.created_at.getTime();
+        const prev = latestLikeByUser.get(child.created_by);
+        if (!prev || ts >= prev.ts) {
+          latestLikeByUser.set(child.created_by, { ts, value: child.text === "1" });
+        }
+        return;
+      }
+      const trimmed = child.text?.trim() ?? "";
+      out[child.id] = {
+        username: trimmed ? child.users.username : "",
+        user_id: child.created_by,
+        text: trimmed || "Comment Deleted",
+        replies: buildTree(child.id),
+        ...(trimmed ? {} : { deleted: true }),
+      };
+    });
+    return out;
+  };
+  const comments = buildTree(sectionId);
+  const likes: Record<string, boolean> = {};
+  latestLikeByUser.forEach((entry, userId) => {
+    if (entry.value) likes[userId] = true;
+  });
+  return {
+    comments,
+    likes,
+  };
 };
 
 export async function POST(request: Request) {
@@ -66,105 +83,80 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as FeedPostCommentBody;
+    const body = (await request.json()) as FeedPostCommentRequest;
     const postId = body.post_id?.trim();
+    const sectionId = body.section_id?.trim();
     const message = body.message?.trim();
     const parentPath = Array.isArray(body.parent_path) ? body.parent_path : [];
-    if (!postId || !message) {
+    if (!postId || !sectionId || !message) {
       return NextResponse.json(
-        { error: { code: "invalid_request", message: "post_id and message are required." } },
+        { error: { code: "invalid_request", message: "post_id, section_id and message are required." } },
         { status: 400 },
       );
     }
 
-    const post = await prisma.posts.findFirst({
+    const sectionRoot = await prisma.thread_messages.findFirst({
       where: {
-        id: postId,
+        id: sectionId,
+        post_id: postId,
       },
       select: {
         id: true,
         created_by: true,
-        data: true,
+        parent_id: true,
       },
     });
-    if (!post) {
+    if (!sectionRoot || !sectionRoot.parent_id) {
       return NextResponse.json(
-        { error: { code: "post_not_found", message: "Post not found." } },
+        { error: { code: "post_not_found", message: "Post section not found." } },
         { status: 404 },
       );
     }
-
-    // Enforce same visibility rule as feed: own post or accepted friend.
-    if (post.created_by !== authResult.user_id) {
-      const friendRow = await prisma.friends.findFirst({
-        where: {
-          accepted: true,
-          OR: [
-            {
-              requesting_user: authResult.user_id,
-              other_user: post.created_by,
-            },
-            {
-              requesting_user: post.created_by,
-              other_user: authResult.user_id,
-            },
-          ],
-        },
-        select: { id: true },
-      });
-      if (!friendRow) {
-        return NextResponse.json(
-          { error: { code: "not_allowed", message: "You cannot comment on this post." } },
-          { status: 403 },
-        );
-      }
-    }
-
-    const dataObject = asPostDataObject(post.data as Prisma.JsonValue | null);
-    const comments = cloneCommentTree(dataObject.comments ?? {});
-    let targetMap = comments;
-    let replyTargetAuthorUserId: string | null = null;
-
-    for (const pathKey of parentPath) {
-      const targetComment = targetMap[pathKey];
-      if (!targetComment) {
-        return NextResponse.json(
-          { error: { code: "invalid_parent_path", message: "Parent path is invalid." } },
-          { status: 400 },
-        );
-      }
-      replyTargetAuthorUserId = targetComment.user_id;
-      targetComment.replies = targetComment.replies ?? {};
-      targetMap = targetComment.replies;
-    }
-
-    const newCommentKey = createCommentKey(targetMap);
-    targetMap[newCommentKey] = {
-      username: authResult.username,
-      user_id: authResult.user_id,
-      text: message,
-      replies: {},
-    };
-
-    const nextData: Prisma.InputJsonValue = {
-      ...dataObject,
-      comments,
-    } as Prisma.InputJsonValue;
-
-    const updated = await prisma.posts.update({
+    const thread = await prisma.threads.findFirst({
       where: {
-        id: post.id,
+        id: sectionRoot.parent_id,
+        OR: [{ owner: authResult.user_id }, { user_thread_access: { some: { user_id: authResult.user_id } } }],
       },
+      select: { id: true },
+    });
+    if (!thread) {
+      return NextResponse.json(
+        { error: { code: "not_allowed", message: "You cannot comment on this post." } },
+        { status: 403 },
+      );
+    }
+
+    const replyResolution = await resolveValidatedReplyParent({
+      postId,
+      sectionRootId: sectionRoot.id,
+      parentPath: parentPath.map((id) => (typeof id === "string" ? id.trim() : "")).filter(Boolean),
+    });
+    if (!replyResolution.ok) {
+      return NextResponse.json(
+        { error: { code: replyResolution.code, message: replyResolution.message } },
+        { status: replyResolution.status },
+      );
+    }
+    const replyParent = replyResolution.replyParent;
+    const rootParentId = computePostSectionReplyRootParentId(sectionRoot.id, {
+      id: replyParent.id,
+      parent_id: replyParent.parent_id,
+      root_parent_id: replyParent.root_parent_id,
+    });
+
+    await prisma.thread_messages.create({
       data: {
-        data: nextData,
-      },
-      select: {
-        data: true,
+        created_by: authResult.user_id,
+        parent_id: replyParent.id,
+        post_id: postId,
+        image_id: null,
+        updated_at: new Date(),
+        root_parent_id: rootParentId,
+        text: message,
       },
     });
 
-    // Send a push notification to the recipient of the comment (either the post owner or the comment author)
-    const notificationRecipientUserId = parentPath.length === 0 ? post.created_by : replyTargetAuthorUserId;
+    const notificationRecipientUserId = parentPath.length === 0 ? sectionRoot.created_by : null;
     if (notificationRecipientUserId && notificationRecipientUserId !== authResult.user_id) {
       const sanitizedMessage = sanitizeNotificationText(message);
       const previewSource = sanitizedMessage || "Sent a reply";
@@ -186,7 +178,8 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ data: updated.data }, { status: 200 });
+    const data = await buildSectionData(sectionId);
+    return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
     console.error("feed_post_comment_failed", error);
     return NextResponse.json(
@@ -204,123 +197,74 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as FeedPostCommentBody;
+    const body = (await request.json()) as FeedPostCommentRequest;
     const postId = body.post_id?.trim();
+    const sectionId = body.section_id?.trim();
     const commentPath = Array.isArray(body.comment_path) ? body.comment_path : [];
-    if (!postId || commentPath.length === 0) {
+    if (!postId || !sectionId || commentPath.length === 0) {
       return NextResponse.json(
-        { error: { code: "invalid_request", message: "post_id and comment_path are required." } },
+        { error: { code: "invalid_request", message: "post_id, section_id and comment_path are required." } },
         { status: 400 },
       );
     }
 
-    const post = await prisma.posts.findFirst({
+    const sectionRoot = await prisma.thread_messages.findFirst({
       where: {
-        id: postId,
+        id: sectionId,
+        post_id: postId,
       },
       select: {
         id: true,
-        created_by: true,
-        data: true,
+        parent_id: true,
       },
     });
-    if (!post) {
+    if (!sectionRoot || !sectionRoot.parent_id) {
       return NextResponse.json(
-        { error: { code: "post_not_found", message: "Post not found." } },
+        { error: { code: "post_not_found", message: "Post section not found." } },
         { status: 404 },
       );
     }
-
-    // Enforce same visibility rule as feed: own post or accepted friend.
-    if (post.created_by !== authResult.user_id) {
-      const friendRow = await prisma.friends.findFirst({
-        where: {
-          accepted: true,
-          OR: [
-            {
-              requesting_user: authResult.user_id,
-              other_user: post.created_by,
-            },
-            {
-              requesting_user: post.created_by,
-              other_user: authResult.user_id,
-            },
-          ],
-        },
-        select: { id: true },
-      });
-      if (!friendRow) {
-        return NextResponse.json(
-          { error: { code: "not_allowed", message: "You cannot delete comments on this post." } },
-          { status: 403 },
-        );
-      }
-    }
-
-    const dataObject = asPostDataObject(post.data as Prisma.JsonValue | null);
-    const comments = cloneCommentTree(dataObject.comments ?? {});
-    let targetMap = comments;
-
-    for (const pathKey of commentPath.slice(0, -1)) {
-      const targetComment = targetMap[pathKey];
-      if (!targetComment) {
-        return NextResponse.json(
-          { error: { code: "invalid_comment_path", message: "Comment path is invalid." } },
-          { status: 400 },
-        );
-      }
-      targetComment.replies = targetComment.replies ?? {};
-      targetMap = targetComment.replies;
-    }
-
-    const targetKey = commentPath[commentPath.length - 1];
-    const targetComment = targetMap[targetKey];
-    if (!targetComment) {
+    const thread = await prisma.threads.findFirst({
+      where: {
+        id: sectionRoot.parent_id,
+        OR: [{ owner: authResult.user_id }, { user_thread_access: { some: { user_id: authResult.user_id } } }],
+      },
+      select: { id: true },
+    });
+    if (!thread) {
       return NextResponse.json(
-        { error: { code: "invalid_comment_path", message: "Comment path is invalid." } },
-        { status: 400 },
+        { error: { code: "not_allowed", message: "You cannot delete comments on this post." } },
+        { status: 403 },
       );
     }
 
-    if (targetComment.user_id !== authResult.user_id) {
+    const pathResolution = await resolveValidatedCommentTarget({
+      postId,
+      sectionRootId: sectionRoot.id,
+      commentPath: commentPath.map((id) => (typeof id === "string" ? id.trim() : "")).filter(Boolean),
+    });
+    if (!pathResolution.ok) {
+      return NextResponse.json(
+        { error: { code: pathResolution.code, message: pathResolution.message } },
+        { status: pathResolution.status },
+      );
+    }
+    if (pathResolution.target.created_by !== authResult.user_id) {
       return NextResponse.json(
         { error: { code: "not_allowed", message: "You can only delete your own comments." } },
         { status: 403 },
       );
     }
 
-    const preservedReplies = targetComment.replies ?? {};
-    const hasReplies = Object.keys(preservedReplies).length > 0;
-    if (hasReplies) {
-      targetMap[targetKey] = {
-        username: "",
-        user_id: "",
-        text: "Comment Deleted",
-        replies: preservedReplies,
-        deleted: true,
-      };
-    } else {
-      delete targetMap[targetKey];
-    }
-
-    const nextData: Prisma.InputJsonValue = {
-      ...dataObject,
-      comments,
-    } as Prisma.InputJsonValue;
-
-    const updated = await prisma.posts.update({
-      where: {
-        id: post.id,
-      },
+    await prisma.thread_messages.update({
+      where: { id: pathResolution.target.id },
       data: {
-        data: nextData,
-      },
-      select: {
-        data: true,
+        text: null,
       },
     });
 
-    return NextResponse.json({ data: updated.data }, { status: 200 });
+    const data = await buildSectionData(sectionId);
+    return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
     console.error("feed_post_comment_delete_failed", error);
     return NextResponse.json(
