@@ -568,7 +568,7 @@ function PostSectionComponent({
                 aria-label={aboutToDeleteCommentPath === pathKey ? "Confirm delete comment" : "Delete comment"}
               >
                 <Trash2
-                  className={`h-4 w-4 ${aboutToDeleteCommentPath === pathKey ? "text-red-400" : "text-accent-2 opacity-30"}`}
+                  className={`h-5 w-5 ${aboutToDeleteCommentPath === pathKey ? "text-red-400" : "text-accent-2 opacity-30"}`}
                 />
               </button>
             ) : null}
@@ -599,7 +599,7 @@ function PostSectionComponent({
           <button
             type="button"
             onClick={() => setActiveReplyPath(isReplyInputOpen ? null : pathKey)}
-            className="text-xs text-accent-2 underline underline-offset-2 hover:text-foreground opacity-50"
+            className="text-sm text-accent-2 underline underline-offset-2 hover:text-foreground opacity-50"
             aria-label={isReplyInputOpen ? "Cancel reply" : "Reply to comment"}
           >
             {isReplyInputOpen ? "Cancel reply" : "Reply"}
@@ -607,7 +607,8 @@ function PostSectionComponent({
 
           <EmojiPicker
             onSelectEmoji={(emoji) => handlePostEmojiReply(emoji, path)}
-            buttonClassName="h-5 border-none pt-0.5"
+            buttonClassName="h-7 border-none"
+            buttonSmileIconClassName="h-5 w-5"
           />
         </div>
 
@@ -815,15 +816,15 @@ function PostSectionComponent({
             className="inline-flex h-6 min-h-6 items-center justify-center gap-1 rounded-lg px-1.5 py-0 text-xs leading-none text-accent-2 transition hover:text-foreground disabled:opacity-50"
           >
             <Heart
-              className={`h-5 w-5 shrink-0 ${isLikedByViewer ? "fill-accent-3 text-accent-3" : "text-accent-2"}`}
+              className={`h-6 w-6 shrink-0 ${isLikedByViewer ? "fill-accent-3 text-accent-3" : "text-accent-2"}`}
             />
             <span className="text-sm leading-none tabular-nums">{likeCount}</span>
           </button>
 
           <EmojiPicker
             onSelectEmoji={handlePostEmojiReply}
-            buttonClassName="h-6 border-none pt-0.5"
-            buttonSmileIconClassName="h-5 w-5"
+            buttonClassName="h-7 border-none"
+            buttonSmileIconClassName="h-6 w-6"
           />
 
           {hasPostOptions ? (

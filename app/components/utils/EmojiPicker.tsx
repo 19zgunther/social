@@ -1,17 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Pencil, Smile, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import emojiKeywordsByEmoji from "emojilib";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./useSwipeBack";
-import { loadAllCustomEmojis } from "@/app/lib/customEmojiCache";
+import { loadAllCustomEmojis, resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import { EmojiItem } from "@/app/types/interfaces";
 import { CustomEmoji } from "@/app/lib/customEmojiCanvas";
 import EmojiEditorTab from "@/app/components/EmojiEditorTab";
 const RECENT_EMOJIS_STORAGE_KEY = "emojiPickerRecentUsage";
 const RECENT_EMOJIS_STORAGE_BACKUP_KEY = "emojiPickerRecentUsageBackup";
 const MAX_RECENT_EMOJIS = 50;
+const MAX_UNRESOLVED_RECENT_CUSTOM_EMOJI_REFRESHES = 10;
+const UNRESOLVED_RECENT_CUSTOM_EMOJI_REFRESH_MS = 1000;
 const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
 
 type EmojiUsageEntry = {
@@ -141,6 +143,28 @@ const updateUsageWithSelection = (usage: EmojiUsageEntry[], emoji: string, times
 const customEmojiUuidFromToken = (value: string): string | null => {
   const match = value.trim().match(CUSTOM_EMOJI_TOKEN_REGEX);
   return match?.[1] ?? null;
+};
+
+const mergeCustomEmojiLists = (
+  primary: EmojiItem[],
+  extra: Record<string, EmojiItem>,
+): EmojiItem[] => {
+  const byUuid = new Map(primary.map((emoji) => [emoji.uuid, emoji]));
+  for (const emoji of Object.values(extra)) {
+    byUuid.set(emoji.uuid, emoji);
+  }
+  return [...byUuid.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
+};
+
+const unresolvedCustomEmojiUuidsFromRecent = (
+  recentOptions: string[],
+  emojiByUuid: Record<string, EmojiItem>,
+): string[] => {
+  const uuids = recentOptions
+    .map((emoji) => customEmojiUuidFromToken(emoji))
+    .filter((uuid): uuid is string => Boolean(uuid))
+    .filter((uuid) => !emojiByUuid[uuid]);
+  return [...new Set(uuids)];
 };
 
 const unicodeEmojiMatchesPickerSearch = (
@@ -287,14 +311,23 @@ export default function EmojiPicker({
     };
   }, [isMounted]);
 
-  const refreshCustomEmojis = useCallback(async () => {
+  const refreshCustomEmojis = useCallback(async (resolveUuids?: string[]) => {
     try {
-      const emojis = await loadAllCustomEmojis();
-      setCustomEmojis(emojis);
+      const uuidsToResolve = resolveUuids?.filter(Boolean) ?? [];
+      const [emojis, resolved] = await Promise.all([
+        loadAllCustomEmojis(),
+        uuidsToResolve.length > 0 ? resolveEmojisByUuid(uuidsToResolve) : Promise.resolve({}),
+      ]);
+      setCustomEmojis(mergeCustomEmojiLists(emojis, resolved));
     } catch {
       // Ignore custom emoji loading failures; default emoji picker still works.
     }
   }, []);
+
+  const recentEmojiOptionsRef = useRef(recentEmojiOptions);
+  recentEmojiOptionsRef.current = recentEmojiOptions;
+  const customEmojiByUuidRef = useRef(customEmojiByUuid);
+  customEmojiByUuidRef.current = customEmojiByUuid;
 
   useEffect(() => {
     if (!isMounted || !isOpen) {
@@ -302,10 +335,17 @@ export default function EmojiPicker({
     }
     let cancelled = false;
     const loadCustomEmojis = async () => {
+      const missingUuids = unresolvedCustomEmojiUuidsFromRecent(
+        recentEmojiOptionsRef.current,
+        customEmojiByUuidRef.current,
+      );
       try {
-        const emojis = await loadAllCustomEmojis();
+        const [emojis, resolved] = await Promise.all([
+          loadAllCustomEmojis(),
+          missingUuids.length > 0 ? resolveEmojisByUuid(missingUuids) : Promise.resolve({}),
+        ]);
         if (!cancelled) {
-          setCustomEmojis(emojis);
+          setCustomEmojis(mergeCustomEmojiLists(emojis, resolved));
         }
       } catch {
         // Ignore custom emoji loading failures; default emoji picker still works.
@@ -316,6 +356,62 @@ export default function EmojiPicker({
       cancelled = true;
     };
   }, [isMounted, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    let cancelled = false;
+    let refreshCount = 0;
+    let intervalId: number | undefined;
+
+    const stopPolling = () => {
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId);
+        intervalId = undefined;
+      }
+    };
+
+    const pollUnresolvedRecentCustomEmojis = async () => {
+      if (cancelled || refreshCount >= MAX_UNRESOLVED_RECENT_CUSTOM_EMOJI_REFRESHES) {
+        stopPolling();
+        return;
+      }
+
+      const missingUuids = unresolvedCustomEmojiUuidsFromRecent(
+        recentEmojiOptionsRef.current,
+        customEmojiByUuidRef.current,
+      );
+      if (missingUuids.length === 0) {
+        stopPolling();
+        return;
+      }
+
+      refreshCount += 1;
+      await refreshCustomEmojis(missingUuids);
+
+      if (
+        cancelled ||
+        refreshCount >= MAX_UNRESOLVED_RECENT_CUSTOM_EMOJI_REFRESHES ||
+        unresolvedCustomEmojiUuidsFromRecent(
+          recentEmojiOptionsRef.current,
+          customEmojiByUuidRef.current,
+        ).length === 0
+      ) {
+        stopPolling();
+      }
+    };
+
+    intervalId = window.setInterval(() => {
+      void pollUnresolvedRecentCustomEmojis();
+    }, UNRESOLVED_RECENT_CUSTOM_EMOJI_REFRESH_MS);
+
+    return () => {
+      cancelled = true;
+      stopPolling();
+    };
+  }, [isOpen, refreshCustomEmojis]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -425,7 +521,7 @@ export default function EmojiPicker({
                   ) : (
                     <>
                       <div className="mb-3 flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold tracking-tight text-foreground/90 drop-shadow-sm">
+                        <p className="text-base font-semibold tracking-tight text-foreground/90 drop-shadow-sm">
                           Choose an emoji
                         </p>
                         <div className="flex shrink-0 items-center gap-1.5">
@@ -449,7 +545,7 @@ export default function EmojiPicker({
                         </div>
                       </div>
                       <div className="mb-3">
-                        <label htmlFor="emoji-search" className="mb-1.5 block text-[11px] font-semibold text-foreground/55">
+                        <label htmlFor="emoji-search" className="mb-1.5 block text-[13px] font-semibold text-foreground/55">
                           Search
                         </label>
                         <input
@@ -463,7 +559,7 @@ export default function EmojiPicker({
                       </div>
 
                       {/** Recent emojis */}
-                      <p className="text-[11px] font-semibold text-foreground/55">Recent</p>
+                      <p className="text-[13px] font-semibold text-foreground/55">Recent</p>
                       <div className="mb-3 overflow-x-auto overflow-y-hidden">
                         <div className="grid grid-flow-col grid-rows-1 gap-0.5 py-0.5">
                           {filteredRecentEmojiOptions.map((emoji, index) => (
@@ -476,7 +572,7 @@ export default function EmojiPicker({
                                     key={`recent-${emoji}-${index}`}
                                     type="button"
                                     onClick={() => handleSelectEmoji(emoji)}
-                                    className={`flex h-10 w-10 items-center justify-center px-1 py-1 ${emojiTileBase}`}
+                                    className={`flex h-[3.25rem] w-[3.25rem] items-center justify-center px-1 py-1 [&_canvas]:!h-9 [&_canvas]:!w-9 ${emojiTileBase}`}
                                     aria-label={`Insert custom emoji ${customEmoji.name}`}
                                     title={customEmoji.name}
                                   >
@@ -484,14 +580,22 @@ export default function EmojiPicker({
                                   </button>
                                 );
                               } else if (customEmojiUuid) {
-                                return '?'; // Don't show custom emojis that are not in the custom emoji list.
+                                return (
+                                  <span
+                                    key={`recent-pending-${emoji}-${index}`}
+                                    className="flex h-[3.25rem] w-[3.25rem] items-center justify-center text-sm text-accent-2/45 animate-pulse"
+                                    aria-hidden="true"
+                                  >
+                                    …
+                                  </span>
+                                );
                               }
                               return (
                                 <button
                                   key={`recent-${emoji}-${index}`}
                                   type="button"
                                   onClick={() => handleSelectEmoji(emoji)}
-                                  className={`h-10 w-10 px-1 py-1 text-lg ${emojiTileBase}`}
+                                  className={`h-[3.25rem] w-[3.25rem] px-1 py-1 text-[1.46rem] leading-none ${emojiTileBase}`}
                                   aria-label={`Insert ${emoji}`}
                                 >
                                   {emoji}
@@ -505,15 +609,15 @@ export default function EmojiPicker({
                       {/** Custom emojis */}
                       {filteredCustomEmojis.length > 0 ? (
                         <>
-                          <p className="text-[11px] font-semibold text-foreground/55">Your custom emojis</p>
+                          <p className="text-[13px] font-semibold text-foreground/55">Your custom emojis</p>
                           <div className="mb-2 overflow-x-auto overflow-y-hidden pb-1">
-                            <div className="grid grid-flow-col grid-rows-1 gap-0.5 py-0.5">
+                            <div className="grid h-[calc(3*2.6rem)] grid-flow-col grid-rows-3 gap-0.5 py-0.5">
                               {filteredCustomEmojis.map((emoji) => (
                                 <button
                                   key={emoji.uuid}
                                   type="button"
                                   onClick={() => handleSelectEmoji(customEmojiToken(emoji.uuid))}
-                                  className={`flex h-8 w-8 items-center justify-center px-1 py-1 ${emojiTileBase}`}
+                                  className={`flex h-[2.6rem] w-[2.6rem] items-center justify-center px-1 py-1 [&_canvas]:!h-9 [&_canvas]:!w-9 ${emojiTileBase}`}
                                   aria-label={`Insert custom emoji ${emoji.name}`}
                                   title={emoji.name}
                                 >
@@ -526,7 +630,7 @@ export default function EmojiPicker({
                       ) : null}
 
                       {/** All emojis */}
-                      <p className="mb-1.5 text-[11px] font-semibold text-foreground/55">All emojis</p>
+                      <p className="mb-1.5 text-[13px] font-semibold text-foreground/55">All emojis</p>
                       <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-white/[0.06] bg-black/15 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
                         <div className="grid h-[11rem] grid-flow-col grid-rows-4 gap-0 px-0.5">
                           {filteredEmojiOptions.map((emoji, index) => (
