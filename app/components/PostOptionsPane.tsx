@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
+import UserProfileImage from "@/app/components/UserProfileImage";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
   CustomEmoji,
@@ -185,33 +186,14 @@ export default function PostOptionsPane({
     };
   }, [customEmojiUuids]);
 
-  const groupedReactions = useMemo(() => {
-    const entries = Object.entries(comments ?? {})
+  const reactionEntries = useMemo(() => {
+    return Object.entries(comments ?? {})
       .filter(([, comment]) => isEmojiOnlyComment(comment.text))
       .map(([, comment]) => ({
         emoji: comment.text.trim(),
         username: comment.username || comment.user_id,
         userId: comment.user_id,
       }));
-
-    const byEmoji = new Map<
-      string,
-      { emoji: string; reactors: { username: string; userId: string }[] }
-    >();
-
-    for (const entry of entries) {
-      const existing = byEmoji.get(entry.emoji);
-      if (existing) {
-        existing.reactors.push({ username: entry.username, userId: entry.userId });
-      } else {
-        byEmoji.set(entry.emoji, {
-          emoji: entry.emoji,
-          reactors: [{ username: entry.username, userId: entry.userId }],
-        });
-      }
-    }
-
-    return Array.from(byEmoji.values());
   }, [comments]);
 
   const hasImages = imageIds.length > 0;
@@ -257,9 +239,10 @@ export default function PostOptionsPane({
         <button
           type="button"
           onClick={onBack}
-          className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-accent-2 hover:text-foreground"
+          className="inline-flex items-center gap-1.5 text-sm text-accent-2 transition hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" /> Back
+          <ArrowLeft className="h-4 w-4 shrink-0" />
+          Back
         </button>
         <h1 className="text-lg font-semibold text-foreground">Post</h1>
         <div className="w-20" />
@@ -313,43 +296,43 @@ export default function PostOptionsPane({
           </section>
         ) : null}
 
-        {groupedReactions.length > 0 ? (
+        {reactionEntries.length > 0 ? (
           <section>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent-2">Reactions</h2>
-            <ul className="space-y-3">
-              {groupedReactions.map((group) => (
+            <ul className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-8 gap-y-2">
+              {reactionEntries.map((entry, index) => (
                 <li
-                  key={group.emoji}
-                  className="flex items-start gap-3 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2"
+                  key={`${entry.userId}-${entry.emoji}-${index}`}
+                  className="contents"
                 >
-                  <div className="shrink-0 pt-0.5">
+                  <div className="flex h-8 w-10 items-center justify-center">
                     <RenderReactionEmoji
-                      value={group.emoji}
+                      value={entry.emoji}
                       customEmojiByUuid={customEmojiByUuid}
                     />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-foreground">
-                      {group.reactors.map((reactor, index) => (
-                        <span key={`${reactor.userId}-${index}`}>
-                          {index > 0 ? ", " : null}
-                          {onViewUserProfile ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onViewUserProfile(reactor.userId);
-                                onBack();
-                              }}
-                              className="font-medium text-foreground underline-offset-2 hover:underline"
-                            >
-                              {reactor.username}
-                            </button>
-                          ) : (
-                            <span className="font-medium">{reactor.username}</span>
-                          )}
-                        </span>
-                      ))}
-                    </p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <UserProfileImage
+                      userId={entry.userId}
+                      sizePx={32}
+                      alt={`${entry.username} profile`}
+                    />
+                    {onViewUserProfile ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onViewUserProfile(entry.userId);
+                          onBack();
+                        }}
+                        className="min-w-0 truncate text-sm font-medium text-foreground underline-offset-2 hover:underline"
+                      >
+                        {entry.username}
+                      </button>
+                    ) : (
+                      <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                        {entry.username}
+                      </span>
+                    )}
                   </div>
                 </li>
               ))}
