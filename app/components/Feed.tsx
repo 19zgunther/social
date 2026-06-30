@@ -1,7 +1,9 @@
 "use client";
 
-import { TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState } from "react";
+import { TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { PostSection} from "@/app/components/PostSection";
+import PostOptionsPane from "@/app/components/PostOptionsPane";
+import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
 import { LoaderCircle, Plus } from "lucide-react";
@@ -32,9 +34,11 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 export default function Feed({
   onViewUserProfile,
   onOpenCreatePost,
+  swipeBackOverrideRef,
 }: {
   onViewUserProfile?: (userId: string) => void;
   onOpenCreatePost?: () => void;
+  swipeBackOverrideRef: MutableRefObject<(() => void) | null>;
 }) {
   const [posts, setPosts] = useStateCached<PostItem[]>([], FEED_CACHE_KEY);
   const [viewerUserId, setViewerUserId] = useState<string | null>(null);
@@ -44,6 +48,7 @@ export default function Feed({
   const [hasMore, setHasMore] = useState(false);
   const [nextCursorPostId, setNextCursorPostId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
+  const [postOptionsPostId, setPostOptionsPostId] = useState<string | null>(null);
   const [didHydrateFromCache, setDidHydrateFromCache] = useState(false);
   const feedContainerRef = useRef<HTMLDivElement | null>(null);
   const pullStartYRef = useRef<number | null>(null);
@@ -195,14 +200,33 @@ export default function Feed({
     });
   }, [loadPosts]);
 
-  const showTopRefreshIndicator = isRefreshingLatest && didHydrateFromCache && posts.length > 0;
-
-  // For animating loading feed height
   const [loadingFeedHeight, setLoadingFeedHeight] = useState(0);
   useEffect(() => {
     setLoadingFeedHeight(isLoading ? 5 : 0);
-  }, [isLoading])
-  
+  }, [isLoading]);
+
+  const showTopRefreshIndicator = isRefreshingLatest && didHydrateFromCache && posts.length > 0;
+
+  const postOptionsPost = postOptionsPostId
+    ? posts.find((post) => post.id === postOptionsPostId) ?? null
+    : null;
+
+  const onClosePostOptions = useCallback(() => {
+    setPostOptionsPostId(null);
+  }, []);
+
+  useSwipeBackOverride(swipeBackOverrideRef, onClosePostOptions, postOptionsPost !== null);
+
+  if (postOptionsPost) {
+    return (
+      <PostOptionsPane
+        post={postOptionsPost}
+        onBack={onClosePostOptions}
+        onViewUserProfile={onViewUserProfile}
+      />
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-primary-background">
       <div
@@ -254,6 +278,7 @@ export default function Feed({
             post={post}
             currentUserId={viewerUserId}
             onViewUserProfile={onViewUserProfile}
+            onOpenPostOptions={setPostOptionsPostId}
             onPostUpdated={onPostUpdated}
           />
         ))}

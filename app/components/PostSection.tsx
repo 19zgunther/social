@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, UIEvent, useEffect, useMemo, useState } from "react";
-import { Heart, ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { Heart, ChevronDown, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import UserProfileImage from "@/app/components/UserProfileImage";
@@ -21,6 +21,7 @@ type PostSectionProps = {
   showComments?: boolean;
   className?: string;
   onViewUserProfile?: (userId: string) => void;
+  onOpenPostOptions?: (postId: string) => void;
   onPostUpdated?: (updated: {
     id: string;
     data?: PostData | null;
@@ -110,6 +111,7 @@ function PostSectionComponent({
   showComments = true,
   className,
   onViewUserProfile,
+  onOpenPostOptions,
   onPostUpdated,
 }: PostSectionProps) {
   const [postData, setPostData] = useState<PostData>(post.data ?? {});
@@ -514,6 +516,15 @@ function PostSectionComponent({
     }
   };
 
+  const hasPostOptions = rootEmojiReactions.length > 0 || allPostImageIds.length > 0;
+
+  const onOpenPostOptionsPane = () => {
+    if (allPostImageIds.length > 1) {
+      void loadAdditionalImages();
+    }
+    onOpenPostOptions?.(post.id);
+  };
+
   const renderCommentTree = (
     commentTimestamp: string,
     comment: PostCommentNode,
@@ -794,7 +805,7 @@ function PostSectionComponent({
         ) : null}
 
         {/** Like Button, Emoji Picker, Reaction Emojis */}
-        <div className="mt-1 flex items-center gap-2 max-w-[90vw] h-8">
+        <div className="mt-1 flex h-8 w-full items-center gap-2">
           <button
             type="button"
             onClick={() => {
@@ -815,10 +826,30 @@ function PostSectionComponent({
             buttonSmileIconClassName="h-5 w-5"
           />
 
-          {rootEmojiReactions.length > 0 ? (
-            <div className="flex max-w-[60%] flex-wrap items-center gap-0 ml-3">
-              {rootEmojiReactions.map((emoji, index) => <RenderReactionEmoji key={`${emoji}-${index}`} value={emoji} customEmojiByUuid={customEmojiByUuid} />)}
-            </div>
+          {hasPostOptions ? (
+            <>
+              {rootEmojiReactions.length > 0 ? (
+                <div className="ml-3 flex min-w-0 flex-1 flex-wrap items-center gap-0 overflow-hidden">
+                  {rootEmojiReactions.map((emoji, index) => (
+                    <RenderReactionEmoji
+                      key={`${emoji}-${index}`}
+                      value={emoji}
+                      customEmojiByUuid={customEmojiByUuid}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex-1" />
+              )}
+              <button
+                type="button"
+                onClick={onOpenPostOptionsPane}
+                className="ml-auto shrink-0 rounded-lg border-none bg-transparent p-1 text-accent-2 hover:text-foreground"
+                aria-label="Post options"
+              >
+                <MoreHorizontal className="h-5 w-5" />
+              </button>
+            </>
           ) : null}
         </div>
 
@@ -867,6 +898,7 @@ function PostSectionComponent({
         imageStorageUserId={imageViewer?.imageStorageUserId ?? null}
         alt={imageViewer?.alt}
       />
+
     </article>
   );
 }

@@ -1,9 +1,28 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 
 const EDGE_SWIPE_START_THRESHOLD = 1 / 3;
 const EDGE_SWIPE_FINISH_THRESHOLD = 2 / 3;
 const CANCEL_SETTLE_MS = 280;
 export const DONT_SWIPE_TABS_CLASSNAME = "dont-swipe-tabs";
+
+export function useSwipeBackOverride(
+    swipeBackOverrideRef: MutableRefObject<(() => void) | null>,
+    onBack: () => void,
+    active: boolean,
+) {
+    useEffect(() => {
+        if (!active) {
+            return;
+        }
+
+        swipeBackOverrideRef.current = onBack;
+        return () => {
+            if (swipeBackOverrideRef.current === onBack) {
+                swipeBackOverrideRef.current = null;
+            }
+        };
+    }, [active, onBack, swipeBackOverrideRef]);
+}
 
 function easeOutCubic(t: number) {
     return 1 - Math.pow(1 - t, 3);

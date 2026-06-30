@@ -294,6 +294,7 @@ export default function Home() {
 
   const onBackRef = useRef<() => void>(() => { console.error("onBackRef not set"); });
   const onForwardRef = useRef<() => void>(() => { console.error("onForwardRef not set"); });
+  const swipeBackOverrideRef = useRef<(() => void) | null>(null);
   const { onTouchStart, onTouchEnd, onTouchMove, onTouchCancel, swipingBackPercent, swipingForwardPercent } =
     useSwipeBack({ onBack: onBackRef.current, onForward: onForwardRef.current });
 
@@ -347,7 +348,13 @@ export default function Home() {
   if (back) { TAB_TO_STYLE[back] = BACK_SWIPE_TAB; }
   TAB_TO_STYLE[activeTab] = ACTIVE_STYLE;
 
-  onBackRef.current = () => { if (back) {setActiveTab(back);} }
+  onBackRef.current = () => {
+    if (swipeBackOverrideRef.current) {
+      swipeBackOverrideRef.current();
+      return;
+    }
+    if (back) { setActiveTab(back); }
+  }
   onForwardRef.current = () => { if (forward) {setActiveTab(forward);} }
 
   const feedStyle = TAB_TO_STYLE["feed"];
@@ -428,6 +435,7 @@ export default function Home() {
             <Feed
               onViewUserProfile={onViewUserProfile}
               onOpenCreatePost={() => setActiveTab("create_post")}
+              swipeBackOverrideRef={swipeBackOverrideRef}
             />
           </div>
 
@@ -534,6 +542,7 @@ export default function Home() {
               onOpenSettings={() => setActiveTab("profile_settings")}
               onViewUserProfile={onViewUserProfile}
               onOpenCreatePost={() => setActiveTab("create_post")}
+              swipeBackOverrideRef={swipeBackOverrideRef}
             />
           </div>
 
@@ -561,6 +570,7 @@ export default function Home() {
               userId={viewingUserId}
               currentUserId={authUser.user_id}
               onBack={() => setActiveTab("profile")}
+              swipeBackOverrideRef={swipeBackOverrideRef}
               onOpenDirectThread={(thread) => {
                 setSelectedThread(thread);
                 setThreadReturnTab("other_user_profile");

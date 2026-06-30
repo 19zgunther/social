@@ -181,6 +181,89 @@ export const imageCache = async ({
 };
 export const getImageUrlFromCache = (imageId: string): string | undefined => { return __imageURLCache.get(imageId); }
 
+export const getImageBlob = async ({
+  signedUrl = null,
+  imageId,
+  grant = null,
+  storageUserId = null,
+  threadId = null,
+}: {
+  signedUrl?: string | null;
+  imageId: string;
+  grant?: string | null;
+  storageUserId?: string | null;
+  threadId?: string | null;
+}): Promise<Blob | null> => {
+  try {
+    const cachedBlob = await readCachedBlob(imageId);
+    if (cachedBlob) {
+      return cachedBlob;
+    }
+
+    let urlToFetch = signedUrl;
+    if (!urlToFetch && grant && (storageUserId || threadId)) {
+      urlToFetch = await resolveSignedUrlFromGrant(imageId, grant, { storageUserId, threadId });
+    }
+    if (!urlToFetch) {
+      return null;
+    }
+
+    return getBlobForImage(urlToFetch, imageId);
+  } catch {
+    return null;
+  }
+};
+
+const extensionForBlob = (blob: Blob): string => {
+  if (blob.type === "image/png") {
+    return "png";
+  }
+  if (blob.type === "image/webp") {
+    return "webp";
+  }
+  if (blob.type === "image/gif") {
+    return "gif";
+  }
+  return "jpg";
+};
+
+export const downloadImageBlob = (blob: Blob, filename: string): void => {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+};
+
+export const downloadImageBlobAsFile = async (blob: Blob, filename: string): Promise<boolean> => {
+  const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+  if (typeof navigator.share === "function" && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+      return true;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return false;
+      }
+    }
+  }
+  downloadImageBlob(blob, filename);
+  return true;
+};
+
+export const downloadImageBlobWithExtension = async (
+  blob: Blob,
+  baseFilename: string,
+): Promise<boolean> => {
+  const extension = extensionForBlob(blob);
+  const filename = baseFilename.includes(".") ? baseFilename : `${baseFilename}.${extension}`;
+  return downloadImageBlobAsFile(blob, filename);
+};
+
 export const clearAllCachedImages = async (): Promise<void> => {
   for (const url of __imageURLCache.values()) {
     URL.revokeObjectURL(url);

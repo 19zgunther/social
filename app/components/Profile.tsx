@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type MutableRefObject, type ReactNode } from "react";
 import {
   ArrowLeft,
   ChevronRight,
@@ -12,6 +12,7 @@ import {
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { PostSection } from "@/app/components/PostSection";
+import PostOptionsPane from "@/app/components/PostOptionsPane";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 import EmojiEditorTab from "@/app/components/EmojiEditorTab";
@@ -29,6 +30,7 @@ import {
   UserProfileResponse,
 } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
+import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
 
 type ProfileProps = {
   userId: string;
@@ -41,6 +43,7 @@ type ProfileProps = {
   onOpenSettings: () => void;
   onViewUserProfile: (userId: string) => void;
   onOpenCreatePost: () => void;
+  swipeBackOverrideRef: MutableRefObject<(() => void) | null>;
 };
 
 
@@ -280,6 +283,7 @@ function Profile({
   onOpenSettings,
   onViewUserProfile,
   onOpenCreatePost,
+  swipeBackOverrideRef,
 }: ProfileProps) {
   const [posts, setPosts] = useStateCached<PostItem[]>([], "user_profile_posts_cache_v2");
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -505,7 +509,19 @@ function Profile({
   }, []);
 
   const [confirmedDeletePost, setConfirmedDeletePost] = useState(false);
+  const [showSelectedPostOptions, setShowSelectedPostOptions] = useState(false);
   useEffect(() => { setConfirmedDeletePost(false); }, [selectedPost]);
+  useEffect(() => { setShowSelectedPostOptions(false); }, [selectedPost]);
+
+  const onCloseSelectedPostOptions = useCallback(() => {
+    setShowSelectedPostOptions(false);
+  }, []);
+
+  useSwipeBackOverride(
+    swipeBackOverrideRef,
+    onCloseSelectedPostOptions,
+    Boolean(selectedPost) && showSelectedPostOptions,
+  );
 
   const onDeleteSelectedPost = async () => {
     if (!selectedPost) {
@@ -538,6 +554,16 @@ function Profile({
   };
 
   if (selectedPost) {
+    if (showSelectedPostOptions) {
+      return (
+        <PostOptionsPane
+          post={selectedPost}
+          onBack={onCloseSelectedPostOptions}
+          onViewUserProfile={onViewUserProfile}
+        />
+      );
+    }
+
     return (
       <div className="flex h-full min-h-0 w-full flex-col bg-primary-background">
         <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
@@ -562,6 +588,7 @@ function Profile({
             post={selectedPost}
             currentUserId={userId}
             showComments
+            onOpenPostOptions={() => setShowSelectedPostOptions(true)}
             onPostUpdated={(updated) => {
               if (!selectedPost) {
                 return;
@@ -809,18 +836,21 @@ function ProfileOtherUser({
   currentUserId,
   onBack,
   onOpenDirectThread,
+  swipeBackOverrideRef,
 }: {
   isActive: boolean;
   userId: string;
   currentUserId: string;
   onBack: () => void;
   onOpenDirectThread: (thread: ThreadItem) => void;
+  swipeBackOverrideRef: MutableRefObject<(() => void) | null>;
 }) {
   const [profileData, setProfileData] = useState<UserProfileResponse | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [showSelectedPostOptions, setShowSelectedPostOptions] = useState(false);
   const [isSendingRequest, setIsSendingRequest] = useState(false);
   const [isOpeningDirectThread, setIsOpeningDirectThread] = useState(false);
 
@@ -860,10 +890,21 @@ function ProfileOtherUser({
 
   // Clear remove friend confirmation when the profile changes
   useEffect(() => {setRemoveFriendConfirmed(false)}, [userId, isActive, currentUserId])
+  useEffect(() => { setShowSelectedPostOptions(false); }, [selectedPostId]);
 
   const selectedPost = selectedPostId && profileData
     ? profileData.posts.find((post) => post.id === selectedPostId) ?? null
     : null;
+
+  const onCloseSelectedPostOptions = useCallback(() => {
+    setShowSelectedPostOptions(false);
+  }, []);
+
+  useSwipeBackOverride(
+    swipeBackOverrideRef,
+    onCloseSelectedPostOptions,
+    Boolean(selectedPost) && showSelectedPostOptions,
+  );
 
   const loadProfile = async (cursorPostId?: string) => {
     if (cursorPostId) {
@@ -955,6 +996,15 @@ function ProfileOtherUser({
   };
 
   if (selectedPost) {
+    if (showSelectedPostOptions) {
+      return (
+        <PostOptionsPane
+          post={selectedPost}
+          onBack={onCloseSelectedPostOptions}
+        />
+      );
+    }
+
     return (
       <div
         className="flex h-full min-h-0 w-full flex-col bg-primary-background"
@@ -973,6 +1023,7 @@ function ProfileOtherUser({
             post={selectedPost}
             currentUserId={currentUserId}
             showComments
+            onOpenPostOptions={() => setShowSelectedPostOptions(true)}
             onPostUpdated={(updated) => {
               setProfileData((previous) => {
                 if (!previous) {
