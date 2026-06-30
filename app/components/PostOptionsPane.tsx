@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Download } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft } from "lucide-react";
+import CachedImage from "@/app/components/utils/CachedImage";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
   CustomEmoji,
@@ -85,13 +86,81 @@ export default function PostOptionsPane({
   onViewUserProfile,
 }: PostOptionsPaneProps) {
   const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
-  const [isDownloadingImages, setIsDownloadingImages] = useState(false);
+  const [imageGrantById, setImageGrantById] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    if (post.image_id && post.image_access_grant) {
+      initial[post.image_id] = post.image_access_grant;
+    }
+    return initial;
+  });
+  const [isLoadingImageGrants, setIsLoadingImageGrants] = useState(false);
+  const [downloadingImageId, setDownloadingImageId] = useState<string | null>(null);
   const [downloadStatusMessage, setDownloadStatusMessage] = useState("");
 
   const comments = post.data?.comments;
   const imageIds = useMemo(() => buildImageIds(post), [post]);
 
   const customEmojiUuids = useMemo(() => collectCustomEmojiUuids(comments), [comments]);
+
+  useEffect(() => {
+    setImageGrantById(() => {
+      const next: Record<string, string> = {};
+      if (post.image_id && post.image_access_grant) {
+        next[post.image_id] = post.image_access_grant;
+      }
+      return next;
+    });
+    setDownloadStatusMessage("");
+    setDownloadingImageId(null);
+  }, [post.id, post.image_id, post.image_access_grant]);
+
+  useEffect(() => {
+    const missingImageIds = imageIds.filter((imageId) => {
+      if (imageId === post.image_id && post.image_access_grant) {
+        return false;
+      }
+      return true;
+    });
+    if (missingImageIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadImageGrants = async () => {
+      setIsLoadingImageGrants(true);
+      try {
+        const response = await fetch("/api/image-access-grants", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_ids: missingImageIds,
+            owner_user_id: post.created_by,
+          }),
+        });
+        if (!response.ok || cancelled) {
+          return;
+        }
+        const payload = (await response.json()) as { grants_by_id?: Record<string, string | null> };
+        const merged: Record<string, string> = {};
+        for (const [id, grant] of Object.entries(payload.grants_by_id ?? {})) {
+          if (grant) {
+            merged[id] = grant;
+          }
+        }
+        if (!cancelled) {
+          setImageGrantById((previous) => ({ ...previous, ...merged }));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingImageGrants(false);
+        }
+      }
+    };
+    void loadImageGrants();
+    return () => {
+      cancelled = true;
+    };
+  }, [imageIds, post.created_by, post.id, post.image_access_grant, post.image_id]);
 
   useEffect(() => {
     if (customEmojiUuids.length === 0) {
@@ -146,78 +215,41 @@ export default function PostOptionsPane({
   }, [comments]);
 
   const hasImages = imageIds.length > 0;
-  const downloadLabel = imageIds.length === 1 ? "Download image" : "Download images";
 
-  const onDownloadImages = async () => {
-    if (!hasImages || isDownloadingImages) {
+  const onDownloadImage = useCallback(async (imageId: string, index: number) => {
+    if (downloadingImageId) {
       return;
     }
 
-    setIsDownloadingImages(true);
+    const grant = imageGrantById[imageId];
+    if (!grant) {
+      return;
+    }
+
+    setDownloadingImageId(imageId);
     setDownloadStatusMessage("");
     try {
-      const grants: Record<string, string> = {};
-      if (post.image_id && post.image_access_grant) {
-        grants[post.image_id] = post.image_access_grant;
+      const blob = await getImageBlob({
+        imageId,
+        grant,
+        storageUserId: post.created_by,
+      });
+      if (!blob) {
+        setDownloadStatusMessage("Could not download image. Try again in a moment.");
+        return;
       }
 
-      const missingImageIds = imageIds.filter((imageId) => !grants[imageId]);
-      if (missingImageIds.length > 0) {
-        const response = await fetch("/api/image-access-grants", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            image_ids: missingImageIds,
-            owner_user_id: post.created_by,
-          }),
-        });
-        if (response.ok) {
-          const payload = (await response.json()) as { grants_by_id?: Record<string, string | null> };
-          for (const [id, grant] of Object.entries(payload.grants_by_id ?? {})) {
-            if (grant) {
-              grants[id] = grant;
-            }
-          }
-        }
-      }
-
-      let downloadedCount = 0;
-      for (let index = 0; index < imageIds.length; index += 1) {
-        const imageId = imageIds[index]!;
-        const grant = grants[imageId];
-        if (!grant) {
-          continue;
-        }
-
-        const blob = await getImageBlob({
-          imageId,
-          grant,
-          storageUserId: post.created_by,
-        });
-        if (!blob) {
-          continue;
-        }
-
-        const baseFilename = imageIds.length === 1 ? `post-${post.id}` : `post-${post.id}-${index + 1}`;
-        const didDownload = await downloadImageBlobWithExtension(blob, baseFilename);
-        if (didDownload) {
-          downloadedCount += 1;
-        }
-      }
-
-      if (downloadedCount === 0) {
-        setDownloadStatusMessage("Could not download images. Try again in a moment.");
-      } else if (downloadedCount === 1) {
+      const baseFilename = imageIds.length === 1 ? `post-${post.id}` : `post-${post.id}-${index + 1}`;
+      const didDownload = await downloadImageBlobWithExtension(blob, baseFilename);
+      if (didDownload) {
         setDownloadStatusMessage("Image saved.");
-      } else {
-        setDownloadStatusMessage(`${downloadedCount} images saved.`);
       }
     } catch {
-      setDownloadStatusMessage("Could not download images.");
+      setDownloadStatusMessage("Could not download image.");
     } finally {
-      setIsDownloadingImages(false);
+      setDownloadingImageId(null);
     }
-  };
+  }, [downloadingImageId, imageGrantById, imageIds.length, post.created_by, post.id]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-primary-background">
@@ -236,17 +268,45 @@ export default function PostOptionsPane({
       <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4">
         {hasImages ? (
           <section className="mb-4">
-            <button
-              type="button"
-              onClick={() => {
-                void onDownloadImages();
-              }}
-              disabled={isDownloadingImages}
-              className="flex w-full items-center gap-3 rounded-lg border border-accent-1 bg-secondary-background px-3 py-3 text-left text-sm text-foreground transition hover:border-accent-2 disabled:opacity-50"
-            >
-              <Download className="h-5 w-5 shrink-0 text-accent-2" />
-              <span>{isDownloadingImages ? "Downloading..." : downloadLabel}</span>
-            </button>
+            <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent-2">Images</h2>
+            <p className="mb-2 text-xs text-accent-2">Tap an image to save it.</p>
+            <div className="grid grid-cols-4 gap-1">
+              {imageIds.map((imageId, index) => {
+                const grant = imageGrantById[imageId];
+                const isDownloading = downloadingImageId === imageId;
+                return (
+                  <button
+                    key={imageId}
+                    type="button"
+                    onClick={() => {
+                      void onDownloadImage(imageId, index);
+                    }}
+                    disabled={!grant || downloadingImageId !== null}
+                    className="relative aspect-square overflow-hidden rounded-md border border-accent-1 bg-secondary-background p-0 transition enabled:hover:border-accent-2 disabled:opacity-60"
+                    aria-label={`Download image ${index + 1}`}
+                  >
+                    {grant ? (
+                      <CachedImage
+                        imageId={imageId}
+                        imageAccessGrant={grant}
+                        imageStorageUserId={post.created_by}
+                        alt={`Post image ${index + 1}`}
+                        className="pointer-events-none h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] leading-tight text-accent-2">
+                        {isLoadingImageGrants ? "Loading..." : "Unavailable"}
+                      </span>
+                    )}
+                    {isDownloading ? (
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-[10px] font-medium text-white">
+                        Saving...
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
             {downloadStatusMessage ? (
               <p className="mt-2 text-xs text-accent-2">{downloadStatusMessage}</p>
             ) : null}
