@@ -1,6 +1,7 @@
 "use client";
 
-import { memo, UIEvent, useEffect, useMemo, useState } from "react";
+import { memo, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CongratsBalloonOverlay from "@/app/components/CongratsBalloonOverlay";
 import { Heart, ChevronDown, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
@@ -14,6 +15,7 @@ import {
 import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
+import { hasCongratsComment } from "@/app/lib/congratsComment";
 
 type PostSectionProps = {
   post: PostItem;
@@ -32,6 +34,8 @@ type PostSectionProps = {
 };
 
 const COMMENT_PATH_SEPARATOR = ">";
+const CONGRATS_BALLOON_REVEAL_MS = 5000;
+const CONGRATS_BALLOON_CENTER_ROOT_MARGIN = "-35% 0px -35% 0px";
 const EMOJI_ONLY_COMMENT_REGEX = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
 const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
 const parsePostDate = (value: string): Date | null => {
@@ -147,6 +151,11 @@ function PostSectionComponent({
     alt: string;
   } | null>(null);
   const [isPostDateExpanded, setIsPostDateExpanded] = useState(false);
+  const [balloonSessionKey, setBalloonSessionKey] = useState<number | null>(null);
+  const balloonSessionCounterRef = useRef(0);
+  const imageAreaRef = useRef<HTMLDivElement>(null);
+  const isImageAreaCenteredRef = useRef(false);
+  const prevHasCongratsRef = useRef(false);
 
   const rootCommentEntries = useMemo(
     () =>
@@ -197,6 +206,65 @@ function PostSectionComponent({
     return ids;
   }, [post.image_id, postData.other_image_ids]);
   const hasMultipleImages = allPostImageIds.length > 1;
+  const hasCongrats = useMemo(
+    () => hasCongratsComment(postData.comments),
+    [postData.comments],
+  );
+  const canShowCongratsBalloons = allPostImageIds.length > 0 && hasCongrats;
+
+  const startBalloonReveal = useCallback(() => {
+    if (!canShowCongratsBalloons) {
+      return;
+    }
+    balloonSessionCounterRef.current += 1;
+    setBalloonSessionKey(balloonSessionCounterRef.current);
+  }, [canShowCongratsBalloons]);
+
+  useEffect(() => {
+    setBalloonSessionKey(null);
+    isImageAreaCenteredRef.current = false;
+    prevHasCongratsRef.current = false;
+  }, [post.id]);
+
+  useEffect(() => {
+    if (!canShowCongratsBalloons) {
+      setBalloonSessionKey(null);
+      return;
+    }
+
+    const element = imageAreaRef.current;
+    if (!element) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) {
+          return;
+        }
+        const nowCentered = entry.isIntersecting;
+        if (nowCentered && !isImageAreaCenteredRef.current) {
+          startBalloonReveal();
+        }
+        isImageAreaCenteredRef.current = nowCentered;
+      },
+      {
+        root: null,
+        rootMargin: CONGRATS_BALLOON_CENTER_ROOT_MARGIN,
+        threshold: 0,
+      },
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [canShowCongratsBalloons, post.id, startBalloonReveal]);
+
+  useEffect(() => {
+    if (hasCongrats && !prevHasCongratsRef.current && isImageAreaCenteredRef.current) {
+      startBalloonReveal();
+    }
+    prevHasCongratsRef.current = hasCongrats;
+  }, [hasCongrats, startBalloonReveal]);
 
   useEffect(() => {
     setPostData(post.data ?? {});
@@ -682,51 +750,60 @@ function PostSectionComponent({
 
       </header>
       {allPostImageIds.length > 0 ? (
-        <div
-          className="flex w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth"
-          onScroll={onCarouselScroll}
-          onTouchStart={() => {
-            void loadAdditionalImages();
-          }}
-          onMouseDown={() => {
-            void loadAdditionalImages();
-          }}
-        >
-          {allPostImageIds.map((imageId, index) => {
-            const grant = imageGrantById[imageId];
-            const isPrimaryImage = index === 0;
-            return (
-              <div key={imageId} className="w-full shrink-0 snap-center">
-                {grant ? (
-                  <button
-                    type="button"
-                    className="block w-full cursor-zoom-in border-0 bg-transparent p-0"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setImageViewer({
-                        imageId,
-                        imageAccessGrant: grant,
-                        imageStorageUserId: post.created_by,
-                        alt: "Post attachment",
-                      });
-                    }}
-                  >
-                    <CachedImage
-                      imageId={imageId}
-                      imageAccessGrant={grant}
-                      imageStorageUserId={post.created_by}
-                      alt="Post attachment"
-                      className="pointer-events-none aspect-square w-full overflow-hidden object-cover"
-                    />
-                  </button>
-                ) : (
-                  <div className="flex h-full w-full aspect-square items-center justify-center border-y border-accent-1 bg-secondary-background text-xs text-accent-2">
-                    {isPrimaryImage || isLoadingAdditionalImages ? "Loading image..." : "Swipe to load image"}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div ref={imageAreaRef} className="relative aspect-square w-full">
+          {balloonSessionKey !== null ? (
+            <CongratsBalloonOverlay
+              sessionKey={balloonSessionKey}
+              spawnDurationMs={CONGRATS_BALLOON_REVEAL_MS}
+              onSessionFinished={() => setBalloonSessionKey(null)}
+            />
+          ) : null}
+          <div
+            className="flex w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth"
+            onScroll={onCarouselScroll}
+            onTouchStart={() => {
+              void loadAdditionalImages();
+            }}
+            onMouseDown={() => {
+              void loadAdditionalImages();
+            }}
+          >
+            {allPostImageIds.map((imageId, index) => {
+              const grant = imageGrantById[imageId];
+              const isPrimaryImage = index === 0;
+              return (
+                <div key={imageId} className="w-full shrink-0 snap-center">
+                  {grant ? (
+                    <button
+                      type="button"
+                      className="block w-full cursor-zoom-in border-0 bg-transparent p-0"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setImageViewer({
+                          imageId,
+                          imageAccessGrant: grant,
+                          imageStorageUserId: post.created_by,
+                          alt: "Post attachment",
+                        });
+                      }}
+                    >
+                      <CachedImage
+                        imageId={imageId}
+                        imageAccessGrant={grant}
+                        imageStorageUserId={post.created_by}
+                        alt="Post attachment"
+                        className="pointer-events-none aspect-square w-full overflow-hidden object-cover"
+                      />
+                    </button>
+                  ) : (
+                    <div className="flex h-full w-full aspect-square items-center justify-center border-y border-accent-1 bg-secondary-background text-xs text-accent-2">
+                      {isPrimaryImage || isLoadingAdditionalImages ? "Loading image..." : "Swipe to load image"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 

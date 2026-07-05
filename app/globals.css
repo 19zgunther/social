@@ -57,3 +57,56 @@ body {
   touch-action: none;
   -webkit-text-size-adjust: 100%;
 }
+
+@keyframes congrats-balloon-float {
+  0% {
+    top: calc(100% + var(--balloon-spawn-offset, 2rem));
+    transform: translateX(0) scale(var(--balloon-scale, 1));
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.95;
+  }
+
+  90% {
+    opacity: 0.95;
+  }
+
+  100% {
+    top: -4.5rem;
+    transform: translateX(var(--balloon-sway, 0px)) scale(var(--balloon-scale, 1));
+    opacity: 0;
+  }
+}
+
+.congrats-balloon {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: congrats-balloon-float linear forwards;
+  will-change: top, transform, opacity;
+}
+
+.congrats-balloon-body {
+  width: 2.4rem;
+  height: 3rem;
+  border-radius: 50% 50% 50% 50% / 55% 55% 45% 45%;
+  background: radial-gradient(circle at 35% 30%, #ffffffaa 0%, var(--balloon-color) 45%, color-mix(in srgb, var(--balloon-color) 70%, black) 100%);
+  box-shadow: inset -4px -6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.congrats-balloon-knot {
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-top: -0.1rem;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--balloon-color) 80%, black);
+}
+
+.congrats-balloon-string {
+  width: 1px;
+  height: 1.75rem;
+  background: linear-gradient(to bottom, #ffffff88, #ffffff33);
+}
