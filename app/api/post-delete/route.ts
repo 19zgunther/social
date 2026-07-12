@@ -46,11 +46,14 @@ export async function POST(request: Request) {
       );
     }
 
-    await prisma.posts.delete({
-      where: {
-        id: post.id,
-      },
-    });
+    await prisma.$transaction([
+      prisma.user_post_access.deleteMany({
+        where: { post_id: post.id },
+      }),
+      prisma.posts.delete({
+        where: { id: post.id },
+      }),
+    ]);
 
     return NextResponse.json({ ok: true, post_id: post.id }, { status: 200 });
   } catch (error) {

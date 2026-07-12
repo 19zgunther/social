@@ -237,12 +237,22 @@ export type ProfilePostsListResponse = {
   next_cursor_post_id: string | null;
 };
 
+export type PostAudienceMode = "permanent" | "all" | "group";
+
+export type PostAudienceRequest = {
+  mode: PostAudienceMode;
+  /** Required when mode is "group". */
+  group_id?: string;
+};
+
 export type PostCreateRequest = {
   text?: string;
   image_id?: string;
   image_base64_data?: string;
   image_mime_type?: string;
   data?: unknown;
+  /** Defaults to permanent (all current and future friends). */
+  audience?: PostAudienceRequest;
 };
 export type PostCreateResponse = { post: PostItem };
 export type PostEditRequest = {
@@ -508,3 +518,19 @@ export type EmojiSaveResponse = {
 export type EmojisResolveResponse = {
   emojis_by_uuid: Record<string, EmojiItem>;
 };
+
+export type PostGroup = {
+  id: string;
+  name: string;
+  member_ids: string[];
+};
+
+export type PostGroupsData = {
+  groups: PostGroup[];
+};
+
+export type PostGroupsGetResponse = PostGroupsData;
+
+export type PostGroupsSetRequest = PostGroupsData;
+
+export type PostGroupsSetResponse = PostGroupsData;

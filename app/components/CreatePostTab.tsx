@@ -6,7 +6,7 @@ import {
   prepareImageForUpload,
   uploadPreparedImageToMainBucket,
 } from "@/app/components/utils/client_file_storage_utils";
-import { ApiError } from "@/app/types/interfaces";
+import { ApiError, PostGroup, PostGroupsGetResponse } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 
 type CreatePostTabProps = {
@@ -14,6 +14,11 @@ type CreatePostTabProps = {
   onCancel: () => void;
   onPosted: () => void;
 };
+
+type AudienceSelection =
+  | { mode: "permanent" }
+  | { mode: "all" }
+  | { mode: "group"; groupId: string };
 
 type PendingUploadImage = {
   id: string;
@@ -417,6 +422,8 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
   const [editingImageId, setEditingImageId] = useState<string | null>(null);
   const [isPosting, setIsPosting] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [postGroups, setPostGroups] = useState<PostGroup[]>([]);
+  const [audience, setAudience] = useState<AudienceSelection>({ mode: "permanent" });
   const editingImage = editingImageId ? images.find((image) => image.id === editingImageId) ?? null : null;
 
   useEffect(() => {
@@ -427,6 +434,74 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
       textInputRef.current?.focus();
     }, 0);
   }, [isActive]);
+
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await postWithAuth("/api/post-groups-get", {});
+        if (!response.ok || cancelled) {
+          return;
+        }
+        const payload = (await response.json()) as PostGroupsGetResponse;
+        if (cancelled) {
+          return;
+        }
+        setPostGroups(payload.groups);
+      } catch {
+        // Audience picker still works with permanent / all.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isActive]);
+
+  useEffect(() => {
+    if (audience.mode !== "group") {
+      return;
+    }
+    if (!postGroups.some((group) => group.id === audience.groupId)) {
+      setAudience({ mode: "permanent" });
+    }
+  }, [audience, postGroups]);
+
+  const audienceHint = useMemo(() => {
+    if (audience.mode === "permanent") {
+      return "Visible to all current and future friends.";
+    }
+    if (audience.mode === "all") {
+      return "Visible only to people who are friends right now.";
+    }
+    const group = postGroups.find((entry) => entry.id === audience.groupId);
+    if (!group) {
+      return "Pick a group.";
+    }
+    if (group.member_ids.length === 0) {
+      return "This group has no members — only you will see the post.";
+    }
+    return `Visible to ${group.member_ids.length} friend${group.member_ids.length === 1 ? "" : "s"} in “${group.name}”.`;
+  }, [audience, postGroups]);
+
+  const onSelectAudience = (value: string) => {
+    if (value === "permanent") {
+      setAudience({ mode: "permanent" });
+      return;
+    }
+    if (value === "all") {
+      setAudience({ mode: "all" });
+      return;
+    }
+    if (value.startsWith("group:")) {
+      setAudience({ mode: "group", groupId: value.slice("group:".length) });
+    }
+  };
+
+  const audienceSelectValue =
+    audience.mode === "group" ? `group:${audience.groupId}` : audience.mode;
 
   const onSelectPostImages = async (event: ChangeEvent<HTMLInputElement>) => {
     const fileList = Array.from(event.target.files ?? []);
@@ -485,6 +560,10 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
         ...(hasCommentText ? { text: comment } : {}),
         ...(primaryImageId ? { image_id: primaryImageId } : {}),
         ...(otherImageIds.length > 0 ? { data: { other_image_ids: otherImageIds } } : {}),
+        audience:
+          audience.mode === "group"
+            ? { mode: "group", group_id: audience.groupId }
+            : { mode: audience.mode },
       });
       if (!createResponse.ok) {
         setStatusMessage(await readErrorMessage(createResponse));
@@ -493,6 +572,7 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
 
       setComment("");
       setImages([]);
+      setAudience({ mode: "permanent" });
       onPosted();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to create post.");
@@ -539,6 +619,27 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
           onChange={onSelectPostImages}
           className="hidden"
         />
+
+        <div className="mb-3">
+          <label htmlFor="post-audience" className="mb-1 block text-xs font-semibold text-accent-2">
+            Who can see this
+          </label>
+          <select
+            id="post-audience"
+            value={audienceSelectValue}
+            onChange={(event) => onSelectAudience(event.target.value)}
+            className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+          >
+            <option value="permanent">All friends (including future)</option>
+            <option value="all">All friends right now</option>
+            {postGroups.map((group) => (
+              <option key={group.id} value={`group:${group.id}`}>
+                {group.name} ({group.member_ids.length})
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-accent-2">{audienceHint}</p>
+        </div>
 
         <button
           type="button"

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { visiblePostsWhereForViewer } from "@/app/lib/postVisibility";
 import {
   FeedPostsListRequest,
   FeedPostsListResponse,
@@ -45,22 +46,8 @@ export async function POST(request: Request) {
         ),
       ),
     );
-    const visibleUserIds = Array.from(new Set([authResult.user_id, ...friendUserIds]));
-    if (visibleUserIds.length === 0) {
-      const payload: FeedPostsListResponse = {
-        has_more: false,
-        next_cursor_post_id: null,
-        posts: [],
-      };
-      return NextResponse.json(payload, { status: 200 });
-    }
-
     const postsDesc = await prisma.posts.findMany({
-      where: {
-        created_by: {
-          in: visibleUserIds,
-        },
-      },
+      where: visiblePostsWhereForViewer(authResult.user_id, friendUserIds),
       ...(cursorPostId
         ? {
             cursor: {

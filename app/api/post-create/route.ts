@@ -5,6 +5,7 @@ import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
+import { resolvePostAudience } from "@/app/lib/postVisibility";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import { PostCreateRequest, PostCreateResponse, PostData } from "@/app/types/interfaces";
@@ -70,6 +71,16 @@ export async function POST(request: Request) {
       );
     }
 
+    const resolved = await resolvePostAudience({
+      authorUserId: authResult.user_id,
+      audience: body.audience,
+    });
+    if ("error" in resolved) {
+      return NextResponse.json({ error: resolved.error }, { status: 400 });
+    }
+    const { audience } = resolved;
+    const isPermanent = audience.mode === "permanent";
+
     let imageId: string | null = providedImageId ?? null;
     if (!providedImageId && imageBase64Data && imageMimeType) {
       imageId = randomUUID();
@@ -81,42 +92,41 @@ export async function POST(request: Request) {
       });
     }
 
-    const post = await prisma.posts.create({
-      data: {
-        created_by: authResult.user_id,
-        image_id: imageId,
-        text: text ?? null,
-        ...(data ? { data } : {}),
-      },
-      select: {
-        id: true,
-        created_at: true,
-        created_by: true,
-        image_id: true,
-        text: true,
-        data: true,
-      },
+    const post = await prisma.$transaction(async (tx) => {
+      const created = await tx.posts.create({
+        data: {
+          created_by: authResult.user_id,
+          image_id: imageId,
+          text: text ?? null,
+          permanent: isPermanent,
+          ...(data ? { data } : {}),
+        },
+        select: {
+          id: true,
+          created_at: true,
+          created_by: true,
+          image_id: true,
+          text: true,
+          data: true,
+          permanent: true,
+        },
+      });
+
+      if (!isPermanent && audience.viewerIds.length > 0) {
+        const createdAt = new Date();
+        await tx.user_post_access.createMany({
+          data: audience.viewerIds.map((viewerId) => ({
+            post_id: created.id,
+            viewer_id: viewerId,
+            created_at: createdAt,
+          })),
+        });
+      }
+
+      return created;
     });
 
-    const acceptedFriendRows = await prisma.friends.findMany({
-      where: {
-        accepted: true,
-        OR: [{ requesting_user: authResult.user_id }, { other_user: authResult.user_id }],
-      },
-      select: {
-        requesting_user: true,
-        other_user: true,
-      },
-    });
-    const recipientUserIds = Array.from(
-      new Set(
-        acceptedFriendRows
-          .map((row) =>
-            row.requesting_user === authResult.user_id ? row.other_user : row.requesting_user,
-          )
-          .filter((userId) => userId !== authResult.user_id),
-      ),
-    );
+    const recipientUserIds = audience.viewerIds.filter((userId) => userId !== authResult.user_id);
     if (recipientUserIds.length > 0) {
       const previewText = getPostPushPreviewText(post.text, Boolean(post.image_id));
       void sendPushToUsers({

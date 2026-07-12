@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { visibleAuthorPostsWhereForViewer } from "@/app/lib/postVisibility";
 import { PostData, PostItem } from "@/app/types/interfaces";
 
 const PAGE_SIZE = 24;
@@ -111,9 +112,7 @@ export async function POST(request: Request) {
 
     if (isFriends) {
       const postsDesc = await prisma.posts.findMany({
-        where: {
-          created_by: targetUserId,
-        },
+        where: visibleAuthorPostsWhereForViewer(targetUserId, authResult.user_id),
         ...(cursorPostId
           ? {
               cursor: {

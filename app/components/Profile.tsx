@@ -16,6 +16,7 @@ import PostOptionsPane from "@/app/components/PostOptionsPane";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 import EmojiEditorTab from "@/app/components/EmojiEditorTab";
+import PostGroupsTab from "@/app/components/PostGroupsTab";
 import {
   AcceptedFriend,
   ApiError,
@@ -296,7 +297,7 @@ function Profile({
   const [incomingRequests, setIncomingRequests] = useState<IncomingFriendRequest[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<OutgoingFriendRequest[]>([]);
   const [acceptedFriends, setAcceptedFriends] = useState<AcceptedFriend[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<"posts" | "friends" | "emojis">("posts");
+  const [activeSubTab, setActiveSubTab] = useState<"posts" | "friends" | "groups" | "emojis">("posts");
   const [isLoadingFriendRows, setIsLoadingFriendRows] = useState(true);
   const [activeFriendUserId, setActiveFriendUserId] = useState<string | null>(null);
   const [activeIncomingRequestId, setActiveIncomingRequestId] = useState<string | null>(null);
@@ -665,13 +666,23 @@ function Profile({
           </button>
           <button
             type="button"
+            onClick={() => setActiveSubTab("groups")}
+            className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold transition ${activeSubTab === "groups"
+              ? "border-accent-3 text-foreground"
+              : "border-transparent text-accent-2 hover:text-foreground"
+              }`}
+          >
+            Groups
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveSubTab("emojis")}
             className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold transition ${activeSubTab === "emojis"
               ? "border-accent-3 text-foreground"
               : "border-transparent text-accent-2 hover:text-foreground"
               }`}
           >
-            Emoji Editor
+            Emojis
           </button>
         </div>
       </section>
@@ -810,6 +821,13 @@ function Profile({
             </div>
           ) : null}
         </section>
+      ) : activeSubTab === "groups" ? (
+        <PostGroupsTab
+          isActive={activeSubTab === "groups"}
+          acceptedFriends={acceptedFriends}
+          isLoadingFriends={isLoadingFriendRows}
+          onGoToFriendsTab={() => setActiveSubTab("friends")}
+        />
       ) : activeSubTab === "emojis" ? (
         <EmojiEditorTab isActive={activeSubTab === "emojis"} />
       ) : (

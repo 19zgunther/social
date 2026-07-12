@@ -4,6 +4,7 @@ import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
+import { canViewerAccessPost } from "@/app/lib/postVisibility";
 
 type FeedPostCommentBody = {
   post_id?: string;
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
       select: {
         id: true,
         created_by: true,
+        permanent: true,
         data: true,
       },
     });
@@ -94,30 +96,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Enforce same visibility rule as feed: own post or accepted friend.
-    if (post.created_by !== authResult.user_id) {
-      const friendRow = await prisma.friends.findFirst({
-        where: {
-          accepted: true,
-          OR: [
-            {
-              requesting_user: authResult.user_id,
-              other_user: post.created_by,
-            },
-            {
-              requesting_user: post.created_by,
-              other_user: authResult.user_id,
-            },
-          ],
-        },
-        select: { id: true },
-      });
-      if (!friendRow) {
-        return NextResponse.json(
-          { error: { code: "not_allowed", message: "You cannot comment on this post." } },
-          { status: 403 },
-        );
-      }
+    const allowed = await canViewerAccessPost({
+      viewerUserId: authResult.user_id,
+      post,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: { code: "not_allowed", message: "You cannot comment on this post." } },
+        { status: 403 },
+      );
     }
 
     const dataObject = asPostDataObject(post.data as Prisma.JsonValue | null);
@@ -221,6 +208,7 @@ export async function DELETE(request: Request) {
       select: {
         id: true,
         created_by: true,
+        permanent: true,
         data: true,
       },
     });
@@ -231,30 +219,15 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Enforce same visibility rule as feed: own post or accepted friend.
-    if (post.created_by !== authResult.user_id) {
-      const friendRow = await prisma.friends.findFirst({
-        where: {
-          accepted: true,
-          OR: [
-            {
-              requesting_user: authResult.user_id,
-              other_user: post.created_by,
-            },
-            {
-              requesting_user: post.created_by,
-              other_user: authResult.user_id,
-            },
-          ],
-        },
-        select: { id: true },
-      });
-      if (!friendRow) {
-        return NextResponse.json(
-          { error: { code: "not_allowed", message: "You cannot delete comments on this post." } },
-          { status: 403 },
-        );
-      }
+    const allowed = await canViewerAccessPost({
+      viewerUserId: authResult.user_id,
+      post,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: { code: "not_allowed", message: "You cannot delete comments on this post." } },
+        { status: 403 },
+      );
     }
 
     const dataObject = asPostDataObject(post.data as Prisma.JsonValue | null);
