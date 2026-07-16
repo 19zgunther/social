@@ -1,0 +1,10 @@
+## Misc rules
+- Avoid using 'any'
+- Avoid adding short helper functions if they're only used in 1 place
+- Avoid adding short files
+- Prio switching into planning mode when the user requests a complex change/Feature
+- Don't use Immediately Invoked Function Expressions
+- Avoid in-html long/multi-line function event handlers. Put them in static callbacks and such.
+
+# How To Review Code:
+- If a user asks you to 'review', first read REVIEW.md

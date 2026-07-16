@@ -16,6 +16,7 @@ import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostI
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 import { hasCongratsComment } from "@/app/lib/congratsComment";
+import PollBlock, { getPollViewerState } from "@/app/components/PollBlock";
 
 type PostSectionProps = {
   post: PostItem;
@@ -901,6 +902,27 @@ function PostSectionComponent({
             ) : null}
           </div>
         ) : null}
+
+        {(() => {
+          const poll = getPollViewerState(postData);
+          if (!poll) {
+            return null;
+          }
+          return (
+            <PollBlock
+              postId={post.id}
+              poll={poll}
+              isPreview={isPreview}
+              onPollUpdated={(nextData) => {
+                setPostData(nextData);
+                onPostUpdated?.({
+                  id: post.id,
+                  data: nextData,
+                });
+              }}
+            />
+          );
+        })()}
 
         {/** Like Button, Emoji Picker, Reaction Emojis */}
         <div className="mt-1 flex h-8 w-full items-center gap-2">

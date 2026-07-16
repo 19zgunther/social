@@ -10,6 +10,7 @@ import {
   Plus,
   Settings as SettingsIcon,
   Trash2,
+  ListChecks,
 } from "lucide-react";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
@@ -19,6 +20,7 @@ import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 import EmojiEditorTab from "@/app/components/EmojiEditorTab";
 import PostGroupsTab from "@/app/components/PostGroupsTab";
+import { getPollViewerState } from "@/app/components/PollBlock";
 import {
   AcceptedFriend,
   ApiError,
@@ -221,6 +223,7 @@ function ProfilePostsSection({
           const hasImageAttachment = Boolean(post.image_id);
           const hasPostImageSource = Boolean(post.image_id && post.image_access_grant);
           const trimmedPostText = post.text.trim();
+          const poll = getPollViewerState(post.data);
           return (
             <button
               key={post.id}
@@ -240,6 +243,20 @@ function ProfilePostsSection({
               ) : hasImageAttachment ? (
                 <div className="flex h-full w-full items-center justify-center bg-black text-[10px] text-accent-2">
                   Loading...
+                </div>
+              ) : poll ? (
+                <div className="flex h-full w-full flex-col items-start justify-start gap-1 overflow-hidden bg-black p-1.5">
+                  <ListChecks className="h-4 w-4 shrink-0 text-accent-3" />
+                  <p
+                    className="w-full overflow-hidden text-left text-[9px] leading-tight text-foreground/80 break-words"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 5,
+                      WebkitBoxOrient: "vertical",
+                    }}
+                  >
+                    {trimmedPostText || poll.options[0]?.text || "Poll"}
+                  </p>
                 </div>
               ) : (
                 <div className="flex h-full w-full items-start justify-start overflow-hidden bg-black p-1.5">

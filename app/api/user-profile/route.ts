@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { sanitizePostDataForViewer } from "@/app/lib/polls";
 import { visibleAuthorPostsWhereForViewer } from "@/app/lib/postVisibility";
 import { PostData, PostItem } from "@/app/types/interfaces";
 
@@ -194,7 +195,11 @@ export async function POST(request: Request) {
         image_url: null,
         image_access_grant: imageAccessGrantByPostId.get(post.id) ?? null,
         text: post.text ?? "",
-        data: post.data as PostData | null,
+        data: sanitizePostDataForViewer({
+          data: post.data,
+          viewerUserId: authResult.user_id,
+          authorUserId: post.created_by,
+        }),
         username: post.users.username,
         email: post.users.email,
         author_profile_image_id: post.users.profile_image_id,

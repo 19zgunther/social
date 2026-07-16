@@ -6,7 +6,7 @@ import {
   prepareImageForUpload,
   uploadPreparedImageToMainBucket,
 } from "@/app/components/utils/client_file_storage_utils";
-import { ApiError, PostGroup, PostGroupsGetResponse, PostItem } from "@/app/types/interfaces";
+import { ApiError, PollDurationHours, PollSelectionMode, PollViewerState, PostGroup, PostGroupsGetResponse, PostItem } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { PostSection } from "@/app/components/PostSection";
 
@@ -20,6 +20,8 @@ type CreatePostTabProps = {
   onPosted: () => void;
 };
 
+type CreatePostKind = "post" | "poll";
+
 type AudienceSelection =
   | { mode: "permanent" }
   | { mode: "all" }
@@ -30,6 +32,48 @@ type PendingUploadImage = {
   previewDataUrl: string;
   base64Data: string;
   mimeType: string;
+};
+
+const POLL_DURATION_OPTIONS: Array<{ value: PollDurationHours; label: string }> = [
+  { value: 12, label: "12 hours" },
+  { value: 24, label: "1 day" },
+  { value: 48, label: "2 days" },
+  { value: 168, label: "1 week" },
+];
+
+const buildPreviewPollState = ({
+  optionTexts,
+  selectionMode,
+  allowVoteChanges,
+  durationHours,
+}: {
+  optionTexts: string[];
+  selectionMode: PollSelectionMode;
+  allowVoteChanges: boolean;
+  durationHours: PollDurationHours;
+}): PollViewerState => {
+  const options = optionTexts
+    .map((text) => text.trim())
+    .filter((text) => text.length > 0)
+    .map((text, index) => ({ id: `preview-option-${index}`, text }));
+  const closesAt = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString();
+  return {
+    options:
+      options.length >= 2
+        ? options
+        : [
+            { id: "preview-option-0", text: options[0]?.text || "Option 1" },
+            { id: "preview-option-1", text: options[1]?.text || "Option 2" },
+          ],
+    selection_mode: selectionMode,
+    allow_vote_changes: allowVoteChanges,
+    closes_at: closesAt,
+    has_voted: false,
+    viewer_selection: [],
+    is_closed: false,
+    results: null,
+    total_voters: null,
+  };
 };
 
 type PostImageEditorModalProps = {
@@ -430,6 +474,7 @@ export default function CreatePostTab({
 }: CreatePostTabProps) {
   const createInputRef = useRef<HTMLInputElement | null>(null);
   const textInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const [postKind, setPostKind] = useState<CreatePostKind>("post");
   const [comment, setComment] = useState("");
   const [images, setImages] = useState<PendingUploadImage[]>([]);
   const [editingImageId, setEditingImageId] = useState<string | null>(null);
@@ -437,6 +482,10 @@ export default function CreatePostTab({
   const [statusMessage, setStatusMessage] = useState("");
   const [postGroups, setPostGroups] = useState<PostGroup[]>([]);
   const [audience, setAudience] = useState<AudienceSelection>({ mode: "permanent" });
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  const [pollSelectionMode, setPollSelectionMode] = useState<PollSelectionMode>("single");
+  const [pollAllowVoteChanges, setPollAllowVoteChanges] = useState(false);
+  const [pollDurationHours, setPollDurationHours] = useState<PollDurationHours>(24);
   const editingImage = editingImageId ? images.find((image) => image.id === editingImageId) ?? null : null;
 
   useEffect(() => {
@@ -447,6 +496,12 @@ export default function CreatePostTab({
       textInputRef.current?.focus();
     }, 0);
   }, [isActive]);
+
+  useEffect(() => {
+    if (postKind === "poll" && images.length > 1) {
+      setImages((previous) => previous.slice(0, 1));
+    }
+  }, [postKind, images.length]);
 
   useEffect(() => {
     if (!isActive) {
@@ -516,11 +571,33 @@ export default function CreatePostTab({
   const audienceSelectValue =
     audience.mode === "group" ? `group:${audience.groupId}` : audience.mode;
 
-  const hasPreviewContent = comment.trim().length > 0 || images.length > 0;
+  const filledPollOptions = useMemo(
+    () => pollOptions.map((option) => option.trim()).filter((option) => option.length > 0),
+    [pollOptions],
+  );
+  const hasValidPoll = postKind === "poll" && filledPollOptions.length >= 2;
+  const hasPreviewContent =
+    comment.trim().length > 0 || images.length > 0 || (postKind === "poll" && filledPollOptions.length > 0);
+
+  const canSubmit =
+    postKind === "poll"
+      ? hasValidPoll && !isPosting
+      : (images.length > 0 || comment.trim().length > 0) && !isPosting;
 
   const previewPost = useMemo((): PostItem => {
     const otherImageIds =
-      images.length > 1 ? images.slice(1).map((_, index) => `preview-${index + 1}`) : undefined;
+      postKind === "post" && images.length > 1
+        ? images.slice(1).map((_, index) => `preview-${index + 1}`)
+        : undefined;
+    const poll =
+      postKind === "poll"
+        ? buildPreviewPollState({
+            optionTexts: pollOptions,
+            selectionMode: pollSelectionMode,
+            allowVoteChanges: pollAllowVoteChanges,
+            durationHours: pollDurationHours,
+          })
+        : undefined;
     return {
       id: "create-post-preview",
       created_at: new Date().toISOString(),
@@ -528,7 +605,10 @@ export default function CreatePostTab({
       image_id: images.length > 0 ? "preview-0" : null,
       image_url: null,
       text: comment,
-      data: otherImageIds ? { other_image_ids: otherImageIds } : null,
+      data: {
+        ...(otherImageIds ? { other_image_ids: otherImageIds } : {}),
+        ...(poll ? { poll } : {}),
+      },
       like_count: 0,
       is_liked_by_viewer: false,
       username,
@@ -536,7 +616,19 @@ export default function CreatePostTab({
       author_profile_image_id: profileImageId,
       author_profile_image_url: profileImageUrl,
     };
-  }, [comment, currentUserId, images, profileImageId, profileImageUrl, username]);
+  }, [
+    comment,
+    currentUserId,
+    images,
+    pollAllowVoteChanges,
+    pollDurationHours,
+    pollOptions,
+    pollSelectionMode,
+    postKind,
+    profileImageId,
+    profileImageUrl,
+    username,
+  ]);
 
   const previewImageUrls = useMemo(
     () => images.map((image) => image.previewDataUrl),
@@ -563,23 +655,33 @@ export default function CreatePostTab({
           } satisfies PendingUploadImage;
         }),
       );
-      setImages((previous) => [...previous, ...prepared]);
+      setImages((previous) => {
+        if (postKind === "poll") {
+          return prepared.slice(0, 1);
+        }
+        return [...previous, ...prepared];
+      });
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to prepare image.");
     }
   };
 
   const onPost = async () => {
-    const hasCommentText = comment.trim().length > 0;
-    if ((images.length === 0 && !hasCommentText) || isPosting) {
+    if (!canSubmit) {
+      return;
+    }
+
+    if (postKind === "poll" && filledPollOptions.length < 2) {
+      setStatusMessage("Add at least 2 poll options.");
       return;
     }
 
     setIsPosting(true);
     setStatusMessage("");
     try {
+      const imagesToUpload = postKind === "poll" ? images.slice(0, 1) : images;
       const uploadedImageIds: string[] = [];
-      for (const image of images) {
+      for (const image of imagesToUpload) {
         const payload = await uploadPreparedImageToMainBucket(
           {
             base64Data: image.base64Data,
@@ -596,10 +698,25 @@ export default function CreatePostTab({
       }
 
       const [primaryImageId, ...otherImageIds] = uploadedImageIds;
+      const hasCommentText = comment.trim().length > 0;
+      const dataPayload =
+        postKind === "poll"
+          ? {
+              poll: {
+                options: filledPollOptions.map((text) => ({ text })),
+                selection_mode: pollSelectionMode,
+                allow_vote_changes: pollAllowVoteChanges,
+                duration_hours: pollDurationHours,
+              },
+            }
+          : otherImageIds.length > 0
+            ? { other_image_ids: otherImageIds }
+            : undefined;
+
       const createResponse = await postWithAuth("/api/post-create", {
         ...(hasCommentText ? { text: comment } : {}),
         ...(primaryImageId ? { image_id: primaryImageId } : {}),
-        ...(otherImageIds.length > 0 ? { data: { other_image_ids: otherImageIds } } : {}),
+        ...(dataPayload ? { data: dataPayload } : {}),
         audience:
           audience.mode === "group"
             ? { mode: "group", group_id: audience.groupId }
@@ -613,6 +730,11 @@ export default function CreatePostTab({
       setComment("");
       setImages([]);
       setAudience({ mode: "permanent" });
+      setPollOptions(["", ""]);
+      setPollSelectionMode("single");
+      setPollAllowVoteChanges(false);
+      setPollDurationHours(24);
+      setPostKind("post");
       onPosted();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to create post.");
@@ -620,6 +742,11 @@ export default function CreatePostTab({
       setIsPosting(false);
     }
   };
+
+  const showAddImageTile = !(postKind === "poll" && images.length >= 1);
+  const imageTiles = showAddImageTile
+    ? [{ id: "ADD", previewDataUrl: "ADD" } as PendingUploadImage, ...images]
+    : images;
 
   return (
     <div className={`flex h-full min-h-0 w-full flex-col bg-primary-background ${DONT_SWIPE_TABS_CLASSNAME}`}>
@@ -634,7 +761,7 @@ export default function CreatePostTab({
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 pb-24">
         <PostImageEditorModal
           isOpen={Boolean(editingImage)}
           sourceDataUrl={editingImage?.previewDataUrl ?? null}
@@ -655,14 +782,34 @@ export default function CreatePostTab({
           ref={createInputRef}
           type="file"
           accept="image/*"
-          multiple
+          multiple={postKind === "post"}
           onChange={onSelectPostImages}
           className="hidden"
         />
 
+        <div className="mb-3 flex gap-2">
+          {([
+            { kind: "post", label: "Post" },
+            { kind: "poll", label: "Poll" },
+          ] as const).map((entry) => (
+            <button
+              key={entry.kind}
+              type="button"
+              onClick={() => setPostKind(entry.kind)}
+              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                postKind === entry.kind
+                  ? "border-accent-3 bg-accent-3 text-primary-background"
+                  : "border-accent-1 bg-secondary-background text-accent-2 hover:text-foreground"
+              }`}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+
         <div className="mb-3">
           <label htmlFor="post-audience" className="mb-1 block text-xs font-semibold text-accent-2">
-            Who can see this post?
+            Who can see this {postKind === "poll" ? "poll" : "post"}?
           </label>
           <div className="relative">
             <select
@@ -681,16 +828,17 @@ export default function CreatePostTab({
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-accent-2" />
           </div>
+          <p className="mt-1 text-xs text-accent-2">{audienceHint}</p>
         </div>
 
         <div className="-mx-1 pt-3 w-[calc(100%+0.5rem)] overflow-x-auto">
           <div className="flex w-max flex-nowrap gap-2 px-1">
-            {[{id: 'ADD', previewDataUrl: 'ADD'}, ...images].map((image) => (
+            {imageTiles.map((image) => (
               <div
                 key={image.id}
                 className="relative aspect-square h-32 flex-none overflow-hidden rounded-lg border border-accent-1 sm:h-36"
               >
-                {image.id === 'ADD' ? (<>
+                {image.id === "ADD" ? (
                   <button
                     type="button"
                     onClick={() => createInputRef.current?.click()}
@@ -698,37 +846,39 @@ export default function CreatePostTab({
                   >
                     <div className="w-full">
                       <ImagePlus className="h-10 w-10 w-full" />
-                      <div>Add photos</div>
+                      <div>{postKind === "poll" ? "Add photo" : "Add photos"}</div>
                     </div>
                   </button>
-                </>) : (<>
-                  <img src={image.previewDataUrl} alt="New post preview" className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setEditingImageId(image.id)}
-                    className="absolute left-1 top-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80 opacity-50"
-                    aria-label="Tap to edit image"
-                    title="Tap to edit"
-                  >
-                    <PenBoxIcon className="h-6 w-6" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setImages((previous) => {
-                        const nextImages = previous.filter((row) => row.id !== image.id);
-                        if (editingImageId === image.id) {
-                          setEditingImageId(null);
-                        }
-                        return nextImages;
-                      })
-                    }
-                    className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white hover:bg-black/80 opacity-50"
-                    aria-label="Remove image"
-                  >
-                    <X className="h-6 w-6" />
-                  </button>
-                </>)}
+                ) : (
+                  <>
+                    <img src={image.previewDataUrl} alt="New post preview" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setEditingImageId(image.id)}
+                      className="absolute left-1 top-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80 opacity-50"
+                      aria-label="Tap to edit image"
+                      title="Tap to edit"
+                    >
+                      <PenBoxIcon className="h-6 w-6" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setImages((previous) => {
+                          const nextImages = previous.filter((row) => row.id !== image.id);
+                          if (editingImageId === image.id) {
+                            setEditingImageId(null);
+                          }
+                          return nextImages;
+                        })
+                      }
+                      className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white hover:bg-black/80 opacity-50"
+                      aria-label="Remove image"
+                    >
+                      <X className="h-6 w-6" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -739,10 +889,116 @@ export default function CreatePostTab({
             ref={textInputRef}
             value={comment}
             onChange={(event) => setComment(event.target.value)}
-            placeholder="Write a comment..."
+            placeholder={postKind === "poll" ? "Ask a question..." : "Write a comment..."}
             className="min-h-[20vh] max-h-[20vh] w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
           />
         </div>
+
+        {postKind === "poll" ? (
+          <div className="mt-4 space-y-4">
+            <div>
+              <p className="mb-2 text-xs font-semibold text-accent-2">Options (2–10)</p>
+              <div className="space-y-2">
+                {pollOptions.map((option, index) => (
+                  <div key={`poll-option-${index}`} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={option}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setPollOptions((previous) =>
+                          previous.map((entry, entryIndex) =>
+                            entryIndex === index ? nextValue : entry,
+                          ),
+                        );
+                      }}
+                      placeholder={`Option ${index + 1}`}
+                      maxLength={200}
+                      className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+                    />
+                    {pollOptions.length > 2 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPollOptions((previous) => previous.filter((_, entryIndex) => entryIndex !== index))
+                        }
+                        className="rounded-lg border border-accent-1 px-2 py-2 text-accent-2 hover:text-foreground"
+                        aria-label={`Remove option ${index + 1}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              {pollOptions.length < 10 ? (
+                <button
+                  type="button"
+                  onClick={() => setPollOptions((previous) => [...previous, ""])}
+                  className="mt-2 text-sm font-semibold text-accent-3 hover:brightness-110"
+                >
+                  + Add option
+                </button>
+              ) : null}
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold text-accent-2">Selection</p>
+              <div className="flex gap-2">
+                {([
+                  { mode: "single", label: "One choice" },
+                  { mode: "multiple", label: "Multiple choices" },
+                ] as const).map((entry) => (
+                  <button
+                    key={entry.mode}
+                    type="button"
+                    onClick={() => setPollSelectionMode(entry.mode)}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm transition ${
+                      pollSelectionMode === entry.mode
+                        ? "border-accent-3 bg-accent-3/20 text-foreground"
+                        : "border-accent-1 bg-secondary-background text-accent-2"
+                    }`}
+                  >
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={pollAllowVoteChanges}
+                onChange={(event) => setPollAllowVoteChanges(event.target.checked)}
+                className="h-4 w-4"
+              />
+              Allow changing votes before the poll closes
+            </label>
+
+            <div>
+              <label htmlFor="poll-duration" className="mb-1 block text-xs font-semibold text-accent-2">
+                Duration
+              </label>
+              <div className="relative">
+                <select
+                  id="poll-duration"
+                  value={pollDurationHours}
+                  onChange={(event) =>
+                    setPollDurationHours(Number(event.target.value) as PollDurationHours)
+                  }
+                  className="w-full appearance-none rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 pr-10 text-sm text-foreground outline-none focus:border-accent-2"
+                >
+                  {POLL_DURATION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-accent-2" />
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {hasPreviewContent ? (
           <div className="mt-7">
@@ -765,8 +1021,8 @@ export default function CreatePostTab({
         <button
           type="button"
           onClick={onPost}
-          style={{ boxShadow: '0 0 10px 2px rgba(0, 0, 0, 1)' }}
-          disabled={(images.length === 0 && comment.trim().length === 0) || isPosting}
+          style={{ boxShadow: "0 0 10px 2px rgba(0, 0, 0, 1)" }}
+          disabled={!canSubmit}
           className="rounded-xl bg-accent-3 px-6 py-3 text-base font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-50"
         >
           {isPosting ? "Posting..." : "Post ->"}

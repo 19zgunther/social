@@ -23,10 +23,55 @@ export type PostCommentNode = {
   deleted?: boolean;
 };
 
+export type PollSelectionMode = "single" | "multiple";
+export type PollDurationHours = 12 | 24 | 48 | 168;
+
+export type PollOption = {
+  id: string;
+  text: string;
+};
+
+/** Stored in posts.data.poll (server-side). */
+export type PollData = {
+  options: PollOption[];
+  selection_mode: PollSelectionMode;
+  allow_vote_changes: boolean;
+  closes_at: string;
+  votes: Record<string, string[]>;
+};
+
+/** Create-time poll config (no votes / closes_at). */
+export type PollCreateInput = {
+  options: Array<{ text: string }>;
+  selection_mode: PollSelectionMode;
+  allow_vote_changes: boolean;
+  duration_hours: PollDurationHours;
+};
+
+export type PollResultRow = {
+  option_id: string;
+  count: number;
+};
+
+/** Viewer-facing poll returned in PostItem.data.poll. */
+export type PollViewerState = {
+  options: PollOption[];
+  selection_mode: PollSelectionMode;
+  allow_vote_changes: boolean;
+  closes_at: string;
+  has_voted: boolean;
+  viewer_selection: string[];
+  is_closed: boolean;
+  results: PollResultRow[] | null;
+  total_voters: number | null;
+};
+
 export type PostData = {
   comments?: Record<string, PostCommentNode>;
   likes?: Record<string, boolean>;
   other_image_ids?: string[];
+  /** Storage uses PollData; API responses replace with PollViewerState. */
+  poll?: PollData | PollViewerState;
 };
 
 export type PostItem = {

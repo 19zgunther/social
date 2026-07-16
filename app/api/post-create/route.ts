@@ -8,20 +8,25 @@ import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { resolvePostAudience } from "@/app/lib/postVisibility";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
-import { PostCreateRequest, PostCreateResponse, PostData } from "@/app/types/interfaces";
-
-const sanitizePostData = (rawData: unknown): Prisma.InputJsonValue | undefined => {
-  if (!rawData || typeof rawData !== "object") {
-    return undefined;
-  }
-  return rawData as Prisma.InputJsonValue;
-};
+import {
+  parsePollCreateInput,
+  sanitizePostDataForViewer,
+  validateAndBuildPoll,
+} from "@/app/lib/polls";
+import { PollData, PostCreateRequest, PostCreateResponse, PostData } from "@/app/types/interfaces";
 
 const POST_PUSH_PREVIEW_MAX_LENGTH = 120;
-const getPostPushPreviewText = (postText: string | null, hasImage: boolean): string => {
+const getPostPushPreviewText = (
+  postText: string | null,
+  hasImage: boolean,
+  hasPoll: boolean,
+): string => {
   const sanitizedText = sanitizeNotificationText(postText);
   if (sanitizedText) {
     return sanitizedText.slice(0, POST_PUSH_PREVIEW_MAX_LENGTH);
+  }
+  if (hasPoll) {
+    return "Shared a poll";
   }
   if (hasImage) {
     return "Shared a photo";
@@ -42,17 +47,59 @@ export async function POST(request: Request) {
     const providedImageId = body.image_id?.trim();
     const imageBase64Data = body.image_base64_data?.trim();
     const imageMimeType = body.image_mime_type?.trim();
-    const data = sanitizePostData(body.data);
     const hasText = Boolean(text);
     const hasProvidedImageId = Boolean(providedImageId);
     const hasImageUploadPayload = Boolean(imageBase64Data || imageMimeType);
 
-    if (!hasText && !hasProvidedImageId && !hasImageUploadPayload) {
+    const rawData =
+      body.data && typeof body.data === "object" && !Array.isArray(body.data)
+        ? (body.data as Record<string, unknown>)
+        : {};
+
+    const otherImageIds = Array.isArray(rawData.other_image_ids)
+      ? rawData.other_image_ids.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+      : [];
+
+    let builtPoll: PollData | null = null;
+    if (rawData.poll !== undefined) {
+      const pollInput = parsePollCreateInput(rawData.poll);
+      if (!pollInput) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "invalid_poll",
+              message: "Poll configuration is invalid.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      const pollResult = validateAndBuildPoll(pollInput);
+      if ("error" in pollResult) {
+        return NextResponse.json({ error: pollResult.error }, { status: 400 });
+      }
+      builtPoll = pollResult.poll;
+    }
+
+    if (builtPoll && otherImageIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_poll",
+            message: "Poll posts can include at most one image.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!hasText && !hasProvidedImageId && !hasImageUploadPayload && !builtPoll) {
       return NextResponse.json(
         {
           error: {
             code: "invalid_request",
-            message: "text and/or image_id or image_base64_data with image_mime_type is required.",
+            message:
+              "text and/or image_id or image_base64_data with image_mime_type, or a valid poll, is required.",
           },
         },
         { status: 400 },
@@ -92,6 +139,15 @@ export async function POST(request: Request) {
       });
     }
 
+    const postData: PostData = {};
+    if (otherImageIds.length > 0) {
+      postData.other_image_ids = otherImageIds;
+    }
+    if (builtPoll) {
+      postData.poll = builtPoll;
+    }
+    const hasPostData = Object.keys(postData).length > 0;
+
     const post = await prisma.$transaction(async (tx) => {
       const created = await tx.posts.create({
         data: {
@@ -99,7 +155,7 @@ export async function POST(request: Request) {
           image_id: imageId,
           text: text ?? null,
           permanent: isPermanent,
-          ...(data ? { data } : {}),
+          ...(hasPostData ? { data: postData as Prisma.InputJsonValue } : {}),
         },
         select: {
           id: true,
@@ -128,7 +184,7 @@ export async function POST(request: Request) {
 
     const recipientUserIds = audience.viewerIds.filter((userId) => userId !== authResult.user_id);
     if (recipientUserIds.length > 0) {
-      const previewText = getPostPushPreviewText(post.text, Boolean(post.image_id));
+      const previewText = getPostPushPreviewText(post.text, Boolean(post.image_id), Boolean(builtPoll));
       void sendPushToUsers({
         recipientUserIds,
         payload: {
@@ -175,6 +231,12 @@ export async function POST(request: Request) {
       }
     }
 
+    const sanitizedData = sanitizePostDataForViewer({
+      data: post.data,
+      viewerUserId: authResult.user_id,
+      authorUserId: post.created_by,
+    });
+
     const payload: PostCreateResponse = {
       post: {
         id: post.id,
@@ -184,7 +246,7 @@ export async function POST(request: Request) {
         image_url: null,
         image_access_grant: imageAccessGrant,
         text: post.text ?? "",
-        data: post.data as PostData | null,
+        data: sanitizedData,
         like_count: 0,
         is_liked_by_viewer: false,
         username: authResult.username,
