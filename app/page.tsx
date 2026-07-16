@@ -592,15 +592,15 @@ export default function Home() {
         </div>
 
         {activeTab !== "create_post" ? (
-          <div className="w-full h-fit flex justify-between border-t border-accent-1 bg-primary-background z-[1000]">
+          <div className="w-full h-fit flex justify-between border-t border-accent-1 bg-primary-background z-[1000]" style={{boxShadow: "0 0 20px 10px rgba(0, 0, 0, 0.6)"}}>
             <NavRowButton
-              icon={<House aria-hidden className="h-4 w-4" />}
+              icon={<House aria-hidden className="h-5 w-5" />}
               isActive={activeTab === "feed"}
               showCircle={false}
               onClick={() => setActiveTab("feed")}
             />
             <NavRowButton
-              icon={<Users aria-hidden className="h-4 w-4" />}
+              icon={<Users aria-hidden className="h-5 w-5" />}
               isActive={activeTab === "groups"}
               showCircle={groupsUnreadCount > 0}
               onClick={() => setActiveTab("groups")}
@@ -614,7 +614,7 @@ export default function Home() {
             />
             */}
             <NavRowButton
-              icon={<UserRound aria-hidden className="h-4 w-4" />}
+              icon={<UserRound aria-hidden className="h-5 w-5" />}
               isActive={activeTab === "profile"}
               showCircle={profileIncomingRequestCount > 0}
               onClick={() => {
@@ -622,7 +622,7 @@ export default function Home() {
               }}
             />
             <NavRowButton
-              icon={<MessageSquare aria-hidden className="h-4 w-4" />}
+              icon={<MessageSquare aria-hidden className="h-5 w-5" />}
               isActive={activeTab === "feedback"}
               showCircle={false}
               onClick={() => setActiveTab("feedback")}
