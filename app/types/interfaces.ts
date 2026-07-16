@@ -180,6 +180,9 @@ export type IncomingFriendRequest = {
   requested_at: string;
   username: string;
   email: string | null;
+  profile_image_id: string | null;
+  profile_image_url: string | null;
+  profile_image_access_grant?: string | null;
 };
 
 export type OutgoingFriendRequest = {

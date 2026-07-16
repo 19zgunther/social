@@ -308,14 +308,14 @@ export default function PostGroupsTab({
   };
 
   const chipClass = (active: boolean) =>
-    `shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+    `shrink-0 rounded-full border px-4 py-2.5 text-xs font-semibold transition ${
       active
         ? "border-accent-3 bg-accent-3 text-primary-background"
         : "border-accent-1 bg-primary-background text-accent-2 hover:text-foreground"
     }`;
 
   const membershipChipClass = (isMember: boolean) =>
-    `rounded-full border px-2 py-0.5 text-[11px] font-semibold transition ${
+    `rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
       isMember
         ? "border-accent-3 bg-accent-3 text-primary-background"
         : "border-accent-1 bg-primary-background text-accent-2 hover:text-foreground"
@@ -331,7 +331,7 @@ export default function PostGroupsTab({
         Private friend lists used as post audiences. Choose a group when you create a post.
       </p>
 
-      <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => {
@@ -413,7 +413,7 @@ export default function PostGroupsTab({
       ) : null}
 
       {selectedGroup ? (
-        <div className="mt-3 rounded-lg border border-accent-1 bg-primary-background px-3 py-2">
+        <div className="mt-3 border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3">
           {isRenaming ? (
             <div className="flex items-center gap-2">
               <input
@@ -471,7 +471,7 @@ export default function PostGroupsTab({
                 className="rounded-lg border border-accent-1 p-1.5 text-accent-2 hover:text-foreground"
                 aria-label="Rename group"
               >
-                <Pencil className="h-3.5 w-3.5" />
+                <Pencil className="h-5 w-5" />
               </button>
               <button
                 type="button"
@@ -483,13 +483,10 @@ export default function PostGroupsTab({
                 }`}
                 aria-label={confirmDelete ? "Confirm delete group" : "Delete group"}
               >
-                {confirmDelete ? "Delete?" : <Trash2 className="h-3.5 w-3.5" />}
+                {confirmDelete ? "Delete?" : <Trash2 className="h-5 w-5" />}
               </button>
             </div>
           )}
-          {selectedGroup.member_ids.length === 0 && acceptedFriends.length > 0 ? (
-            <p className="mt-2 text-xs text-accent-2">Tap friends to add them.</p>
-          ) : null}
         </div>
       ) : null}
 
@@ -503,13 +500,13 @@ export default function PostGroupsTab({
         />
       </div>
 
-      <div className="mt-3 min-h-0 flex-1 space-y-2">
+      <div className="mt-3 min-h-0 flex-1 space-y-2 pt-2">
         {isLoadingGroups || isLoadingFriends ? (
           <p className="text-xs text-accent-2">Loading...</p>
         ) : null}
 
         {!isLoadingFriends && acceptedFriends.length === 0 ? (
-          <div className="rounded-lg border border-accent-1 bg-primary-background px-3 py-4">
+          <div className="border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-4">
             <p className="text-sm text-foreground">Add friends first</p>
             <p className="mt-1 text-xs text-accent-2">
               Groups are lists of your friends used when sharing posts.
@@ -529,7 +526,7 @@ export default function PostGroupsTab({
         !isLoadingGroups &&
         groups.length === 0 &&
         !isCreating ? (
-          <div className="rounded-lg border border-accent-1 bg-primary-background px-3 py-4">
+          <div className="border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-4">
             <p className="text-sm text-foreground">Create a group for selective posts</p>
             <p className="mt-1 text-xs text-accent-2">
               Then pick that group as the audience when creating a post. You can still post to all
@@ -560,12 +557,12 @@ export default function PostGroupsTab({
           ? filteredFriends.map((friend) => (
               <div
                 key={friend.id}
-                className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2"
+                className="w-full border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   <UserProfileImage
                     userId={friend.user_id}
-                    sizePx={40}
+                    sizePx={50}
                     alt={`${friend.username} profile`}
                     signedUrl={friend.profile_image_url}
                     imageAccessGrant={friend.profile_image_access_grant}
@@ -579,7 +576,7 @@ export default function PostGroupsTab({
                     ) : null}
                   </div>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-2 flex flex-wrap gap-1.5 pl-[66px]">
                   {groups.map((group) => {
                     const isMember = group.member_ids.includes(friend.user_id);
                     return (
@@ -606,7 +603,7 @@ export default function PostGroupsTab({
                   key={friend.id}
                   type="button"
                   onClick={() => toggleMembership(selectedGroup.id, friend.user_id)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-left transition hover:bg-secondary-background"
+                  className="flex w-full items-center gap-4 border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3 text-left transition hover:bg-secondary-background"
                 >
                   <span
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
@@ -619,7 +616,7 @@ export default function PostGroupsTab({
                   </span>
                   <UserProfileImage
                     userId={friend.user_id}
-                    sizePx={40}
+                    sizePx={50}
                     alt={`${friend.username} profile`}
                     signedUrl={friend.profile_image_url}
                     imageAccessGrant={friend.profile_image_access_grant}

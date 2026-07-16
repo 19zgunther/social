@@ -90,6 +90,23 @@ export async function POST(request: Request) {
         requested_at: row.requested_at.toISOString(),
         username: row.users_friends_requesting_userTousers.username,
         email: row.users_friends_requesting_userTousers.email,
+        profile_image_id: row.users_friends_requesting_userTousers.profile_image_id,
+        profile_image_url: null,
+        profile_image_access_grant: (() => {
+          const pid = row.users_friends_requesting_userTousers.profile_image_id;
+          if (!pid) {
+            return null;
+          }
+          try {
+            return createMainBucketImageAccessGrant({
+              imageId: pid,
+              storageUserId: row.requesting_user,
+              viewerUserId: authResult.user_id,
+            });
+          } catch {
+            return null;
+          }
+        })(),
       })),
       outgoing_requests: outgoing.map((row) => ({
         id: row.id,

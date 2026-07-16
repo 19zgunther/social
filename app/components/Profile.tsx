@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState, type MutableRefObject, type ReactNode } from "react";
 import {
   ArrowLeft,
+  Check,
   ChevronRight,
   CircleUserRound,
   MessageSquare,
+  Plus,
   Settings as SettingsIcon,
   Trash2,
 } from "lucide-react";
@@ -46,6 +48,15 @@ type ProfileProps = {
   onOpenCreatePost: () => void;
   swipeBackOverrideRef: MutableRefObject<(() => void) | null>;
 };
+
+const PROFILE_SUB_TABS = [
+  { id: "posts", label: "Posts" },
+  { id: "friends", label: "Friends" },
+  { id: "groups", label: "Groups" },
+  { id: "emojis", label: "Emojis" },
+] as const;
+
+type ProfileSubTab = (typeof PROFILE_SUB_TABS)[number]["id"];
 
 
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
@@ -92,7 +103,7 @@ function ProfilePictureRow({
     localProfileImageUrl || (localProfileImageAccessGrant && localProfileImageId),
   );
   return (
-    <div className="border-b border-accent-1 px-4 py-4">
+    <div className="border-none border-accent-1 px-4 py-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           {isCurrentUsers ? (
@@ -184,92 +195,88 @@ function ProfilePostsSection({
   showCreateButton?: boolean;
 }) {
   return (
-    <>
-      <div className="border-b border-accent-1 px-3 py-3 flex items-center justify-between gap-3">
-        <p>Posts</p>
-        {showCreateButton && onOpenCreatePost ? (
+    <div className="relative min-h-0">
+      {showCreateButton && onOpenCreatePost ? (
+        <button
+          type="button"
+          onClick={onOpenCreatePost}
+          aria-label="Create post"
+          className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-accent-3 text-primary-background transition hover:opacity-90"
+          style={{ boxShadow: "0 1px 10px 2px black" }}
+        >
+          <Plus aria-hidden className="h-5 w-5" strokeWidth={2.5} />
+        </button>
+      ) : null}
+
+      {isLoadingPosts ? <p className="px-3 py-3 text-xs text-accent-2">Loading posts...</p> : null}
+      {!isLoadingPosts && posts.length === 0 ? (
+        <p className="px-3 py-3 text-xs text-accent-2">
+          {showCreateButton ? "No posts yet. Create your first post." : "No posts yet."}
+        </p>
+      ) : null}
+
+      <div className="grid grid-cols-3 border-t border-accent-1">
+        {posts.map((post, index) => {
+          const showRightBorder = index % 3 !== 2;
+          const hasImageAttachment = Boolean(post.image_id);
+          const hasPostImageSource = Boolean(post.image_id && post.image_access_grant);
+          const trimmedPostText = post.text.trim();
+          return (
+            <button
+              key={post.id}
+              type="button"
+              onClick={() => setSelectedPostId(post.id)}
+              className={`aspect-square bg-primary-background ${showRightBorder ? "border-r border-accent-1" : ""
+                } border-b border-accent-1`}
+            >
+              {hasPostImageSource ? (
+                <CachedImage
+                  imageAccessGrant={post.image_access_grant ?? null}
+                  imageStorageUserId={post.created_by}
+                  imageId={post.image_id}
+                  alt="Profile post"
+                  className="h-full w-full object-cover"
+                />
+              ) : hasImageAttachment ? (
+                <div className="flex h-full w-full items-center justify-center bg-black text-[10px] text-accent-2">
+                  Loading...
+                </div>
+              ) : (
+                <div className="flex h-full w-full items-start justify-start overflow-hidden bg-black p-1.5">
+                  <p
+                    className="w-full overflow-hidden text-left text-[9px] leading-tight text-foreground/80 break-words"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 7,
+                      WebkitBoxOrient: "vertical",
+                    }}
+                  >
+                    {trimmedPostText || "(No text)"}
+                  </p>
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {hasMorePosts ? (
+        <div className="px-3 py-3">
           <button
             type="button"
-            onClick={onOpenCreatePost}
-            className="rounded-lg border border-accent-3 bg-secondary-background px-3 py-2 text-xs font-semibold text-accent-3 hover:text-foreground"
+            onClick={() => {
+              if (nextCursorPostId && !isLoadingMorePosts) {
+                void loadPosts(nextCursorPostId);
+              }
+            }}
+            disabled={!nextCursorPostId || isLoadingMorePosts}
+            className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs font-medium text-accent-2 transition hover:text-foreground disabled:opacity-50"
           >
-            + Create Post
+            {isLoadingMorePosts ? "Loading..." : "Load more"}
           </button>
-        ) : null}
-      </div>
-      <div className="min-h-0">
-        {isLoadingPosts ? <p className="px-3 py-3 text-xs text-accent-2">Loading posts...</p> : null}
-        {!isLoadingPosts && posts.length === 0 ? (
-          <p className="px-3 py-3 text-xs text-accent-2">
-            {showCreateButton ? "No posts yet. Create your first post." : "No posts yet."}
-          </p>
-        ) : null}
-
-        <div className="grid grid-cols-3 border-t border-accent-1">
-          {posts.map((post, index) => {
-            const showRightBorder = showCreateButton && onOpenCreatePost
-              ? (index + 1) % 3 !== 0
-              : index % 3 !== 2;
-            const hasImageAttachment = Boolean(post.image_id);
-            const hasPostImageSource = Boolean(post.image_id && post.image_access_grant);
-            const trimmedPostText = post.text.trim();
-            return (
-              <button
-                key={post.id}
-                type="button"
-                onClick={() => setSelectedPostId(post.id)}
-                className={`aspect-square bg-primary-background ${showRightBorder ? "border-r border-accent-1" : ""
-                  } border-b border-accent-1`}
-              >
-                {hasPostImageSource ? (
-                  <CachedImage
-                    imageAccessGrant={post.image_access_grant ?? null}
-                    imageStorageUserId={post.created_by}
-                    imageId={post.image_id}
-                    alt="Profile post"
-                    className="h-full w-full object-cover"
-                  />
-                ) : hasImageAttachment ? (
-                  <div className="flex h-full w-full items-center justify-center bg-black text-[10px] text-accent-2">
-                    Loading...
-                  </div>
-                ) : (
-                  <div className="flex h-full w-full items-start justify-start overflow-hidden bg-black p-1.5">
-                    <p
-                      className="w-full overflow-hidden text-left text-[9px] leading-tight text-foreground/80 break-words"
-                      style={{
-                        display: "-webkit-box",
-                        WebkitLineClamp: 7,
-                        WebkitBoxOrient: "vertical",
-                      }}
-                    >
-                      {trimmedPostText || "(No text)"}
-                    </p>
-                  </div>
-                )}
-              </button>
-            );
-          })}
         </div>
-
-        {hasMorePosts ? (
-          <div className="px-3 py-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (nextCursorPostId && !isLoadingMorePosts) {
-                  void loadPosts(nextCursorPostId);
-                }
-              }}
-              disabled={!nextCursorPostId || isLoadingMorePosts}
-              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs font-medium text-accent-2 transition hover:text-foreground disabled:opacity-50"
-            >
-              {isLoadingMorePosts ? "Loading..." : "Load more"}
-            </button>
-          </div>
-        ) : null}
-      </div>
-    </>
+      ) : null}
+    </div>
   )
 }
 
@@ -297,7 +304,8 @@ function Profile({
   const [incomingRequests, setIncomingRequests] = useState<IncomingFriendRequest[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<OutgoingFriendRequest[]>([]);
   const [acceptedFriends, setAcceptedFriends] = useState<AcceptedFriend[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<"posts" | "friends" | "groups" | "emojis">("posts");
+  const [activeSubTab, setActiveSubTab] = useState<ProfileSubTab>("posts");
+  const activeSubTabIndex = PROFILE_SUB_TABS.findIndex((tab) => tab.id === activeSubTab);
   const [isLoadingFriendRows, setIsLoadingFriendRows] = useState(true);
   const [activeFriendUserId, setActiveFriendUserId] = useState<string | null>(null);
   const [activeIncomingRequestId, setActiveIncomingRequestId] = useState<string | null>(null);
@@ -642,61 +650,47 @@ function Profile({
         setIsProfilePictureEditorOpen={setIsProfilePictureEditorOpen}
       />
 
-      <section className="border-b border-accent-1 px-3 py-2">
-        <div className="flex items-center w-full">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab("posts")}
-            className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold transition ${activeSubTab === "posts"
-              ? "border-accent-3 text-foreground"
-              : "border-transparent text-accent-2 hover:text-foreground"
-              }`}
-          >
-            Posts
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab("friends")}
-            className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold transition ${activeSubTab === "friends"
-              ? "border-accent-3 text-foreground"
-              : "border-transparent text-accent-2 hover:text-foreground"
-              }`}
-          >
-            Friends
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab("groups")}
-            className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold transition ${activeSubTab === "groups"
-              ? "border-accent-3 text-foreground"
-              : "border-transparent text-accent-2 hover:text-foreground"
-              }`}
-          >
-            Groups
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSubTab("emojis")}
-            className={`flex-1 border-b-2 px-3 py-2 text-sm font-semibold transition ${activeSubTab === "emojis"
-              ? "border-accent-3 text-foreground"
-              : "border-transparent text-accent-2 hover:text-foreground"
-              }`}
-          >
-            Emojis
-          </button>
+      <section className="border-none border-accent-1 px-3 py-2.5">
+        <div
+          role="tablist"
+          aria-label="Profile sections"
+          className="relative flex w-full rounded-full bg-black border-accent-1 border-2 rounded-full p-1"
+        >
+          <div
+            aria-hidden
+            className="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/4)] rounded-full bg-accent-3 transition-transform duration-200 ease-out"
+            style={{ transform: `translateX(${Math.max(activeSubTabIndex, 0) * 100}%)` }}
+          />
+          {PROFILE_SUB_TABS.map((tab) => {
+            const isActive = activeSubTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveSubTab(tab.id)}
+                className={`relative z-10 flex flex-1 items-center justify-center gap-1 rounded-full px-1 py-2.5 text-xs font-semibold transition-colors ${
+                  isActive ? "text-primary-background" : "text-accent-2 hover:text-foreground"
+                }`}
+              >
+                {isActive ? <Check aria-hidden className="h-3 w-3 shrink-0" strokeWidth={2.75} /> : null}
+                <span className="truncate">{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
       {activeSubTab === "friends" ? (
-        <section className="border-b border-accent-1 px-3 py-3 w-full">
-          <p className="text-xs font-semibold text-accent-2 mt-1">Search for users to add as friends</p>
+        <section className="border-b border-accent-1 px-3 w-full">
           <div className="mt-3 w-full">
             <UserSearch
               value={friendSearchQuery}
               onValueChange={setFriendSearchQuery}
               onSelect={onSelectUserFromSearch}
               searchUsers={searchFriendOptions}
-              placeholder="Search username/email"
+              placeholder="Search to add or find friends..."
               inputClassName="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
               dropdownClassName="min-h-[30vh] max-h-[30vh]"
               getOptionActionLabel={(option) => {
@@ -727,50 +721,72 @@ function Profile({
             ) : null}
 
             <div className="space-y-2">
-              {incomingRequests.map((requestRow) => (
-                <div
-                  key={requestRow.id}
-                  className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2"
-                >
-                  <p className="text-sm text-foreground">{requestRow.username}</p>
-                  <p className="text-xs text-accent-2">{requestRow.email ?? "No email"}</p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void onRespondToFriendRequest(requestRow.id, true);
-                      }}
-                      disabled={activeIncomingRequestId === requestRow.id}
-                      className="rounded-lg bg-accent-3 px-2 py-1 text-xs font-semibold text-primary-background disabled:opacity-50"
-                    >
-                      Confirm
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void onRespondToFriendRequest(requestRow.id, false);
-                      }}
-                      disabled={activeIncomingRequestId === requestRow.id}
-                      className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
+              {incomingRequests.length > 0 ? (
+                <>
+                  <p className="mb-1 text-xs font-semibold text-accent-2">
+                    Incoming requests ({incomingRequests.length})
+                  </p>
+                  <div className="space-y-2 pt-2">
+                    {incomingRequests.map((requestRow) => (
+                      <div
+                        key={requestRow.id}
+                        className="w-full border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3 flex items-center gap-4"
+                      >
+                        <UserProfileImage
+                          userId={requestRow.requesting_user_id}
+                          sizePx={50}
+                          alt={`${requestRow.username} profile`}
+                          signedUrl={requestRow.profile_image_url}
+                          imageAccessGrant={requestRow.profile_image_access_grant}
+                          imageStorageUserId={requestRow.requesting_user_id}
+                          imageId={requestRow.profile_image_id}
+                        />
+                        <div className="flex-1 min-w-0 text-left">
+                          <p className="text-sm font-medium text-foreground truncate">{requestRow.username}</p>
+                          {requestRow.email ? (
+                            <p className="text-xs text-accent-2 truncate">{requestRow.email}</p>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void onRespondToFriendRequest(requestRow.id, true);
+                            }}
+                            disabled={activeIncomingRequestId === requestRow.id}
+                            className="rounded-lg bg-accent-3 px-2 py-1 text-xs font-semibold text-primary-background disabled:opacity-50"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void onRespondToFriendRequest(requestRow.id, false);
+                            }}
+                            disabled={activeIncomingRequestId === requestRow.id}
+                            className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
+                </>
+              ) : null}
 
               <p className="mb-1 text-xs font-semibold text-accent-2">Your friends ({acceptedFriends.length})</p>
-              <div className="space-y-2">
+              <div className="space-y-2 pt-2">
                 {acceptedFriends.map((friend) => (
                   <button
                     key={friend.id}
                     type="button"
                     onClick={() => { onViewUserProfile(friend.user_id); }}
-                    className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 flex items-center gap-3 transition hover:bg-secondary-background"
+                    className="w-full border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3 flex items-center gap-4 transition hover:bg-secondary-background"
                   >
                     <UserProfileImage
                       userId={friend.user_id}
-                      sizePx={40}
+                      sizePx={50}
                       alt={`${friend.username} profile`}
                       signedUrl={friend.profile_image_url}
                       imageAccessGrant={friend.profile_image_access_grant}
@@ -793,15 +809,15 @@ function Profile({
           {pendingOutgoingRequests.length > 0 ? (
             <div className="mt-3">
               <p className="mb-1 text-xs font-semibold text-accent-2">Pending sent requests</p>
-              <div className="space-y-2">
+              <div className="space-y-2 pt-2">
                 {pendingOutgoingRequests.map((row) => (
                   <div
                     key={row.id}
-                    className="rounded-lg border border-accent-1 bg-primary-background px-3 py-2 flex items-center gap-3"
+                    className="w-full border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3 flex items-center gap-4"
                   >
                     <UserProfileImage
                       userId={row.other_user_id}
-                      sizePx={40}
+                      sizePx={50}
                       alt={`${row.username} profile`}
                       signedUrl={row.profile_image_url}
                       imageAccessGrant={row.profile_image_access_grant}
