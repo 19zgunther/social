@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { loadAllCustomEmojis, putEmojiInCache } from "@/app/lib/customEmojiCache";
 import { ApiError, EmojiItem, EmojiSaveResponse } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
@@ -291,6 +292,24 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   const [isSaving, setIsSaving] = useState(false);
   const [undoStack, setUndoStack] = useState<Uint16Array[]>([]);
   const [redoStack, setRedoStack] = useState<Uint16Array[]>([]);
+  const [portalMounted, setPortalMounted] = useState(false);
+
+  useEffect(() => {
+    // DOM is unavailable during SSR; defer portal until after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount gate for createPortal
+    setPortalMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (editorMode === "none") {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [editorMode]);
 
   const currentColorPacked = useMemo(() => {
     const rgb = (r << 6) | (g << 3) | b;
@@ -313,6 +332,19 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     }
     drawPixelsToCanvas(canvasRef.current, pixels);
   }, [pixels]);
+
+  useEffect(() => {
+    if (editorMode === "none") {
+      return;
+    }
+    // Portal canvas mounts with the mode change; draw after layout so the bitmap is visible.
+    const frame = window.requestAnimationFrame(() => {
+      if (canvasRef.current) {
+        drawPixelsToCanvas(canvasRef.current, latestPixelsRef.current);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editorMode]);
 
   const loadEmojiList = useCallback(async () => {
     setIsLoading(true);
@@ -560,6 +592,22 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     setStatusMessage("");
   }, [exitEditor]);
 
+  useEffect(() => {
+    if (editorMode === "none") {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isSaving) {
+        // Capture + stop so a parent EmojiPicker Escape handler does not also fire.
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onCancelEditor();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [editorMode, isSaving, onCancelEditor]);
+
   const onUploadImage = async (file: File) => {
     if (!file.type.startsWith("image/")) {
       setStatusMessage("Please upload an image file.");
@@ -759,177 +807,212 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
         ) : null}
       </div>
 
-      {editorMode !== "none" ? (
-        <>
-          <div className="mb-1">
-            <label className="mb-1 block text-xs text-accent-2" htmlFor="emoji-name-input">Name</label>
-            <input
-              id="emoji-name-input"
-              type="text"
-              value={emojiName}
-              onChange={(event) => setEmojiName(event.target.value)}
-              maxLength={40}
-              className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-              placeholder="Enter emoji name..."
+      {portalMounted && editorMode !== "none"
+        ? createPortal(
+          <div
+            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2050] flex items-center justify-center px-3 py-4`}
+          >
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => {
+                if (!isSaving) {
+                  onCancelEditor();
+                }
+              }}
+              aria-hidden="true"
             />
-          </div>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={editorMode === "editing" ? "Edit emoji" : "Create emoji"}
+              className="relative flex h-[min(92dvh,900px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-accent-1 bg-secondary-background p-3 shadow-xl shadow-black/40"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="shrink-0">
+                  <p className="mb-2 text-sm font-semibold text-foreground">
+                    {editorMode === "editing" ? "Edit Emoji" : "Create Emoji"}
+                  </p>
+                  <div className="mb-1">
+                    <label className="mb-1 block text-xs text-accent-2" htmlFor="emoji-name-input">Name</label>
+                    <input
+                      id="emoji-name-input"
+                      type="text"
+                      value={emojiName}
+                      onChange={(event) => setEmojiName(event.target.value)}
+                      maxLength={40}
+                      className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+                      placeholder="Enter emoji name..."
+                    />
+                  </div>
 
-          <div className="mb-3 rounded-lg p-2">
-            <PixelGradientSlider
-              id="emoji-color-slider"
-              min={0}
-              max={1023}
-              value={spectrumPosition}
-              onChange={setSpectrumPosition}
-              colorAt={spectrumPositionToCssColor}
-              aria-label="Hue"
-            />
+                  <div className="mb-2 rounded-lg py-1">
+                    <PixelGradientSlider
+                      id="emoji-color-slider"
+                      min={0}
+                      max={1023}
+                      value={spectrumPosition}
+                      onChange={setSpectrumPosition}
+                      colorAt={spectrumPositionToCssColor}
+                      aria-label="Hue"
+                    />
 
-            <div className="mt-1 flex gap-4">
-              <div className="mt-1 flex-1">
-                <label className="block text-xs text-accent-2" htmlFor="emoji-shade-slider">
-                  Shade
-                </label>
-                <PixelGradientSlider
-                  id="emoji-shade-slider"
-                  min={0}
-                  max={BRIGHTNESS_MAX}
-                  value={brightness}
-                  onChange={setBrightness}
-                  colorAt={shadeColorAt}
-                  aria-label="Shade"
-                />
-              </div>
-              <div className="mt-1 flex-1">
-                <label className="block text-xs text-accent-2" htmlFor="emoji-thickness-slider">
-                  Thickness
-                </label>
-                <TriangleThicknessSlider
-                  id="emoji-thickness-slider"
-                  min={0.01}
-                  max={8}
-                  step={0.01}
-                  value={thickness}
-                  onChange={setThickness}
-                  aria-label="Thickness"
-                />
-              </div>
-            </div>
-          </div>
+                    <div className="mt-1 flex gap-4">
+                      <div className="mt-1 flex-1">
+                        <label className="block text-xs text-accent-2" htmlFor="emoji-shade-slider">
+                          Shade
+                        </label>
+                        <PixelGradientSlider
+                          id="emoji-shade-slider"
+                          min={0}
+                          max={BRIGHTNESS_MAX}
+                          value={brightness}
+                          onChange={setBrightness}
+                          colorAt={shadeColorAt}
+                          aria-label="Shade"
+                        />
+                      </div>
+                      <div className="mt-1 flex-1">
+                        <label className="block text-xs text-accent-2" htmlFor="emoji-thickness-slider">
+                          Thickness
+                        </label>
+                        <TriangleThicknessSlider
+                          id="emoji-thickness-slider"
+                          min={0.01}
+                          max={8}
+                          step={0.01}
+                          value={thickness}
+                          onChange={setThickness}
+                          aria-label="Thickness"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-          <div className="mb-3 flex justify-center rounded-lg p-2">
-            <div className="w-[90vw]">
-              <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-accent-2">
-                <div className="flex items-center gap-1 rounded-lg border border-accent-1 bg-secondary-background">
-                  {[
-                    { id: "draw" as const, label: "", icon: Brush },
-                    { id: "move" as const, label: "", icon: Hand },
-                    { id: "erase" as const, label: "", icon: Eraser },
-                  ].map((tool) => {
-                    const Icon = tool.icon;
-                    const selected = activeTool === tool.id;
-                    return (
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <div className="mb-1 flex shrink-0 items-center justify-between px-1 text-[11px] text-accent-2">
+                    <div className="flex items-center gap-1 rounded-lg border border-accent-1 bg-primary-background">
+                      {[
+                        { id: "draw" as const, label: "", icon: Brush },
+                        { id: "move" as const, label: "", icon: Hand },
+                        { id: "erase" as const, label: "", icon: Eraser },
+                      ].map((tool) => {
+                        const Icon = tool.icon;
+                        const selected = activeTool === tool.id;
+                        return (
+                          <button
+                            key={tool.id}
+                            type="button"
+                            onClick={() => setActiveTool(tool.id)}
+                            className={`flex items-center gap-1 rounded-md px-2 py-2 text-xs ${
+                              selected ? "bg-accent-3 text-primary-background" : "text-accent-2 hover:text-foreground"
+                            }`}
+                            title={tool.label}
+                          >
+                            <Icon size={20} />
+                            <span>{tool.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-1">
                       <button
-                        key={tool.id}
                         type="button"
-                        onClick={() => setActiveTool(tool.id)}
-                        className={`flex items-center gap-1 rounded-md px-2 py-2 text-xs ${
-                          selected ? "bg-accent-3 text-primary-background" : "text-accent-2 hover:text-foreground"
-                        }`}
-                        title={tool.label}
+                        onClick={onUndo}
+                        disabled={undoStack.length === 0}
+                        className="flex items-center justify-center rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2"
+                        title="Undo"
+                        aria-label="Undo"
                       >
-                        <Icon size={20} />
-                        <span>{tool.label}</span>
+                        <Undo2 size={20} />
                       </button>
-                    );
-                  })}
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={onUndo}
-                    disabled={undoStack.length === 0}
-                    className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
-                    title="Undo"
-                    aria-label="Undo"
-                  >
-                    <Undo2 size={20} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onRedo}
-                    disabled={redoStack.length === 0}
-                    className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
-                    title="Redo"
-                    aria-label="Redo"
-                  >
-                    <Redo2 size={20} />
-                  </button>
+                      <button
+                        type="button"
+                        onClick={onRedo}
+                        disabled={redoStack.length === 0}
+                        className="flex items-center justify-center rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2"
+                        title="Redo"
+                        aria-label="Redo"
+                      >
+                        <Redo2 size={20} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={zoomOut}
+                        disabled={zoom <= EDITOR_ZOOM_LEVELS[0]}
+                        className="flex items-center justify-center rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2"
+                        title="Zoom out"
+                        aria-label="Zoom out"
+                      >
+                        <ZoomOut size={20} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={zoomIn}
+                        disabled={zoom >= EDITOR_ZOOM_LEVELS[EDITOR_ZOOM_LEVELS.length - 1]}
+                        className="flex items-center justify-center rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2"
+                        title="Zoom in"
+                        aria-label="Zoom in"
+                      >
+                        <ZoomIn size={20} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="relative min-h-0 flex-1 [container-type:size]">
+                    <div
+                      ref={canvasViewportRef}
+                      className="absolute left-1/2 top-1/2 aspect-square -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg border border-accent-1 bg-primary-background"
+                      style={{ width: "min(100cqw, 100cqh)" }}
+                    >
+                      <canvas
+                        ref={canvasRef}
+                        width={GRID_SIZE}
+                        height={GRID_SIZE}
+                        onPointerDown={onPointerDown}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp}
+                        onPointerCancel={onPointerUp}
+                        style={{
+                          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                          transformOrigin: "top left",
+                          cursor: activeTool === "move" ? (isPanning ? "grabbing" : "grab") : "crosshair",
+                        }}
+                        className={canvasClass}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="mt-2 flex shrink-0 flex-col gap-2">
+                  {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
                   <button
                     type="button"
-                    onClick={zoomOut}
-                    disabled={zoom <= EDITOR_ZOOM_LEVELS[0]}
-                    className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
-                    title="Zoom out"
-                    aria-label="Zoom out"
+                    onClick={() => { void onSaveEmoji(); }}
+                    disabled={isSaving}
+                    className="w-full rounded-lg bg-accent-3 px-3 py-2 text-sm font-semibold text-primary-background disabled:opacity-50"
                   >
-                    <ZoomOut size={20} />
+                    {isSaving ? "Saving..." : saveButtonLabel}
                   </button>
                   <button
                     type="button"
-                    onClick={zoomIn}
-                    disabled={zoom >= EDITOR_ZOOM_LEVELS[EDITOR_ZOOM_LEVELS.length - 1]}
-                    className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
-                    title="Zoom in"
-                    aria-label="Zoom in"
+                    onClick={onCancelEditor}
+                    disabled={isSaving}
+                    className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-accent-2 hover:text-foreground disabled:opacity-50"
                   >
-                    <ZoomIn size={20} />
+                    Cancel
                   </button>
                 </div>
-              </div>
-              <div ref={canvasViewportRef} className="relative aspect-square overflow-hidden rounded">
-                <canvas
-                  ref={canvasRef}
-                  width={GRID_SIZE}
-                  height={GRID_SIZE}
-                  onPointerDown={onPointerDown}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUp}
-                  onPointerCancel={onPointerUp}
-                  style={{
-                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                    transformOrigin: "top left",
-                    cursor: activeTool === "move" ? (isPanning ? "grabbing" : "grab") : "crosshair",
-                  }}
-                  className={canvasClass}
-                />
               </div>
             </div>
-          </div>
-
-          <div className="mb-4 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => { void onSaveEmoji(); }}
-              disabled={isSaving}
-              className="w-full rounded-lg bg-accent-3 px-3 py-2 text-sm font-semibold text-primary-background disabled:opacity-50"
-            >
-              {isSaving ? "Saving..." : saveButtonLabel}
-            </button>
-            <button
-              type="button"
-              onClick={onCancelEditor}
-              disabled={isSaving}
-              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-accent-2 hover:text-foreground disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </>
-      ) : null}
+          </div>,
+          document.body,
+        )
+        : null}
 
       {editorMode === "none" ? (
         <>
@@ -979,7 +1062,9 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
         </>
       ) : null}
 
-      {statusMessage ? <p className="mt-3 text-xs text-accent-2">{statusMessage}</p> : null}
+      {editorMode === "none" && statusMessage ? (
+        <p className="mt-3 text-xs text-accent-2">{statusMessage}</p>
+      ) : null}
     </section>
   );
 }

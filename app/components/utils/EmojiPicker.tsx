@@ -505,7 +505,7 @@ export default function EmojiPicker({
                         <button
                           type="button"
                           onClick={() => setShowEmojiEditor(false)}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-accent-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
                         >
                           <ArrowLeft className="h-4 w-4" />
                           Back to picker
@@ -513,7 +513,7 @@ export default function EmojiPicker({
                         <button
                           type="button"
                           onClick={() => setIsOpen(false)}
-                          className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-accent-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
+                          className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
                           aria-label="Close emoji picker"
                         >
                           <X className="h-5 w-5" />
@@ -531,7 +531,7 @@ export default function EmojiPicker({
                           <button
                             type="button"
                             onClick={() => setShowEmojiEditor(true)}
-                            className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-accent-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
+                            className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
                             aria-label="Create or edit custom emoji"
                             title="Create or edit custom emoji"
                           >
@@ -540,7 +540,7 @@ export default function EmojiPicker({
                           <button
                             type="button"
                             onClick={() => setIsOpen(false)}
-                            className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-accent-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
+                            className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
                             aria-label="Close emoji picker"
                           >
                             <X className="h-5 w-5" />
@@ -564,7 +564,7 @@ export default function EmojiPicker({
                       {/** Recent emojis */}
                       <p className="text-[13px] font-semibold text-foreground/55">Recent</p>
                       <div className="mb-3 overflow-x-auto overflow-y-hidden">
-                        <div className="grid grid-flow-col grid-rows-1 gap-0.5 py-0.5">
+                        <div className="grid grid-flow-col grid-rows-1 gap-0 py-0">
                           {filteredRecentEmojiOptions.map((emoji, index) => (
                             (() => {
                               const customEmojiUuid = customEmojiUuidFromToken(emoji);
@@ -575,7 +575,7 @@ export default function EmojiPicker({
                                     key={`recent-${emoji}-${index}`}
                                     type="button"
                                     onClick={() => handleSelectEmoji(emoji)}
-                                    className={`flex h-[3.25rem] w-[3.25rem] items-center justify-center px-1 py-1 [&_canvas]:!h-9 [&_canvas]:!w-9 ${emojiTileBase}`}
+                                    className={`flex h-[3rem] w-[3rem] items-center justify-center px-0 py-0 [&_canvas]:!h-9 [&_canvas]:!w-9 ${emojiTileBase}`}
                                     aria-label={`Insert custom emoji ${customEmoji.name}`}
                                     title={customEmoji.name}
                                   >
@@ -586,7 +586,7 @@ export default function EmojiPicker({
                                 return (
                                   <span
                                     key={`recent-pending-${emoji}-${index}`}
-                                    className="flex h-[3.25rem] w-[3.25rem] items-center justify-center text-sm text-accent-2/45 animate-pulse"
+                                    className="flex h-[3rem] w-[3rem] items-center justify-center text-sm text-accent-2/45 animate-pulse"
                                     aria-hidden="true"
                                   >
                                     …
@@ -598,7 +598,7 @@ export default function EmojiPicker({
                                   key={`recent-${emoji}-${index}`}
                                   type="button"
                                   onClick={() => handleSelectEmoji(emoji)}
-                                  className={`h-[3.25rem] w-[3.25rem] px-1 py-1 text-[1.46rem] leading-none ${emojiTileBase}`}
+                                  className={`h-[3rem] w-[3rem] px-0 py-0 text-[1.46rem] leading-none ${emojiTileBase}`}
                                   aria-label={`Insert ${emoji}`}
                                 >
                                   {emoji}
