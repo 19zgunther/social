@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadAllCustomEmojis, putEmojiInCache } from "@/app/lib/customEmojiCache";
 import { ApiError, EmojiItem, EmojiSaveResponse } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
-import { Brush, Eraser, Hand, Redo2, Undo2 } from "lucide-react";
+import { PixelGradientSlider } from "@/app/components/utils/PixelGradientSlider";
+import { TriangleThicknessSlider } from "@/app/components/utils/TriangleThicknessSlider";
+import { Brush, Eraser, Hand, ImagePlus, Plus, Redo2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 
 const GRID_SIZE = 64;
 const PIXEL_COUNT = GRID_SIZE * GRID_SIZE;
@@ -27,17 +29,7 @@ const radiusFromThickness = (thickness: number): number => {
 };
 
 /** Discrete zoom steps (emoji editor canvas). */
-const EDITOR_ZOOM_LEVELS = [1, 2, 4] as const;
-
-const zoomLevelLabel = (z: number): string => {
-  if (z === 1) {
-    return "1×";
-  }
-  if (z === 2) {
-    return "2×";
-  }
-  return `${z}×`;
-};
+const EDITOR_ZOOM_LEVELS = [1, 1.3, 1.6, 2, 3, 4] as const;
 
 type EditorTool = "draw" | "move" | "erase";
 type ViewportPan = { x: number; y: number };
@@ -114,6 +106,11 @@ const spectrumPositionToRgbFloat = (position: number): { r: number; g: number; b
   // Segment 3: red -> white
   const t = (p - 896) / 127;
   return { r: 1, g: t, b: t };
+};
+
+const spectrumPositionToCssColor = (position: number): string => {
+  const { r, g, b } = spectrumPositionToRgbFloat(position);
+  return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
 };
 
 const BRIGHTNESS_MAX = 1023;
@@ -256,7 +253,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   const panStartClientRef = useRef<{ x: number; y: number } | null>(null);
   const latestPixelsRef = useRef<Uint16Array>(new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
   const [pixels, setPixels] = useState<Uint16Array>(() => new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
-  const [emojiName, setEmojiName] = useState("Untitled");
+  const [emojiName, setEmojiName] = useState("");
   const [selectedEmojiUuid, setSelectedEmojiUuid] = useState<string | null>(null);
   const [thickness, setThickness] = useState(2);
   const [spectrumPosition, setSpectrumPosition] = useState(1023);
@@ -298,10 +295,14 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     return rgb === 0 ? rgb | EXPLICIT_BLACK_FLAG : rgb;
   }, [r, g, b]);
 
-  const shadeSliderTrackEndColor = useMemo(() => {
-    const base = spectrumPositionToRgbFloat(spectrumPosition);
-    return `rgb(${Math.round(base.r * 255)}, ${Math.round(base.g * 255)}, ${Math.round(base.b * 255)})`;
-  }, [spectrumPosition]);
+  const shadeColorAt = useCallback(
+    (brightnessValue: number): string => {
+      const base = spectrumPositionToRgbFloat(spectrumPosition);
+      const factor = clamp01(brightnessValue / BRIGHTNESS_MAX);
+      return `rgb(${Math.round(base.r * factor * 255)}, ${Math.round(base.g * factor * 255)}, ${Math.round(base.b * factor * 255)})`;
+    },
+    [spectrumPosition],
+  );
 
   useEffect(() => {
     latestPixelsRef.current = pixels;
@@ -371,38 +372,56 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     setPan({ x: 0, y: 0 });
   }, []);
 
-  const cycleZoom = useCallback(() => {
-    const idx = EDITOR_ZOOM_LEVELS.findIndex((level) => Math.abs(level - zoom) < 1e-6);
-    const nextZoom = EDITOR_ZOOM_LEVELS[idx >= 0 ? (idx + 1) % EDITOR_ZOOM_LEVELS.length : 0];
+  const applyZoom = useCallback(
+    (nextZoom: number) => {
+      // At 1× there is nothing to pan (canvas fills the viewport); clear offset explicitly.
+      if (nextZoom <= 1) {
+        setZoom(EDITOR_ZOOM_LEVELS[0]);
+        setPan({ x: 0, y: 0 });
+        return;
+      }
 
-    // At 1× there is nothing to pan (canvas fills the viewport); clear offset explicitly.
-    if (nextZoom <= 1) {
-      setZoom(EDITOR_ZOOM_LEVELS[0]);
-      setPan({ x: 0, y: 0 });
-      return;
-    }
-
-    const viewport = canvasViewportRef.current;
-    if (!viewport) {
+      const viewport = canvasViewportRef.current;
+      if (!viewport) {
+        setZoom(nextZoom);
+        setPan({ x: 0, y: 0 });
+        return;
+      }
+      const { width, height } = viewport.getBoundingClientRect();
+      const cx = width / 2;
+      const cy = height / 2;
+      const worldX = (cx - pan.x) / zoom;
+      const worldY = (cy - pan.y) / zoom;
+      const nextPan = clampPan(
+        {
+          x: cx - worldX * nextZoom,
+          y: cy - worldY * nextZoom,
+        },
+        nextZoom,
+      );
       setZoom(nextZoom);
-      setPan({ x: 0, y: 0 });
+      setPan(nextPan);
+    },
+    [clampPan, pan.x, pan.y, zoom],
+  );
+
+  const zoomIn = useCallback(() => {
+    const idx = EDITOR_ZOOM_LEVELS.findIndex((level) => Math.abs(level - zoom) < 1e-6);
+    const currentIdx = idx >= 0 ? idx : 0;
+    if (currentIdx >= EDITOR_ZOOM_LEVELS.length - 1) {
       return;
     }
-    const { width, height } = viewport.getBoundingClientRect();
-    const cx = width / 2;
-    const cy = height / 2;
-    const worldX = (cx - pan.x) / zoom;
-    const worldY = (cy - pan.y) / zoom;
-    const nextPan = clampPan(
-      {
-        x: cx - worldX * nextZoom,
-        y: cy - worldY * nextZoom,
-      },
-      nextZoom,
-    );
-    setZoom(nextZoom);
-    setPan(nextPan);
-  }, [clampPan, pan.x, pan.y, zoom]);
+    applyZoom(EDITOR_ZOOM_LEVELS[currentIdx + 1]);
+  }, [applyZoom, zoom]);
+
+  const zoomOut = useCallback(() => {
+    const idx = EDITOR_ZOOM_LEVELS.findIndex((level) => Math.abs(level - zoom) < 1e-6);
+    const currentIdx = idx >= 0 ? idx : 0;
+    if (currentIdx <= 0) {
+      return;
+    }
+    applyZoom(EDITOR_ZOOM_LEVELS[currentIdx - 1]);
+  }, [applyZoom, zoom]);
 
   useEffect(() => {
     if (zoom <= 1) {
@@ -692,34 +711,21 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
           <button
             type="button"
             onClick={onNewEmoji}
-            className="rounded-lg border border-accent-1 bg-secondary-background px-3 py-1.5 text-xs text-accent-2 hover:text-foreground"
+            className="rounded-lg flex gap-2 border border-accent-1 flex-1 bg-secondary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
           >
-            + New Emoji
+            <Plus /> New Emoji
           </button>
           <button
             type="button"
             onClick={() => uploadInputRef.current?.click()}
-            className="rounded-lg border border-accent-1 bg-secondary-background px-3 py-1.5 text-xs text-accent-2 hover:text-foreground"
+            className="rounded-lg flex gap-2 border border-accent-1 flex-1 bg-secondary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
           >
-            + Upload Image
+            <ImagePlus /> Upload Image
           </button>
-          <input
-            ref={uploadInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) {
-                void onUploadImage(file);
-              }
-              event.currentTarget.value = "";
-            }}
-          />
         </div>
       </div>
 
-      <div className="mb-3">
+      <div className="mb-1">
         <label className="mb-1 block text-xs text-accent-2" htmlFor="emoji-name-input">Name</label>
         <input
           id="emoji-name-input"
@@ -728,119 +734,61 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
           onChange={(event) => setEmojiName(event.target.value)}
           maxLength={40}
           className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-          placeholder="Emoji name"
+          placeholder="Enter emoji name..."
         />
       </div>
 
-      <div className="mb-3 flex justify-center gap-2">
-        <button
-          type="button"
-          onClick={onUndo}
-          disabled={undoStack.length === 0}
-          className="rounded-lg border border-accent-1 bg-secondary-background px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-40"
-        >
-          <Undo2 />
-        </button>
-        <button
-          type="button"
-          onClick={onRedo}
-          disabled={redoStack.length === 0}
-          className="rounded-lg border border-accent-1 bg-secondary-background px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-40"
-        >
-          <Redo2 />
-        </button>
-      </div>
-
-      <div className="mb-3 rounded-lg border border-accent-1 p-2" style={{ borderColor: rgb3ToHex(r, g, b), borderWidth: "3px" }}>
-        <label className="mb-1 block text-xs text-accent-2" htmlFor="emoji-color-slider">Hue</label>
-        <input
+      <div className="mb-3 rounded-lg p-2">
+        <PixelGradientSlider
           id="emoji-color-slider"
-          type="range"
           min={0}
           max={1023}
-          step={1}
           value={spectrumPosition}
-          onChange={(event) => {
-            setSpectrumPosition(Number(event.target.value));
-          }}
-          className="w-full"
-          style={{
-            background:
-              "linear-gradient(90deg, #000000 0%, #ff0000 10%, #ff7a00 20%, #ffff00 30%, #00ff00 40%, #66ffff 50%, #0066ff 60%, #6b00ff 70%, #a300ff 80%, #ff4da6 90%, #ff0000 96%, #ffffff 100%)",
-          }}
+          onChange={setSpectrumPosition}
+          colorAt={spectrumPositionToCssColor}
+          aria-label="Hue"
         />
-        <div className="mt-2 grid grid-cols-12 gap-1">
-          {[
-            "#000000", "#ff0000", "#ff7a00", "#8b4513", "#ffff00", "#00ff00", "#66ffff",
-            "#0066ff", "#6b00ff", "#a300ff", "#ff4da6", "#ffffff",
-          ].map((hex, index) => {
-            const rr = Math.round((parseInt(hex.slice(1, 3), 16) / 255) * 7);
-            const gg = Math.round((parseInt(hex.slice(3, 5), 16) / 255) * 7);
-            const bb = Math.round((parseInt(hex.slice(5, 7), 16) / 255) * 7);
-            const selected = rr === r && gg === g && bb === b;
-            return (
-              <button
-                key={`${hex}-${index}`}
-                type="button"
-                onClick={() => {
-                  const { position, brightness: nextBrightness } = bestSpectrumAndBrightnessForRgb3(rr, gg, bb);
-                  setSpectrumPosition(position);
-                  setBrightness(nextBrightness);
-                }}
-                className={`aspect-square rounded border border-accent-1 ${selected ? "ring-2 ring-accent-3" : ""}`}
-                style={{ backgroundColor: hex }}
-                title={hex}
-              />
-            );
-          })}
-        </div>
         
-        <div className="mt-1 flex gap-1">
+        <div className="mt-1 flex gap-4">
           <div className="mt-1 flex-1">
             <label className="block text-xs text-accent-2" htmlFor="emoji-shade-slider">
               Shade
             </label>
-            <input
+            <PixelGradientSlider
               id="emoji-shade-slider"
-              type="range"
               min={0}
               max={BRIGHTNESS_MAX}
-              step={1}
               value={brightness}
-              onChange={(event) => {
-                setBrightness(Number(event.target.value));
-              }}
-              className="w-full"
-              style={{
-                background: `linear-gradient(90deg, #000000 0%, ${shadeSliderTrackEndColor} 100%)`,
-              }}
+              onChange={setBrightness}
+              colorAt={shadeColorAt}
+              aria-label="Shade"
             />
           </div>
           <div className="mt-1 flex-1">
-            <label className="block text-xs text-accent-2" htmlFor="emoji-shade-slider">
+            <label className="block text-xs text-accent-2" htmlFor="emoji-thickness-slider">
               Thickness
             </label>
-            <input
-              type="range"
+            <TriangleThicknessSlider
+              id="emoji-thickness-slider"
               min={0.01}
               max={8}
               step={0.01}
               value={thickness}
-              onChange={(event) => setThickness(Number(event.target.value))}
-              className="w-full"
+              onChange={setThickness}
+              aria-label="Thickness"
             />
           </div>
         </div>
       </div>
 
-      <div className="mb-3 flex justify-center rounded-lg border border-accent-1 p-2">
+      <div className="mb-3 flex justify-center rounded-lg p-2">
         <div className="w-[90vw]">
           <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-accent-2">
             <div className="flex items-center gap-1 rounded-lg border border-accent-1 bg-secondary-background">
               {[
-                { id: "draw" as const, label: "Draw", icon: Brush },
-                { id: "move" as const, label: "Move", icon: Hand },
-                { id: "erase" as const, label: "Erase", icon: Eraser },
+                { id: "draw" as const, label: "", icon: Brush },
+                { id: "move" as const, label: "", icon: Hand },
+                { id: "erase" as const, label: "", icon: Eraser },
               ].map((tool) => {
                 const Icon = tool.icon;
                 const selected = activeTool === tool.id;
@@ -849,28 +797,61 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                     key={tool.id}
                     type="button"
                     onClick={() => setActiveTool(tool.id)}
-                    className={`flex items-center gap-1 rounded-md px-1 py-1 text-xs ${
+                    className={`flex items-center gap-1 rounded-md px-2 py-2 text-xs ${
                       selected ? "bg-accent-3 text-primary-background" : "text-accent-2 hover:text-foreground"
                     }`}
                     title={tool.label}
                   >
-                    <Icon size={14} />
+                    <Icon size={20} />
                     <span>{tool.label}</span>
                   </button>
                 );
               })}
             </div>
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg border border-accent-1 bg-secondary-background">
-                <button
-                  type="button"
-                  onClick={cycleZoom}
-                  className="flex min-w-[3.25rem] items-center justify-center rounded-md px-2 py-1 text-xs text-accent-2 hover:text-foreground"
-                  title="Cycle zoom: 1× → 1.25× → 1.5× → 2×"
-                >
-                  {zoomLevelLabel(zoom)} Zoom
-                </button>
-              </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={onUndo}
+                disabled={undoStack.length === 0}
+                className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                <Undo2 size={20} />
+              </button>
+              <button
+                type="button"
+                onClick={onRedo}
+                disabled={redoStack.length === 0}
+                className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                <Redo2 size={20} />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={zoomOut}
+                disabled={zoom <= EDITOR_ZOOM_LEVELS[0]}
+                className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                <ZoomOut size={20} />
+              </button>
+              <button
+                type="button"
+                onClick={zoomIn}
+                disabled={zoom >= EDITOR_ZOOM_LEVELS[EDITOR_ZOOM_LEVELS.length - 1]}
+                className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                <ZoomIn size={20} />
+              </button>
             </div>
           </div>
           <div ref={canvasViewportRef} className="relative aspect-square overflow-hidden rounded">
