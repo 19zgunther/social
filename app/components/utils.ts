@@ -4,7 +4,7 @@ type Mode = "login" | "signup";
 type AppTab =
     | "feed"
     | "groups"
-    | "events"
+    | "events" // hidden from nav — tab UI commented out in page.tsx
     | "profile"
     | "feedback"
     | "thread"
@@ -30,7 +30,7 @@ const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | n
     let tab: AppTab | null =
         tabParam === "feed" ||
             tabParam === "groups" ||
-            tabParam === "events" ||
+            // tabParam === "events" || // events tab hidden
             tabParam === "profile" ||
             tabParam === "feedback" ||
             tabParam === "create_post"

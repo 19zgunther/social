@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { Calendar, House, MessageSquare, UserRound, Users } from "lucide-react";
+import { /* Calendar, */ House, MessageSquare, UserRound, Users } from "lucide-react";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
 import { Profile, ProfileOtherUser } from "@/app/components/Profile";
@@ -11,7 +11,7 @@ import {
   AuthUser,
   ThreadEventItem,
   ThreadItem,
-  UserUpcomingEventListItem,
+  // UserUpcomingEventListItem, // events tab hidden
 } from "@/app/types/interfaces";
 import {
   MOBILE_FRAME_STYLE,
@@ -25,7 +25,7 @@ import NavRowButton from "./components/utils/NavRowButton";
 import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
 import ThreadEventPage from "./components/ThreadEventPage";
-import UpcomingEventsTab from "./components/UpcomingEventsTab";
+// import UpcomingEventsTab from "./components/UpcomingEventsTab"; // events tab hidden
 import useSwipeBack from "./components/utils/useSwipeBack";
 import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
@@ -36,10 +36,13 @@ const TAB_TO_BACK_BASE: { [key in AppTab]: { forward: AppTab | null; back: AppTa
   thread_event: { forward: null, back: "thread_settings" },
   thread_settings: { forward: null, back: "thread" },
   thread: { forward: null, back: "groups" },
-  groups: { forward: "events", back: "feed" },
-  events: { forward: "profile", back: "groups" },
+  // groups: { forward: "events", back: "feed" },
+  // events: { forward: "profile", back: "groups" },
+  groups: { forward: "profile", back: "feed" }, // skipped events tab
+  events: { forward: "profile", back: "groups" }, // hidden — kept for AppTab compat
   feed: { forward: "groups", back: null },
-  profile: { forward: null, back: "events" },
+  // profile: { forward: null, back: "events" },
+  profile: { forward: null, back: "groups" }, // skipped events tab
   feedback: { forward: "profile_settings", back: "profile" },
   profile_settings: { forward: null, back: "profile" },
   other_user_profile: { forward: null, back: "profile" },
@@ -64,7 +67,7 @@ export default function Home() {
   const [threadReturnTab, setThreadReturnTab] = useState<
     "groups" | "thread_event" | "other_user_profile"
   >("groups");
-  const [eventsRefreshNonce, setEventsRefreshNonce] = useState(0);
+  const [eventsRefreshNonce, setEventsRefreshNonce] = useState(0); // events tab hidden; nonce kept for thread_event delete refresh
   const [groupsListRefreshNonce, setGroupsListRefreshNonce] = useState(0);
   const [profileReloadSignal, setProfileReloadSignal] = useState(0);
 
@@ -359,7 +362,7 @@ export default function Home() {
 
   const feedStyle = TAB_TO_STYLE["feed"];
   const groupsStyle = TAB_TO_STYLE["groups"];
-  const eventsStyle = TAB_TO_STYLE["events"];
+  // const eventsStyle = TAB_TO_STYLE["events"]; // events tab hidden
   const threadStyle = TAB_TO_STYLE["thread"];
   const threadSettingsStyle = TAB_TO_STYLE["thread_settings"];
   const threadEventStyle = TAB_TO_STYLE["thread_event"];
@@ -386,6 +389,7 @@ export default function Home() {
           onTouchMove={onTouchMove}
           onTouchCancel={onTouchCancel}
         >
+          {/* events tab hidden
           <div className="absolute h-full w-full" style={eventsStyle}>
             <UpcomingEventsTab
               currentUserId={authUser.user_id}
@@ -413,6 +417,7 @@ export default function Home() {
               }}
             />
           </div>
+          */}
 
           <div className="absolute w-full h-full" style={groupsStyle}>
             <Groups
@@ -596,12 +601,14 @@ export default function Home() {
               showCircle={groupsUnreadCount > 0}
               onClick={() => setActiveTab("groups")}
             />
+            {/* events tab hidden
             <NavRowButton
               icon={<Calendar aria-hidden className="h-4 w-4" />}
               isActive={activeTab === "events"}
               showCircle={false}
               onClick={() => setActiveTab("events")}
             />
+            */}
             <NavRowButton
               icon={<UserRound aria-hidden className="h-4 w-4" />}
               isActive={activeTab === "profile"}
