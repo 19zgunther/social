@@ -32,6 +32,7 @@ const radiusFromThickness = (thickness: number): number => {
 const EDITOR_ZOOM_LEVELS = [1, 1.3, 1.6, 2, 3, 4] as const;
 
 type EditorTool = "draw" | "move" | "erase";
+type EditorMode = "none" | "creating" | "editing";
 type ViewportPan = { x: number; y: number };
 
 const readErrorMessage = async (response: Response): Promise<string> => {
@@ -253,6 +254,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   const panStartClientRef = useRef<{ x: number; y: number } | null>(null);
   const latestPixelsRef = useRef<Uint16Array>(new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
   const [pixels, setPixels] = useState<Uint16Array>(() => new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
+  const [editorMode, setEditorMode] = useState<EditorMode>("none");
   const [emojiName, setEmojiName] = useState("");
   const [selectedEmojiUuid, setSelectedEmojiUuid] = useState<string | null>(null);
   const [thickness, setThickness] = useState(2);
@@ -522,6 +524,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   }, []);
 
   const onSelectEmoji = (emoji: EmojiItem) => {
+    setEditorMode("editing");
     setSelectedEmojiUuid(emoji.uuid);
     setEmojiName(emoji.name || "Untitled");
     setPixels(decodeDataB64(emoji.data_b64));
@@ -532,6 +535,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   };
 
   const onNewEmoji = () => {
+    setEditorMode("creating");
     setSelectedEmojiUuid(null);
     setEmojiName("Untitled");
     setPixels(new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
@@ -541,13 +545,27 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     setStatusMessage("Started a new emoji.");
   };
 
+  const exitEditor = useCallback(() => {
+    setEditorMode("none");
+    setSelectedEmojiUuid(null);
+    setEmojiName("");
+    setPixels(new Uint16Array(PIXEL_COUNT).fill(TRANSPARENT_PIXEL));
+    setUndoStack([]);
+    setRedoStack([]);
+    resetViewport();
+  }, [resetViewport]);
+
+  const onCancelEditor = useCallback(() => {
+    exitEditor();
+    setStatusMessage("");
+  }, [exitEditor]);
+
   const onUploadImage = async (file: File) => {
     if (!file.type.startsWith("image/")) {
       setStatusMessage("Please upload an image file.");
       return;
     }
 
-    const previousPixels = latestPixelsRef.current.slice();
     try {
       const objectUrl = URL.createObjectURL(file);
       const image = new Image();
@@ -636,19 +654,14 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
         }
       }
 
-      setUndoStack((previous) => {
-        const next = [...previous, previousPixels];
-        return next.length > MAX_HISTORY_STEPS ? next.slice(next.length - MAX_HISTORY_STEPS) : next;
-      });
+      setEditorMode("creating");
+      setSelectedEmojiUuid(null);
+      const inferredName = file.name.replace(/\.[^/.]+$/, "").trim();
+      setEmojiName((inferredName || "Untitled").slice(0, 40));
+      setUndoStack([]);
       setRedoStack([]);
       setPixels(importedPixels);
       resetViewport();
-      if (!selectedEmojiUuid) {
-        const inferredName = file.name.replace(/\.[^/.]+$/, "").trim();
-        if (inferredName) {
-          setEmojiName(inferredName.slice(0, 40));
-        }
-      }
       setStatusMessage("Imported image into emoji canvas.");
     } catch {
       setStatusMessage("Failed to import image.");
@@ -676,12 +689,12 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
       const payload = (await response.json()) as EmojiSaveResponse;
       const saved = payload.emoji;
       await putEmojiInCache(saved);
-      setSelectedEmojiUuid(saved.uuid);
       setEmojis((previous) => {
         const remaining = previous.filter((row) => row.uuid !== saved.uuid);
         return [saved, ...remaining];
       });
       setStatusMessage("Emoji saved.");
+      exitEditor();
       onSaved?.();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to save emoji.");
@@ -689,6 +702,12 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
       setIsSaving(false);
     }
   };
+
+  const displayEmojiName = emojiName.trim() || "Untitled";
+  const saveButtonLabel =
+    editorMode === "editing"
+      ? `Save Edits to '${displayEmojiName}'`
+      : `Create Emoji '${displayEmojiName}'`;
 
   const sectionClass = `border-b border-accent-1 px-3 py-3 ${DONT_SWIPE_TABS_CLASSNAME}`;
   const canvasClass = "h-full w-full touch-none rounded border border-accent-1 [image-rendering:pixelated]";
@@ -707,225 +726,258 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     <section className={sectionClass}>
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-semibold text-foreground">Emoji Editor</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={onNewEmoji}
-            className="rounded-lg flex gap-2 border border-accent-1 flex-1 bg-secondary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
-          >
-            <Plus /> New Emoji
-          </button>
-          <button
-            type="button"
-            onClick={() => uploadInputRef.current?.click()}
-            className="rounded-lg flex gap-2 border border-accent-1 flex-1 bg-secondary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
-          >
-            <ImagePlus /> Upload Image
-          </button>
-        </div>
-      </div>
-
-      <div className="mb-1">
-        <label className="mb-1 block text-xs text-accent-2" htmlFor="emoji-name-input">Name</label>
-        <input
-          id="emoji-name-input"
-          type="text"
-          value={emojiName}
-          onChange={(event) => setEmojiName(event.target.value)}
-          maxLength={40}
-          className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-          placeholder="Enter emoji name..."
-        />
-      </div>
-
-      <div className="mb-3 rounded-lg p-2">
-        <PixelGradientSlider
-          id="emoji-color-slider"
-          min={0}
-          max={1023}
-          value={spectrumPosition}
-          onChange={setSpectrumPosition}
-          colorAt={spectrumPositionToCssColor}
-          aria-label="Hue"
-        />
-        
-        <div className="mt-1 flex gap-4">
-          <div className="mt-1 flex-1">
-            <label className="block text-xs text-accent-2" htmlFor="emoji-shade-slider">
-              Shade
-            </label>
-            <PixelGradientSlider
-              id="emoji-shade-slider"
-              min={0}
-              max={BRIGHTNESS_MAX}
-              value={brightness}
-              onChange={setBrightness}
-              colorAt={shadeColorAt}
-              aria-label="Shade"
-            />
-          </div>
-          <div className="mt-1 flex-1">
-            <label className="block text-xs text-accent-2" htmlFor="emoji-thickness-slider">
-              Thickness
-            </label>
-            <TriangleThicknessSlider
-              id="emoji-thickness-slider"
-              min={0.01}
-              max={8}
-              step={0.01}
-              value={thickness}
-              onChange={setThickness}
-              aria-label="Thickness"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-3 flex justify-center rounded-lg p-2">
-        <div className="w-[90vw]">
-          <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-accent-2">
-            <div className="flex items-center gap-1 rounded-lg border border-accent-1 bg-secondary-background">
-              {[
-                { id: "draw" as const, label: "", icon: Brush },
-                { id: "move" as const, label: "", icon: Hand },
-                { id: "erase" as const, label: "", icon: Eraser },
-              ].map((tool) => {
-                const Icon = tool.icon;
-                const selected = activeTool === tool.id;
-                return (
-                  <button
-                    key={tool.id}
-                    type="button"
-                    onClick={() => setActiveTool(tool.id)}
-                    className={`flex items-center gap-1 rounded-md px-2 py-2 text-xs ${
-                      selected ? "bg-accent-3 text-primary-background" : "text-accent-2 hover:text-foreground"
-                    }`}
-                    title={tool.label}
-                  >
-                    <Icon size={20} />
-                    <span>{tool.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={onUndo}
-                disabled={undoStack.length === 0}
-                className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
-                title="Zoom out"
-                aria-label="Zoom out"
-              >
-                <Undo2 size={20} />
-              </button>
-              <button
-                type="button"
-                onClick={onRedo}
-                disabled={redoStack.length === 0}
-                className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
-                title="Zoom in"
-                aria-label="Zoom in"
-              >
-                <Redo2 size={20} />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={zoomOut}
-                disabled={zoom <= EDITOR_ZOOM_LEVELS[0]}
-                className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
-                title="Zoom out"
-                aria-label="Zoom out"
-              >
-                <ZoomOut size={20} />
-              </button>
-              <button
-                type="button"
-                onClick={zoomIn}
-                disabled={zoom >= EDITOR_ZOOM_LEVELS[EDITOR_ZOOM_LEVELS.length - 1]}
-                className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
-                title="Zoom in"
-                aria-label="Zoom in"
-              >
-                <ZoomIn size={20} />
-              </button>
-            </div>
-          </div>
-          <div ref={canvasViewportRef} className="relative aspect-square overflow-hidden rounded">
-            <canvas
-              ref={canvasRef}
-              width={GRID_SIZE}
-              height={GRID_SIZE}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              style={{
-                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                transformOrigin: "top left",
-                cursor: activeTool === "move" ? (isPanning ? "grabbing" : "grab") : "crosshair",
+        {editorMode === "none" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onNewEmoji}
+              className="rounded-lg flex gap-2 border border-accent-1 flex-1 bg-secondary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
+            >
+              <Plus /> New Emoji
+            </button>
+            <button
+              type="button"
+              onClick={() => uploadInputRef.current?.click()}
+              className="rounded-lg flex gap-2 border border-accent-1 flex-1 bg-secondary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
+            >
+              <ImagePlus /> Upload Image
+            </button>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) {
+                  void onUploadImage(file);
+                }
               }}
-              className={canvasClass}
             />
           </div>
-        </div>
+        ) : null}
       </div>
 
-      <button
-        type="button"
-        onClick={() => { void onSaveEmoji(); }}
-        disabled={isSaving}
-        className="mb-4 w-full rounded-lg bg-accent-3 px-3 py-2 text-sm font-semibold text-primary-background disabled:opacity-50"
-      >
-        {isSaving ? "Saving..." : selectedEmojiUuid ? "Save Changes" : "Create Emoji"}
-      </button>
+      {editorMode !== "none" ? (
+        <>
+          <div className="mb-1">
+            <label className="mb-1 block text-xs text-accent-2" htmlFor="emoji-name-input">Name</label>
+            <input
+              id="emoji-name-input"
+              type="text"
+              value={emojiName}
+              onChange={(event) => setEmojiName(event.target.value)}
+              maxLength={40}
+              className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+              placeholder="Enter emoji name..."
+            />
+          </div>
 
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold text-accent-2">Your emojis</p>
-        {isLoading ? <p className="text-xs text-accent-2">Loading...</p> : null}
-      </div>
-      <div className="grid grid-cols-4 gap-2">
-        {emojis.map((emoji) => (
-          <button
-            key={emoji.uuid}
-            type="button"
-            onClick={() => onSelectEmoji(emoji)}
-            className={`rounded-lg p-2 text-left ${selectedEmojiUuid === emoji.uuid ? "border border-accent-3" : "border-accent-1"}`}
-          >
-            <div className={thumbBoxClass}>
-              <canvas
-                width={GRID_SIZE}
-                height={GRID_SIZE}
-                ref={(el) => {
-                  if (!el) {
-                    return;
-                  }
-                  const ctx = el.getContext("2d");
-                  if (!ctx) {
-                    return;
-                  }
-                  const smallPixels = decodeDataB64(emoji.data_b64);
-                  const imageData = ctx.createImageData(GRID_SIZE, GRID_SIZE);
-                  for (let i = 0; i < PIXEL_COUNT; i += 1) {
-                    const packed = smallPixels[i] ?? 0;
-                    const rgb = packed & RGB_MASK;
-                    imageData.data[i * 4] = Math.round(((rgb >> 6) & 0b111) * (255 / 7));
-                    imageData.data[i * 4 + 1] = Math.round(((rgb >> 3) & 0b111) * (255 / 7));
-                    imageData.data[i * 4 + 2] = Math.round((rgb & 0b111) * (255 / 7));
-                    imageData.data[i * 4 + 3] = (packed & TRANSPARENT_FLAG) === TRANSPARENT_FLAG ? 0 : 255;
-                  }
-                  ctx.putImageData(imageData, 0, 0);
-                }}
-                className="h-full w-full [image-rendering:pixelated]"
-              />
+          <div className="mb-3 rounded-lg p-2">
+            <PixelGradientSlider
+              id="emoji-color-slider"
+              min={0}
+              max={1023}
+              value={spectrumPosition}
+              onChange={setSpectrumPosition}
+              colorAt={spectrumPositionToCssColor}
+              aria-label="Hue"
+            />
+
+            <div className="mt-1 flex gap-4">
+              <div className="mt-1 flex-1">
+                <label className="block text-xs text-accent-2" htmlFor="emoji-shade-slider">
+                  Shade
+                </label>
+                <PixelGradientSlider
+                  id="emoji-shade-slider"
+                  min={0}
+                  max={BRIGHTNESS_MAX}
+                  value={brightness}
+                  onChange={setBrightness}
+                  colorAt={shadeColorAt}
+                  aria-label="Shade"
+                />
+              </div>
+              <div className="mt-1 flex-1">
+                <label className="block text-xs text-accent-2" htmlFor="emoji-thickness-slider">
+                  Thickness
+                </label>
+                <TriangleThicknessSlider
+                  id="emoji-thickness-slider"
+                  min={0.01}
+                  max={8}
+                  step={0.01}
+                  value={thickness}
+                  onChange={setThickness}
+                  aria-label="Thickness"
+                />
+              </div>
             </div>
-            <p className="truncate text-[10px] text-accent-2">{emoji.name || "Untitled"}</p>
-          </button>
-        ))}
-      </div>
+          </div>
+
+          <div className="mb-3 flex justify-center rounded-lg p-2">
+            <div className="w-[90vw]">
+              <div className="mb-1 flex items-center justify-between px-1 text-[11px] text-accent-2">
+                <div className="flex items-center gap-1 rounded-lg border border-accent-1 bg-secondary-background">
+                  {[
+                    { id: "draw" as const, label: "", icon: Brush },
+                    { id: "move" as const, label: "", icon: Hand },
+                    { id: "erase" as const, label: "", icon: Eraser },
+                  ].map((tool) => {
+                    const Icon = tool.icon;
+                    const selected = activeTool === tool.id;
+                    return (
+                      <button
+                        key={tool.id}
+                        type="button"
+                        onClick={() => setActiveTool(tool.id)}
+                        className={`flex items-center gap-1 rounded-md px-2 py-2 text-xs ${
+                          selected ? "bg-accent-3 text-primary-background" : "text-accent-2 hover:text-foreground"
+                        }`}
+                        title={tool.label}
+                      >
+                        <Icon size={20} />
+                        <span>{tool.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={onUndo}
+                    disabled={undoStack.length === 0}
+                    className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
+                    title="Undo"
+                    aria-label="Undo"
+                  >
+                    <Undo2 size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onRedo}
+                    disabled={redoStack.length === 0}
+                    className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
+                    title="Redo"
+                    aria-label="Redo"
+                  >
+                    <Redo2 size={20} />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={zoomOut}
+                    disabled={zoom <= EDITOR_ZOOM_LEVELS[0]}
+                    className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
+                    title="Zoom out"
+                    aria-label="Zoom out"
+                  >
+                    <ZoomOut size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={zoomIn}
+                    disabled={zoom >= EDITOR_ZOOM_LEVELS[EDITOR_ZOOM_LEVELS.length - 1]}
+                    className="flex items-center justify-center rounded-md px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2 rounded-lg border border-accent-1 bg-secondary-background"
+                    title="Zoom in"
+                    aria-label="Zoom in"
+                  >
+                    <ZoomIn size={20} />
+                  </button>
+                </div>
+              </div>
+              <div ref={canvasViewportRef} className="relative aspect-square overflow-hidden rounded">
+                <canvas
+                  ref={canvasRef}
+                  width={GRID_SIZE}
+                  height={GRID_SIZE}
+                  onPointerDown={onPointerDown}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerCancel={onPointerUp}
+                  style={{
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    transformOrigin: "top left",
+                    cursor: activeTool === "move" ? (isPanning ? "grabbing" : "grab") : "crosshair",
+                  }}
+                  className={canvasClass}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-4 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => { void onSaveEmoji(); }}
+              disabled={isSaving}
+              className="w-full rounded-lg bg-accent-3 px-3 py-2 text-sm font-semibold text-primary-background disabled:opacity-50"
+            >
+              {isSaving ? "Saving..." : saveButtonLabel}
+            </button>
+            <button
+              type="button"
+              onClick={onCancelEditor}
+              disabled={isSaving}
+              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-accent-2 hover:text-foreground disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : null}
+
+      {editorMode === "none" ? (
+        <>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold text-accent-2">Your emojis</p>
+            {isLoading ? <p className="text-xs text-accent-2">Loading...</p> : null}
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {emojis.map((emoji) => (
+              <button
+                key={emoji.uuid}
+                type="button"
+                onClick={() => onSelectEmoji(emoji)}
+                className={`rounded-lg p-2 text-left ${selectedEmojiUuid === emoji.uuid ? "border border-accent-3" : "border-accent-1"}`}
+              >
+                <div className={thumbBoxClass}>
+                  <canvas
+                    width={GRID_SIZE}
+                    height={GRID_SIZE}
+                    ref={(el) => {
+                      if (!el) {
+                        return;
+                      }
+                      const ctx = el.getContext("2d");
+                      if (!ctx) {
+                        return;
+                      }
+                      const smallPixels = decodeDataB64(emoji.data_b64);
+                      const imageData = ctx.createImageData(GRID_SIZE, GRID_SIZE);
+                      for (let i = 0; i < PIXEL_COUNT; i += 1) {
+                        const packed = smallPixels[i] ?? 0;
+                        const rgb = packed & RGB_MASK;
+                        imageData.data[i * 4] = Math.round(((rgb >> 6) & 0b111) * (255 / 7));
+                        imageData.data[i * 4 + 1] = Math.round(((rgb >> 3) & 0b111) * (255 / 7));
+                        imageData.data[i * 4 + 2] = Math.round((rgb & 0b111) * (255 / 7));
+                        imageData.data[i * 4 + 3] = (packed & TRANSPARENT_FLAG) === TRANSPARENT_FLAG ? 0 : 255;
+                      }
+                      ctx.putImageData(imageData, 0, 0);
+                    }}
+                    className="h-full w-full [image-rendering:pixelated]"
+                  />
+                </div>
+                <p className="truncate text-[10px] text-accent-2">{emoji.name || "Untitled"}</p>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       {statusMessage ? <p className="mt-3 text-xs text-accent-2">{statusMessage}</p> : null}
     </section>

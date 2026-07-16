@@ -477,7 +477,7 @@ export default function EmojiPicker({
       {isMounted && isOpen
         ? createPortal(
           <div
-            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2000] flex items-center justify-center px-4`}
+            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2000] flex items-center justify-center px-2`}
           >
             <div
               className="absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(10,132,255,0.22),transparent_55%),radial-gradient(ellipse_80%_60%_at_100%_100%,rgba(142,156,176,0.12),transparent_50%)] bg-black/45 backdrop-blur-md"
@@ -493,12 +493,12 @@ export default function EmojiPicker({
             >
               <div className="pointer-events-none absolute -inset-px rounded-[1.6rem] bg-gradient-to-br from-white/25 via-white/[0.07] to-white/[0.02] opacity-90 blur-[1px]" />
               <div
-                className="relative overflow-hidden rounded-[1.55rem] border border-white/[0.14] bg-gradient-to-b from-white/[0.11] via-secondary-background/35 to-secondary-background/55 p-4 shadow-[0_28px_90px_-20px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.22),inset_0_-1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-[1.35]"
+                className="relative overflow-hidden rounded-[1.55rem] border border-white/[0.14] bg-gradient-to-b from-white/[0.11] via-secondary-background/35 to-secondary-background/55 px-1 py-3 shadow-[0_28px_90px_-20px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.22),inset_0_-1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-[1.35]"
               >
                 <div className="pointer-events-none absolute -left-1/4 -top-1/3 h-[85%] w-[85%] rounded-full bg-gradient-to-br from-white/30 via-white/[0.06] to-transparent opacity-70 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-12 -right-8 h-48 w-48 rounded-full bg-accent-3/20 blur-3xl" />
                 <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" />
-                <div className="relative z-[1] max-h-[min(85vh,720px)] overflow-y-auto overscroll-contain pr-0.5">
+                <div className="relative z-[1] max-h-[min(85vh,720px)] overflow-y-auto overscroll-contain pr">
                   {showEmojiEditor ? (
                     <>
                       <div className="mb-3 flex items-center justify-between gap-2">
