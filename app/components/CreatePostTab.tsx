@@ -1,16 +1,21 @@
 "use client";
 
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Aperture, ArrowLeft, Contrast, Droplets, Palette, PenBoxIcon, Plus, Sun, Thermometer, X } from "lucide-react";
+import { Aperture, ArrowLeft, ChevronDown, Contrast, Droplets, Palette, PenBoxIcon, ImagePlus, Sun, Thermometer, X } from "lucide-react";
 import {
   prepareImageForUpload,
   uploadPreparedImageToMainBucket,
 } from "@/app/components/utils/client_file_storage_utils";
-import { ApiError, PostGroup, PostGroupsGetResponse } from "@/app/types/interfaces";
+import { ApiError, PostGroup, PostGroupsGetResponse, PostItem } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
+import { PostSection } from "@/app/components/PostSection";
 
 type CreatePostTabProps = {
   isActive: boolean;
+  currentUserId: string;
+  username: string;
+  profileImageId: string | null;
+  profileImageUrl: string | null;
   onCancel: () => void;
   onPosted: () => void;
 };
@@ -414,7 +419,15 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   }
 };
 
-export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePostTabProps) {
+export default function CreatePostTab({
+  isActive,
+  currentUserId,
+  username,
+  profileImageId,
+  profileImageUrl,
+  onCancel,
+  onPosted,
+}: CreatePostTabProps) {
   const createInputRef = useRef<HTMLInputElement | null>(null);
   const textInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [comment, setComment] = useState("");
@@ -503,6 +516,33 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
   const audienceSelectValue =
     audience.mode === "group" ? `group:${audience.groupId}` : audience.mode;
 
+  const hasPreviewContent = comment.trim().length > 0 || images.length > 0;
+
+  const previewPost = useMemo((): PostItem => {
+    const otherImageIds =
+      images.length > 1 ? images.slice(1).map((_, index) => `preview-${index + 1}`) : undefined;
+    return {
+      id: "create-post-preview",
+      created_at: new Date().toISOString(),
+      created_by: currentUserId,
+      image_id: images.length > 0 ? "preview-0" : null,
+      image_url: null,
+      text: comment,
+      data: otherImageIds ? { other_image_ids: otherImageIds } : null,
+      like_count: 0,
+      is_liked_by_viewer: false,
+      username,
+      email: null,
+      author_profile_image_id: profileImageId,
+      author_profile_image_url: profileImageUrl,
+    };
+  }, [comment, currentUserId, images, profileImageId, profileImageUrl, username]);
+
+  const previewImageUrls = useMemo(
+    () => images.map((image) => image.previewDataUrl),
+    [images],
+  );
+
   const onSelectPostImages = async (event: ChangeEvent<HTMLInputElement>) => {
     const fileList = Array.from(event.target.files ?? []);
     event.target.value = "";
@@ -587,9 +627,9 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs text-accent-2 hover:text-foreground"
+          className="rounded-full flex items-center gap-2 px-3 py-2 text-sm text-accent-2 hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-5 w-5" />
           Cancel
         </button>
       </div>
@@ -622,97 +662,110 @@ export default function CreatePostTab({ isActive, onCancel, onPosted }: CreatePo
 
         <div className="mb-3">
           <label htmlFor="post-audience" className="mb-1 block text-xs font-semibold text-accent-2">
-            Who can see this
+            Who can see this post?
           </label>
-          <select
-            id="post-audience"
-            value={audienceSelectValue}
-            onChange={(event) => onSelectAudience(event.target.value)}
-            className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
-          >
-            <option value="permanent">All friends (including future)</option>
-            <option value="all">All friends right now</option>
-            {postGroups.map((group) => (
-              <option key={group.id} value={`group:${group.id}`}>
-                {group.name} ({group.member_ids.length})
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-accent-2">{audienceHint}</p>
+          <div className="relative">
+            <select
+              id="post-audience"
+              value={audienceSelectValue}
+              onChange={(event) => onSelectAudience(event.target.value)}
+              className="w-full appearance-none rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 pr-10 text-sm text-foreground outline-none focus:border-accent-2"
+            >
+              <option value="permanent">All friends (including future)</option>
+              <option value="all">All friends right now</option>
+              {postGroups.map((group) => (
+                <option key={group.id} value={`group:${group.id}`}>
+                  {group.name} ({group.member_ids.length})
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-accent-2" />
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => createInputRef.current?.click()}
-          className="mb-3 w-full inline-flex items-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-accent-3 hover:text-foreground"
-        >
-          <Plus className="h-4 w-4" />
-          Add photos
-        </button>
-
-        <div className="-mx-1 w-[calc(100%+0.5rem)] overflow-x-auto pb-1">
+        <div className="-mx-1 pt-3 w-[calc(100%+0.5rem)] overflow-x-auto">
           <div className="flex w-max flex-nowrap gap-2 px-1">
-            {images.map((image) => (
+            {[{id: 'ADD', previewDataUrl: 'ADD'}, ...images].map((image) => (
               <div
                 key={image.id}
                 className="relative aspect-square h-32 flex-none overflow-hidden rounded-lg border border-accent-1 sm:h-36"
               >
-                <img src={image.previewDataUrl} alt="New post preview" className="h-full w-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => setEditingImageId(image.id)}
-                  className="absolute left-1 top-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80 opacity-50"
-                  aria-label="Tap to edit image"
-                  title="Tap to edit"
-                >
-                  <PenBoxIcon className="h-6 w-6" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setImages((previous) => {
-                      const nextImages = previous.filter((row) => row.id !== image.id);
-                      if (editingImageId === image.id) {
-                        setEditingImageId(null);
-                      }
-                      return nextImages;
-                    })
-                  }
-                  className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white hover:bg-black/80 opacity-50"
-                  aria-label="Remove image"
-                >
-                  <X className="h-6 w-6" />
-                </button>
+                {image.id === 'ADD' ? (<>
+                  <button
+                    type="button"
+                    onClick={() => createInputRef.current?.click()}
+                    className="mb-3 w-full h-full inline-flex items-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-accent-3 hover:text-foreground"
+                  >
+                    <div className="w-full">
+                      <ImagePlus className="h-10 w-10 w-full" />
+                      <div>Add photos</div>
+                    </div>
+                  </button>
+                </>) : (<>
+                  <img src={image.previewDataUrl} alt="New post preview" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setEditingImageId(image.id)}
+                    className="absolute left-1 top-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80 opacity-50"
+                    aria-label="Tap to edit image"
+                    title="Tap to edit"
+                  >
+                    <PenBoxIcon className="h-6 w-6" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setImages((previous) => {
+                        const nextImages = previous.filter((row) => row.id !== image.id);
+                        if (editingImageId === image.id) {
+                          setEditingImageId(null);
+                        }
+                        return nextImages;
+                      })
+                    }
+                    className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white hover:bg-black/80 opacity-50"
+                    aria-label="Remove image"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </>)}
               </div>
             ))}
-
-            {images.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-xs text-accent-2">Add photos to your post</p>
-              </div>
-            ) : null}
           </div>
         </div>
 
-        <div className="mt-10">
+        <div className="mt-7">
           <textarea
             ref={textInputRef}
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             placeholder="Write a comment..."
-            className="min-h-[40vh] w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+            className="min-h-[20vh] max-h-[20vh] w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
           />
         </div>
+
+        {hasPreviewContent ? (
+          <div className="mt-7">
+            <p className="mb-2 text-xs font-semibold text-accent-2">Preview</p>
+            <PostSection
+              post={previewPost}
+              currentUserId={currentUserId}
+              previewImageUrls={previewImageUrls}
+              isPreview
+              disableCommentSendInput={true}
+              className="rounded-lg border border-accent-1"
+            />
+          </div>
+        ) : null}
 
         {statusMessage ? <p className="mt-2 text-xs text-accent-2">{statusMessage}</p> : null}
       </div>
 
-      <div className="flex justify-end border-t border-accent-1 px-3 py-3">
+      <div className="absolute bottom-4 right-4">
         <button
           type="button"
-          onClick={() => {
-            void onPost();
-          }}
+          onClick={onPost}
+          style={{ boxShadow: '0 0 10px 2px rgba(0, 0, 0, 1)' }}
           disabled={(images.length === 0 && comment.trim().length === 0) || isPosting}
           className="rounded-xl bg-accent-3 px-6 py-3 text-base font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-50"
         >

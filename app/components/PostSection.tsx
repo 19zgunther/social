@@ -21,7 +21,12 @@ type PostSectionProps = {
   post: PostItem;
   currentUserId?: string | null;
   showComments?: boolean;
+  /** Local data URLs for unsaved post images (create-post preview). */
+  previewImageUrls?: string[];
+  /** Read-only preview: no likes, comments, or edits. */
+  isPreview?: boolean;
   className?: string;
+  disableCommentSendInput?: boolean;
   onViewUserProfile?: (userId: string) => void;
   onOpenPostOptions?: (postId: string) => void;
   onPostUpdated?: (updated: {
@@ -113,6 +118,9 @@ function PostSectionComponent({
   post,
   currentUserId,
   showComments = true,
+  previewImageUrls,
+  isPreview = false,
+  disableCommentSendInput=false,
   className,
   onViewUserProfile,
   onOpenPostOptions,
@@ -193,6 +201,9 @@ function PostSectionComponent({
     return Array.from(uuids);
   }, [postData.comments]);
   const allPostImageIds = useMemo(() => {
+    if (previewImageUrls && previewImageUrls.length > 0) {
+      return previewImageUrls.map((_, index) => `preview-${index}`);
+    }
     const ids: string[] = [];
     if (post.image_id) {
       ids.push(post.image_id);
@@ -204,7 +215,7 @@ function PostSectionComponent({
       ids.push(imageId);
     }
     return ids;
-  }, [post.image_id, postData.other_image_ids]);
+  }, [post.image_id, postData.other_image_ids, previewImageUrls]);
   const hasMultipleImages = allPostImageIds.length > 1;
   const hasCongrats = useMemo(
     () => hasCongratsComment(postData.comments),
@@ -318,7 +329,7 @@ function PostSectionComponent({
   }, [initialLikes, post.is_liked_by_viewer, post.like_count]);
 
   const loadAdditionalImages = async () => {
-    if (!hasMultipleImages || hasLoadedAdditionalImages || isLoadingAdditionalImages) {
+    if (previewImageUrls || !hasMultipleImages || hasLoadedAdditionalImages || isLoadingAdditionalImages) {
       return;
     }
     const additionalImageIds = allPostImageIds.slice(1);
@@ -479,7 +490,7 @@ function PostSectionComponent({
   };
 
   const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
-  const canEditPostText = Boolean(currentUserId) && post.created_by === currentUserId;
+  const canEditPostText = !isPreview && Boolean(currentUserId) && post.created_by === currentUserId;
 
   const onSavePostText = async () => {
     if (!canEditPostText || isSavingPostText) {
@@ -720,6 +731,7 @@ function PostSectionComponent({
             userId={post.created_by}
             sizePx={40}
             alt={`${post.username} profile`}
+            signedUrl={post.author_profile_image_url ?? null}
             imageAccessGrant={post.author_profile_image_access_grant ?? null}
             imageStorageUserId={post.created_by}
             imageId={post.author_profile_image_id ?? null}
@@ -769,11 +781,19 @@ function PostSectionComponent({
             }}
           >
             {allPostImageIds.map((imageId, index) => {
+              const previewUrl = previewImageUrls?.[index];
               const grant = imageGrantById[imageId];
               const isPrimaryImage = index === 0;
               return (
                 <div key={imageId} className="w-full shrink-0 snap-center">
-                  {grant ? (
+                  {previewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- local create-post preview
+                    <img
+                      src={previewUrl}
+                      alt="Post attachment"
+                      className="aspect-square w-full object-cover"
+                    />
+                  ) : grant ? (
                     <button
                       type="button"
                       className="block w-full cursor-zoom-in border-0 bg-transparent p-0"
@@ -889,7 +909,7 @@ function PostSectionComponent({
             onClick={() => {
               void onToggleLike();
             }}
-            disabled={isUpdatingLike}
+            disabled={isUpdatingLike || isPreview}
             className="inline-flex h-6 min-h-6 items-center justify-center gap-1 rounded-lg px-1.5 py-0 text-xs leading-none text-accent-2 transition hover:text-foreground disabled:opacity-50"
           >
             <Heart
@@ -902,6 +922,7 @@ function PostSectionComponent({
             onSelectEmoji={handlePostEmojiReply}
             buttonClassName="h-7 border-none"
             buttonSmileIconClassName="h-6 w-6"
+            disabled={isPreview}
           />
 
           {hasPostOptions ? (
@@ -941,6 +962,7 @@ function PostSectionComponent({
                 value={rootCommentDraft}
                 onChange={(event) => setRootCommentDraft(event.target.value)}
                 placeholder="Add a comment..."
+                disabled={disableCommentSendInput}
                 className="flex-1 rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-sm text-foreground outline-none focus:border-accent-2"
               />
               <button
@@ -955,7 +977,7 @@ function PostSectionComponent({
 
             {/** Comment Tree */}
             {rootTextCommentEntries.length === 0 ? (
-              <p className="text-xs text-accent-2">No comments yet...</p>
+              <p className="text-xs text-accent-2"></p>
             ) : (
               <div className="space-y-2">
                 {rootTextCommentEntries.map(([commentTimestamp, comment]) =>

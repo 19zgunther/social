@@ -188,6 +188,7 @@ type EmojiPickerProps = {
   className?: string;
   buttonClassName?: string;
   buttonSmileIconClassName?: string;
+  disabled?: boolean;
   /** Fires when the full-screen emoji picker opens or closes (for host UI like overlays). */
   onOpenChange?: (open: boolean) => void;
 };
@@ -200,6 +201,7 @@ export default function EmojiPicker({
   buttonClassName,
   buttonSmileIconClassName,
   onOpenChange,
+  disabled = false,
 }: EmojiPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showEmojiEditor, setShowEmojiEditor] = useState(false);
@@ -467,6 +469,7 @@ export default function EmojiPicker({
         onClick={() => setIsOpen((previous) => !previous)}
         className={`rounded-lg border border-accent-1 px-2 py-1 text-accent-2 transition hover:text-foreground ${buttonClassName ?? ""}`}
         aria-label="Add emoji"
+        disabled={disabled}
       >
         <Smile className={`h-4 w-4 ${buttonSmileIconClassName ?? ""}`} />
       </button>
