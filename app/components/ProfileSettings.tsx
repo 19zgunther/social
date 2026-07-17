@@ -3,6 +3,7 @@
 import { LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
 import BackButton from "@/app/components/utils/BackButton";
+import { LoadingAnimation, AnimationEditorModal } from "@/app/components/animator";
 import { clearAllCachedCustomEmojis } from "@/app/lib/customEmojiCache";
 import { clearAllCachedImages } from "@/app/lib/imageCache";
 import { ensurePushSubscription, isInstalledPwa, PUSH_PROMPT_DISMISSED_KEY } from "@/app/lib/pushClient";
@@ -19,6 +20,7 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
   const [isTestingNotifications, setIsTestingNotifications] = useState(false);
   const [isClearingImageCache, setIsClearingImageCache] = useState(false);
   const [isClearingEmojiCache, setIsClearingEmojiCache] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [debugDataSnapshot, setDebugDataSnapshot] = useState(
     JSON.stringify(globalDebugData, null, 2),
   );
@@ -242,6 +244,19 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
             </button>
           </div>
 
+          <div className="flex flex-col items-center gap-2 pt-2 pb-6">
+            <LoadingAnimation size={96} color="white" />
+            <button
+              type="button"
+              onClick={() => {
+                setEditorOpen(true);
+              }}
+              className="rounded-lg border border-accent-1 bg-secondary-background px-4 py-2 text-sm text-foreground hover:bg-accent-1/30 transition"
+            >
+              Edit loading animation
+            </button>
+          </div>
+
           <div>
             <h2 className="text-sm font-semibold text-foreground mb-3 min-h-100vh overflow-y-scroll min-w-80vw">Debug</h2>
             <textarea
@@ -258,6 +273,13 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
           <p className="text-xs text-accent-2">{statusMessage}</p>
         </div>
       ) : null}
+
+      <AnimationEditorModal
+        open={editorOpen}
+        onClose={() => {
+          setEditorOpen(false);
+        }}
+      />
     </div>
   );
 }
