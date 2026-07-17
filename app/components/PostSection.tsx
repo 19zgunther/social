@@ -596,8 +596,6 @@ function PostSectionComponent({
     }
   };
 
-  const hasPostOptions = rootEmojiReactions.length > 0 || allPostImageIds.length > 0;
-
   const onOpenPostOptionsPane = () => {
     if (allPostImageIds.length > 1) {
       void loadAdditionalImages();
@@ -759,16 +757,14 @@ function PostSectionComponent({
               ? formatPostDateExpanded(post.created_at)
               : formatPostDateCollapsed(post.created_at)}
           </button>
-          {hasPostOptions ? (
-            <button
-              type="button"
-              onClick={onOpenPostOptionsPane}
-              className="ml-auto shrink-0 rounded-lg border-none bg-transparent p-1 text-accent-2 hover:text-foreground"
-              aria-label="Post options"
-            >
-              <MoreHorizontal className="h-5 w-5" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={onOpenPostOptionsPane}
+            className="ml-auto shrink-0 rounded-lg border-none bg-transparent p-1 text-accent-2 hover:text-foreground"
+            aria-label="Post options"
+          >
+            <MoreHorizontal className="h-5 w-5" />
+          </button>
         </div>
       </header>
       {allPostImageIds.length > 0 ? (

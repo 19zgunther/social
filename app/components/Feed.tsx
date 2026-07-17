@@ -222,6 +222,7 @@ export default function Feed({
       <PostOptionsPane
         post={postOptionsPost}
         onBack={onClosePostOptions}
+        currentUserId={viewerUserId}
         onViewUserProfile={onViewUserProfile}
       />
     );

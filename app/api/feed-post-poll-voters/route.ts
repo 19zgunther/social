@@ -69,7 +69,8 @@ export async function POST(request: Request) {
         { status: 404 },
       );
     }
-    if (!isPollClosed(poll)) {
+    const isOwner = post.created_by === authResult.user_id;
+    if (!isPollClosed(poll) && !isOwner) {
       return NextResponse.json(
         {
           error: {

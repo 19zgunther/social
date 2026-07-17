@@ -23,6 +23,7 @@ import {
 type PostOptionsPaneProps = {
   post: PostItem;
   onBack: () => void;
+  currentUserId?: string | null;
   onViewUserProfile?: (userId: string) => void;
 };
 
@@ -92,6 +93,7 @@ const buildImageIds = (post: PostItem): string[] => {
 export default function PostOptionsPane({
   post,
   onBack,
+  currentUserId,
   onViewUserProfile,
 }: PostOptionsPaneProps) {
   const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
@@ -111,7 +113,9 @@ export default function PostOptionsPane({
 
   const comments = post.data?.comments;
   const imageIds = useMemo(() => buildImageIds(post), [post]);
-  const isClosedPoll = Boolean(getPollViewerState(post.data)?.is_closed);
+  const poll = getPollViewerState(post.data);
+  const isPollOwner = Boolean(currentUserId && currentUserId === post.created_by);
+  const canViewPollVoters = Boolean(poll && (poll.is_closed || isPollOwner));
 
   const customEmojiUuids = useMemo(() => collectCustomEmojiUuids(comments), [comments]);
 
@@ -199,7 +203,7 @@ export default function PostOptionsPane({
   }, [customEmojiUuids]);
 
   useEffect(() => {
-    if (!isClosedPoll) {
+    if (!canViewPollVoters) {
       setPollVoterOptions(null);
       setPollVotersError("");
       setIsLoadingPollVoters(false);
@@ -251,7 +255,7 @@ export default function PostOptionsPane({
     return () => {
       cancelled = true;
     };
-  }, [isClosedPoll, post.id]);
+  }, [canViewPollVoters, post.id]);
 
   const reactionEntries = useMemo(() => {
     return Object.entries(comments ?? {})
@@ -264,7 +268,7 @@ export default function PostOptionsPane({
   }, [comments]);
 
   const hasImages = imageIds.length > 0;
-  const hasPollVotesSection = isClosedPoll;
+  const hasPollVotesSection = canViewPollVoters;
   const hasContent = hasImages || reactionEntries.length > 0 || hasPollVotesSection;
 
   const onDownloadImage = useCallback(async (imageId: string, index: number) => {

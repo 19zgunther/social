@@ -585,6 +585,7 @@ function Profile({
         <PostOptionsPane
           post={selectedPost}
           onBack={onCloseSelectedPostOptions}
+          currentUserId={userId}
           onViewUserProfile={onViewUserProfile}
         />
       );
@@ -1046,6 +1047,7 @@ function ProfileOtherUser({
         <PostOptionsPane
           post={selectedPost}
           onBack={onCloseSelectedPostOptions}
+          currentUserId={currentUserId}
         />
       );
     }
