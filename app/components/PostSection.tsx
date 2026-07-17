@@ -759,8 +759,17 @@ function PostSectionComponent({
               ? formatPostDateExpanded(post.created_at)
               : formatPostDateCollapsed(post.created_at)}
           </button>
+          {hasPostOptions ? (
+            <button
+              type="button"
+              onClick={onOpenPostOptionsPane}
+              className="ml-auto shrink-0 rounded-lg border-none bg-transparent p-1 text-accent-2 hover:text-foreground"
+              aria-label="Post options"
+            >
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+          ) : null}
         </div>
-
       </header>
       {allPostImageIds.length > 0 ? (
         <div ref={imageAreaRef} className="relative aspect-square w-full">
@@ -947,30 +956,16 @@ function PostSectionComponent({
             disabled={isPreview}
           />
 
-          {hasPostOptions ? (
-            <>
-              {rootEmojiReactions.length > 0 ? (
-                <div className="ml-3 flex min-w-0 flex-1 flex-wrap items-center gap-0 overflow-hidden">
-                  {rootEmojiReactions.map((emoji, index) => (
-                    <RenderReactionEmoji
-                      key={`${emoji}-${index}`}
-                      value={emoji}
-                      customEmojiByUuid={customEmojiByUuid}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="flex-1" />
-              )}
-              <button
-                type="button"
-                onClick={onOpenPostOptionsPane}
-                className="ml-auto shrink-0 rounded-lg border-none bg-transparent p-1 text-accent-2 hover:text-foreground"
-                aria-label="Post options"
-              >
-                <MoreHorizontal className="h-5 w-5" />
-              </button>
-            </>
+          {rootEmojiReactions.length > 0 ? (
+            <div className="ml-3 flex min-w-0 flex-1 flex-wrap items-center gap-0 overflow-hidden">
+              {rootEmojiReactions.map((emoji, index) => (
+                <RenderReactionEmoji
+                  key={`${emoji}-${index}`}
+                  value={emoji}
+                  customEmojiByUuid={customEmojiByUuid}
+                />
+              ))}
+            </div>
           ) : null}
         </div>
 

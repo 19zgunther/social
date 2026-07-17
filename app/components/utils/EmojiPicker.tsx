@@ -505,9 +505,9 @@ export default function EmojiPicker({
                         <button
                           type="button"
                           onClick={() => setShowEmojiEditor(false)}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
+                          className="inline-flex items-center gap-1.5 text-sm text-accent-2 transition hover:text-foreground"
                         >
-                          <ArrowLeft className="h-4 w-4" />
+                          <ArrowLeft className="h-4 w-4 shrink-0" />
                           Back to picker
                         </button>
                         <button

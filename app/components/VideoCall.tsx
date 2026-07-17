@@ -3,6 +3,7 @@
 import type { MutableRefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import { PhoneOff, Video } from "lucide-react";
+import BackButton from "@/app/components/utils/BackButton";
 import {
   createVideoCallController,
   type VideoCallController,
@@ -280,13 +281,7 @@ export default function VideoCall({ threadId, currentUserId, onBack }: VideoCall
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background">
       <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
-        <button
-          type="button"
-          onClick={onEndCall}
-          className="rounded-full border border-accent-1 px-3 py-1 text-xs text-accent-2 hover:text-foreground"
-        >
-          Back
-        </button>
+        <BackButton onBack={onEndCall} />
         <div className="flex items-center gap-2">
           <Video className="h-4 w-4 text-accent-2" />
           <p className="text-sm font-semibold text-foreground">Video call</p>

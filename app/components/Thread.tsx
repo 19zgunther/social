@@ -1702,7 +1702,7 @@ export default function Thread({
       ) : null}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
-        <BackButton onBack={onBack} backLabel="" textOnly />
+        <BackButton onBack={onBack} />
         <div
           className="min-w-0 text-center flex items-center gap-2"
           onClick={setThreadSettingsOpen}

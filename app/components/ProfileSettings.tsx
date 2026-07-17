@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowLeft, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
+import BackButton from "@/app/components/utils/BackButton";
 import { clearAllCachedCustomEmojis } from "@/app/lib/customEmojiCache";
 import { clearAllCachedImages } from "@/app/lib/imageCache";
 import { ensurePushSubscription, isInstalledPwa, PUSH_PROMPT_DISMISSED_KEY } from "@/app/lib/pushClient";
@@ -152,13 +153,7 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
       className="flex h-full min-h-0 flex-col bg-primary-background"
     >
       <div className="flex items-center justify-between border-b border-accent-1 px-3 py-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-accent-2 hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back
-        </button>
+        <BackButton onBack={onBack} />
         <h1 className="text-lg font-semibold text-foreground">Settings</h1>
         <div className="w-20" />
       </div>

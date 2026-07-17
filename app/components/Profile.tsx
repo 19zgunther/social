@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState, type MutableRefObject, type ReactNode } from "react";
 import {
-  ArrowLeft,
   Check,
   ChevronRight,
   CircleUserRound,
@@ -14,6 +13,7 @@ import {
 } from "lucide-react";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
+import BackButton from "@/app/components/utils/BackButton";
 import { PostSection } from "@/app/components/PostSection";
 import PostOptionsPane from "@/app/components/PostOptionsPane";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
@@ -229,7 +229,7 @@ function ProfilePostsSection({
               key={post.id}
               type="button"
               onClick={() => setSelectedPostId(post.id)}
-              className={`aspect-square bg-primary-background ${showRightBorder ? "border-r border-accent-1" : ""
+              className={`relative aspect-square min-h-0 overflow-hidden bg-primary-background p-0 ${showRightBorder ? "border-r border-accent-1" : ""
                 } border-b border-accent-1`}
             >
               {hasPostImageSource ? (
@@ -238,7 +238,7 @@ function ProfilePostsSection({
                   imageStorageUserId={post.created_by}
                   imageId={post.image_id}
                   alt="Profile post"
-                  className="h-full w-full object-cover"
+                  className="pointer-events-none h-full w-full object-cover"
                 />
               ) : hasImageAttachment ? (
                 <div className="flex h-full w-full items-center justify-center bg-black text-[10px] text-accent-2">
@@ -593,13 +593,7 @@ function Profile({
     return (
       <div className="flex h-full min-h-0 w-full flex-col bg-primary-background">
         <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
-          <button
-            type="button"
-            onClick={() => setSelectedPostId(null)}
-            className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs text-accent-2 hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back
-          </button>
+          <BackButton onBack={() => setSelectedPostId(null)} />
           <button
             type="button"
             onClick={() => { void onDeleteSelectedPost(); }}
@@ -1061,13 +1055,7 @@ function ProfileOtherUser({
         className="flex h-full min-h-0 w-full flex-col bg-primary-background"
       >
         <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
-          <button
-            type="button"
-            onClick={() => setSelectedPostId(null)}
-            className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs text-accent-2 hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back
-          </button>
+          <BackButton onBack={() => setSelectedPostId(null)} />
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
           <PostSection
@@ -1112,13 +1100,7 @@ function ProfileOtherUser({
         className="flex h-full min-h-0 flex-col bg-primary-background"
       >
         <div className="border-b border-accent-1 px-3 py-2">
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs text-accent-2 hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back
-          </button>
+          <BackButton onBack={onBack} />
         </div>
         <div className="flex-1 flex items-center justify-center">
           <p className="text-xs text-accent-2">
@@ -1137,13 +1119,7 @@ function ProfileOtherUser({
       className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain touch-pan-y bg-primary-background"
     >
       <div className="border-b border-accent-1 px-3 py-2">
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs text-accent-2 hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back
-        </button>
+        <BackButton onBack={onBack} />
       </div>
 
       <ProfilePictureRow

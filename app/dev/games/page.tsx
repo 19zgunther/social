@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import Pool from "@/app/components/games/Pool";
 import { createInitialPoolGame, isPoolTurnForUser } from "@/app/components/games/poolGameUtils";
 import type { PoolGameMessageData } from "@/app/types/interfaces";
@@ -101,8 +102,9 @@ export default function DevGamesPage() {
 
       <Link
         href="/"
-        className="text-center text-sm text-accent-2 underline-offset-2 hover:text-foreground hover:underline"
+        className="inline-flex items-center justify-center gap-1.5 text-sm text-accent-2 transition hover:text-foreground"
       >
+        <ArrowLeft className="h-4 w-4 shrink-0" />
         Back to app
       </Link>
     </div>

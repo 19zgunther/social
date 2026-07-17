@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft } from "lucide-react";
 import CachedImage from "@/app/components/utils/CachedImage";
+import BackButton from "@/app/components/utils/BackButton";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
@@ -236,14 +236,7 @@ export default function PostOptionsPane({
   return (
     <div className="flex h-full min-h-0 flex-col bg-primary-background">
       <div className="flex items-center justify-between border-b border-accent-1 px-3 py-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm text-accent-2 transition hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4 shrink-0" />
-          Back
-        </button>
+        <BackButton onBack={onBack} />
         <h1 className="text-lg font-semibold text-foreground">Post</h1>
         <div className="w-20" />
       </div>
