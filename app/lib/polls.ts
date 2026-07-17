@@ -211,6 +211,38 @@ const buildResults = (poll: PollData): { results: PollResultRow[]; totalVoters: 
   };
 };
 
+export type PollVoterBreakdownRow = {
+  option_id: string;
+  text: string;
+  voter_ids: string[];
+};
+
+/** Invert votes into per-option voter ids (option order preserved; unknown option ids skipped). */
+export const buildClosedPollVoterBreakdown = (poll: PollData): PollVoterBreakdownRow[] => {
+  const validOptionIds = new Set(poll.options.map((option) => option.id));
+  const votersByOption = new Map<string, string[]>(poll.options.map((option) => [option.id, []]));
+
+  for (const [userId, selection] of Object.entries(poll.votes)) {
+    if (!userId || !Array.isArray(selection) || selection.length === 0) {
+      continue;
+    }
+    const seenForUser = new Set<string>();
+    for (const optionId of selection) {
+      if (!validOptionIds.has(optionId) || seenForUser.has(optionId)) {
+        continue;
+      }
+      seenForUser.add(optionId);
+      votersByOption.get(optionId)?.push(userId);
+    }
+  }
+
+  return poll.options.map((option) => ({
+    option_id: option.id,
+    text: option.text,
+    voter_ids: votersByOption.get(option.id) ?? [],
+  }));
+};
+
 export const sanitizePollForViewer = ({
   poll,
   viewerUserId,

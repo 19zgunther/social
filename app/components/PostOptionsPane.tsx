@@ -4,13 +4,21 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import CachedImage from "@/app/components/utils/CachedImage";
 import BackButton from "@/app/components/utils/BackButton";
 import UserProfileImage from "@/app/components/UserProfileImage";
+import { getPollViewerState } from "@/app/components/PollBlock";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
   CustomEmoji,
   customEmojiUuidFromToken,
 } from "@/app/lib/customEmojiCanvas";
 import { downloadImageBlobWithExtension, getImageBlob } from "@/app/lib/imageCache";
-import { EmojiItem, PostCommentNode, PostItem } from "@/app/types/interfaces";
+import {
+  ApiError,
+  EmojiItem,
+  FeedPostPollVotersOption,
+  FeedPostPollVotersResponse,
+  PostCommentNode,
+  PostItem,
+} from "@/app/types/interfaces";
 
 type PostOptionsPaneProps = {
   post: PostItem;
@@ -97,9 +105,13 @@ export default function PostOptionsPane({
   const [isLoadingImageGrants, setIsLoadingImageGrants] = useState(false);
   const [downloadingImageId, setDownloadingImageId] = useState<string | null>(null);
   const [downloadStatusMessage, setDownloadStatusMessage] = useState("");
+  const [pollVoterOptions, setPollVoterOptions] = useState<FeedPostPollVotersOption[] | null>(null);
+  const [isLoadingPollVoters, setIsLoadingPollVoters] = useState(false);
+  const [pollVotersError, setPollVotersError] = useState("");
 
   const comments = post.data?.comments;
   const imageIds = useMemo(() => buildImageIds(post), [post]);
+  const isClosedPoll = Boolean(getPollViewerState(post.data)?.is_closed);
 
   const customEmojiUuids = useMemo(() => collectCustomEmojiUuids(comments), [comments]);
 
@@ -186,6 +198,61 @@ export default function PostOptionsPane({
     };
   }, [customEmojiUuids]);
 
+  useEffect(() => {
+    if (!isClosedPoll) {
+      setPollVoterOptions(null);
+      setPollVotersError("");
+      setIsLoadingPollVoters(false);
+      return;
+    }
+
+    let cancelled = false;
+    const loadPollVoters = async () => {
+      setIsLoadingPollVoters(true);
+      setPollVotersError("");
+      setPollVoterOptions(null);
+      try {
+        const response = await fetch("/api/feed-post-poll-voters", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ post_id: post.id }),
+        });
+        if (cancelled) {
+          return;
+        }
+        if (!response.ok) {
+          let message = "Could not load poll voters.";
+          try {
+            const body = (await response.json()) as ApiError;
+            if (body.error?.message) {
+              message = body.error.message;
+            }
+          } catch {
+            // Keep default message.
+          }
+          setPollVotersError(message);
+          return;
+        }
+        const payload = (await response.json()) as FeedPostPollVotersResponse;
+        if (!cancelled) {
+          setPollVoterOptions(payload.options ?? []);
+        }
+      } catch {
+        if (!cancelled) {
+          setPollVotersError("Could not load poll voters.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingPollVoters(false);
+        }
+      }
+    };
+    void loadPollVoters();
+    return () => {
+      cancelled = true;
+    };
+  }, [isClosedPoll, post.id]);
+
   const reactionEntries = useMemo(() => {
     return Object.entries(comments ?? {})
       .filter(([, comment]) => isEmojiOnlyComment(comment.text))
@@ -197,6 +264,8 @@ export default function PostOptionsPane({
   }, [comments]);
 
   const hasImages = imageIds.length > 0;
+  const hasPollVotesSection = isClosedPoll;
+  const hasContent = hasImages || reactionEntries.length > 0 || hasPollVotesSection;
 
   const onDownloadImage = useCallback(async (imageId: string, index: number) => {
     if (downloadingImageId) {
@@ -232,6 +301,14 @@ export default function PostOptionsPane({
       setDownloadingImageId(null);
     }
   }, [downloadingImageId, imageGrantById, imageIds.length, post.created_by, post.id]);
+
+  const onOpenUserProfile = useCallback((userId: string) => {
+    if (!onViewUserProfile) {
+      return;
+    }
+    onViewUserProfile(userId);
+    onBack();
+  }, [onBack, onViewUserProfile]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-primary-background">
@@ -289,6 +366,60 @@ export default function PostOptionsPane({
           </section>
         ) : null}
 
+        {hasPollVotesSection ? (
+          <section className={reactionEntries.length > 0 ? "mb-4" : undefined}>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent-2">Poll votes</h2>
+            {isLoadingPollVoters ? (
+              <p className="text-sm text-accent-2">Loading voters...</p>
+            ) : null}
+            {pollVotersError ? (
+              <p className="text-sm text-accent-2">{pollVotersError}</p>
+            ) : null}
+            {!isLoadingPollVoters && !pollVotersError && pollVoterOptions ? (
+              <div className="flex flex-col gap-4">
+                {pollVoterOptions.map((option) => (
+                  <div key={option.option_id}>
+                    <h3 className="mb-2 text-sm font-medium text-foreground">{option.text}</h3>
+                    {option.voters.length === 0 ? (
+                      <p className="text-xs text-accent-2 pl-4">No votes</p>
+                    ) : (
+                      <ul className="flex flex-col gap-2 pl-4">
+                        {option.voters.map((voter) => (
+                          <li
+                            key={`${option.option_id}-${voter.user_id}`}
+                            className="flex min-w-0 items-center gap-3"
+                          >
+                            <UserProfileImage
+                              userId={voter.user_id}
+                              sizePx={32}
+                              alt={`${voter.username} profile`}
+                            />
+                            {onViewUserProfile ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onOpenUserProfile(voter.user_id);
+                                }}
+                                className="min-w-0 truncate text-sm font-medium text-foreground underline-offset-2 hover:underline"
+                              >
+                                {voter.username}
+                              </button>
+                            ) : (
+                              <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                                {voter.username}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         {reactionEntries.length > 0 ? (
           <section>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent-2">Reactions</h2>
@@ -314,8 +445,7 @@ export default function PostOptionsPane({
                       <button
                         type="button"
                         onClick={() => {
-                          onViewUserProfile(entry.userId);
-                          onBack();
+                          onOpenUserProfile(entry.userId);
                         }}
                         className="min-w-0 truncate text-sm font-medium text-foreground underline-offset-2 hover:underline"
                       >
@@ -331,7 +461,7 @@ export default function PostOptionsPane({
               ))}
             </ul>
           </section>
-        ) : !hasImages ? (
+        ) : !hasContent ? (
           <p className="text-sm text-accent-2">No reactions yet.</p>
         ) : null}
       </div>

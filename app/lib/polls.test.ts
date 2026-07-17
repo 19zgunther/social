@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyVote,
+  buildClosedPollVoterBreakdown,
   sanitizePollForViewer,
   validateAndBuildPoll,
 } from "@/app/lib/polls";
@@ -343,5 +344,47 @@ describe("sanitizePollForViewer", () => {
     });
 
     expect(view).not.toHaveProperty("votes");
+  });
+});
+
+describe("buildClosedPollVoterBreakdown", () => {
+  it("groups voter ids by option in option order", () => {
+    const breakdown = buildClosedPollVoterBreakdown(
+      basePoll({
+        votes: {
+          "user-1": ["opt-a"],
+          "user-2": ["opt-b"],
+          "user-3": ["opt-a", "opt-b"],
+        },
+      }),
+    );
+
+    expect(breakdown).toEqual([
+      { option_id: "opt-a", text: "Yes", voter_ids: ["user-1", "user-3"] },
+      { option_id: "opt-b", text: "No", voter_ids: ["user-2", "user-3"] },
+    ]);
+  });
+
+  it("skips unknown option ids and dedupes a user selecting the same option twice", () => {
+    const breakdown = buildClosedPollVoterBreakdown(
+      basePoll({
+        votes: {
+          "user-1": ["opt-a", "missing", "opt-a"],
+          "user-2": ["opt-b"],
+        },
+      }),
+    );
+
+    expect(breakdown).toEqual([
+      { option_id: "opt-a", text: "Yes", voter_ids: ["user-1"] },
+      { option_id: "opt-b", text: "No", voter_ids: ["user-2"] },
+    ]);
+  });
+
+  it("returns empty voter lists when nobody has voted", () => {
+    expect(buildClosedPollVoterBreakdown(basePoll())).toEqual([
+      { option_id: "opt-a", text: "Yes", voter_ids: [] },
+      { option_id: "opt-b", text: "No", voter_ids: [] },
+    ]);
   });
 });

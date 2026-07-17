@@ -303,6 +303,21 @@ export type PostCreateRequest = {
   audience?: PostAudienceRequest;
 };
 export type PostCreateResponse = { post: PostItem };
+export type FeedPostPollVotersRequest = {
+  post_id?: string;
+};
+export type FeedPostPollVoter = {
+  user_id: string;
+  username: string;
+};
+export type FeedPostPollVotersOption = {
+  option_id: string;
+  text: string;
+  voters: FeedPostPollVoter[];
+};
+export type FeedPostPollVotersResponse = {
+  options: FeedPostPollVotersOption[];
+};
 export type PostEditRequest = {
   post_id?: string;
   text?: string;
