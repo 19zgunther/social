@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       });
 
       const loginUrl = `${origin}/?temp_password=${encodeURIComponent(row.id)}`;
-      const from = process.env.RESEND_FROM ?? "Social <youforgotyourpassword@zgunther.com>";
+      const from = process.env.RESEND_FROM ?? "Social <youforgotyourpassword@i-am-eng.com>";
 
       const resend = new Resend(apiKey);
       try {

@@ -12,6 +12,7 @@ import {
   Droplets,
   ImagePlus,
   Palette,
+  RotateCcw,
   Sun,
   Thermometer,
   X,
@@ -953,10 +954,10 @@ export default function CreatePostTab({
                 type="button"
                 onClick={() => goToIndex(activeIndex - 1)}
                 disabled={activeIndex <= 0}
-                className="absolute left-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-accent-1 bg-primary-background/90 p-2 text-accent-2 shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
+                className="absolute left-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-accent-1 bg-primary-background/90 p-3 text-accent-2 shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
                 aria-label="Previous photo"
               >
-                <ChevronLeft className="h-6 w-6" />
+                <ChevronLeft className="h-7 w-7" />
               </button>
 
               <div
@@ -1031,7 +1032,7 @@ export default function CreatePostTab({
                           type="button"
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={onRemoveActiveImage}
-                          className="absolute right-2 top-2 z-20 rounded-full bg-black/60 p-1 text-white opacity-70 hover:bg-black/80"
+                          className="absolute right-2 top-2 z-20 rounded-full bg-black/60 p-2.5 text-white opacity-70 hover:bg-black/80"
                           aria-label="Remove image"
                         >
                           <X className="h-6 w-6" />
@@ -1046,10 +1047,10 @@ export default function CreatePostTab({
                 type="button"
                 onClick={() => goToIndex(activeIndex + 1)}
                 disabled={activeIndex >= images.length - 1}
-                className="absolute right-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-accent-1 bg-primary-background/90 p-2 text-accent-2 shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
+                className="absolute right-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-accent-1 bg-primary-background/90 p-3 text-accent-2 shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
                 aria-label="Next photo"
               >
-                <ChevronRight className="h-6 w-6" />
+                <ChevronRight className="h-7 w-7" />
               </button>
             </div>
 
@@ -1059,8 +1060,8 @@ export default function CreatePostTab({
               </p>
             ) : null}
 
-            <div className="rounded-lg border-accent-1 px-2 py-1.5">
-              <div className="relative flex items-center justify-center gap-1 px-12">
+            <div className="rounded-lg border-accent-1 px-2 py-2">
+              <div className="flex items-center justify-center gap-1.5 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {ADJUSTMENT_OPTIONS.map((option) => {
                     const Icon = option.icon;
                     return (
@@ -1068,7 +1069,7 @@ export default function CreatePostTab({
                         key={option.key}
                         type="button"
                         onClick={() => setActiveAdjustment(option.key)}
-                        className={`inline-flex shrink-0 items-center rounded-md border p-1.5 transition ${
+                        className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border transition ${
                           option.key === activeAdjustment
                             ? "border-accent-3 bg-accent-3 text-primary-background"
                             : "border-accent-1 bg-primary-background text-accent-2 hover:text-foreground"
@@ -1076,7 +1077,7 @@ export default function CreatePostTab({
                         aria-label={option.label}
                         title={option.label}
                       >
-                        <Icon className="h-4 w-4" />
+                        <Icon className="h-5 w-5" />
                       </button>
                     );
                   })}
@@ -1092,13 +1093,15 @@ export default function CreatePostTab({
                     }));
                     setActiveAdjustment("brightness");
                   }}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 rounded-md border border-accent-1/50 px-2 py-1 text-[11px] text-accent-2 hover:text-foreground"
+                  className="inline-flex opacity-50 h-11 w-11 shrink-0 items-center justify-center rounded-md border border-accent-1 bg-primary-background text-accent-2 transition hover:text-foreground"
+                  aria-label="Reset"
+                  title="Reset"
                 >
-                  Reset
+                  <RotateCcw className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="mt-1 flex items-center gap-2">
+              <div className="mt-2 flex items-center gap-3">
                 <input
                   type="range"
                   min={activeAdjustmentOption.min}
@@ -1118,9 +1121,9 @@ export default function CreatePostTab({
                       },
                     });
                   }}
-                  className="h-1.5 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-accent-1 accent-accent-3 [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-accent-1 [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent-3 [&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-accent-1 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent-3"
+                  className="h-10 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-transparent accent-accent-3 [&::-webkit-slider-runnable-track]:h-2.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-accent-1 [&::-webkit-slider-thumb]:-mt-1.5 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent-3 [&::-moz-range-track]:h-2.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-accent-1 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent-3"
                 />
-                <span className="w-9 shrink-0 text-right text-[11px] text-accent-2">
+                <span className="w-10 shrink-0 text-right text-xs text-accent-2">
                   {cropMode
                     ? `${activeDraft.zoom.toFixed(1)}x`
                     : activeSliderValue > 0
