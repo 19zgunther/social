@@ -13,13 +13,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Social",
+  title: "Zocial",
   description: "Mobile-first social app",
   manifest: "/manifest.webmanifest",
-  applicationName: "Social",
+  applicationName: "Zocial",
   appleWebApp: {
     capable: true,
-    title: "Social",
+    title: "Zocial",
     statusBarStyle: "black-translucent",
   },
 };
