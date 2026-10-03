@@ -5,6 +5,7 @@ type AppTab =
     | "feed"
     | "groups"
     | "events" // hidden from nav — tab UI commented out in page.tsx
+    | "shared_event_posts"
     | "profile"
     | "feedback"
     | "thread"
@@ -31,6 +32,7 @@ const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | n
         tabParam === "feed" ||
             tabParam === "groups" ||
             // tabParam === "events" || // events tab hidden
+            tabParam === "shared_event_posts" ||
             tabParam === "profile" ||
             tabParam === "feedback" ||
             tabParam === "create_post"

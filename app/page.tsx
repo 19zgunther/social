@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { /* Calendar, */ House, MessageSquare, UserRound, Users } from "lucide-react";
+import { /* Calendar, */ House, Images, MessageSquare, UserRound, Users } from "lucide-react";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
 import { Profile, ProfileOtherUser } from "@/app/components/Profile";
@@ -29,6 +29,7 @@ import ThreadEventPage from "./components/ThreadEventPage";
 import useSwipeBack from "./components/utils/useSwipeBack";
 import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
+import SharedEventPostsTab from "./components/SharedEventPostsTab";
 import { UserSessionSyncProvider } from "./components/UserSessionSyncContext";
 
 
@@ -36,13 +37,11 @@ const TAB_TO_BACK_BASE: { [key in AppTab]: { forward: AppTab | null; back: AppTa
   thread_event: { forward: null, back: "thread_settings" },
   thread_settings: { forward: null, back: "thread" },
   thread: { forward: null, back: "groups" },
-  // groups: { forward: "events", back: "feed" },
-  // events: { forward: "profile", back: "groups" },
-  groups: { forward: "profile", back: "feed" }, // skipped events tab
+  groups: { forward: "shared_event_posts", back: "feed" },
   events: { forward: "profile", back: "groups" }, // hidden — kept for AppTab compat
+  shared_event_posts: { forward: "profile", back: "groups" },
   feed: { forward: "groups", back: null },
-  // profile: { forward: null, back: "events" },
-  profile: { forward: null, back: "groups" }, // skipped events tab
+  profile: { forward: null, back: "shared_event_posts" },
   feedback: { forward: "profile_settings", back: "profile" },
   profile_settings: { forward: null, back: "profile" },
   other_user_profile: { forward: null, back: "profile" },
@@ -337,6 +336,7 @@ export default function Home() {
     feed: DEFAULT_TAB,
     groups: DEFAULT_TAB,
     events: DEFAULT_TAB,
+    shared_event_posts: DEFAULT_TAB,
     thread: DEFAULT_TAB,
     thread_settings: DEFAULT_TAB,
     thread_event: DEFAULT_TAB,
@@ -363,6 +363,7 @@ export default function Home() {
   const feedStyle = TAB_TO_STYLE["feed"];
   const groupsStyle = TAB_TO_STYLE["groups"];
   // const eventsStyle = TAB_TO_STYLE["events"]; // events tab hidden
+  const sharedEventPostsStyle = TAB_TO_STYLE["shared_event_posts"];
   const threadStyle = TAB_TO_STYLE["thread"];
   const threadSettingsStyle = TAB_TO_STYLE["thread_settings"];
   const threadEventStyle = TAB_TO_STYLE["thread_event"];
@@ -441,6 +442,13 @@ export default function Home() {
               onViewUserProfile={onViewUserProfile}
               onOpenCreatePost={() => setActiveTab("create_post")}
               swipeBackOverrideRef={swipeBackOverrideRef}
+            />
+          </div>
+
+          <div className="absolute w-full h-full" style={sharedEventPostsStyle}>
+            <SharedEventPostsTab
+              currentUserId={authUser.user_id}
+              isActive={activeTab === "shared_event_posts"}
             />
           </div>
 
@@ -604,6 +612,12 @@ export default function Home() {
               isActive={activeTab === "groups"}
               showCircle={groupsUnreadCount > 0}
               onClick={() => setActiveTab("groups")}
+            />
+            <NavRowButton
+              icon={<Images aria-hidden className="h-5 w-5" />}
+              isActive={activeTab === "shared_event_posts"}
+              showCircle={false}
+              onClick={() => setActiveTab("shared_event_posts")}
             />
             {/* events tab hidden
             <NavRowButton

@@ -356,6 +356,11 @@ function PostSectionComponent({
     setIsLikedByViewer(Boolean(post.is_liked_by_viewer));
   }, [initialLikes, post.is_liked_by_viewer, post.like_count]);
 
+  const isSharedEvent = post.kind === "shared_event";
+  const sharedPostId = post.shared_post_id ?? (isSharedEvent ? post.id : null);
+  const storageUserIdForSlide = (ownerUserId?: string): string =>
+    ownerUserId ?? post.created_by;
+
   const loadAdditionalImages = async () => {
     if (resolvedPreviewMedia || hasLoadedAdditionalImages || isLoadingAdditionalImages) {
       return;
@@ -371,10 +376,17 @@ function PostSectionComponent({
       const response = await fetch("/api/image-access-grants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image_ids: missingIds,
-          owner_user_id: post.created_by,
-        }),
+        body: JSON.stringify(
+          sharedPostId
+            ? {
+                image_ids: missingIds,
+                shared_post_id: sharedPostId,
+              }
+            : {
+                image_ids: missingIds,
+                owner_user_id: post.created_by,
+              },
+        ),
       });
       if (!response.ok) {
         return;
@@ -431,13 +443,20 @@ function PostSectionComponent({
     setIsUpdatingLike(true);
 
     try {
-      const response = await fetch("/api/feed-post-like", {
+      const response = await fetch(isSharedEvent ? "/api/shared-post-like" : "/api/feed-post-like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          post_id: post.id,
-          like: nextLikedState,
-        }),
+        body: JSON.stringify(
+          isSharedEvent
+            ? {
+                shared_post_id: sharedPostId,
+                like: nextLikedState,
+              }
+            : {
+                post_id: post.id,
+                like: nextLikedState,
+              },
+        ),
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as ApiError;
@@ -480,15 +499,26 @@ function PostSectionComponent({
 
     setIsSubmittingComment(true);
     try {
-      const response = await fetch("/api/feed-post-comment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          post_id: post.id,
-          parent_path: parentPath,
-          message,
-        }),
-      });
+      const response = await fetch(
+        isSharedEvent ? "/api/shared-post-comment" : "/api/feed-post-comment",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            isSharedEvent
+              ? {
+                  shared_post_id: sharedPostId,
+                  parent_path: parentPath,
+                  message,
+                }
+              : {
+                  post_id: post.id,
+                  parent_path: parentPath,
+                  message,
+                },
+          ),
+        },
+      );
       if (!response.ok) {
         return;
       }
@@ -528,7 +558,11 @@ function PostSectionComponent({
   };
 
   const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
-  const canEditPostText = !isPreview && Boolean(currentUserId) && post.created_by === currentUserId;
+  const canEditPostText =
+    !isPreview &&
+    !isSharedEvent &&
+    Boolean(currentUserId) &&
+    post.created_by === currentUserId;
 
   const onSavePostText = async () => {
     if (!canEditPostText || isSavingPostText) {
@@ -586,14 +620,24 @@ function PostSectionComponent({
 
     setIsDeletingCommentPath(pathKey);
     try {
-      const response = await fetch("/api/feed-post-comment", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          post_id: post.id,
-          comment_path: commentPath,
-        }),
-      });
+      const response = await fetch(
+        isSharedEvent ? "/api/shared-post-comment" : "/api/feed-post-comment",
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            isSharedEvent
+              ? {
+                  shared_post_id: sharedPostId,
+                  comment_path: commentPath,
+                }
+              : {
+                  post_id: post.id,
+                  comment_path: commentPath,
+                },
+          ),
+        },
+      );
       if (!response.ok) {
         return;
       }
@@ -772,28 +816,33 @@ function PostSectionComponent({
             imageStorageUserId={post.created_by}
             imageId={post.author_profile_image_id ?? null}
           />
-          {onViewUserProfile ? (
+          <div className="min-w-0 flex-1">
+            {onViewUserProfile ? (
+              <button
+                type="button"
+                onClick={() => onViewUserProfile(post.created_by)}
+                className="text-sm font-semibold text-foreground hover:underline"
+              >
+                {post.username}
+              </button>
+            ) : (
+              <p className="text-sm font-semibold text-foreground">{post.username}</p>
+            )}
+            {post.title ? (
+              <p className="truncate text-[11px] text-accent-3">{post.title}</p>
+            ) : null}
             <button
               type="button"
-              onClick={() => onViewUserProfile(post.created_by)}
-              className="text-sm font-semibold text-foreground hover:underline"
+              aria-expanded={isPostDateExpanded}
+              aria-label={isPostDateExpanded ? "Hide post time" : "Show full post time"}
+              onClick={() => setIsPostDateExpanded((previous) => !previous)}
+              className="text-left text-[11px] text-accent-2 hover:underline"
             >
-              {post.username}
+              {isPostDateExpanded
+                ? formatPostDateExpanded(post.created_at)
+                : formatPostDateCollapsed(post.created_at)}
             </button>
-          ) : (
-            <p className="text-sm font-semibold text-foreground">{post.username}</p>
-          )}
-          <button
-            type="button"
-            aria-expanded={isPostDateExpanded}
-            aria-label={isPostDateExpanded ? "Hide post time" : "Show full post time"}
-            onClick={() => setIsPostDateExpanded((previous) => !previous)}
-            className="text-left text-[11px] text-accent-2 hover:underline"
-          >
-            {isPostDateExpanded
-              ? formatPostDateExpanded(post.created_at)
-              : formatPostDateCollapsed(post.created_at)}
-          </button>
+          </div>
           <button
             type="button"
             onClick={onOpenPostOptionsPane}
@@ -826,6 +875,9 @@ function PostSectionComponent({
             {mediaSlides.map((slide, index) => {
               const isActiveSlide = index === activeImageIndex;
               const isPrimarySlide = index === 0;
+              const slideStorageUserId = storageUserIdForSlide(
+                "ownerUserId" in slide ? slide.ownerUserId : undefined,
+              );
               if (slide.kind === "video") {
                 const previewUrl = slide.previewUrl;
                 const videoGrant = imageGrantById[slide.mediaId];
@@ -848,7 +900,7 @@ function PostSectionComponent({
                       <CachedVideo
                         mediaId={slide.mediaId}
                         mediaAccessGrant={videoGrant ?? null}
-                        mediaStorageUserId={post.created_by}
+                        mediaStorageUserId={slideStorageUserId}
                         posterId={slide.posterId ?? null}
                         posterAccessGrant={posterGrant ?? null}
                         isActive={isActiveSlide}
@@ -883,7 +935,7 @@ function PostSectionComponent({
                         setImageViewer({
                           imageId: slide.mediaId,
                           imageAccessGrant: grant,
-                          imageStorageUserId: post.created_by,
+                          imageStorageUserId: slideStorageUserId,
                           alt: "Post attachment",
                         });
                       }}
@@ -891,7 +943,7 @@ function PostSectionComponent({
                       <CachedImage
                         imageId={slide.mediaId}
                         imageAccessGrant={grant}
-                        imageStorageUserId={post.created_by}
+                        imageStorageUserId={slideStorageUserId}
                         alt="Post attachment"
                         className="pointer-events-none aspect-square w-full overflow-hidden object-cover"
                       />

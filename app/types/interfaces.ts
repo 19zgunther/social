@@ -73,6 +73,8 @@ export type PostMediaItem = {
   kind: PostMediaKind;
   /** JPEG still for video slides (required when kind is video). */
   poster_id?: string;
+  /** Storage owner for shared-event media (path `{owner}/{id}`). */
+  owner_user_id?: string;
 };
 
 export type PostData = {
@@ -85,6 +87,8 @@ export type PostData = {
   /** Storage uses PollData; API responses replace with PollViewerState. */
   poll?: PollData | PollViewerState;
 };
+
+export type FeedPostKind = "post" | "shared_event";
 
 export type PostItem = {
   id: string;
@@ -105,6 +109,13 @@ export type PostItem = {
   /** Legacy; always null from list/create APIs. */
   author_profile_image_url?: string | null;
   author_profile_image_access_grant?: string | null;
+  /** Defaults to "post" when omitted (legacy feed/cache items). */
+  kind?: FeedPostKind;
+  /** Present when kind is "shared_event". */
+  title?: string;
+  shared_post_id?: string;
+  close_at?: string;
+  release_at?: string;
 };
 
 export type ImageOverlayData = {
@@ -282,13 +293,118 @@ export type TempLoginEmailResponse = { message: string };
 export type SignupRequest = { username?: string; email?: string; password?: string };
 export type SignupResponse = { token: string; user: AuthUser };
 
-export type FeedPostsListRequest = { cursor_post_id?: string };
+export type FeedPostsListRequest = {
+  /** ISO timestamp of the last item's sort time (`created_at` / `release_at`). */
+  cursor?: string;
+  /** @deprecated Prefer `cursor`. */
+  cursor_post_id?: string;
+};
 export type FeedPostsListResponse = {
   viewer_user_id?: string;
   posts: PostItem[];
   has_more: boolean;
+  next_cursor: string | null;
   next_cursor_post_id: string | null;
 };
+
+export type SharedPostPhase = "open" | "pending" | "released";
+
+export type SharedPostContributorItem = {
+  user_id: string;
+  username: string;
+  email: string | null;
+  invited_at: string;
+  has_contributed: boolean;
+  profile_image_id?: string | null;
+  profile_image_access_grant?: string | null;
+};
+
+export type SharedPostListItem = {
+  id: string;
+  created_at: string;
+  created_by: string;
+  title: string;
+  text: string;
+  close_at: string;
+  release_at: string;
+  phase: SharedPostPhase;
+  contributor_count: number;
+  viewer_has_contributed: boolean;
+  is_creator: boolean;
+  /** Only populated when phase is "released". */
+  image_id: string | null;
+  image_url: string | null;
+  image_access_grant?: string | null;
+  data: PostData | null;
+  like_count?: number;
+  is_liked_by_viewer?: boolean;
+  username: string;
+  email: string | null;
+  author_profile_image_id?: string | null;
+  author_profile_image_access_grant?: string | null;
+  contributors?: SharedPostContributorItem[];
+};
+
+export type SharedPostCreateRequest = {
+  title?: string;
+  text?: string;
+  close_at?: string;
+  release_at?: string;
+  invitee_user_ids?: string[];
+};
+export type SharedPostCreateResponse = { shared_post: SharedPostListItem };
+
+export type SharedPostUpdateRequest = {
+  shared_post_id?: string;
+  title?: string;
+  text?: string;
+  close_at?: string;
+  release_at?: string;
+  invitee_user_ids?: string[];
+};
+export type SharedPostUpdateResponse = { shared_post: SharedPostListItem };
+
+export type SharedPostsListResponse = {
+  open: SharedPostListItem[];
+  pending: SharedPostListItem[];
+  released: SharedPostListItem[];
+};
+
+export type SharedPostGetRequest = { shared_post_id?: string };
+export type SharedPostGetResponse = { shared_post: SharedPostListItem };
+
+export type SharedPostInviteRequest = {
+  shared_post_id?: string;
+  invitee_user_ids?: string[];
+};
+export type SharedPostInviteResponse = { shared_post: SharedPostListItem };
+
+export type SharedPostContributeRequest = {
+  shared_post_id?: string;
+  media?: PostMediaItem[];
+};
+export type SharedPostContributeResponse = {
+  ok: true;
+  contributed_count: number;
+};
+
+export type SharedPostLikeRequest = {
+  shared_post_id?: string;
+  like?: boolean;
+};
+export type SharedPostLikeResponse = {
+  data: PostData | null;
+  like_count: number;
+  is_liked_by_viewer: boolean;
+};
+
+export type SharedPostCommentRequest = {
+  shared_post_id?: string;
+  parent_path?: string[];
+  message?: string;
+  comment_path?: string[];
+};
+export type SharedPostCommentResponse = { data: PostData | null };
 
 export type ProfilePostsListRequest = { cursor_post_id?: string };
 export type ProfilePostsListResponse = {

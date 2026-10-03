@@ -58,6 +58,8 @@ type EventDateTimeSelectProps = {
   id?: string;
   /** Merged onto the root shell (e.g. stronger glass on photo backgrounds). */
   className?: string;
+  /** Date + time in one row, without per-field Date/Time titles. */
+  compactFields?: boolean;
 };
 
 /**
@@ -71,6 +73,7 @@ export default function EventDateTimeSelect({
   disabled,
   id,
   className,
+  compactFields = false,
 }: EventDateTimeSelectProps) {
   const { date, time } = splitLocalDatetime(value);
 
@@ -103,35 +106,57 @@ export default function EventDateTimeSelect({
         </span>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="min-w-0 flex-1 space-y-1">
-          <label className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground/88 [text-shadow:0_2px_6px_rgba(0,0,0,0.88)]">
-            <Calendar className="h-3 w-3 opacity-80" aria-hidden />
-            Date
-          </label>
+      {compactFields ? (
+        <div className="grid min-w-0 grid-cols-2 gap-2">
           <input
             type="date"
+            aria-label={`${label} date`}
             value={date}
             onChange={onDateChange}
             disabled={disabled}
-            className={fieldInputClass}
+            className={`${fieldInputClass} box-border min-w-0 max-w-full`}
           />
-        </div>
-        <div className="w-full shrink-0 space-y-1 sm:w-[9.5rem]">
-          <label className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground/88 [text-shadow:0_2px_6px_rgba(0,0,0,0.88)]">
-            <Clock className="h-3 w-3 opacity-80" aria-hidden />
-            Time
-          </label>
           <input
             type="time"
+            aria-label={`${label} time`}
             step={60}
             value={timeValue}
             onChange={onTimeChange}
             disabled={disabled}
-            className={fieldInputClass}
+            className={`${fieldInputClass} box-border min-w-0 max-w-full`}
           />
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1 space-y-1">
+            <label className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground/88 [text-shadow:0_2px_6px_rgba(0,0,0,0.88)]">
+              <Calendar className="h-3 w-3 opacity-80" aria-hidden />
+              Date
+            </label>
+            <input
+              type="date"
+              value={date}
+              onChange={onDateChange}
+              disabled={disabled}
+              className={fieldInputClass}
+            />
+          </div>
+          <div className="w-full shrink-0 space-y-1 sm:w-[9.5rem]">
+            <label className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground/88 [text-shadow:0_2px_6px_rgba(0,0,0,0.88)]">
+              <Clock className="h-3 w-3 opacity-80" aria-hidden />
+              Time
+            </label>
+            <input
+              type="time"
+              step={60}
+              value={timeValue}
+              onChange={onTimeChange}
+              disabled={disabled}
+              className={fieldInputClass}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

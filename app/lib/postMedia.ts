@@ -16,6 +16,7 @@ export type PostMediaSlide = {
   kind: PostMediaKind;
   mediaId: string;
   posterId?: string;
+  ownerUserId?: string;
 };
 
 export const parsePostMediaItems = (raw: unknown): PostMediaItem[] | null => {
@@ -59,6 +60,7 @@ export const getPostMediaSlides = (input: {
       kind: item.kind,
       mediaId: item.id,
       posterId: item.kind === "video" ? item.poster_id : undefined,
+      ownerUserId: item.owner_user_id,
     }));
   }
 

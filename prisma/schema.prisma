@@ -70,6 +70,40 @@ model shared_feedback {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model shared_posts {
+  id                         String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at                 DateTime                    @default(now()) @db.Timestamptz(6)
+  created_by                 String                      @db.Uuid
+  title                      String
+  text                       String?
+  image_id                   String?                     @db.Uuid
+  data                       Json?                       @db.Json
+  close_at                   DateTime                    @db.Timestamptz(6)
+  release_at                 DateTime                    @db.Timestamptz(6)
+  users                      users                       @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  shared_posts_contributors  shared_posts_contributors[]
+
+  @@index([release_at(sort: Desc)])
+  @@index([close_at])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model shared_posts_contributors {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shared_post_id String       @db.Uuid
+  user_id        String       @db.Uuid
+  invited_at     DateTime     @db.Timestamptz(6)
+  invited_by     String       @db.Uuid
+  shared_posts   shared_posts @relation(fields: [shared_post_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users          users        @relation("shared_posts_contributors_user_idTousers", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invited_by_user users       @relation("shared_posts_contributors_invited_byTousers", fields: [invited_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([shared_post_id, user_id])
+  @@index([shared_post_id])
+  @@index([user_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model temp_passwords {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id    String   @db.Uuid
@@ -172,29 +206,32 @@ model user_thread_last_read_at {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model users {
-  id                                     String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  username                               String                     @unique
-  email                                  String?
-  password_hash                          String?
-  email_verified_at                      DateTime?                  @db.Timestamptz(6)
-  created_at                             DateTime?                  @db.Timestamptz(6)
-  profile_image_id                       String?                    @db.Uuid
-  post_groups_data                       Json?                      @db.Json
-  emojis                                 emojis[]
-  friends_friends_other_userTousers      friends[]                  @relation("friends_other_userTousers")
-  friends_friends_requesting_userTousers friends[]                  @relation("friends_requesting_userTousers")
-  posts                                  posts[]
-  push_subscriptions                     push_subscriptions[]
-  shared_feedback                        shared_feedback[]
-  temp_passwords                         temp_passwords[]
-  thread_events                          thread_events[]
-  thread_messages                        thread_messages[]
-  threads                                threads[]
-  user_post_access                       user_post_access[]
-  user_sessions                          user_sessions?
-  user_thread_access                     user_thread_access[]
-  user_thread_last_read_at               user_thread_last_read_at[]
-  webrtc_signalling                      webrtc_signalling[]
+  id                                                     String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username                                               String                      @unique
+  email                                                  String?
+  password_hash                                          String?
+  email_verified_at                                      DateTime?                   @db.Timestamptz(6)
+  created_at                                             DateTime?                   @db.Timestamptz(6)
+  profile_image_id                                       String?                     @db.Uuid
+  post_groups_data                                       Json?                       @db.Json
+  emojis                                                 emojis[]
+  friends_friends_other_userTousers                      friends[]                   @relation("friends_other_userTousers")
+  friends_friends_requesting_userTousers                 friends[]                   @relation("friends_requesting_userTousers")
+  posts                                                  posts[]
+  push_subscriptions                                     push_subscriptions[]
+  shared_feedback                                        shared_feedback[]
+  shared_posts                                           shared_posts[]
+  shared_posts_contributors_shared_posts_contributors_user_idTousers shared_posts_contributors[] @relation("shared_posts_contributors_user_idTousers")
+  shared_posts_contributors_shared_posts_contributors_invited_byTousers shared_posts_contributors[] @relation("shared_posts_contributors_invited_byTousers")
+  temp_passwords                                         temp_passwords[]
+  thread_events                                          thread_events[]
+  thread_messages                                        thread_messages[]
+  threads                                                threads[]
+  user_post_access                                       user_post_access[]
+  user_sessions                                          user_sessions?
+  user_thread_access                                     user_thread_access[]
+  user_thread_last_read_at                               user_thread_last_read_at[]
+  webrtc_signalling                                      webrtc_signalling[]
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

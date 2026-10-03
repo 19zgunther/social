@@ -7,7 +7,7 @@ import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
 import { LoaderCircle, Plus } from "lucide-react";
-const FEED_CACHE_KEY = "feed_cache_v2";
+const FEED_CACHE_KEY = "feed_cache_v3";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
 
@@ -46,7 +46,7 @@ export default function Feed({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshingLatest, setIsRefreshingLatest] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [nextCursorPostId, setNextCursorPostId] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [postOptionsPostId, setPostOptionsPostId] = useState<string | null>(null);
   const [didHydrateFromCache, setDidHydrateFromCache] = useState(false);
@@ -57,15 +57,15 @@ export default function Feed({
 
   const loadPosts = useCallback(
     async ({
-      cursorPostId,
+      cursor,
       showLoadingState = true,
       showRefreshIndicator = false,
     }: {
-      cursorPostId?: string;
+      cursor?: string;
       showLoadingState?: boolean;
       showRefreshIndicator?: boolean;
     } = {}) => {
-      if (cursorPostId) {
+      if (cursor) {
         setIsLoadingMore(true);
       } else if (showRefreshIndicator) {
         setIsRefreshingLatest(true);
@@ -76,7 +76,7 @@ export default function Feed({
 
       try {
         const response = await postWithAuth("/api/feed-posts-list", {
-          ...(cursorPostId ? { cursor_post_id: cursorPostId } : {}),
+          ...(cursor ? { cursor } : {}),
         });
         if (!response.ok) {
           setStatusMessage(await readErrorMessage(response));
@@ -88,9 +88,9 @@ export default function Feed({
           setViewerUserId(payload.viewer_user_id);
         }
         setHasMore(payload.has_more);
-        setNextCursorPostId(payload.next_cursor_post_id);
+        setNextCursor(payload.next_cursor ?? payload.next_cursor_post_id);
 
-        if (cursorPostId) {
+        if (cursor) {
           setPosts((previousPosts) => {
             const mergedPosts = [...previousPosts, ...payload.posts];
             return mergedPosts;
@@ -289,11 +289,11 @@ export default function Feed({
             <button
               type="button"
               onClick={() => {
-                if (nextCursorPostId && !isLoadingMore) {
-                  void loadPosts({ cursorPostId: nextCursorPostId });
+                if (nextCursor && !isLoadingMore) {
+                  void loadPosts({ cursor: nextCursor });
                 }
               }}
-              disabled={!nextCursorPostId || isLoadingMore}
+              disabled={!nextCursor || isLoadingMore}
               className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs font-medium text-accent-2 transition hover:text-foreground disabled:opacity-50"
             >
               {isLoadingMore ? "Loading..." : "Load more"}

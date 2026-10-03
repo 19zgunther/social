@@ -86,3 +86,24 @@ PostSection
 Friends & Friending:
 - In the profile section, users can search by username/email to request to follow other people. Other people in their profile section can approve/reject follow requests. Users only can see the feed/posts their freinds/accepted made. Note: if accepted, the the requesting_user should be able to see the other user's feed, and vice versa too. Also, you shouldn't be able to send a friend request to a user you're already friends with, or who has rejected your friend request. In general, for any 2 users, there should at most be 1 row in the friends table.
 
+# Shared Event Posts
+## Gist
+- One user can create a 'shared event post', set a title (event title), set a close date, a release date, and invite other users to join (Expect many)
+- All users that've been invited can contribute photos to the shared post
+- No one can view the shared post, but everyone can contribute until the close date. Contributors and owner cannot see any photos they've uploaded until it's been released. it's a blind add photos and forget system.
+- After the close date, no one can contribute or edit the post
+- After the release date, everyone who was invited should see it in their feed. This list of people who can view can be edited at any time
+# Should be a tab
+- Should be a new tab called "Shared Event Posts"
+- In tab, should see:
+    <Create Shared Post Button>
+    <Open Shared Posts (each one a row)>
+    <Pending Posts (Waiting to be released)>
+    <Released shared posts you've contributed to>
+## Database Gist
+table shared_posts {
+    ... same as a normal posts table...
+}
+table shared_posts_contributers {
+    one row per shared post per person
+}
