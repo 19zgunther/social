@@ -5,6 +5,7 @@ import CongratsBalloonOverlay from "@/app/components/CongratsBalloonOverlay";
 import { Heart, ChevronDown, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
+import CachedVideo from "@/app/components/utils/CachedVideo";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
@@ -13,16 +14,25 @@ import {
   customEmojiUuidFromToken,
 } from "@/app/lib/customEmojiCanvas";
 import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
+import { collectPostMediaObjectIds, getPostMediaSlides } from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 import { hasCongratsComment } from "@/app/lib/congratsComment";
 import PollBlock, { getPollViewerState } from "@/app/components/PollBlock";
 
+export type PostPreviewMedia = {
+  kind: "image" | "video";
+  url: string;
+  posterUrl?: string;
+};
+
 type PostSectionProps = {
   post: PostItem;
   currentUserId?: string | null;
   showComments?: boolean;
-  /** Local data URLs for unsaved post images (create-post preview). */
+  /** Local URLs for unsaved post media (create-post preview). */
+  previewMedia?: PostPreviewMedia[];
+  /** @deprecated Prefer previewMedia. */
   previewImageUrls?: string[];
   /** Read-only preview: no likes, comments, or edits. */
   isPreview?: boolean;
@@ -119,6 +129,7 @@ function PostSectionComponent({
   post,
   currentUserId,
   showComments = true,
+  previewMedia,
   previewImageUrls,
   isPreview = false,
   disableCommentSendInput=false,
@@ -138,6 +149,15 @@ function PostSectionComponent({
     }
     return initial;
   });
+  const resolvedPreviewMedia = useMemo((): PostPreviewMedia[] | null => {
+    if (previewMedia && previewMedia.length > 0) {
+      return previewMedia;
+    }
+    if (previewImageUrls && previewImageUrls.length > 0) {
+      return previewImageUrls.map((url) => ({ kind: "image" as const, url }));
+    }
+    return null;
+  }, [previewImageUrls, previewMedia]);
   const initialLikes = useMemo(() => postData.likes ?? {}, [postData.likes]);
   const [isLikedByViewer, setIsLikedByViewer] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -201,28 +221,35 @@ function PostSectionComponent({
     walk(postData.comments);
     return Array.from(uuids);
   }, [postData.comments]);
-  const allPostImageIds = useMemo(() => {
-    if (previewImageUrls && previewImageUrls.length > 0) {
-      return previewImageUrls.map((_, index) => `preview-${index}`);
+  const mediaSlides = useMemo(() => {
+    if (resolvedPreviewMedia && resolvedPreviewMedia.length > 0) {
+      return resolvedPreviewMedia.map((item, index) => ({
+        key: `preview-${index}`,
+        kind: item.kind,
+        mediaId: `preview-${index}`,
+        posterId: item.kind === "video" ? `preview-poster-${index}` : undefined,
+        previewUrl: item.url,
+        previewPosterUrl: item.posterUrl,
+      }));
     }
-    const ids: string[] = [];
-    if (post.image_id) {
-      ids.push(post.image_id);
+    return getPostMediaSlides({ imageId: post.image_id, data: postData }).map((slide) => ({
+      ...slide,
+      previewUrl: undefined as string | undefined,
+      previewPosterUrl: undefined as string | undefined,
+    }));
+  }, [post.image_id, postData, resolvedPreviewMedia]);
+  const allMediaObjectIds = useMemo(() => {
+    if (resolvedPreviewMedia) {
+      return [];
     }
-    for (const imageId of postData.other_image_ids ?? []) {
-      if (!imageId || ids.includes(imageId)) {
-        continue;
-      }
-      ids.push(imageId);
-    }
-    return ids;
-  }, [post.image_id, postData.other_image_ids, previewImageUrls]);
-  const hasMultipleImages = allPostImageIds.length > 1;
+    return collectPostMediaObjectIds({ imageId: post.image_id, data: postData });
+  }, [post.image_id, postData, resolvedPreviewMedia]);
+  const hasMultipleImages = mediaSlides.length > 1;
   const hasCongrats = useMemo(
     () => hasCongratsComment(postData.comments),
     [postData.comments],
   );
-  const canShowCongratsBalloons = allPostImageIds.length > 0 && hasCongrats;
+  const canShowCongratsBalloons = mediaSlides.length > 0 && hasCongrats;
 
   const startBalloonReveal = useCallback(() => {
     if (!canShowCongratsBalloons) {
@@ -330,11 +357,11 @@ function PostSectionComponent({
   }, [initialLikes, post.is_liked_by_viewer, post.like_count]);
 
   const loadAdditionalImages = async () => {
-    if (previewImageUrls || !hasMultipleImages || hasLoadedAdditionalImages || isLoadingAdditionalImages) {
+    if (resolvedPreviewMedia || hasLoadedAdditionalImages || isLoadingAdditionalImages) {
       return;
     }
-    const additionalImageIds = allPostImageIds.slice(1);
-    if (additionalImageIds.length === 0) {
+    const missingIds = allMediaObjectIds.filter((id) => !imageGrantById[id]);
+    if (missingIds.length === 0) {
       setHasLoadedAdditionalImages(true);
       return;
     }
@@ -345,7 +372,7 @@ function PostSectionComponent({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          image_ids: additionalImageIds,
+          image_ids: missingIds,
           owner_user_id: post.created_by,
         }),
       });
@@ -365,6 +392,16 @@ function PostSectionComponent({
       setIsLoadingAdditionalImages(false);
     }
   };
+
+  useEffect(() => {
+    if (resolvedPreviewMedia) {
+      return;
+    }
+    if (mediaSlides.some((slide) => slide.kind === "video")) {
+      void loadAdditionalImages();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load video grants when post media changes
+  }, [post.id, mediaSlides]);
 
   const onCarouselScroll = (event: UIEvent<HTMLDivElement>) => {
     const container = event.currentTarget;
@@ -597,7 +634,7 @@ function PostSectionComponent({
   };
 
   const onOpenPostOptionsPane = () => {
-    if (allPostImageIds.length > 1) {
+    if (allMediaObjectIds.length > 1 || mediaSlides.some((slide) => slide.kind === "video")) {
       void loadAdditionalImages();
     }
     onOpenPostOptions?.(post.id);
@@ -767,7 +804,7 @@ function PostSectionComponent({
           </button>
         </div>
       </header>
-      {allPostImageIds.length > 0 ? (
+      {mediaSlides.length > 0 ? (
         <div ref={imageAreaRef} className="relative aspect-square w-full">
           {balloonSessionKey !== null ? (
             <CongratsBalloonOverlay
@@ -786,12 +823,50 @@ function PostSectionComponent({
               void loadAdditionalImages();
             }}
           >
-            {allPostImageIds.map((imageId, index) => {
-              const previewUrl = previewImageUrls?.[index];
-              const grant = imageGrantById[imageId];
-              const isPrimaryImage = index === 0;
+            {mediaSlides.map((slide, index) => {
+              const isActiveSlide = index === activeImageIndex;
+              const isPrimarySlide = index === 0;
+              if (slide.kind === "video") {
+                const previewUrl = slide.previewUrl;
+                const videoGrant = imageGrantById[slide.mediaId];
+                const posterGrant = slide.posterId
+                  ? imageGrantById[slide.posterId]
+                  : undefined;
+                const canShowVideo = Boolean(previewUrl || videoGrant || posterGrant);
+                return (
+                  <div key={slide.key} className="w-full shrink-0 snap-center">
+                    {previewUrl ? (
+                      <video
+                        src={previewUrl}
+                        poster={slide.previewPosterUrl}
+                        className="aspect-square w-full object-cover"
+                        playsInline
+                        controls={isActiveSlide}
+                        preload="metadata"
+                      />
+                    ) : canShowVideo ? (
+                      <CachedVideo
+                        mediaId={slide.mediaId}
+                        mediaAccessGrant={videoGrant ?? null}
+                        mediaStorageUserId={post.created_by}
+                        posterId={slide.posterId ?? null}
+                        posterAccessGrant={posterGrant ?? null}
+                        isActive={isActiveSlide}
+                        className="aspect-square w-full overflow-hidden object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full aspect-square items-center justify-center border-y border-accent-1 bg-secondary-background text-xs text-accent-2">
+                        {isPrimarySlide || isLoadingAdditionalImages ? "Loading video..." : "Swipe to load video"}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              const previewUrl = slide.previewUrl;
+              const grant = imageGrantById[slide.mediaId];
               return (
-                <div key={imageId} className="w-full shrink-0 snap-center">
+                <div key={slide.key} className="w-full shrink-0 snap-center">
                   {previewUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element -- local create-post preview
                     <img
@@ -806,7 +881,7 @@ function PostSectionComponent({
                       onClick={(event) => {
                         event.stopPropagation();
                         setImageViewer({
-                          imageId,
+                          imageId: slide.mediaId,
                           imageAccessGrant: grant,
                           imageStorageUserId: post.created_by,
                           alt: "Post attachment",
@@ -814,7 +889,7 @@ function PostSectionComponent({
                       }}
                     >
                       <CachedImage
-                        imageId={imageId}
+                        imageId={slide.mediaId}
                         imageAccessGrant={grant}
                         imageStorageUserId={post.created_by}
                         alt="Post attachment"
@@ -823,7 +898,7 @@ function PostSectionComponent({
                     </button>
                   ) : (
                     <div className="flex h-full w-full aspect-square items-center justify-center border-y border-accent-1 bg-secondary-background text-xs text-accent-2">
-                      {isPrimaryImage || isLoadingAdditionalImages ? "Loading image..." : "Swipe to load image"}
+                      {isPrimarySlide || isLoadingAdditionalImages ? "Loading image..." : "Swipe to load image"}
                     </div>
                   )}
                 </div>
@@ -837,9 +912,9 @@ function PostSectionComponent({
       <div className="px-3 py-1">
         {hasMultipleImages ? (
           <div className="mb-2 flex justify-center gap-1">
-            {allPostImageIds.map((imageId, index) => (
+            {mediaSlides.map((slide, index) => (
               <span
-                key={`${imageId}-dot`}
+                key={`${slide.key}-dot`}
                 className={`h-1.5 w-1.5 rounded-full transition ${index === activeImageIndex ? "bg-foreground" : "bg-accent-1"
                   }`}
               />

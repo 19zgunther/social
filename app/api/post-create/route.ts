@@ -13,12 +13,18 @@ import {
   sanitizePostDataForViewer,
   validateAndBuildPoll,
 } from "@/app/lib/polls";
-import { PollData, PostCreateRequest, PostCreateResponse, PostData } from "@/app/types/interfaces";
+import { PollData, PostCreateRequest, PostCreateResponse, PostData, PostMediaItem } from "@/app/types/interfaces";
+import {
+  buildCompatFieldsFromMedia,
+  parsePostMediaItems,
+  validatePostMediaForCreate,
+} from "@/app/lib/postMedia";
 
 const POST_PUSH_PREVIEW_MAX_LENGTH = 120;
 const getPostPushPreviewText = (
   postText: string | null,
   hasImage: boolean,
+  hasVideo: boolean,
   hasPoll: boolean,
 ): string => {
   const sanitizedText = sanitizeNotificationText(postText);
@@ -27,6 +33,12 @@ const getPostPushPreviewText = (
   }
   if (hasPoll) {
     return "Shared a poll";
+  }
+  if (hasVideo && hasImage) {
+    return "Shared photos and video";
+  }
+  if (hasVideo) {
+    return "Shared a video";
   }
   if (hasImage) {
     return "Shared a photo";
@@ -56,6 +68,20 @@ export async function POST(request: Request) {
         ? (body.data as Record<string, unknown>)
         : {};
 
+    const parsedMedia =
+      rawData.media !== undefined ? parsePostMediaItems(rawData.media) : null;
+    if (rawData.media !== undefined && !parsedMedia) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_media",
+            message: "Post media is invalid.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
     const otherImageIds = Array.isArray(rawData.other_image_ids)
       ? rawData.other_image_ids.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
       : [];
@@ -81,7 +107,19 @@ export async function POST(request: Request) {
       builtPoll = pollResult.poll;
     }
 
-    if (builtPoll && otherImageIds.length > 0) {
+    const mediaValidation = validatePostMediaForCreate({
+      media: parsedMedia,
+      hasPoll: Boolean(builtPoll),
+    });
+    if (!mediaValidation.ok) {
+      return NextResponse.json(
+        { error: { code: mediaValidation.code, message: mediaValidation.message } },
+        { status: 400 },
+      );
+    }
+    const mediaItems: PostMediaItem[] | null = mediaValidation.media;
+
+    if (builtPoll && !mediaItems && otherImageIds.length > 0) {
       return NextResponse.json(
         {
           error: {
@@ -93,7 +131,8 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!hasText && !hasProvidedImageId && !hasImageUploadPayload && !builtPoll) {
+    const hasMedia = Boolean(mediaItems && mediaItems.length > 0);
+    if (!hasText && !hasProvidedImageId && !hasImageUploadPayload && !builtPoll && !hasMedia) {
       return NextResponse.json(
         {
           error: {
@@ -129,7 +168,12 @@ export async function POST(request: Request) {
     const isPermanent = audience.mode === "permanent";
 
     let imageId: string | null = providedImageId ?? null;
-    if (!providedImageId && imageBase64Data && imageMimeType) {
+    let resolvedOtherImageIds = otherImageIds;
+    if (mediaItems && mediaItems.length > 0) {
+      const compat = buildCompatFieldsFromMedia(mediaItems);
+      imageId = compat.image_id;
+      resolvedOtherImageIds = compat.other_image_ids;
+    } else if (!providedImageId && imageBase64Data && imageMimeType) {
       imageId = randomUUID();
       await uploadImageToMainBucket({
         userId: authResult.user_id,
@@ -140,8 +184,11 @@ export async function POST(request: Request) {
     }
 
     const postData: PostData = {};
-    if (otherImageIds.length > 0) {
-      postData.other_image_ids = otherImageIds;
+    if (mediaItems && mediaItems.length > 0) {
+      postData.media = mediaItems;
+    }
+    if (resolvedOtherImageIds.length > 0) {
+      postData.other_image_ids = resolvedOtherImageIds;
     }
     if (builtPoll) {
       postData.poll = builtPoll;
@@ -184,7 +231,16 @@ export async function POST(request: Request) {
 
     const recipientUserIds = audience.viewerIds.filter((userId) => userId !== authResult.user_id);
     if (recipientUserIds.length > 0) {
-      const previewText = getPostPushPreviewText(post.text, Boolean(post.image_id), Boolean(builtPoll));
+      const hasVideo = Boolean(mediaItems?.some((item) => item.kind === "video"));
+      const hasImageSlide = Boolean(
+        mediaItems?.some((item) => item.kind === "image") || (!hasVideo && post.image_id),
+      );
+      const previewText = getPostPushPreviewText(
+        post.text,
+        hasImageSlide,
+        hasVideo,
+        Boolean(builtPoll),
+      );
       void sendPushToUsers({
         recipientUserIds,
         payload: {

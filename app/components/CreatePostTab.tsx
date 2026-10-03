@@ -19,11 +19,24 @@ import {
 } from "lucide-react";
 import {
   prepareImageForUpload,
+  prepareVideoForUpload,
   uploadPreparedImageToMainBucket,
+  uploadPreparedVideoToMainBucket,
 } from "@/app/components/utils/client_file_storage_utils";
-import { ApiError, PollDurationHours, PollSelectionMode, PollViewerState, PostGroup, PostGroupsGetResponse, PostItem } from "@/app/types/interfaces";
+import {
+  ApiError,
+  PollDurationHours,
+  PollSelectionMode,
+  PollViewerState,
+  PostGroup,
+  PostGroupsGetResponse,
+  PostItem,
+  PostMediaItem,
+} from "@/app/types/interfaces";
+import { MAX_POST_MEDIA_ITEMS } from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { PostSection } from "@/app/components/PostSection";
+import type { PostPreviewMedia } from "@/app/components/PostSection";
 
 type CreatePostTabProps = {
   isActive: boolean;
@@ -43,11 +56,24 @@ type AudienceSelection =
   | { mode: "group"; groupId: string };
 
 type PendingUploadImage = {
+  kind: "image";
   id: string;
   previewDataUrl: string;
   base64Data: string;
   mimeType: string;
 };
+
+type PendingUploadVideo = {
+  kind: "video";
+  id: string;
+  previewObjectUrl: string;
+  file: File;
+  mimeType: string;
+  posterDataUrl: string;
+  posterBase64Data: string;
+};
+
+type PendingUploadMedia = PendingUploadImage | PendingUploadVideo;
 
 type ImageAdjustmentKey =
   | "crop"
@@ -311,7 +337,7 @@ export default function CreatePostTab({
   const textInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [postKind, setPostKind] = useState<CreatePostKind>("post");
   const [comment, setComment] = useState("");
-  const [images, setImages] = useState<PendingUploadImage[]>([]);
+  const [mediaItems, setMediaItems] = useState<PendingUploadMedia[]>([]);
   const [imageEditDrafts, setImageEditDrafts] = useState<Record<string, ImageEditDraft>>({});
   const [activeIndex, setActiveIndex] = useState(0);
   const [activeAdjustment, setActiveAdjustment] = useState<ImageAdjustmentKey>("brightness");
@@ -329,25 +355,26 @@ export default function CreatePostTab({
   const pinchStartRef = useRef<{ distance: number; zoom: number; offsetX: number; offsetY: number } | null>(null);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  const activeImage = images[activeIndex] ?? null;
+  const activeMedia = mediaItems[activeIndex] ?? null;
+  const activeImage = activeMedia?.kind === "image" ? activeMedia : null;
   const activeDraft = activeImage
     ? imageEditDrafts[activeImage.id] ?? DEFAULT_EDIT_DRAFT
     : DEFAULT_EDIT_DRAFT;
-  const cropMode = activeAdjustment === "crop";
+  const cropMode = Boolean(activeImage) && activeAdjustment === "crop";
 
   const exitCropTool = useCallback(() => {
     setActiveAdjustment((previous) => (previous === "crop" ? "brightness" : previous));
   }, []);
 
   const goToIndex = useCallback((nextIndex: number) => {
-    const clamped = Math.max(0, Math.min(images.length - 1, nextIndex));
+    const clamped = Math.max(0, Math.min(mediaItems.length - 1, nextIndex));
     setActiveIndex((previous) => {
       if (clamped !== previous) {
         exitCropTool();
       }
       return clamped;
     });
-  }, [exitCropTool, images.length]);
+  }, [exitCropTool, mediaItems.length]);
 
   useEffect(() => {
     if (!isActive) {
@@ -359,23 +386,42 @@ export default function CreatePostTab({
   }, [isActive]);
 
   useEffect(() => {
-    if (images.length === 0) {
+    if (mediaItems.length === 0) {
       setActiveIndex(0);
       exitCropTool();
       return;
     }
-    if (activeIndex > images.length - 1) {
-      setActiveIndex(images.length - 1);
+    if (activeIndex > mediaItems.length - 1) {
+      setActiveIndex(mediaItems.length - 1);
       exitCropTool();
     }
-  }, [activeIndex, exitCropTool, images.length]);
+  }, [activeIndex, exitCropTool, mediaItems.length]);
+
+  useEffect(() => {
+    if (activeMedia?.kind === "video" && activeAdjustment === "crop") {
+      exitCropTool();
+    }
+  }, [activeAdjustment, activeMedia, exitCropTool]);
+
+  useEffect(() => {
+    return () => {
+      for (const item of mediaItems) {
+        if (item.kind === "video") {
+          URL.revokeObjectURL(item.previewObjectUrl);
+        }
+      }
+    };
+    // Only revoke on unmount; per-item revoke happens on remove.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount cleanup snapshot
+  }, []);
 
   const activeImageSize = activeImage ? imageSizes[activeImage.id] ?? null : null;
 
   useEffect(() => {
     let cancelled = false;
+    const imageOnly = mediaItems.filter((item): item is PendingUploadImage => item.kind === "image");
     void Promise.all(
-      images.map(async (image) => {
+      imageOnly.map(async (image) => {
         try {
           const loaded = await loadImageElement(image.previewDataUrl);
           return {
@@ -404,7 +450,7 @@ export default function CreatePostTab({
             changed = true;
           }
         }
-        const liveIds = new Set(images.map((image) => image.id));
+        const liveIds = new Set(imageOnly.map((image) => image.id));
         for (const id of Object.keys(next)) {
           if (!liveIds.has(id)) {
             delete next[id];
@@ -417,7 +463,7 @@ export default function CreatePostTab({
     return () => {
       cancelled = true;
     };
-  }, [images]);
+  }, [mediaItems]);
 
   useEffect(() => {
     if (!activeImage || !activeImageSize) {
@@ -517,18 +563,19 @@ export default function CreatePostTab({
   );
   const hasValidPoll = postKind === "poll" && filledPollOptions.length >= 2;
   const hasPreviewContent =
-    comment.trim().length > 0 || images.length > 0 || (postKind === "poll" && filledPollOptions.length > 0);
+    comment.trim().length > 0 || mediaItems.length > 0 || (postKind === "poll" && filledPollOptions.length > 0);
 
   const canSubmit =
     postKind === "poll"
       ? hasValidPoll && !isPosting
-      : (images.length > 0 || comment.trim().length > 0) && !isPosting;
+      : (mediaItems.length > 0 || comment.trim().length > 0) && !isPosting;
 
   const previewPost = useMemo((): PostItem => {
-    const otherImageIds =
-      images.length > 1
-        ? images.slice(1).map((_, index) => `preview-${index + 1}`)
-        : undefined;
+    const previewMedia: PostMediaItem[] = mediaItems.map((item, index) =>
+      item.kind === "video"
+        ? { id: `preview-video-${index}`, kind: "video", poster_id: `preview-poster-${index}` }
+        : { id: `preview-image-${index}`, kind: "image" },
+    );
     const poll =
       postKind === "poll"
         ? buildPreviewPollState({
@@ -542,11 +589,11 @@ export default function CreatePostTab({
       id: "create-post-preview",
       created_at: new Date().toISOString(),
       created_by: currentUserId,
-      image_id: images.length > 0 ? "preview-0" : null,
+      image_id: mediaItems.length > 0 ? "preview-0" : null,
       image_url: null,
       text: comment,
       data: {
-        ...(otherImageIds ? { other_image_ids: otherImageIds } : {}),
+        ...(previewMedia.length > 0 ? { media: previewMedia } : {}),
         ...(poll ? { poll } : {}),
       },
       like_count: 0,
@@ -559,7 +606,7 @@ export default function CreatePostTab({
   }, [
     comment,
     currentUserId,
-    images,
+    mediaItems,
     pollAllowVoteChanges,
     pollDurationHours,
     pollOptions,
@@ -570,10 +617,13 @@ export default function CreatePostTab({
     username,
   ]);
 
-  const previewImageUrls = useMemo(
-    () => images.map((image) => image.previewDataUrl),
-    [images],
-  );
+  const previewMediaUrls = useMemo((): PostPreviewMedia[] =>
+    mediaItems.map((item) =>
+      item.kind === "video"
+        ? { kind: "video", url: item.previewObjectUrl, posterUrl: item.posterDataUrl }
+        : { kind: "image", url: item.previewDataUrl },
+    ),
+  [mediaItems]);
 
   const updateActiveDraft = (patch: Partial<ImageEditDraft>) => {
     if (!activeImage) {
@@ -592,7 +642,7 @@ export default function CreatePostTab({
     });
   };
 
-  const onSelectPostImages = async (event: ChangeEvent<HTMLInputElement>) => {
+  const onSelectPostMedia = async (event: ChangeEvent<HTMLInputElement>) => {
     const fileList = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (fileList.length === 0) {
@@ -601,46 +651,90 @@ export default function CreatePostTab({
 
     setStatusMessage("");
     try {
-      const prepared = await Promise.all(
-        fileList.map(async (file) => {
+      if (postKind === "poll") {
+        const imageFiles = fileList.filter((file) => file.type.startsWith("image/"));
+        if (imageFiles.length === 0) {
+          setStatusMessage("Poll posts can only include a photo.");
+          return;
+        }
+        if (mediaItems.length + imageFiles.length > 1) {
+          setStatusMessage("Poll posts can include at most one photo.");
+          return;
+        }
+      }
+
+      const remainingSlots = MAX_POST_MEDIA_ITEMS - mediaItems.length;
+      if (remainingSlots <= 0) {
+        setStatusMessage(`Posts can include at most ${MAX_POST_MEDIA_ITEMS} photos or videos.`);
+        return;
+      }
+      const filesToAdd = fileList.slice(0, remainingSlots);
+      if (filesToAdd.length < fileList.length) {
+        setStatusMessage(`Only the first ${remainingSlots} files were added (max ${MAX_POST_MEDIA_ITEMS}).`);
+      }
+
+      const prepared: PendingUploadMedia[] = [];
+      for (const file of filesToAdd) {
+        if (file.type.startsWith("image/")) {
           const preparedImage = await prepareImageForUpload(file);
-          return {
+          prepared.push({
+            kind: "image",
             id: crypto.randomUUID(),
             previewDataUrl: preparedImage.previewDataUrl,
             base64Data: preparedImage.base64Data,
             mimeType: preparedImage.mimeType,
-          } satisfies PendingUploadImage;
-        }),
-      );
-      setImages((previous) => [...previous, ...prepared]);
+          });
+          continue;
+        }
+        if (postKind === "poll") {
+          throw new Error("Poll posts can only include a photo.");
+        }
+        const preparedVideo = await prepareVideoForUpload(file);
+        prepared.push({
+          kind: "video",
+          id: crypto.randomUUID(),
+          previewObjectUrl: preparedVideo.previewObjectUrl,
+          file: preparedVideo.file,
+          mimeType: preparedVideo.mimeType,
+          posterDataUrl: preparedVideo.poster.previewDataUrl,
+          posterBase64Data: preparedVideo.poster.base64Data,
+        });
+      }
+
+      setMediaItems((previous) => [...previous, ...prepared]);
       setImageEditDrafts((previous) => {
         const nextDrafts = { ...previous };
-        for (const image of prepared) {
-          nextDrafts[image.id] = createDefaultEditDraft();
+        for (const item of prepared) {
+          if (item.kind === "image") {
+            nextDrafts[item.id] = createDefaultEditDraft();
+          }
         }
         return nextDrafts;
       });
-      setActiveIndex(images.length);
+      setActiveIndex(mediaItems.length);
       exitCropTool();
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to prepare image.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to prepare media.");
     }
   };
 
-  const onRemoveActiveImage = () => {
-    if (!activeImage) {
+  const onRemoveActiveMedia = () => {
+    if (!activeMedia) {
       return;
     }
-    const removedId = activeImage.id;
-    const nextImages = images.filter((row) => row.id !== removedId);
-    setImages(nextImages);
+    const removedId = activeMedia.id;
+    if (activeMedia.kind === "video") {
+      URL.revokeObjectURL(activeMedia.previewObjectUrl);
+    }
+    const nextItems = mediaItems.filter((row) => row.id !== removedId);
+    setMediaItems(nextItems);
     setImageEditDrafts((previous) => {
       const nextDrafts = { ...previous };
       delete nextDrafts[removedId];
       return nextDrafts;
     });
     exitCropTool();
-    setActiveIndex((previous) => Math.max(0, Math.min(previous, nextImages.length - 1)));
+    setActiveIndex((previous) => Math.max(0, Math.min(previous, nextItems.length - 1)));
   };
 
   const beginCropGestureFromPointers = () => {
@@ -754,7 +848,7 @@ export default function CreatePostTab({
 
     const start = swipeStartRef.current;
     swipeStartRef.current = null;
-    if (!start || images.length < 2 || pointersRef.current.size > 0) {
+    if (!start || mediaItems.length < 2 || pointersRef.current.size > 0) {
       return;
     }
     const dx = event.clientX - start.x;
@@ -769,14 +863,14 @@ export default function CreatePostTab({
 
   const [maxImageAreaHeight, setMaxImageAreaHeight] = useState(0);
   useEffect(() => {
-    if (images.length === 0) {
+    if (mediaItems.length === 0) {
       setMaxImageAreaHeight(0);
     } else {
       setTimeout(() => {
         setMaxImageAreaHeight(100);
       }, 10);
     }
-  }, [images])
+  }, [mediaItems]);
 
   const onPost = async () => {
     if (!canSubmit) {
@@ -788,36 +882,71 @@ export default function CreatePostTab({
       return;
     }
 
+    if (postKind === "poll" && mediaItems.some((item) => item.kind === "video")) {
+      setStatusMessage("Poll posts cannot include video.");
+      return;
+    }
+
+    if (postKind === "poll" && mediaItems.length > 1) {
+      setStatusMessage("Poll posts can include at most one photo.");
+      return;
+    }
+
     setIsPosting(true);
     setStatusMessage("");
     try {
-      const imagesToUpload = images;
-      const bakedImages = await Promise.all(
-        imagesToUpload.map(async (image) => {
-          const draft = imageEditDrafts[image.id] ?? createDefaultEditDraft();
-          return bakeEditedImage({ sourceDataUrl: image.previewDataUrl, draft });
-        }),
-      );
-      const uploadedImageIds: string[] = [];
-      for (const image of bakedImages) {
-        const payload = await uploadPreparedImageToMainBucket(
+      const uploadedMedia: PostMediaItem[] = [];
+      for (const item of mediaItems) {
+        if (item.kind === "image") {
+          const draft = imageEditDrafts[item.id] ?? createDefaultEditDraft();
+          const baked = await bakeEditedImage({ sourceDataUrl: item.previewDataUrl, draft });
+          const payload = await uploadPreparedImageToMainBucket(
+            {
+              base64Data: baked.base64Data,
+              mimeType: baked.mimeType,
+              previewDataUrl: baked.previewDataUrl,
+            },
+            postWithAuth,
+          );
+          if (!payload.image_id) {
+            setStatusMessage("Image upload failed.");
+            return;
+          }
+          uploadedMedia.push({ id: payload.image_id, kind: "image" });
+          continue;
+        }
+
+        const payload = await uploadPreparedVideoToMainBucket(
           {
-            base64Data: image.base64Data,
-            mimeType: image.mimeType,
-            previewDataUrl: image.previewDataUrl,
+            file: item.file,
+            mimeType: item.mimeType,
+            previewObjectUrl: item.previewObjectUrl,
+            poster: {
+              base64Data: item.posterBase64Data,
+              mimeType: "image/jpeg",
+              previewDataUrl: item.posterDataUrl,
+            },
           },
           postWithAuth,
         );
-        if (!payload.image_id) {
-          setStatusMessage("Image upload failed.");
-          return;
-        }
-        uploadedImageIds.push(payload.image_id);
+        uploadedMedia.push({
+          id: payload.video_id,
+          kind: "video",
+          poster_id: payload.poster_id,
+        });
       }
 
-      const [primaryImageId, ...otherImageIds] = uploadedImageIds;
+      const primaryStillId =
+        uploadedMedia[0]?.kind === "video"
+          ? uploadedMedia[0].poster_id
+          : uploadedMedia[0]?.id;
+      const otherImageIds = uploadedMedia
+        .filter((item) => item.kind === "image")
+        .map((item) => item.id)
+        .filter((id) => id !== primaryStillId);
       const hasCommentText = comment.trim().length > 0;
       const dataPayload = {
+        ...(uploadedMedia.length > 0 ? { media: uploadedMedia } : {}),
         ...(otherImageIds.length > 0 ? { other_image_ids: otherImageIds } : {}),
         ...(postKind === "poll"
           ? {
@@ -834,7 +963,7 @@ export default function CreatePostTab({
 
       const createResponse = await postWithAuth("/api/post-create", {
         ...(hasCommentText ? { text: comment } : {}),
-        ...(primaryImageId ? { image_id: primaryImageId } : {}),
+        ...(primaryStillId ? { image_id: primaryStillId } : {}),
         ...(hasDataPayload ? { data: dataPayload } : {}),
         audience:
           audience.mode === "group"
@@ -846,8 +975,13 @@ export default function CreatePostTab({
         return;
       }
 
+      for (const item of mediaItems) {
+        if (item.kind === "video") {
+          URL.revokeObjectURL(item.previewObjectUrl);
+        }
+      }
       setComment("");
-      setImages([]);
+      setMediaItems([]);
       setImageEditDrafts({});
       setActiveIndex(0);
       exitCropTool();
@@ -886,9 +1020,9 @@ export default function CreatePostTab({
         <input
           ref={createInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/mp4,video/webm,video/quicktime,.mov"
           multiple
-          onChange={onSelectPostImages}
+          onChange={onSelectPostMedia}
           className="hidden"
         />
 
@@ -943,11 +1077,11 @@ export default function CreatePostTab({
             className="inline-flex min-w-[10rem] flex-col items-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-6 py-4 text-sm text-accent-3 hover:text-foreground"
           >
             <ImagePlus className="h-10 w-10" />
-            <span>Add photos</span>
+            <span>Add photos or videos</span>
           </button>
         </div>
 
-        {images.length > 0 ? (
+        {mediaItems.length > 0 ? (
           <div className="mt-4 space-y-3 overflow-hidden transition-all duration-1000" style={{ maxHeight: `${maxImageAreaHeight}vh`}}>
             <div className="relative overflow-visible px-1">
               <button
@@ -955,7 +1089,7 @@ export default function CreatePostTab({
                 onClick={() => goToIndex(activeIndex - 1)}
                 disabled={activeIndex <= 0}
                 className="absolute left-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-accent-1 bg-primary-background/90 p-3 text-accent-2 shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
-                aria-label="Previous photo"
+                aria-label="Previous media"
               >
                 <ChevronLeft className="h-7 w-7" />
               </button>
@@ -968,12 +1102,49 @@ export default function CreatePostTab({
                 onPointerUp={onCarouselPointerUp}
                 onPointerCancel={onCarouselPointerUp}
               >
-                {images.map((image, index) => {
+                {mediaItems.map((item, index) => {
                   const distance = index - activeIndex;
                   const slideStyle = slideTransformForDistance(distance);
                   const isActive = index === activeIndex;
-                  const draft = imageEditDrafts[image.id] ?? DEFAULT_EDIT_DRAFT;
-                  const imageSize = imageSizes[image.id];
+                  if (item.kind === "video") {
+                    return (
+                      <div
+                        key={item.id}
+                        className="absolute left-1/2 top-1/2 h-[90%] w-[90%] origin-center overflow-hidden rounded-lg border border-accent-1 bg-primary-background shadow-lg shadow-black/45 transition-[transform,opacity] duration-300 ease-out"
+                        style={{
+                          transform: slideStyle.transform,
+                          opacity: slideStyle.opacity,
+                          zIndex: slideStyle.zIndex,
+                          pointerEvents: isActive ? "auto" : "none",
+                          transformStyle: "preserve-3d",
+                        }}
+                      >
+                        <video
+                          src={item.previewObjectUrl}
+                          poster={item.posterDataUrl}
+                          className="h-full w-full object-cover"
+                          muted
+                          playsInline
+                          controls={isActive}
+                          preload="metadata"
+                        />
+                        {isActive ? (
+                          <button
+                            type="button"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={onRemoveActiveMedia}
+                            className="absolute right-2 top-2 z-20 rounded-full bg-black/60 p-2.5 text-white opacity-70 hover:bg-black/80"
+                            aria-label="Remove video"
+                          >
+                            <X className="h-6 w-6" />
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  }
+
+                  const draft = imageEditDrafts[item.id] ?? DEFAULT_EDIT_DRAFT;
+                  const imageSize = imageSizes[item.id];
                   const baseScale = imageSize
                     ? Math.max(PREVIEW_SIZE_PX / imageSize.width, PREVIEW_SIZE_PX / imageSize.height)
                     : 1;
@@ -981,7 +1152,7 @@ export default function CreatePostTab({
                   const slideVignetteOpacity = (draft.adjustments.vignette / 100) * 0.72;
                   return (
                     <div
-                      key={image.id}
+                      key={item.id}
                       className="absolute left-1/2 top-1/2 h-[90%] w-[90%] origin-center overflow-hidden rounded-lg border border-accent-1 bg-primary-background shadow-lg shadow-black/45 transition-[transform,opacity] duration-300 ease-out"
                       style={{
                         transform: slideStyle.transform,
@@ -994,7 +1165,7 @@ export default function CreatePostTab({
                       {imageSize ? (
                         <div className="relative h-full w-full overflow-hidden rounded-lg">
                           <img
-                            src={image.previewDataUrl}
+                            src={item.previewDataUrl}
                             alt="New post preview"
                             draggable={false}
                             className="pointer-events-none absolute left-1/2 top-1/2 max-w-none select-none"
@@ -1021,7 +1192,7 @@ export default function CreatePostTab({
                         </div>
                       ) : (
                         <img
-                          src={image.previewDataUrl}
+                          src={item.previewDataUrl}
                           alt="New post preview"
                           draggable={false}
                           className="h-full w-full object-cover"
@@ -1031,7 +1202,7 @@ export default function CreatePostTab({
                         <button
                           type="button"
                           onPointerDown={(event) => event.stopPropagation()}
-                          onClick={onRemoveActiveImage}
+                          onClick={onRemoveActiveMedia}
                           className="absolute right-2 top-2 z-20 rounded-full bg-black/60 p-2.5 text-white opacity-70 hover:bg-black/80"
                           aria-label="Remove image"
                         >
@@ -1046,20 +1217,21 @@ export default function CreatePostTab({
               <button
                 type="button"
                 onClick={() => goToIndex(activeIndex + 1)}
-                disabled={activeIndex >= images.length - 1}
+                disabled={activeIndex >= mediaItems.length - 1}
                 className="absolute right-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-accent-1 bg-primary-background/90 p-3 text-accent-2 shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
-                aria-label="Next photo"
+                aria-label="Next media"
               >
                 <ChevronRight className="h-7 w-7" />
               </button>
             </div>
 
-            {images.length > 1 ? (
+            {mediaItems.length > 1 ? (
               <p className="text-center text-xs text-accent-2">
-                {activeIndex + 1} / {images.length}
+                {activeIndex + 1} / {mediaItems.length}
               </p>
             ) : null}
 
+            {activeImage ? (
             <div className="rounded-lg border-accent-1 px-2 py-2">
               <div className="flex items-center justify-center gap-1.5 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {ADJUSTMENT_OPTIONS.map((option) => {
@@ -1135,6 +1307,9 @@ export default function CreatePostTab({
                 <p className="mt-0.5 text-center text-[10px] text-accent-2">Pinch to zoom, drag to pan</p>
               ) : null}
             </div>
+            ) : (
+              <p className="text-center text-xs text-accent-2">Video ready — no filters in this version.</p>
+            )}
           </div>
         ) : null}
 
@@ -1260,7 +1435,7 @@ export default function CreatePostTab({
             <PostSection
               post={previewPost}
               currentUserId={currentUserId}
-              previewImageUrls={previewImageUrls}
+              previewMedia={previewMediaUrls}
               isPreview
               disableCommentSendInput={true}
               className="rounded-lg border border-accent-1"

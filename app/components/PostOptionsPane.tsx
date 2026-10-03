@@ -11,6 +11,7 @@ import {
   customEmojiUuidFromToken,
 } from "@/app/lib/customEmojiCanvas";
 import { downloadImageBlobWithExtension, getImageBlob } from "@/app/lib/imageCache";
+import { collectPostMediaObjectIds } from "@/app/lib/postMedia";
 import {
   ApiError,
   EmojiItem,
@@ -76,19 +77,8 @@ const collectCustomEmojiUuids = (comments: Record<string, PostCommentNode> | und
   return Array.from(uuids);
 };
 
-const buildImageIds = (post: PostItem): string[] => {
-  const ids: string[] = [];
-  if (post.image_id) {
-    ids.push(post.image_id);
-  }
-  for (const imageId of post.data?.other_image_ids ?? []) {
-    if (!imageId || ids.includes(imageId)) {
-      continue;
-    }
-    ids.push(imageId);
-  }
-  return ids;
-};
+const buildImageIds = (post: PostItem): string[] =>
+  collectPostMediaObjectIds({ imageId: post.image_id, data: post.data });
 
 export default function PostOptionsPane({
   post,

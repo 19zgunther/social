@@ -13,6 +13,7 @@ import type {
   ImageUploadSignRequest,
   ImageUploadSignResponse,
 } from "@/app/types/interfaces";
+import { isAllowedVideoMimeType } from "@/app/lib/postMedia";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -22,6 +23,9 @@ const isSignRequest = (body: ImageUploadRequest): body is ImageUploadSignRequest
 
 const isCompleteRequest = (body: ImageUploadRequest): body is ImageUploadCompleteRequest =>
   "phase" in body && body.phase === "complete";
+
+const isAllowedUploadMimeType = (mimeType: string): boolean =>
+  mimeType.startsWith("image/") || isAllowedVideoMimeType(mimeType);
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -35,12 +39,12 @@ export async function POST(request: Request) {
 
     if (isSignRequest(body)) {
       const imageMimeType = body.image_mime_type?.trim() ?? "";
-      if (!imageMimeType.startsWith("image/")) {
+      if (!isAllowedUploadMimeType(imageMimeType)) {
         return NextResponse.json(
           {
             error: {
               code: "invalid_request",
-              message: "image_mime_type must be an image/* MIME type.",
+              message: "image_mime_type must be an image/* or allowed video MIME type.",
             },
           },
           { status: 400 },

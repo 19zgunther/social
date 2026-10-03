@@ -224,6 +224,15 @@ const extensionForBlob = (blob: Blob): string => {
   if (blob.type === "image/gif") {
     return "gif";
   }
+  if (blob.type === "video/mp4") {
+    return "mp4";
+  }
+  if (blob.type === "video/webm") {
+    return "webm";
+  }
+  if (blob.type === "video/quicktime") {
+    return "mov";
+  }
   return "jpg";
 };
 

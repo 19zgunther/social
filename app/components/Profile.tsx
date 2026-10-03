@@ -6,6 +6,7 @@ import {
   ChevronRight,
   CircleUserRound,
   MessageSquare,
+  Play,
   Plus,
   Settings as SettingsIcon,
   Trash2,
@@ -224,6 +225,8 @@ function ProfilePostsSection({
           const hasPostImageSource = Boolean(post.image_id && post.image_access_grant);
           const trimmedPostText = post.text.trim();
           const poll = getPollViewerState(post.data);
+          const firstMedia = post.data?.media?.[0];
+          const isVideoFirst = firstMedia?.kind === "video";
           return (
             <button
               key={post.id}
@@ -233,6 +236,7 @@ function ProfilePostsSection({
                 } border-b border-accent-1`}
             >
               {hasPostImageSource ? (
+                <>
                 <CachedImage
                   imageAccessGrant={post.image_access_grant ?? null}
                   imageStorageUserId={post.created_by}
@@ -240,6 +244,12 @@ function ProfilePostsSection({
                   alt="Profile post"
                   className="pointer-events-none h-full w-full object-cover"
                 />
+                {isVideoFirst ? (
+                  <span className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/55 p-1 text-white">
+                    <Play className="h-3 w-3 fill-white" />
+                  </span>
+                ) : null}
+                </>
               ) : hasImageAttachment ? (
                 <div className="flex h-full w-full items-center justify-center bg-black text-[10px] text-accent-2">
                   Loading...

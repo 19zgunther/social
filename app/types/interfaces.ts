@@ -66,9 +66,21 @@ export type PollViewerState = {
   total_voters: number | null;
 };
 
+export type PostMediaKind = "image" | "video";
+
+export type PostMediaItem = {
+  id: string;
+  kind: PostMediaKind;
+  /** JPEG still for video slides (required when kind is video). */
+  poster_id?: string;
+};
+
 export type PostData = {
   comments?: Record<string, PostCommentNode>;
   likes?: Record<string, boolean>;
+  /** Ordered slides (images + videos). Source of truth when present. */
+  media?: PostMediaItem[];
+  /** Legacy additional image ids; still written for backward compat. */
   other_image_ids?: string[];
   /** Storage uses PollData; API responses replace with PollViewerState. */
   poll?: PollData | PollViewerState;
