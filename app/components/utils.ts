@@ -22,6 +22,9 @@ const MOBILE_FRAME_STYLE: CSSProperties = {
 const APP_VIEWPORT_STYLE: CSSProperties = {
     height: "100dvh",
     minHeight: "100svh",
+    boxSizing: "border-box",
+    paddingTop: "env(safe-area-inset-top)",
+    paddingBottom: "env(safe-area-inset-bottom)",
 };
 
 const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | null } => {

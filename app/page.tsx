@@ -366,11 +366,11 @@ export default function Home() {
   const feedbackStyle = TAB_TO_STYLE["feedback"];
 
   return (
-    <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
+    <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0">
       <UserSessionSyncProvider currentUserId={authUser.user_id}>
       <section
         style={MOBILE_FRAME_STYLE}
-        className="flex h-full max-h-dvh flex-col overflow-hidden shadow-xl shadow-black/25 relative"
+        className="flex h-full max-h-full flex-col overflow-hidden shadow-xl shadow-black/25 relative"
       >
         <AutoNotificationPrompt authUser={authUser} showNotificationsPrompt={showNotificationsPrompt} setShowNotificationsPrompt={setShowNotificationsPrompt} />
 
@@ -592,7 +592,7 @@ export default function Home() {
         </div>
 
         {activeTab !== "create_post" ? (
-          <div className="nav-rgb-row w-full h-fit flex justify-between border-t border-border bg-bg z-[1000]" style={{boxShadow: "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)"}}>
+          <div className="nav-rgb-row relative z-[1000] flex h-fit w-full shrink-0 justify-between border-t border-border bg-bg" style={{boxShadow: "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)"}}>
             <NavRowButton
               iconClassName="nav-rgb-icon-house"
               isActive={activeTab === "feed"}
