@@ -33,7 +33,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // Allow focus zoom — locking scale breaks iOS keyboard in standalone PWAs
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   themeColor: "#050608",
 };
@@ -46,7 +47,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${logoPressStart.variable} antialiased`}
