@@ -219,7 +219,7 @@ function ProfilePostsSection({
         </p>
       ) : null}
 
-      <div className="grid grid-cols-3 border-t border-border">
+      <div className="grid grid-cols-3">
         {posts.map((post, index) => {
           const showRightBorder = index % 3 !== 2;
           const hasImageAttachment = Boolean(post.image_id);
@@ -233,8 +233,7 @@ function ProfilePostsSection({
               key={post.id}
               type="button"
               onClick={() => setSelectedPostId(post.id)}
-              className={`relative aspect-square min-h-0 overflow-hidden bg-bg p-0 ${showRightBorder ? "border-r border-border" : ""
-                } border-b border-border`}
+              className={`relative rounded-lg p-0.25 aspect-square min-h-0 overflow-hidden bg-bg`}
             >
               {hasPostImageSource ? (
                 <>
