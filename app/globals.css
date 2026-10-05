@@ -14,11 +14,11 @@
   --warning: #f59e0b;
   --black: #000000;
   --white: #ffffff;
-  --rainbow-1: #0061ac;
-  --rainbow-2: #382075;
-  --rainbow-3: #e94e1b;
-  --rainbow-4: #f4d54f;
-  --rainbow-5: #84bcec;
+  --rainbow-1: #4095d6;
+  --rainbow-2: #7c69af;
+  --rainbow-3: #e5805e;
+  --rainbow-4: #f4c34f;
+  --rainbow-5: #a9edc3;
 }
 
 @theme inline {
@@ -448,6 +448,7 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
 .post-rgb-top-border {
   position: relative;
   border-top-color: transparent;
+  --post-top-radius: 0.5rem;
 }
 
 .post-rgb-top-border::before {
@@ -456,7 +457,9 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   top: -1px;
   left: 0;
   right: 0;
-  height: 1px;
+  height: var(--post-top-radius);
+  border-radius: var(--post-top-radius) var(--post-top-radius) 0 0;
+  padding: 1px 1px 0;
   background: linear-gradient(
     125deg,
     color-mix(in srgb, var(--rainbow-1) 20%, var(--border)),
@@ -469,6 +472,11 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   background-size: 200% 100%;
   animation: post-rgb-top-border-shift 28s linear infinite;
   pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
 }
 
 @media (prefers-reduced-motion: reduce) {

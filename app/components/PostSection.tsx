@@ -844,7 +844,7 @@ function PostSectionComponent({
   };
 
   return (
-    <article className={`w-full border-t border-border post-rgb-top-border bg-bg mb-10 ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}>
+    <article className={`w-full border-t border-border post-rgb-top-border bg-bg mb-10 rounded-t-2xl ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}>
       <header className="px-2 py-2">
         <div className="flex items-center gap-2">
           <UserProfileImage
@@ -896,7 +896,7 @@ function PostSectionComponent({
         </div>
       </header>
       {mediaSlides.length > 0 ? (
-        <div ref={imageAreaRef} className="relative aspect-square w-full">
+        <div ref={imageAreaRef} className="relative aspect-square w-full overflow-hidden rounded-xl">
           {balloonSessionKey !== null ? (
             <CongratsBalloonOverlay
               sessionKey={balloonSessionKey}
