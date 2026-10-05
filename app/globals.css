@@ -157,3 +157,67 @@ body {
     background-position: -18px 50%;
   }
 }
+
+@property --create-post-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: true;
+}
+
+@keyframes create-post-border-spin {
+  to {
+    --create-post-angle: 360deg;
+  }
+}
+
+.create-post-rgb-border {
+  --create-post-angle: 0deg;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--secondary-background), var(--secondary-background)) padding-box,
+    conic-gradient(
+      from var(--create-post-angle),
+      #ff3b5c,
+      #ffb020,
+      #5cff8a,
+      #3db8ff,
+      #b56bff,
+      #ff3b5c
+    ) border-box;
+  animation: create-post-border-spin 3.5s linear infinite;
+}
+
+.create-post-rgb-border:hover {
+  animation-duration: 1.75s;
+}
+
+.create-post-rgb-text {
+  background: conic-gradient(
+    from var(--create-post-angle),
+    #ff3b5c,
+    #ffb020,
+    #5cff8a,
+    #3db8ff,
+    #b56bff,
+    #ff3b5c
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .create-post-rgb-border {
+    animation: none;
+    background:
+      linear-gradient(var(--secondary-background), var(--secondary-background)) padding-box,
+      linear-gradient(135deg, #ff3b5c, #ffb020, #5cff8a, #3db8ff, #b56bff) border-box;
+  }
+
+  .create-post-rgb-text {
+    background: linear-gradient(135deg, #ff3b5c, #ffb020, #5cff8a, #3db8ff, #b56bff);
+    background-clip: text;
+    -webkit-background-clip: text;
+  }
+}
