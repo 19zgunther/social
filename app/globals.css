@@ -230,7 +230,7 @@ body {
   --create-post-angle: 0deg;
   border: 2px solid transparent;
   background:
-    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(#000, #000) padding-box,
     conic-gradient(
       from var(--create-post-angle),
       var(--rainbow-1),
@@ -432,7 +432,7 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   .create-post-rgb-border {
     animation: none;
     background:
-      linear-gradient(var(--surface), var(--surface)) padding-box,
+      linear-gradient(#000, #000) padding-box,
       linear-gradient(
           135deg,
           var(--rainbow-1),
