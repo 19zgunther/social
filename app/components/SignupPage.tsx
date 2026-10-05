@@ -135,7 +135,6 @@ export default function SignUpPage({
                 className="flex h-full flex-col justify-center border border-border bg-surface px-6 shadow-lg shadow-black/20"
             >
                 <h1 className="text-lg font-semibold text-foreground">{pageTitle}</h1>
-                <p className="mt-1 text-sm text-muted">Single-page auth flow for mobile-first layout.</p>
                 {mode === "signup" ? (
                     <p className="mt-3 text-sm text-muted">
                         Sorry ppl are dumb and I hate resetting passwords so enter your emails so we can automate it

@@ -64,10 +64,14 @@ body {
 
 html,
 body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  touch-action: none;
+  /* manipulation keeps taps/scroll working; none blocks iOS input focus/keyboard in standalone */
+  touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
 }
 
