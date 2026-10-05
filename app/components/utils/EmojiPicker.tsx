@@ -579,7 +579,7 @@ export default function EmojiPicker({
                                     aria-label={`Insert custom emoji ${customEmoji.name}`}
                                     title={customEmoji.name}
                                   >
-                                    <CustomEmoji customEmoji={customEmoji} />
+                                    <CustomEmoji customEmoji={customEmoji} enablePeek={false} />
                                   </button>
                                 );
                               } else if (customEmojiUuid) {
@@ -624,7 +624,7 @@ export default function EmojiPicker({
                                   aria-label={`Insert custom emoji ${emoji.name}`}
                                   title={emoji.name}
                                 >
-                                  <CustomEmoji customEmoji={emoji} />
+                                  <CustomEmoji customEmoji={emoji} enablePeek={false} />
                                 </button>
                               ))}
                             </div>

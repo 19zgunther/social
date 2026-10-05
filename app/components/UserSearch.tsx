@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Loader from "@/app/components/Loader";
 import UserProfileImage from "@/app/components/UserProfileImage";
 
 export type UserSearchOption = {
@@ -124,7 +125,9 @@ export default function UserSearch({
       {shouldShowDropdown ? (
         <div className={`absolute z-30 mt-1 w-full overflow-y-auto rounded-lg border border-border bg-bg shadow-lg shadow-black/25 ${dropdownClassName ?? "max-h-[40vh]"}`}>
           {isLoading && results.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-muted">Loading users…</p>
+            <div className="flex justify-center px-3 py-3">
+              <Loader scale={0.55} animateHeight={false} />
+            </div>
           ) : results.length === 0 ? (
             <p className="px-3 py-2 text-xs text-muted">{noResultsText}</p>
           ) : (

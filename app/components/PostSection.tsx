@@ -8,11 +8,13 @@ import CachedImage from "@/app/components/utils/CachedImage";
 import CachedVideo from "@/app/components/utils/CachedVideo";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
-import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
-  CustomEmoji,
-  customEmojiUuidFromToken,
-} from "@/app/lib/customEmojiCanvas";
+  findNewEmojiReactionKey,
+  RenderReactionEmoji,
+  useReactionFly,
+} from "@/app/components/ReactionFly";
+import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
+import { customEmojiUuidFromToken } from "@/app/lib/customEmojiCanvas";
 import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
 import { collectPostMediaObjectIds, getPostMediaSlides } from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
@@ -111,20 +113,6 @@ const getCommentAtPath = (
   return null;
 };
 
-function RenderReactionEmoji({ value, customEmojiByUuid }: { value: string; customEmojiByUuid: Record<string, EmojiItem> }) {
-  const uuid = customEmojiUuidFromToken(value);
-  if (!uuid) {
-    return <span className="text-xl leading-none">{value}</span>;
-  }
-  const customEmoji = customEmojiByUuid[uuid];
-  if (!customEmoji) {
-    return <span className="text-xl leading-none">?</span>;
-  }
-  return (
-    <CustomEmoji customEmoji={customEmoji} />
-  );
-};
-
 function PostSectionComponent({
   post,
   currentUserId,
@@ -173,6 +161,17 @@ function PostSectionComponent({
   const [isSavingPostText, setIsSavingPostText] = useState(false);
   const [postTextStatusMessage, setPostTextStatusMessage] = useState("");
   const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
+  const {
+    beginReactionFly,
+    cancelReactionFly,
+    setReactionFlyTarget,
+    bindReactionEl,
+    isFlyingReaction,
+    reactionFlyOverlay,
+  } = useReactionFly({
+    customEmojiByUuid,
+    setCustomEmojiByUuid,
+  });
   const [imageViewer, setImageViewer] = useState<{
     imageId: string;
     imageAccessGrant: string | null;
@@ -201,7 +200,13 @@ function PostSectionComponent({
     [rootCommentEntries],
   );
   const rootEmojiReactions = useMemo(
-    () => rootCommentEntries.filter(([, comment]) => isEmojiOnlyComment(comment.text)).map(([, comment]) => comment.text.trim()),
+    () =>
+      rootCommentEntries
+        .filter(([, comment]) => isEmojiOnlyComment(comment.text))
+        .map(([timestamp, comment]) => ({
+          key: timestamp,
+          emoji: comment.text.trim(),
+        })),
     [rootCommentEntries],
   );
   const customEmojiUuidsInPostData = useMemo(() => {
@@ -489,14 +494,18 @@ function PostSectionComponent({
     }
   };
 
-  const onSubmitComment = async (parentPath: string[], emoji?: string) => {
+  const onSubmitComment = async (parentPath: string[], emoji?: string, reactionFlyId?: number) => {
     const pathKey = parentPath.join(COMMENT_PATH_SEPARATOR);
     const draft = parentPath.length === 0 ? rootCommentDraft : replyDraftByPath[pathKey] ?? "";
     const message = emoji ?? draft.trim();
     if (!message || isSubmittingComment) {
+      if (reactionFlyId !== undefined) {
+        cancelReactionFly(reactionFlyId);
+      }
       return;
     }
 
+    const previousComments = postData.comments;
     setIsSubmittingComment(true);
     try {
       const response = await fetch(
@@ -520,15 +529,29 @@ function PostSectionComponent({
         },
       );
       if (!response.ok) {
+        if (reactionFlyId !== undefined) {
+          cancelReactionFly(reactionFlyId);
+        }
         return;
       }
 
       const payload = (await response.json()) as { data?: PostData | null };
-      setPostData(payload.data ?? {});
+      const nextData = payload.data ?? {};
+      setPostData(nextData);
+      if (reactionFlyId !== undefined && emoji) {
+        const targetKey = findNewEmojiReactionKey(
+          previousComments,
+          nextData.comments,
+          parentPath,
+          emoji,
+          COMMENT_PATH_SEPARATOR,
+        );
+        setReactionFlyTarget(reactionFlyId, targetKey);
+      }
       if (onPostUpdated) {
         onPostUpdated({
           id: post.id,
-          data: payload.data ?? {},
+          data: nextData,
         });
       }
       if (parentPath.length === 0) {
@@ -540,6 +563,10 @@ function PostSectionComponent({
         }));
       }
       setActiveReplyPath(null);
+    } catch {
+      if (reactionFlyId !== undefined) {
+        cancelReactionFly(reactionFlyId);
+      }
     } finally {
       setIsSubmittingComment(false);
     }
@@ -554,7 +581,8 @@ function PostSectionComponent({
 
 
   const handlePostEmojiReply = (emoji: string, path?: string[]) => {
-    void onSubmitComment(path ?? [], emoji);
+    const flyId = beginReactionFly(emoji);
+    void onSubmitComment(path ?? [], emoji, flyId);
   };
 
   const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
@@ -735,9 +763,21 @@ function PostSectionComponent({
         )}
         {emojiReplyEntries.length > 0 ? (
           <div className="ml-10 flex flex-wrap items-center gap-1">
-            {emojiReplyEntries.map(([childTimestamp, childComment]) =>
-              <RenderReactionEmoji key={childTimestamp} value={childComment.text.trim()} customEmojiByUuid={customEmojiByUuid} />
-            )}
+            {emojiReplyEntries.map(([childTimestamp, childComment]) => {
+              const reactionKey = [...path, childTimestamp].join(COMMENT_PATH_SEPARATOR);
+              return (
+                <span
+                  key={childTimestamp}
+                  ref={bindReactionEl(reactionKey)}
+                  className={isFlyingReaction(reactionKey) ? "opacity-0" : undefined}
+                >
+                  <RenderReactionEmoji
+                    value={childComment.text.trim()}
+                    customEmojiByUuid={customEmojiByUuid}
+                  />
+                </span>
+              );
+            })}
           </div>
         ) : null}
         <div className="ml-10 flex items-center gap-5">
@@ -804,7 +844,7 @@ function PostSectionComponent({
   };
 
   return (
-    <article className={`w-full border-t border-border bg-bg mb-10 ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}>
+    <article className={`w-full border-t border-border post-rgb-top-border bg-bg mb-10 ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}>
       <header className="px-2 py-2">
         <div className="flex items-center gap-2">
           <UserProfileImage
@@ -831,26 +871,28 @@ function PostSectionComponent({
             {post.title ? (
               <p className="truncate text-[11px] text-accent">{post.title}</p>
             ) : null}
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <button
               type="button"
               aria-expanded={isPostDateExpanded}
               aria-label={isPostDateExpanded ? "Hide post time" : "Show full post time"}
               onClick={() => setIsPostDateExpanded((previous) => !previous)}
-              className="text-left pl-2 text-[11px] text-muted hover:underline"
+              className="text-[11px] text-muted hover:underline"
             >
               {isPostDateExpanded
                 ? formatPostDateExpanded(post.created_at)
                 : formatPostDateCollapsed(post.created_at)}
             </button>
+            <button
+              type="button"
+              onClick={onOpenPostOptionsPane}
+              className="rounded-lg border-none bg-transparent p-1 text-muted hover:text-foreground"
+              aria-label="Post options"
+            >
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onOpenPostOptionsPane}
-            className="ml-auto shrink-0 rounded-lg border-none bg-transparent p-1 text-muted hover:text-foreground"
-            aria-label="Post options"
-          >
-            <MoreHorizontal className="h-5 w-5" />
-          </button>
         </div>
       </header>
       {mediaSlides.length > 0 ? (
@@ -1057,19 +1099,19 @@ function PostSectionComponent({
         })()}
 
         {/** Like Button, Emoji Picker, Reaction Emojis */}
-        <div className="mt-1 flex h-8 w-full items-center gap-2">
+        <div className="mt-1 flex h-8 w-full items-center">
           <button
             type="button"
             onClick={() => {
               void onToggleLike();
             }}
             disabled={isUpdatingLike || isPreview}
-            className="inline-flex h-6 min-h-6 items-center justify-center gap-1 rounded-lg px-1.5 py-0 text-xs leading-none text-muted transition hover:text-foreground disabled:opacity-50"
+            className="inline-flex h-7 min-h-7 items-center justify-center gap-1 rounded-lg px-1.5 py-0 text-xs leading-none text-muted transition hover:text-foreground disabled:opacity-50"
           >
             {isLikedByViewer ? (
               <span className="liked-heart-rgb" aria-hidden />
             ) : (
-              <Heart className="h-6 w-6 shrink-0 text-muted" />
+              <Heart className="h-7 w-7 shrink-0 text-muted" />
             )}
             <span className="text-sm leading-none tabular-nums">{likeCount}</span>
           </button>
@@ -1083,12 +1125,17 @@ function PostSectionComponent({
 
           {rootEmojiReactions.length > 0 ? (
             <div className="ml-3 flex min-w-0 flex-1 flex-wrap items-center gap-0 overflow-hidden">
-              {rootEmojiReactions.map((emoji, index) => (
-                <RenderReactionEmoji
-                  key={`${emoji}-${index}`}
-                  value={emoji}
-                  customEmojiByUuid={customEmojiByUuid}
-                />
+              {rootEmojiReactions.map((reaction) => (
+                <span
+                  key={reaction.key}
+                  ref={bindReactionEl(reaction.key)}
+                  className={isFlyingReaction(reaction.key) ? "opacity-0" : undefined}
+                >
+                  <RenderReactionEmoji
+                    value={reaction.emoji}
+                    customEmojiByUuid={customEmojiByUuid}
+                  />
+                </span>
               ))}
             </div>
           ) : null}
@@ -1140,6 +1187,8 @@ function PostSectionComponent({
         imageStorageUserId={imageViewer?.imageStorageUserId ?? null}
         alt={imageViewer?.alt}
       />
+
+      {reactionFlyOverlay}
 
     </article>
   );

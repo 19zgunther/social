@@ -300,6 +300,21 @@ export const putEmojiInCache = async (emoji: EmojiItem): Promise<void> => {
   await writeEmojisToCache([emoji]);
 };
 
+export type CustomEmojiCacheStats = {
+  count: number;
+  totalBytes: number;
+};
+
+export const getCustomEmojiCacheStats = async (): Promise<CustomEmojiCacheStats> => {
+  const records = await readAllCachedRecords();
+  let totalBytes = 0;
+  for (const record of records) {
+    // data_b64 is ASCII; length is a close estimate of stored payload size.
+    totalBytes += record.data_b64?.length ?? 0;
+  }
+  return { count: records.length, totalBytes };
+};
+
 export const clearAllCachedCustomEmojis = async (): Promise<void> => {
   inFlightResolveBatches.clear();
   inFlightListByKey.clear();

@@ -273,6 +273,37 @@ export const downloadImageBlobWithExtension = async (
   return downloadImageBlobAsFile(blob, filename);
 };
 
+export type ImageCacheStats = {
+  count: number;
+  totalBytes: number;
+};
+
+export const getImageCacheStats = async (): Promise<ImageCacheStats> => {
+  if (typeof window === "undefined" || typeof window.indexedDB === "undefined") {
+    return { count: 0, totalBytes: 0 };
+  }
+
+  try {
+    const db = await openDb();
+    return await new Promise<ImageCacheStats>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const records = (request.result ?? []) as CachedImageRecord[];
+        let totalBytes = 0;
+        for (const record of records) {
+          totalBytes += record.blob?.size ?? 0;
+        }
+        resolve({ count: records.length, totalBytes });
+      };
+      request.onerror = () => reject(request.error ?? new Error("Failed to read image cache stats."));
+    });
+  } catch {
+    return { count: 0, totalBytes: 0 };
+  }
+};
+
 export const clearAllCachedImages = async (): Promise<void> => {
   for (const url of __imageURLCache.values()) {
     URL.revokeObjectURL(url);

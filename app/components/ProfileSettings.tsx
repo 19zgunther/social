@@ -3,8 +3,8 @@
 import { LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
 import BackButton from "@/app/components/utils/BackButton";
-import { clearAllCachedCustomEmojis } from "@/app/lib/customEmojiCache";
-import { clearAllCachedImages } from "@/app/lib/imageCache";
+import { clearAllCachedCustomEmojis, getCustomEmojiCacheStats, type CustomEmojiCacheStats } from "@/app/lib/customEmojiCache";
+import { clearAllCachedImages, getImageCacheStats, type ImageCacheStats } from "@/app/lib/imageCache";
 import { ensurePushSubscription, isInstalledPwa, PUSH_PROMPT_DISMISSED_KEY } from "@/app/lib/pushClient";
 import { globalDebugData } from "./utils/globalDebugData";
 
@@ -19,6 +19,8 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
   const [isTestingNotifications, setIsTestingNotifications] = useState(false);
   const [isClearingImageCache, setIsClearingImageCache] = useState(false);
   const [isClearingEmojiCache, setIsClearingEmojiCache] = useState(false);
+  const [imageCacheStats, setImageCacheStats] = useState<ImageCacheStats | null>(null);
+  const [emojiCacheStats, setEmojiCacheStats] = useState<CustomEmojiCacheStats | null>(null);
   const [debugDataSnapshot, setDebugDataSnapshot] = useState(
     JSON.stringify(globalDebugData, null, 2),
   );
@@ -113,6 +115,16 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
     }
   };
 
+  const refreshImageCacheStats = async () => {
+    const stats = await getImageCacheStats();
+    setImageCacheStats(stats);
+  };
+
+  const refreshEmojiCacheStats = async () => {
+    const stats = await getCustomEmojiCacheStats();
+    setEmojiCacheStats(stats);
+  };
+
   const onClearImageCache = async () => {
     if (isClearingImageCache) {
       return;
@@ -121,6 +133,7 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
     setIsClearingImageCache(true);
     try {
       await clearAllCachedImages();
+      setImageCacheStats({ count: 0, totalBytes: 0 });
       setStatusMessage("Image cache cleared.");
     } finally {
       setIsClearingImageCache(false);
@@ -135,6 +148,7 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
     setIsClearingEmojiCache(true);
     try {
       await clearAllCachedCustomEmojis();
+      setEmojiCacheStats({ count: 0, totalBytes: 0 });
       setStatusMessage("Custom emoji cache cleared.");
     } finally {
       setIsClearingEmojiCache(false);
@@ -142,11 +156,38 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
   };
 
   useEffect(() => {
+    void refreshImageCacheStats();
+    void refreshEmojiCacheStats();
+  }, []);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setDebugDataSnapshot(JSON.stringify(globalDebugData, null, 2));
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const formatCacheStatsLabel = (
+    stats: { count: number; totalBytes: number } | null,
+    singular: string,
+    plural: string,
+  ): string => {
+    if (!stats) {
+      return "";
+    }
+    const countLabel = stats.count === 1 ? `1 ${singular}` : `${stats.count} ${plural}`;
+    const { totalBytes } = stats;
+    let sizeLabel = `${totalBytes} B`;
+    if (totalBytes >= 1024 * 1024) {
+      sizeLabel = `~${(totalBytes / (1024 * 1024)).toFixed(1)} MB`;
+    } else if (totalBytes >= 1024) {
+      sizeLabel = `~${(totalBytes / 1024).toFixed(0)} KB`;
+    }
+    return `${countLabel} · ${sizeLabel}`;
+  };
+
+  const imageCacheStatsLabel = formatCacheStatsLabel(imageCacheStats, "image", "images");
+  const emojiCacheStatsLabel = formatCacheStatsLabel(emojiCacheStats, "emoji", "emojis");
 
   return (
     <div
@@ -212,7 +253,12 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
               disabled={isClearingImageCache}
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <p className="font-medium">{isClearingImageCache ? "Clearing image cache..." : "Clear cached images"}</p>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="font-medium">{isClearingImageCache ? "Clearing image cache..." : "Clear cached images"}</p>
+                {imageCacheStatsLabel ? (
+                  <p className="shrink-0 text-xs text-muted">{imageCacheStatsLabel}</p>
+                ) : null}
+              </div>
               <p className="text-xs text-muted mt-1">
                 Remove all locally cached images and reload them as needed
               </p>
@@ -223,7 +269,12 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
               disabled={isClearingEmojiCache}
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition disabled:cursor-not-allowed disabled:opacity-60 mt-2"
             >
-              <p className="font-medium">{isClearingEmojiCache ? "Clearing custom emoji cache..." : "Clear cached custom emojis"}</p>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="font-medium">{isClearingEmojiCache ? "Clearing custom emoji cache..." : "Clear cached custom emojis"}</p>
+                {emojiCacheStatsLabel ? (
+                  <p className="shrink-0 text-xs text-muted">{emojiCacheStatsLabel}</p>
+                ) : null}
+              </div>
               <p className="text-xs text-muted mt-1">
                 Remove locally cached custom emoji pixel data (they reload from the server when needed)
               </p>

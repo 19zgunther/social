@@ -779,16 +779,16 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
             <button
               type="button"
               onClick={onNewEmoji}
-              className="rounded-lg flex gap-2 border border-border flex-1 bg-surface px-3 py-3 text-sm text-muted hover:text-foreground"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-accent/50 bg-accent/15 px-3 py-3 text-sm font-semibold text-accent transition hover:border-accent hover:bg-accent/25"
             >
-              <Plus /> New Emoji
+              <Plus className="h-4 w-4" /> New Emoji
             </button>
             <button
               type="button"
               onClick={() => uploadInputRef.current?.click()}
-              className="rounded-lg flex gap-2 border border-border flex-1 bg-surface px-3 py-3 text-sm text-muted hover:text-foreground"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-accent/50 bg-accent/15 px-3 py-3 text-sm font-semibold text-accent transition hover:border-accent hover:bg-accent/25"
             >
-              <ImagePlus /> Upload Image
+              <ImagePlus className="h-4 w-4" /> Upload Image
             </button>
             <input
               ref={uploadInputRef}

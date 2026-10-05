@@ -204,7 +204,7 @@ function ProfilePostsSection({
           onClick={onOpenCreatePost}
           aria-label="Create post"
           className="create-post-rgb-border absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full transition hover:opacity-90"
-          style={{ boxShadow: "0 1px 10px 2px black" }}
+          style={{ boxShadow: "0 4px 10px 4px black" }}
         >
           <span className="create-post-rgb-text text-2xl font-semibold leading-none" aria-hidden>
             +
