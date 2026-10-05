@@ -13,7 +13,8 @@ import CameraModal from "@/app/components/Camera";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import CachedImage from "./utils/CachedImage";
-import { ArrowRight, Image, LoaderCircle, MessageCirclePlus, RefreshCw } from "lucide-react";
+import { ArrowRight, Image, MessageCirclePlus, RefreshCw } from "lucide-react";
+import Loader from "@/app/components/Loader";
 import { AppTab } from "./utils";
 
 type GroupsProps = {
@@ -494,10 +495,7 @@ export default function Groups({
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-foreground">Groups</h1>
             {isLoadingThreads || isRefreshingList ? (
-              <LoaderCircle
-                className="h-5 w-5 shrink-0 animate-spin text-accent-2"
-                aria-hidden
-              />
+              <Loader scale={0.55} className="shrink-0" />
             ) : (
               <button
                 type="button"
@@ -545,11 +543,8 @@ export default function Groups({
       </form>}
 
       {isLoadingThreads ? (
-        <div className="flex items-center gap-2 rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-xs text-accent-2">
-          <span
-            aria-hidden
-            className="h-3 w-3 animate-spin rounded-full border-2 border-accent-2 border-t-transparent"
-          />
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-xs text-accent-2">
+          <Loader scale={0.7} />
           <span>Loading threads...</span>
         </div>
       ) : null}

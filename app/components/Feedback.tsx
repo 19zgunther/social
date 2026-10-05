@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ImagePlus, LoaderCircle, RefreshCw, Square, Trash2, X } from "lucide-react";
+import { Check, ImagePlus, RefreshCw, Square, Trash2, X } from "lucide-react";
+import Loader from "@/app/components/Loader";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
@@ -229,7 +230,7 @@ export default function Feedback({
           aria-label="Refresh feedback"
         >
           {isRefreshing ? (
-            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+            <Loader scale={0.45} />
           ) : (
             <RefreshCw className="h-4 w-4" aria-hidden />
           )}
@@ -264,7 +265,7 @@ export default function Feedback({
             className="inline-flex items-center gap-1.5 rounded-md border border-accent-1 px-1 py-0.5 text-sm text-accent-2 transition hover:border-accent-3 hover:text-accent-3 disabled:opacity-50"
           >
             {isPickingImage ? (
-              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+              <Loader scale={0.45} />
             ) : (
               <ImagePlus className="h-4 w-4" aria-hidden />
             )}
@@ -309,7 +310,7 @@ export default function Feedback({
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
         {isLoading && !isRefreshing ? (
           <div className="flex justify-center py-6">
-            <LoaderCircle className="h-8 w-8 animate-spin text-accent-2" aria-hidden />
+            <Loader />
           </div>
         ) : items.length === 0 ? (
           <p className="py-4 text-center text-sm text-accent-2">No feedback yet. Be the first to post.</p>
@@ -338,7 +339,7 @@ export default function Feedback({
                       aria-label={isResolved ? "Mark unresolved" : "Mark resolved"}
                     >
                       {busy ? (
-                        <LoaderCircle className="h-5 w-5 animate-spin text-accent-2" aria-hidden />
+                        <Loader scale={0.5} />
                       ) : isResolved ? (
                         <Check className="h-5 w-5 text-green-500" aria-hidden strokeWidth={2.5} />
                       ) : (

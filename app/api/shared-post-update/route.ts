@@ -3,6 +3,8 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { loadAcceptedFriendIds } from "@/app/lib/acceptedFriendIds";
+import { sanitizeNotificationText } from "@/app/lib/notification_text";
+import { sendPushToUsers } from "@/app/lib/push_notifications";
 import {
   asSharedPostDataObject,
   serializeSharedPostListItem,
@@ -163,6 +165,20 @@ export async function POST(request: Request) {
         });
       }
     });
+
+    if (toInvite.length > 0) {
+      const eventTitle = sanitizeNotificationText(title) || "a shared event";
+      void sendPushToUsers({
+        recipientUserIds: toInvite,
+        payload: {
+          title: `Added to ${eventTitle}`,
+          body: `${authResult.username} added you to ${eventTitle}.`,
+          url: "/?tab=shared_event_posts",
+        },
+      }).catch((error) => {
+        console.error("shared_post_update_push_dispatch_failed", error);
+      });
+    }
 
     const refreshed = await prisma.shared_posts.findFirst({
       where: { id: sharedPostId },

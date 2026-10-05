@@ -343,6 +343,7 @@ export default function CreatePostTab({
   const [activeAdjustment, setActiveAdjustment] = useState<ImageAdjustmentKey>("brightness");
   const [imageSizes, setImageSizes] = useState<Record<string, { width: number; height: number }>>({});
   const [isPosting, setIsPosting] = useState(false);
+  const [postProgress, setPostProgress] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [postGroups, setPostGroups] = useState<PostGroup[]>([]);
   const [audience, setAudience] = useState<AudienceSelection>({ mode: "permanent" });
@@ -892,8 +893,29 @@ export default function CreatePostTab({
       return;
     }
 
+    const MIN_POST_PROGRESS_MS = 2000;
+    const startedAt = Date.now();
+    const totalSteps = mediaItems.length + 1;
+    const isUploadingMedia = mediaItems.length > 0;
+    let completedSteps = 0;
+
+    const bumpStepProgress = () => {
+      completedSteps += 1;
+      const stepProgress = Math.round((completedSteps / totalSteps) * 90);
+      setPostProgress((previous) => Math.max(previous ?? 0, stepProgress));
+    };
+
     setIsPosting(true);
-    setStatusMessage("");
+    setPostProgress(0);
+    setStatusMessage(isUploadingMedia ? "Uploading…" : "Posting…");
+
+    const progressTickId = window.setInterval(() => {
+      const timeProgress = Math.round(
+        Math.min(1, (Date.now() - startedAt) / MIN_POST_PROGRESS_MS) * 90,
+      );
+      setPostProgress((previous) => Math.max(previous ?? 0, timeProgress));
+    }, 50);
+
     try {
       const uploadedMedia: PostMediaItem[] = [];
       for (const item of mediaItems) {
@@ -913,6 +935,7 @@ export default function CreatePostTab({
             return;
           }
           uploadedMedia.push({ id: payload.image_id, kind: "image" });
+          bumpStepProgress();
           continue;
         }
 
@@ -934,6 +957,7 @@ export default function CreatePostTab({
           kind: "video",
           poster_id: payload.poster_id,
         });
+        bumpStepProgress();
       }
 
       const primaryStillId =
@@ -974,6 +998,7 @@ export default function CreatePostTab({
         setStatusMessage(await readErrorMessage(createResponse));
         return;
       }
+      bumpStepProgress();
 
       for (const item of mediaItems) {
         if (item.kind === "video") {
@@ -991,11 +1016,26 @@ export default function CreatePostTab({
       setPollAllowVoteChanges(false);
       setPollDurationHours(24);
       setPostKind("post");
+
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_POST_PROGRESS_MS) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, MIN_POST_PROGRESS_MS - elapsed);
+        });
+      }
+      setPostProgress(100);
+      setStatusMessage("Posted");
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 150);
+      });
+      setStatusMessage("");
       onPosted();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to create post.");
     } finally {
+      window.clearInterval(progressTickId);
       setIsPosting(false);
+      setPostProgress(null);
     }
   };
 
@@ -1003,13 +1043,16 @@ export default function CreatePostTab({
     ADJUSTMENT_OPTIONS.find((option) => option.key === activeAdjustment) ?? ADJUSTMENT_OPTIONS[0];
   const activeSliderValue = cropMode ? activeDraft.zoom : activeDraft.adjustments[activeAdjustmentOption.key as Exclude<ImageAdjustmentKey, "crop">];
 
+  const progressPercent = postProgress ?? 0;
+
   return (
-    <div className={`flex h-full min-h-0 w-full flex-col bg-primary-background ${DONT_SWIPE_TABS_CLASSNAME}`}>
+    <div className={`relative flex h-full min-h-0 w-full flex-col bg-primary-background ${DONT_SWIPE_TABS_CLASSNAME}`}>
       <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-full flex items-center gap-2 px-3 py-2 text-sm text-accent-2 hover:text-foreground"
+          disabled={isPosting}
+          className="rounded-full flex items-center gap-2 px-3 py-2 text-sm text-accent-2 hover:text-foreground disabled:opacity-50"
         >
           <ArrowLeft className="h-5 w-5" />
           Cancel
@@ -1457,6 +1500,28 @@ export default function CreatePostTab({
           {isPosting ? "Posting..." : "Post ->"}
         </button>
       </div>
+
+      {postProgress !== null ? (
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center bg-primary-background/80 px-8"
+          role="status"
+          aria-live="polite"
+          aria-busy={isPosting}
+        >
+          <div className="w-full max-w-sm">
+            <p className="mb-3 text-center text-sm font-semibold text-foreground">
+              {statusMessage || "Posting…"}
+            </p>
+            <div className="h-2 overflow-hidden rounded-full bg-accent-1">
+              <div
+                className="h-full rounded-full bg-accent-3 transition-[width] duration-100 ease-out"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <p className="mt-2 text-center text-xs text-accent-2">{progressPercent}%</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -6,7 +6,8 @@ import PostOptionsPane from "@/app/components/PostOptionsPane";
 import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
-import { LoaderCircle, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
+import Loader from "@/app/components/Loader";
 const FEED_CACHE_KEY = "feed_cache_v3";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
@@ -252,8 +253,9 @@ export default function Feed({
         ) : null}
 
         <div className="text-xs text-accent-2 transition-all duration-400 overflow-hidden w-full" style={{ maxHeight: `${loadingFeedHeight}rem` }}>
-          <div className="px-3 py-3 flex items-center text-center justify-center gap-2 w-full">
-            Loading feed... <LoaderCircle className="w-4 h-4 inline-block animate-spin" />
+          <div className="px-3 py-3 flex flex-col items-center justify-center gap-2 w-full">
+            <Loader />
+            <span>Loading feed...</span>
           </div>
         </div>
 
@@ -263,11 +265,8 @@ export default function Feed({
 
         {showTopRefreshIndicator ? (
           <div className="px-3 py-2">
-            <div className="flex items-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2">
-              <span
-                aria-hidden
-                className="h-3 w-3 animate-spin rounded-full border-2 border-accent-2 border-t-transparent"
-              />
+            <div className="flex items-center justify-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2">
+              <Loader scale={0.7} />
               <p className="text-xs text-accent-2">Refreshing feed...</p>
             </div>
           </div>

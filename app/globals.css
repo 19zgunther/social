@@ -110,3 +110,50 @@ body {
   height: 1.75rem;
   background: linear-gradient(to bottom, #ffffff88, #ffffff33);
 }
+
+.loader {
+  width: 90px;
+  height: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.loader::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #ffff2d;
+  z-index: 1;
+  animation: l5-chomp 0.25s 0.153s infinite steps(5) alternate;
+}
+
+.loader::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% + 2px);
+  right: 0;
+  background: radial-gradient(circle 3px, #eeee89 90%, transparent 91%) 0 50% / 18px 100% repeat-x;
+  animation: l5-dots 0.5s linear infinite;
+}
+
+@keyframes l5-chomp {
+  0% {
+    clip-path: polygon(50% 50%, 100% 0, 100% 0, 0 0, 0 100%, 100% 100%, 100% 100%);
+  }
+  100% {
+    clip-path: polygon(50% 50%, 100% 65%, 100% 0, 0 0, 0 100%, 100% 100%, 100% 35%);
+  }
+}
+
+@keyframes l5-dots {
+  to {
+    background-position: -18px 50%;
+  }
+}

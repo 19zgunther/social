@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { loadAcceptedFriendIds } from "@/app/lib/acceptedFriendIds";
+import { sanitizeNotificationText } from "@/app/lib/notification_text";
+import { sendPushToUsers } from "@/app/lib/push_notifications";
 import {
   getSharedPostPhase,
   serializeSharedPostListItem,
@@ -39,6 +41,7 @@ export async function POST(request: Request) {
       where: { id: sharedPostId },
       select: {
         id: true,
+        title: true,
         created_by: true,
         close_at: true,
         release_at: true,
@@ -123,6 +126,18 @@ export async function POST(request: Request) {
         invited_by: authResult.user_id,
       })),
       skipDuplicates: true,
+    });
+
+    const eventTitle = sanitizeNotificationText(existing.title) || "a shared event";
+    void sendPushToUsers({
+      recipientUserIds: toInvite,
+      payload: {
+        title: `Added to ${eventTitle}`,
+        body: `${authResult.username} added you to ${eventTitle}.`,
+        url: "/?tab=shared_event_posts",
+      },
+    }).catch((error) => {
+      console.error("shared_post_invite_push_dispatch_failed", error);
     });
 
     const refreshed = await prisma.shared_posts.findFirst({

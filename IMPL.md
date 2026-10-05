@@ -89,6 +89,7 @@ Friends & Friending:
 # Shared Event Posts
 ## Gist
 - One user can create a 'shared event post', set a title (event title), set a close date, a release date, and invite other users to join (Expect many)
+- On create or invite & save, we should send notifications to invited participants
 - All users that've been invited can contribute photos to the shared post
 - No one can view the shared post, but everyone can contribute until the close date. Contributors and owner cannot see any photos they've uploaded until it's been released. it's a blind add photos and forget system.
 - After the close date, no one can contribute or edit the post

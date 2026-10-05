@@ -1,7 +1,8 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Check, ImagePlus, LoaderCircle, Plus, Settings, Users } from "lucide-react";
+import { Check, ImagePlus, Plus, Settings, Users } from "lucide-react";
+import Loader from "@/app/components/Loader";
 import Camera from "@/app/components/Camera";
 import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
 import { PostSection } from "@/app/components/PostSection";
@@ -491,8 +492,9 @@ export default function SharedEventPostsTab({
         </header>
         <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-3">
           {isSettings && isLoadingSettings ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-xs text-accent-2">
-              Loading <LoaderCircle className="h-4 w-4 animate-spin" />
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-xs text-accent-2">
+              <Loader />
+              <span>Loading</span>
             </div>
           ) : (
             <>
@@ -525,7 +527,8 @@ export default function SharedEventPostsTab({
                 </p>
                 {isLoadingFriends ? (
                   <div className="flex items-center gap-2 py-3 text-xs text-accent-2">
-                    Loading friends <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                    <Loader scale={0.7} />
+                    <span>Loading friends</span>
                   </div>
                 ) : friends.length === 0 ? (
                   <p className="text-xs text-accent-2">No friends to invite yet.</p>
@@ -578,7 +581,7 @@ export default function SharedEventPostsTab({
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-3 bg-secondary-background py-3 text-sm font-semibold text-accent-3 disabled:opacity-50"
               >
                 {isSavingEditor ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  <Loader scale={0.55} />
                 ) : isSettings ? null : (
                   <Plus className="h-4 w-4" />
                 )}
@@ -608,8 +611,9 @@ export default function SharedEventPostsTab({
 
         <div className="flex-1 min-h-0 overflow-y-auto">
           {isLoadingDetail || !detailPost ? (
-            <div className="flex items-center justify-center gap-2 px-3 py-8 text-xs text-accent-2">
-              Loading <LoaderCircle className="h-4 w-4 animate-spin" />
+            <div className="flex flex-col items-center justify-center gap-2 px-3 py-8 text-xs text-accent-2">
+              <Loader />
+              <span>Loading</span>
             </div>
           ) : detailPost.phase === "released" ? (
             <PostSection
@@ -649,7 +653,7 @@ export default function SharedEventPostsTab({
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-3 bg-secondary-background py-3 text-sm font-semibold text-accent-3 disabled:opacity-50"
                   >
                     {isContributing ? (
-                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                      <Loader scale={0.55} />
                     ) : (
                       <ImagePlus className="h-4 w-4" />
                     )}
@@ -707,8 +711,9 @@ export default function SharedEventPostsTab({
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-4">
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-xs text-accent-2">
-            Loading <LoaderCircle className="h-4 w-4 animate-spin" />
+          <div className="flex flex-col items-center justify-center gap-2 py-6 text-xs text-accent-2">
+            <Loader />
+            <span>Loading</span>
           </div>
         ) : null}
 

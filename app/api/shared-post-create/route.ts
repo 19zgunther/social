@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { loadAcceptedFriendIds } from "@/app/lib/acceptedFriendIds";
+import { sanitizeNotificationText } from "@/app/lib/notification_text";
+import { sendPushToUsers } from "@/app/lib/push_notifications";
 import {
   serializeSharedPostListItem,
   sharedPostSelectForSerialize,
@@ -102,6 +104,20 @@ export async function POST(request: Request) {
       },
       select: sharedPostSelectForSerialize,
     });
+
+    if (inviteeUserIds.length > 0) {
+      const eventTitle = sanitizeNotificationText(title) || "a shared event";
+      void sendPushToUsers({
+        recipientUserIds: inviteeUserIds,
+        payload: {
+          title: `Added to ${eventTitle}`,
+          body: `${authResult.username} added you to ${eventTitle}.`,
+          url: "/?tab=shared_event_posts",
+        },
+      }).catch((error) => {
+        console.error("shared_post_create_push_dispatch_failed", error);
+      });
+    }
 
     const payload: SharedPostCreateResponse = {
       shared_post: serializeSharedPostListItem({

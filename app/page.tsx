@@ -21,6 +21,7 @@ import {
 } from "@/app/components/utils";
 import { AutoNotificationPrompt } from "./components/utils/AutoNotificationPrompt";
 import SignUpPage from "./components/SignupPage";
+import CheckingSessionPage from "./components/CheckingSessionPage";
 import NavRowButton from "./components/utils/NavRowButton";
 import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
@@ -303,16 +304,7 @@ export default function Home() {
 
   // Early return for loading state if session is still being checked.
   if (isCheckingSession) {
-    return (
-      <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0">
-        <section
-          style={MOBILE_FRAME_STYLE}
-          className="flex h-full items-center justify-center border border-accent-1 bg-secondary-background px-6"
-        >
-          <p className="text-sm text-accent-2">Checking your session...</p>
-        </section>
-      </main>
-    );
+    return <CheckingSessionPage />;
   }
 
   // Early return for signup page if user is not authenticated.
