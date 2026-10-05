@@ -294,6 +294,23 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
           </div>
 
           <div>
+            <h2 className="text-sm font-semibold text-foreground mb-3">Logo</h2>
+            <div className="flex justify-center">
+              <div
+                className="logo-rgb-bg h-48 w-48"
+                aria-label="Zo logo"
+              >
+                <span className="logo-zo-mark text-[3.25rem]" data-text="Zo">
+                  <span className="logo-zo-face">Zo</span>
+                </span>
+              </div>
+            </div>
+            <p className="mt-2 text-center text-xs text-muted">
+              Screenshot this mark for favicon and app icons
+            </p>
+          </div>
+
+          <div>
             <h2 className="text-sm font-semibold text-foreground mb-3 min-h-100vh overflow-y-scroll min-w-80vw">Debug</h2>
             <textarea
               className="min-h-[100vh] overflow-y-scroll min-w-[80vw]"

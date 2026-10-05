@@ -284,6 +284,64 @@ body {
     center / contain no-repeat;
 }
 
+.logo-rgb-bg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  --create-post-angle: 0deg;
+  animation: create-post-border-spin 20s linear infinite;
+}
+
+.logo-zo-mark {
+  position: relative;
+  display: inline-block;
+  font-family: var(--font-logo-press-start), monospace;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  user-select: none;
+}
+
+/* Solid extrusion / block sides behind the face */
+.logo-zo-mark::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  color: #1a1028;
+  -webkit-text-fill-color: #1a1028;
+  text-shadow:
+    1px 1px 0 #160e22,
+    2px 2px 0 #120b1c,
+    3px 3px 0 #0e0916,
+    4px 4px 0 #0a0710,
+    5px 5px 0 #07050c,
+    6px 6px 0 #050408,
+    7px 7px 0 #030206,
+    8px 8px 0 #000;
+}
+
+/* Spiral rainbow face — same conic animation as create-post */
+.logo-zo-face {
+  position: relative;
+  z-index: 1;
+  background: conic-gradient(
+    from var(--create-post-angle),
+    var(--rainbow-1),
+    var(--rainbow-2),
+    var(--rainbow-3),
+    var(--rainbow-4),
+    var(--rainbow-5),
+    var(--rainbow-1)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
 @keyframes liked-heart-gradient-shift {
   to {
     /* Move exactly one duplicated cycle so the loop has no seam */
@@ -466,6 +524,24 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
       var(--rainbow-4),
       var(--rainbow-5)
     );
+  }
+
+  .logo-rgb-bg {
+    animation: none;
+    --create-post-angle: 0deg;
+  }
+
+  .logo-zo-face {
+    background: linear-gradient(
+      135deg,
+      var(--rainbow-1),
+      var(--rainbow-2),
+      var(--rainbow-3),
+      var(--rainbow-4),
+      var(--rainbow-5)
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
   }
 
   .liked-heart-rgb::before {
