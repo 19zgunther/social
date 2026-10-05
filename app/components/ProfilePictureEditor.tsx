@@ -237,13 +237,13 @@ export default function ProfilePictureEditor({
 
   return (
     <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 ${DONT_SWIPE_TABS_CLASSNAME}`}>
-      <div className="w-full max-w-sm rounded-xl border border-accent-1 bg-secondary-background p-3 shadow-xl shadow-black/35">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-3 shadow-xl shadow-black/35">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Edit Profile Picture</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground"
+            className="rounded-full border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
           >
             Close
           </button>
@@ -262,7 +262,7 @@ export default function ProfilePictureEditor({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full h-20 rounded-lg border border-accent-1 bg-primary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
+              className="w-full h-20 rounded-lg border border-border bg-bg px-3 py-3 text-sm text-muted hover:text-foreground"
             >
               Select image
             </button>
@@ -272,7 +272,7 @@ export default function ProfilePictureEditor({
                 void onRemoveProfilePicture();
               }}
               disabled={isSaving}
-              className="w-full h-20 rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
+              className="w-full h-20 rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted hover:text-foreground disabled:opacity-50"
             >
               {isSaving ? "Removing..." : "Remove Profile Picture"}
             </button>
@@ -280,7 +280,7 @@ export default function ProfilePictureEditor({
         ) : (
           <>
             <div
-              className="relative mx-auto h-[280px] w-[280px] overflow-hidden rounded-lg border border-accent-1 bg-primary-background touch-none"
+              className="relative mx-auto h-[280px] w-[280px] overflow-hidden rounded-lg border border-border bg-bg touch-none"
               onPointerDown={onPointerDownPreview}
               onPointerMove={onPointerMovePreview}
               onPointerUp={onPointerUpPreview}
@@ -300,7 +300,7 @@ export default function ProfilePictureEditor({
               />
             </div>
             <div className="mt-2 space-y-1">
-              <label className="text-xs text-accent-2">Zoom</label>
+              <label className="text-xs text-muted">Zoom</label>
               <input
                 type="range"
                 min={1}
@@ -317,7 +317,7 @@ export default function ProfilePictureEditor({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg border border-accent-1 px-3 py-2 text-xs text-accent-2 hover:text-foreground"
+                className="rounded-lg border border-border px-3 py-2 text-xs text-muted hover:text-foreground"
               >
                 Choose another
               </button>
@@ -327,7 +327,7 @@ export default function ProfilePictureEditor({
                   void onSaveProfilePicture();
                 }}
                 disabled={isSaving}
-                className="rounded-lg bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background disabled:opacity-50"
+                className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent disabled:opacity-50"
               >
                 {isSaving ? "Saving..." : "Save"}
               </button>
@@ -335,7 +335,7 @@ export default function ProfilePictureEditor({
           </>
         )}
 
-        {statusMessage ? <p className="mt-2 text-xs text-accent-2">{statusMessage}</p> : null}
+        {statusMessage ? <p className="mt-2 text-xs text-muted">{statusMessage}</p> : null}
       </div>
     </div>
   );

@@ -117,21 +117,21 @@ export default function UserSearch({
         placeholder={placeholder}
         className={
           inputClassName ??
-          "w-full rounded-xl border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+          "w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
         }
       />
 
       {shouldShowDropdown ? (
-        <div className={`absolute z-30 mt-1 w-full overflow-y-auto rounded-lg border border-accent-1 bg-primary-background shadow-lg shadow-black/25 ${dropdownClassName ?? "max-h-[40vh]"}`}>
+        <div className={`absolute z-30 mt-1 w-full overflow-y-auto rounded-lg border border-border bg-bg shadow-lg shadow-black/25 ${dropdownClassName ?? "max-h-[40vh]"}`}>
           {isLoading && results.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-accent-2">Loading users…</p>
+            <p className="px-3 py-2 text-xs text-muted">Loading users…</p>
           ) : results.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-accent-2">{noResultsText}</p>
+            <p className="px-3 py-2 text-xs text-muted">{noResultsText}</p>
           ) : (
             <ul>
               {results.map((option) => (
                 <li key={option.id}>
-                  <div className="w-full border-b border-accent-1/60 px-3 py-2 last:border-b-0 hover:bg-secondary-background">
+                  <div className="w-full border-b border-border/60 px-3 py-2 last:border-b-0 hover:bg-surface">
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -155,9 +155,9 @@ export default function UserSearch({
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium text-foreground">{option.username}</p>
                             {option.email && (
-                              <p className="truncate text-xs text-accent-2">{option.email}</p>
+                              <p className="truncate text-xs text-muted">{option.email}</p>
                             )}
-                            {option.hint ? <p className="text-xs text-accent-2">{option.hint}</p> : null}
+                            {option.hint ? <p className="text-xs text-muted">{option.hint}</p> : null}
                           </div>
                         </div>
                       </button>
@@ -190,7 +190,7 @@ export default function UserSearch({
                                 });
                             }}
                             disabled={isActionDisabled}
-                            className="shrink-0 rounded-lg border border-accent-1 px-2 py-1 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                            className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs font-semibold text-muted transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {activeActionUserId === option.id ? "..." : actionLabel}
                           </button>

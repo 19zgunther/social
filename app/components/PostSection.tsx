@@ -709,11 +709,11 @@ function PostSectionComponent({
     const replyTargetDisplayName = comment.username || comment.user_id || "this comment";
 
     return (
-      <div key={pathKey} className={`${depth > 0 ? "ml-4 border-l border-accent-1/70 pl-2" : ""}`}>
+      <div key={pathKey} className={`${depth > 0 ? "ml-4 border-l border-border/70 pl-2" : ""}`}>
         {isDeletedPlaceholder ? (
-          <div className="text-sm italic text-accent-2">Comment Deleted</div>
+          <div className="text-sm italic text-muted">Comment Deleted</div>
         ) : (
-          <div className="text-sm text-accent-2 flex items-start gap-2">
+          <div className="text-sm text-muted flex items-start gap-2">
             <span className="shrink-0 font-semibold text-foreground/90">{comment.username || comment.user_id}</span>
             <span className="min-w-0 flex-1 break-words">{linkifyHttpsText(comment.text)}</span>
             {canDeleteComment ? (
@@ -727,7 +727,7 @@ function PostSectionComponent({
                 aria-label={aboutToDeleteCommentPath === pathKey ? "Confirm delete comment" : "Delete comment"}
               >
                 <Trash2
-                  className={`h-5 w-5 ${aboutToDeleteCommentPath === pathKey ? "text-red-400" : "text-accent-2 opacity-30"}`}
+                  className={`h-5 w-5 ${aboutToDeleteCommentPath === pathKey ? "text-danger" : "text-muted opacity-30"}`}
                 />
               </button>
             ) : null}
@@ -746,7 +746,7 @@ function PostSectionComponent({
             <button
               type="button"
               onClick={() => toggleReplies(pathKey)}
-              className="text-xs flex text-accent-2 underline underline-offset-2 hover:text-foreground opacity-50"
+              className="text-xs flex text-muted underline underline-offset-2 hover:text-foreground opacity-50"
             >
               <ChevronDown className={`h-4 w-4 ${isExpanded ? "rotate-180" : ""}`} />
               {isExpanded
@@ -758,7 +758,7 @@ function PostSectionComponent({
           <button
             type="button"
             onClick={() => setActiveReplyPath(isReplyInputOpen ? null : pathKey)}
-            className="text-sm text-accent-2 underline underline-offset-2 hover:text-foreground opacity-50"
+            className="text-sm text-muted underline underline-offset-2 hover:text-foreground opacity-50"
             aria-label={isReplyInputOpen ? "Cancel reply" : "Reply to comment"}
           >
             {isReplyInputOpen ? "Cancel reply" : "Reply"}
@@ -778,13 +778,13 @@ function PostSectionComponent({
               value={replyDraft}
               onChange={(event) => setReplyDraftByPath((previous) => ({ ...previous, [pathKey]: event.target.value }))}
               placeholder={`Replying to ${replyTargetDisplayName}...`}
-              className="flex-1 rounded-lg border border-accent-1 px-2 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+              className="flex-1 rounded-lg border border-border px-2 py-2 text-sm text-foreground outline-none focus:border-muted"
             />
             <button
               type="button"
               onClick={() => { void onSubmitComment(path); }}
               disabled={isSubmittingComment || replyDraft.trim().length === 0}
-              className="rounded-lg border border-accent-1 px-2 py-2 text-sm text-accent-2 hover:text-foreground disabled:opacity-50"
+              className="rounded-lg border border-border px-2 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
             >
               Send
             </button>
@@ -804,7 +804,7 @@ function PostSectionComponent({
   };
 
   return (
-    <article className={`w-full border-t border-accent-1 bg-primary-background mb-10 ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}>
+    <article className={`w-full border-t border-border bg-bg mb-10 ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}>
       <header className="px-2 py-2">
         <div className="flex items-center gap-2">
           <UserProfileImage
@@ -829,14 +829,14 @@ function PostSectionComponent({
               <p className="text-sm font-semibold text-foreground">{post.username}</p>
             )}
             {post.title ? (
-              <p className="truncate text-[11px] text-accent-3">{post.title}</p>
+              <p className="truncate text-[11px] text-accent">{post.title}</p>
             ) : null}
             <button
               type="button"
               aria-expanded={isPostDateExpanded}
               aria-label={isPostDateExpanded ? "Hide post time" : "Show full post time"}
               onClick={() => setIsPostDateExpanded((previous) => !previous)}
-              className="text-left text-[11px] text-accent-2 hover:underline"
+              className="text-left pl-2 text-[11px] text-muted hover:underline"
             >
               {isPostDateExpanded
                 ? formatPostDateExpanded(post.created_at)
@@ -846,7 +846,7 @@ function PostSectionComponent({
           <button
             type="button"
             onClick={onOpenPostOptionsPane}
-            className="ml-auto shrink-0 rounded-lg border-none bg-transparent p-1 text-accent-2 hover:text-foreground"
+            className="ml-auto shrink-0 rounded-lg border-none bg-transparent p-1 text-muted hover:text-foreground"
             aria-label="Post options"
           >
             <MoreHorizontal className="h-5 w-5" />
@@ -907,7 +907,7 @@ function PostSectionComponent({
                         className="aspect-square w-full overflow-hidden object-cover"
                       />
                     ) : (
-                      <div className="flex h-full w-full aspect-square items-center justify-center border-y border-accent-1 bg-secondary-background text-xs text-accent-2">
+                      <div className="flex h-full w-full aspect-square items-center justify-center border-y border-border bg-surface text-xs text-muted">
                         {isPrimarySlide || isLoadingAdditionalImages ? "Loading video..." : "Swipe to load video"}
                       </div>
                     )}
@@ -949,7 +949,7 @@ function PostSectionComponent({
                       />
                     </button>
                   ) : (
-                    <div className="flex h-full w-full aspect-square items-center justify-center border-y border-accent-1 bg-secondary-background text-xs text-accent-2">
+                    <div className="flex h-full w-full aspect-square items-center justify-center border-y border-border bg-surface text-xs text-muted">
                       {isPrimarySlide || isLoadingAdditionalImages ? "Loading image..." : "Swipe to load image"}
                     </div>
                   )}
@@ -967,7 +967,7 @@ function PostSectionComponent({
             {mediaSlides.map((slide, index) => (
               <span
                 key={`${slide.key}-dot`}
-                className={`h-1.5 w-1.5 rounded-full transition ${index === activeImageIndex ? "bg-foreground" : "bg-accent-1"
+                className={`h-1.5 w-1.5 rounded-full transition ${index === activeImageIndex ? "bg-foreground" : "bg-border"
                   }`}
               />
             ))}
@@ -981,7 +981,7 @@ function PostSectionComponent({
               value={postTextDraft}
               onChange={(event) => setPostTextDraft(event.target.value)}
               placeholder="Write a caption..."
-              className="min-h-24 w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+              className="min-h-24 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
             />
             <div className="flex items-center justify-end gap-2">
               <button
@@ -992,7 +992,7 @@ function PostSectionComponent({
                   setPostTextStatusMessage("");
                 }}
                 disabled={isSavingPostText}
-                className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
+                className="rounded-lg border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -1002,12 +1002,12 @@ function PostSectionComponent({
                   void onSavePostText();
                 }}
                 disabled={isSavingPostText}
-                className="rounded-lg bg-accent-3 px-3 py-1 text-xs font-semibold text-primary-background disabled:opacity-50"
+                className="rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-on-accent disabled:opacity-50"
               >
                 {isSavingPostText ? "Saving..." : "Save"}
               </button>
             </div>
-            {postTextStatusMessage ? <p className="text-xs text-accent-2">{postTextStatusMessage}</p> : null}
+            {postTextStatusMessage ? <p className="text-xs text-muted">{postTextStatusMessage}</p> : null}
           </div>
         ) : post.text.trim() || canEditPostText ? (
           <div className="flex items-start gap-2">
@@ -1015,7 +1015,7 @@ function PostSectionComponent({
               {post.text.trim() ? (
                 <p className="whitespace-pre-wrap text-sm text-foreground break-words">{linkifyHttpsText(post.text)}</p>
               ) : (
-                <p className="text-sm text-accent-2 italic">No text</p>
+                <p className="text-sm text-muted italic">No text</p>
               )}
             </div>
             {canEditPostText ? (
@@ -1027,7 +1027,7 @@ function PostSectionComponent({
                   setPostTextStatusMessage("");
                 }}
                 aria-label="Edit post text"
-                className="shrink-0 rounded-lg border-none bg-transparent p-1.5 text-accent-2"
+                className="shrink-0 rounded-lg border-none bg-transparent p-1.5 text-muted"
               >
                 <Pencil className="h-4 w-4" />
               </button>
@@ -1064,11 +1064,13 @@ function PostSectionComponent({
               void onToggleLike();
             }}
             disabled={isUpdatingLike || isPreview}
-            className="inline-flex h-6 min-h-6 items-center justify-center gap-1 rounded-lg px-1.5 py-0 text-xs leading-none text-accent-2 transition hover:text-foreground disabled:opacity-50"
+            className="inline-flex h-6 min-h-6 items-center justify-center gap-1 rounded-lg px-1.5 py-0 text-xs leading-none text-muted transition hover:text-foreground disabled:opacity-50"
           >
-            <Heart
-              className={`h-6 w-6 shrink-0 ${isLikedByViewer ? "fill-accent-3 text-accent-3" : "text-accent-2"}`}
-            />
+            {isLikedByViewer ? (
+              <span className="liked-heart-rgb" aria-hidden />
+            ) : (
+              <Heart className="h-6 w-6 shrink-0 text-muted" />
+            )}
             <span className="text-sm leading-none tabular-nums">{likeCount}</span>
           </button>
 
@@ -1103,13 +1105,13 @@ function PostSectionComponent({
                 onChange={(event) => setRootCommentDraft(event.target.value)}
                 placeholder="Add a comment..."
                 disabled={disableCommentSendInput}
-                className="flex-1 rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+                className="flex-1 rounded-lg border border-border bg-bg px-2 py-2 text-sm text-foreground outline-none focus:border-muted"
               />
               <button
                 type="button"
                 onClick={() => { void onSubmitComment([]); }}
                 disabled={isSubmittingComment || rootCommentDraft.trim().length === 0}
-                className="rounded-lg border border-accent-1 px-2 py-2 text-sm text-accent-2 hover:text-foreground disabled:opacity-50"
+                className="rounded-lg border border-border px-2 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
               >
                 Send
               </button>
@@ -1117,7 +1119,7 @@ function PostSectionComponent({
 
             {/** Comment Tree */}
             {rootTextCommentEntries.length === 0 ? (
-              <p className="text-xs text-accent-2"></p>
+              <p className="text-xs text-muted"></p>
             ) : (
               <div className="space-y-2">
                 {rootTextCommentEntries.map(([commentTimestamp, comment]) =>

@@ -310,15 +310,15 @@ export default function PostGroupsTab({
   const chipClass = (active: boolean) =>
     `shrink-0 rounded-full border px-4 py-2.5 text-xs font-semibold transition ${
       active
-        ? "border-accent-3 bg-accent-3 text-primary-background"
-        : "border-accent-1 bg-primary-background text-accent-2 hover:text-foreground"
+        ? "border-accent bg-accent text-on-accent"
+        : "border-border bg-bg text-muted hover:text-foreground"
     }`;
 
   const membershipChipClass = (isMember: boolean) =>
     `rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
       isMember
-        ? "border-accent-3 bg-accent-3 text-primary-background"
-        : "border-accent-1 bg-primary-background text-accent-2 hover:text-foreground"
+        ? "border-accent bg-accent text-on-accent"
+        : "border-border bg-bg text-muted hover:text-foreground"
     }`;
 
   if (!isActive) {
@@ -326,8 +326,8 @@ export default function PostGroupsTab({
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col border-b border-accent-1 px-3 py-3 w-full">
-      <p className="text-xs text-accent-2">
+    <section className="flex min-h-0 flex-1 flex-col border-b border-border px-3 py-3 w-full">
+      <p className="text-xs text-muted">
         Private friend lists used as post audiences. Choose a group when you create a post.
       </p>
 
@@ -392,19 +392,19 @@ export default function PostGroupsTab({
             maxLength={POST_GROUPS_NAME_MAX_LENGTH}
             placeholder="Group name"
             autoFocus
-            className="min-w-0 flex-1 rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
           />
           <button
             type="button"
             onClick={onCreateGroup}
-            className="rounded-lg bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background"
+            className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent"
           >
             Create
           </button>
           <button
             type="button"
             onClick={() => setIsCreating(false)}
-            className="rounded-lg border border-accent-1 px-2 py-2 text-accent-2 hover:text-foreground"
+            className="rounded-lg border border-border px-2 py-2 text-muted hover:text-foreground"
             aria-label="Cancel create"
           >
             <X className="h-4 w-4" />
@@ -413,7 +413,7 @@ export default function PostGroupsTab({
       ) : null}
 
       {selectedGroup ? (
-        <div className="mt-3 border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3">
+        <div className="mt-3 border-b border-border/50 bg-bg px-3 py-0 pb-3">
           {isRenaming ? (
             <div className="flex items-center gap-2">
               <input
@@ -431,12 +431,12 @@ export default function PostGroupsTab({
                 }}
                 maxLength={POST_GROUPS_NAME_MAX_LENGTH}
                 autoFocus
-                className="min-w-0 flex-1 rounded-lg border border-accent-1 bg-secondary-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-accent-2"
+                className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground outline-none focus:border-muted"
               />
               <button
                 type="button"
                 onClick={onRenameGroup}
-                className="rounded-lg bg-accent-3 px-2 py-1.5 text-xs font-semibold text-primary-background"
+                className="rounded-lg bg-accent px-2 py-1.5 text-xs font-semibold text-on-accent"
               >
                 Save
               </button>
@@ -446,7 +446,7 @@ export default function PostGroupsTab({
                   setIsRenaming(false);
                   setRenameValue(selectedGroup.name);
                 }}
-                className="rounded-lg border border-accent-1 px-2 py-1.5 text-accent-2"
+                className="rounded-lg border border-border px-2 py-1.5 text-muted"
                 aria-label="Cancel rename"
               >
                 <X className="h-4 w-4" />
@@ -456,7 +456,7 @@ export default function PostGroupsTab({
             <div className="flex items-center gap-2">
               <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
                 {selectedGroup.name}
-                <span className="ml-2 text-xs font-normal text-accent-2">
+                <span className="ml-2 text-xs font-normal text-muted">
                   {selectedGroup.member_ids.length} member
                   {selectedGroup.member_ids.length === 1 ? "" : "s"}
                 </span>
@@ -468,7 +468,7 @@ export default function PostGroupsTab({
                   setRenameValue(selectedGroup.name);
                   setConfirmDelete(false);
                 }}
-                className="rounded-lg border border-accent-1 p-1.5 text-accent-2 hover:text-foreground"
+                className="rounded-lg border border-border p-1.5 text-muted hover:text-foreground"
                 aria-label="Rename group"
               >
                 <Pencil className="h-5 w-5" />
@@ -478,8 +478,8 @@ export default function PostGroupsTab({
                 onClick={onDeleteGroup}
                 className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
                   confirmDelete
-                    ? "border-red-400 bg-red-500/15 text-red-400"
-                    : "border-accent-1 text-accent-2 hover:text-foreground"
+                    ? "border-danger bg-danger/15 text-danger"
+                    : "border-border text-muted hover:text-foreground"
                 }`}
                 aria-label={confirmDelete ? "Confirm delete group" : "Delete group"}
               >
@@ -496,25 +496,25 @@ export default function PostGroupsTab({
           value={friendSearch}
           onChange={(event) => setFriendSearch(event.target.value)}
           placeholder="Search friends"
-          className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+          className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
         />
       </div>
 
       <div className="mt-3 min-h-0 flex-1 space-y-2 pt-2">
         {isLoadingGroups || isLoadingFriends ? (
-          <p className="text-xs text-accent-2">Loading...</p>
+          <p className="text-xs text-muted">Loading...</p>
         ) : null}
 
         {!isLoadingFriends && acceptedFriends.length === 0 ? (
-          <div className="border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-4">
+          <div className="border-b border-border/50 bg-bg px-3 py-0 pb-4">
             <p className="text-sm text-foreground">Add friends first</p>
-            <p className="mt-1 text-xs text-accent-2">
+            <p className="mt-1 text-xs text-muted">
               Groups are lists of your friends used when sharing posts.
             </p>
             <button
               type="button"
               onClick={onGoToFriendsTab}
-              className="mt-3 rounded-lg bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background"
+              className="mt-3 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent"
             >
               Go to Friends
             </button>
@@ -526,9 +526,9 @@ export default function PostGroupsTab({
         !isLoadingGroups &&
         groups.length === 0 &&
         !isCreating ? (
-          <div className="border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-4">
+          <div className="border-b border-border/50 bg-bg px-3 py-0 pb-4">
             <p className="text-sm text-foreground">Create a group for selective posts</p>
-            <p className="mt-1 text-xs text-accent-2">
+            <p className="mt-1 text-xs text-muted">
               Then pick that group as the audience when creating a post. You can still post to all
               friends without a group.
             </p>
@@ -538,7 +538,7 @@ export default function PostGroupsTab({
                 setIsCreating(true);
                 setNewGroupName("");
               }}
-              className="mt-3 inline-flex items-center gap-1 rounded-lg bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background"
+              className="mt-3 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent"
             >
               <Plus className="h-3.5 w-3.5" />
               New group
@@ -550,14 +550,14 @@ export default function PostGroupsTab({
         acceptedFriends.length > 0 &&
         groups.length > 0 &&
         filteredFriends.length === 0 ? (
-          <p className="text-xs text-accent-2">No friends match that search.</p>
+          <p className="text-xs text-muted">No friends match that search.</p>
         ) : null}
 
         {selectedFilter === ALL_FILTER && groups.length > 0
           ? filteredFriends.map((friend) => (
               <div
                 key={friend.id}
-                className="w-full border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3"
+                className="w-full border-b border-border/50 bg-bg px-3 py-0 pb-3"
               >
                 <div className="flex items-center gap-4">
                   <UserProfileImage
@@ -572,7 +572,7 @@ export default function PostGroupsTab({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{friend.username}</p>
                     {friend.email ? (
-                      <p className="truncate text-xs text-accent-2">{friend.email}</p>
+                      <p className="truncate text-xs text-muted">{friend.email}</p>
                     ) : null}
                   </div>
                 </div>
@@ -603,13 +603,13 @@ export default function PostGroupsTab({
                   key={friend.id}
                   type="button"
                   onClick={() => toggleMembership(selectedGroup.id, friend.user_id)}
-                  className="flex w-full items-center gap-4 border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3 text-left transition hover:bg-secondary-background"
+                  className="flex w-full items-center gap-4 border-b border-border/50 bg-bg px-3 py-0 pb-3 text-left transition hover:bg-surface"
                 >
                   <span
                     className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
                       isMember
-                        ? "border-accent-3 bg-accent-3 text-primary-background"
-                        : "border-accent-1 bg-primary-background text-transparent"
+                        ? "border-accent bg-accent text-on-accent"
+                        : "border-border bg-bg text-transparent"
                     }`}
                   >
                     <Check className="h-3.5 w-3.5" />
@@ -626,7 +626,7 @@ export default function PostGroupsTab({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{friend.username}</p>
                     {friend.email ? (
-                      <p className="truncate text-xs text-accent-2">{friend.email}</p>
+                      <p className="truncate text-xs text-muted">{friend.email}</p>
                     ) : null}
                   </div>
                 </button>
@@ -635,8 +635,8 @@ export default function PostGroupsTab({
           : null}
       </div>
 
-      {isSaving ? <p className="mt-2 text-xs text-accent-2">Saving...</p> : null}
-      {statusMessage ? <p className="mt-2 text-xs text-accent-2">{statusMessage}</p> : null}
+      {isSaving ? <p className="mt-2 text-xs text-muted">Saving...</p> : null}
+      {statusMessage ? <p className="mt-2 text-xs text-muted">{statusMessage}</p> : null}
     </section>
   );
 }

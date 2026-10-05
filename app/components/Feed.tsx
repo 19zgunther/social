@@ -52,6 +52,8 @@ export default function Feed({
   const [postOptionsPostId, setPostOptionsPostId] = useState<string | null>(null);
   const [didHydrateFromCache, setDidHydrateFromCache] = useState(false);
   const feedContainerRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const isLoadingMoreRef = useRef(false);
   const pullStartYRef = useRef<number | null>(null);
   const pullRefreshTriggeredRef = useRef(false);
   const lastTopRefreshAtRef = useRef(0);
@@ -67,6 +69,10 @@ export default function Feed({
       showRefreshIndicator?: boolean;
     } = {}) => {
       if (cursor) {
+        if (isLoadingMoreRef.current) {
+          return;
+        }
+        isLoadingMoreRef.current = true;
         setIsLoadingMore(true);
       } else if (showRefreshIndicator) {
         setIsRefreshingLatest(true);
@@ -102,6 +108,7 @@ export default function Feed({
       } catch (error) {
         setStatusMessage(error instanceof Error ? error.message : "Failed to load feed.");
       } finally {
+        isLoadingMoreRef.current = false;
         setIsLoading(false);
         setIsLoadingMore(false);
         setIsRefreshingLatest(false);
@@ -201,10 +208,47 @@ export default function Feed({
     });
   }, [loadPosts]);
 
+  const loadingFeedContentRef = useRef<HTMLDivElement>(null);
   const [loadingFeedHeight, setLoadingFeedHeight] = useState(0);
+  const [loadingFeedTransitionMs, setLoadingFeedTransitionMs] = useState(1000);
   useEffect(() => {
-    setLoadingFeedHeight(isLoading ? 5 : 0);
+    if (isLoading) {
+      setLoadingFeedTransitionMs(700);
+      const frameId = requestAnimationFrame(() => {
+        const nextHeight = loadingFeedContentRef.current?.scrollHeight ?? 0;
+        setLoadingFeedHeight(nextHeight > 0 ? nextHeight : 80);
+      });
+      return () => cancelAnimationFrame(frameId);
+    }
+    setLoadingFeedTransitionMs(1000);
+    setLoadingFeedHeight(0);
   }, [isLoading]);
+
+  const loadMorePosts = useCallback(() => {
+    if (!nextCursor || isLoadingMoreRef.current || isLoading) {
+      return;
+    }
+    void loadPosts({ cursor: nextCursor });
+  }, [isLoading, loadPosts, nextCursor]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    const root = feedContainerRef.current;
+    if (!sentinel || !root || !hasMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMorePosts();
+        }
+      },
+      { root, rootMargin: "120px 0px", threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMorePosts, posts.length]);
 
   const showTopRefreshIndicator = isRefreshingLatest && didHydrateFromCache && posts.length > 0;
 
@@ -230,7 +274,7 @@ export default function Feed({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-primary-background">
+    <div className="flex h-full min-h-0 flex-col bg-bg">
       <div
         ref={feedContainerRef}
         onTouchStart={onFeedTouchStart}
@@ -252,22 +296,31 @@ export default function Feed({
           </div>
         ) : null}
 
-        <div className="text-xs text-accent-2 transition-all duration-400 overflow-hidden w-full" style={{ maxHeight: `${loadingFeedHeight}rem` }}>
-          <div className="px-3 py-3 flex flex-col items-center justify-center gap-2 w-full">
-            <Loader />
+        <div
+          className="w-full overflow-hidden text-xs text-muted"
+          style={{
+            maxHeight: loadingFeedHeight,
+            transition: `max-height ${loadingFeedTransitionMs}ms ease`,
+          }}
+        >
+          <div
+            ref={loadingFeedContentRef}
+            className="flex w-full flex-col items-center justify-center gap-2 px-3 py-3"
+          >
+            <Loader animateHeight={false} />
             <span>Loading feed...</span>
           </div>
         </div>
 
         {!isLoading && posts.length === 0 ? (
-          <div className="px-3 py-3 text-xs text-accent-2">No posts yet.</div>
+          <div className="px-3 py-3 text-xs text-muted">No posts yet.</div>
         ) : null}
 
         {showTopRefreshIndicator ? (
           <div className="px-3 py-2">
-            <div className="flex items-center justify-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2">
+            <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
               <Loader scale={0.7} />
-              <p className="text-xs text-accent-2">Refreshing feed...</p>
+              <p className="text-xs text-muted">Refreshing feed...</p>
             </div>
           </div>
         ) : null}
@@ -284,23 +337,18 @@ export default function Feed({
         ))}
 
         {hasMore ? (
-          <div className="px-3 py-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (nextCursor && !isLoadingMore) {
-                  void loadPosts({ cursor: nextCursor });
-                }
-              }}
-              disabled={!nextCursor || isLoadingMore}
-              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs font-medium text-accent-2 transition hover:text-foreground disabled:opacity-50"
-            >
-              {isLoadingMore ? "Loading..." : "Load more"}
-            </button>
+          <div
+            ref={loadMoreSentinelRef}
+            className="flex w-full items-center justify-center px-3 py-6"
+            aria-busy={isLoadingMore}
+            aria-live="polite"
+          >
+            <Loader animateHeight={false} />
+            <span className="sr-only">{isLoadingMore ? "Loading more posts" : "Scroll to load more posts"}</span>
           </div>
         ) : null}
 
-        {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
+        {statusMessage ? <p className="px-3 py-2 text-xs text-muted">{statusMessage}</p> : null}
       </div>
     </div>
   );

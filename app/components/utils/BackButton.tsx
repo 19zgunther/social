@@ -11,7 +11,7 @@ export default function BackButton({
     <button
       type="button"
       onClick={onBack}
-      className="inline-flex items-center gap-1.5 text-sm text-accent-2 transition hover:text-foreground"
+      className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
     >
       <ArrowLeft className="h-4 w-4 shrink-0" />
       {backLabel}

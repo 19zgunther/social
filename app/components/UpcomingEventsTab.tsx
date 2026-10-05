@@ -207,13 +207,13 @@ export default function UpcomingEventsTab({
             onClick={() => {
               void fetchUpcoming(true);
             }}
-            className="shrink-0 rounded-lg border border-white/20 p-1.5 text-zinc-300 transition hover:border-white/35 hover:text-white disabled:opacity-50"
+            className="shrink-0 rounded-lg border border-white/20 p-1.5 text-muted transition hover:border-white/35 hover:text-white disabled:opacity-50"
             aria-label="Refresh events"
           >
             <RefreshCw className={`h-4 w-4 ${refreshBusy ? "animate-spin" : ""}`} aria-hidden />
           </button>
         </div>
-        <p className="mt-0.5 text-xs text-zinc-400">Across all your groups</p>
+        <p className="mt-0.5 text-xs text-muted">Across all your groups</p>
         <div className="mt-3 flex items-center gap-2">
           <input
             type="text"
@@ -239,21 +239,21 @@ export default function UpcomingEventsTab({
             onClick={() => {
               void onCreateEvent();
             }}
-            className="shrink-0 rounded-lg bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-50"
           >
             {isCreating ? "Creating..." : "Create"}
           </button>
         </div>
-        {createError ? <p className="mt-1 text-xs text-zinc-400">{createError}</p> : null}
+        {createError ? <p className="mt-1 text-xs text-muted">{createError}</p> : null}
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-black">
         {isLoading ? (
-          <p className="px-3 py-4 text-sm text-zinc-400">Loading…</p>
+          <p className="px-3 py-4 text-sm text-muted">Loading…</p>
         ) : null}
-        {error && !isLoading ? <p className="px-3 py-3 text-sm text-zinc-400">{error}</p> : null}
+        {error && !isLoading ? <p className="px-3 py-3 text-sm text-muted">{error}</p> : null}
         {!isLoading && !error && items.length === 0 ? (
-          <p className="px-3 py-4 text-sm text-zinc-400">No upcoming events.</p>
+          <p className="px-3 py-4 text-sm text-muted">No upcoming events.</p>
         ) : null}
 
         <div className="flex flex-col gap-3 px-3 pb-4 pt-2">

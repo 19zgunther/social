@@ -354,7 +354,7 @@ export default function ImageViewerModal({
         <button
           type="button"
           onClick={onReply}
-          className="absolute bottom-6 right-4 p-4 z-10 text-sm font-medium bg-blue-400 hover:bg-blue-300 rounded-full"
+          className="absolute bottom-6 right-4 p-4 z-10 text-sm font-medium bg-accent hover:brightness-110 rounded-full"
         >
           Reply
         </button>

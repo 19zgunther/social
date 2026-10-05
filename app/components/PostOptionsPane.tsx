@@ -77,6 +77,90 @@ const collectCustomEmojiUuids = (comments: Record<string, PostCommentNode> | und
   return Array.from(uuids);
 };
 
+type ReactorEntry = {
+  emoji: string;
+  username: string;
+  userId: string;
+};
+
+type CommentReactionTarget = {
+  key: string;
+  username: string;
+  commentText: string;
+};
+
+type CommentReactionGroup = CommentReactionTarget & {
+  reactions: ReactorEntry[];
+};
+
+type CollectedReactions = {
+  postReactions: ReactorEntry[];
+  commentReactionGroups: CommentReactionGroup[];
+};
+
+const truncateCommentPreview = (value: string, maxLength = 120): string => {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (trimmed.length <= maxLength) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, maxLength - 1)}…`;
+};
+
+const collectReactions = (
+  comments: Record<string, PostCommentNode> | undefined,
+): CollectedReactions => {
+  const postReactions: ReactorEntry[] = [];
+  const groupsByKey = new Map<string, CommentReactionGroup>();
+
+  const walk = (
+    nodes: Record<string, PostCommentNode> | undefined,
+    target: CommentReactionTarget | null,
+    pathPrefix: string[],
+  ) => {
+    if (!nodes) {
+      return;
+    }
+    Object.entries(nodes).forEach(([timestamp, comment]) => {
+      const path = [...pathPrefix, timestamp];
+      const isReaction = isEmojiOnlyComment(comment.text);
+      if (isReaction) {
+        const reactor: ReactorEntry = {
+          emoji: comment.text.trim(),
+          username: comment.username || comment.user_id,
+          userId: comment.user_id,
+        };
+        if (!target) {
+          postReactions.push(reactor);
+        } else {
+          let group = groupsByKey.get(target.key);
+          if (!group) {
+            group = { ...target, reactions: [] };
+            groupsByKey.set(target.key, group);
+          }
+          group.reactions.push(reactor);
+        }
+      }
+      // Emoji reactions nest under the nearest text comment (or the post).
+      const nextTarget = isReaction
+        ? target
+        : {
+            key: path.join("/"),
+            username: comment.username || comment.user_id,
+            commentText: comment.deleted
+              ? "Comment deleted"
+              : truncateCommentPreview(comment.text),
+          };
+      walk(comment.replies, nextTarget, path);
+    });
+  };
+
+  walk(comments, null, []);
+  return {
+    postReactions,
+    commentReactionGroups: Array.from(groupsByKey.values()),
+  };
+};
+
 const buildImageIds = (post: PostItem): string[] =>
   collectPostMediaObjectIds({ imageId: post.image_id, data: post.data });
 
@@ -247,19 +331,15 @@ export default function PostOptionsPane({
     };
   }, [canViewPollVoters, post.id]);
 
-  const reactionEntries = useMemo(() => {
-    return Object.entries(comments ?? {})
-      .filter(([, comment]) => isEmojiOnlyComment(comment.text))
-      .map(([, comment]) => ({
-        emoji: comment.text.trim(),
-        username: comment.username || comment.user_id,
-        userId: comment.user_id,
-      }));
-  }, [comments]);
+  const { postReactions, commentReactionGroups } = useMemo(
+    () => collectReactions(comments),
+    [comments],
+  );
+  const hasReactions = postReactions.length > 0 || commentReactionGroups.length > 0;
 
   const hasImages = imageIds.length > 0;
   const hasPollVotesSection = canViewPollVoters;
-  const hasContent = hasImages || reactionEntries.length > 0 || hasPollVotesSection;
+  const hasContent = hasImages || hasReactions || hasPollVotesSection;
 
   const onDownloadImage = useCallback(async (imageId: string, index: number) => {
     if (downloadingImageId) {
@@ -305,8 +385,8 @@ export default function PostOptionsPane({
   }, [onBack, onViewUserProfile]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-primary-background">
-      <div className="flex items-center justify-between border-b border-accent-1 px-3 py-3">
+    <div className="flex h-full min-h-0 flex-col bg-bg">
+      <div className="flex items-center justify-between border-b border-border px-3 py-3">
         <BackButton onBack={onBack} />
         <h1 className="text-lg font-semibold text-foreground">Post</h1>
         <div className="w-20" />
@@ -315,8 +395,8 @@ export default function PostOptionsPane({
       <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4">
         {hasImages ? (
           <section className="mb-4">
-            <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-accent-2">Images</h2>
-            <p className="mb-2 text-xs text-accent-2">Tap an image to save it.</p>
+            <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Images</h2>
+            <p className="mb-2 text-xs text-muted">Tap an image to save it.</p>
             <div className="grid grid-cols-4 gap-1">
               {imageIds.map((imageId, index) => {
                 const grant = imageGrantById[imageId];
@@ -329,7 +409,7 @@ export default function PostOptionsPane({
                       void onDownloadImage(imageId, index);
                     }}
                     disabled={!grant || downloadingImageId !== null}
-                    className="relative aspect-square overflow-hidden rounded-md border border-accent-1 bg-secondary-background p-0 transition enabled:hover:border-accent-2 disabled:opacity-60"
+                    className="relative aspect-square overflow-hidden rounded-md border border-border bg-surface p-0 transition enabled:hover:border-muted disabled:opacity-60"
                     aria-label={`Download image ${index + 1}`}
                   >
                     {grant ? (
@@ -341,7 +421,7 @@ export default function PostOptionsPane({
                         className="pointer-events-none h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] leading-tight text-accent-2">
+                      <span className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] leading-tight text-muted">
                         {isLoadingImageGrants ? "Loading..." : "Unavailable"}
                       </span>
                     )}
@@ -355,19 +435,19 @@ export default function PostOptionsPane({
               })}
             </div>
             {downloadStatusMessage ? (
-              <p className="mt-2 text-xs text-accent-2">{downloadStatusMessage}</p>
+              <p className="mt-2 text-xs text-muted">{downloadStatusMessage}</p>
             ) : null}
           </section>
         ) : null}
 
         {hasPollVotesSection ? (
-          <section className={reactionEntries.length > 0 ? "mb-4" : undefined}>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent-2">Poll votes</h2>
+          <section className={hasReactions ? "mb-4" : undefined}>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Poll votes</h2>
             {isLoadingPollVoters ? (
-              <p className="text-sm text-accent-2">Loading voters...</p>
+              <p className="text-sm text-muted">Loading voters...</p>
             ) : null}
             {pollVotersError ? (
-              <p className="text-sm text-accent-2">{pollVotersError}</p>
+              <p className="text-sm text-muted">{pollVotersError}</p>
             ) : null}
             {!isLoadingPollVoters && !pollVotersError && pollVoterOptions ? (
               <div className="flex flex-col gap-4">
@@ -375,7 +455,7 @@ export default function PostOptionsPane({
                   <div key={option.option_id}>
                     <h3 className="mb-2 text-sm font-medium text-foreground">{option.text}</h3>
                     {option.voters.length === 0 ? (
-                      <p className="text-xs text-accent-2 pl-4">No votes</p>
+                      <p className="text-xs text-muted pl-4">No votes</p>
                     ) : (
                       <ul className="flex flex-col gap-2 pl-4">
                         {option.voters.map((voter) => (
@@ -414,11 +494,11 @@ export default function PostOptionsPane({
           </section>
         ) : null}
 
-        {reactionEntries.length > 0 ? (
-          <section>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent-2">Reactions</h2>
+        {postReactions.length > 0 ? (
+          <section className={commentReactionGroups.length > 0 ? "mb-4" : undefined}>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Reactions</h2>
             <ul className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-8 gap-y-2">
-              {reactionEntries.map((entry, index) => (
+              {postReactions.map((entry, index) => (
                 <li
                   key={`${entry.userId}-${entry.emoji}-${index}`}
                   className="contents"
@@ -455,8 +535,64 @@ export default function PostOptionsPane({
               ))}
             </ul>
           </section>
+        ) : null}
+
+        {commentReactionGroups.length > 0 ? (
+          <section>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              Reactions to comments
+            </h2>
+            <div className="flex flex-col gap-4">
+              {commentReactionGroups.map((group) => (
+                <div key={group.key}>
+                  <p className="text-sm text-foreground">
+                    <span className="font-semibold text-foreground/90">{group.username}</span>
+                    {" "}
+                    <span className="break-words text-muted">{group.commentText}</span>
+                  </p>
+                  <ul className="mt-2 grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-8 gap-y-2 pl-4">
+                    {group.reactions.map((entry, index) => (
+                      <li
+                        key={`${group.key}-${entry.userId}-${entry.emoji}-${index}`}
+                        className="contents"
+                      >
+                        <div className="flex h-8 w-10 items-center justify-center">
+                          <RenderReactionEmoji
+                            value={entry.emoji}
+                            customEmojiByUuid={customEmojiByUuid}
+                          />
+                        </div>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <UserProfileImage
+                            userId={entry.userId}
+                            sizePx={32}
+                            alt={`${entry.username} profile`}
+                          />
+                          {onViewUserProfile ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onOpenUserProfile(entry.userId);
+                              }}
+                              className="min-w-0 truncate text-sm font-medium text-foreground underline-offset-2 hover:underline"
+                            >
+                              {entry.username}
+                            </button>
+                          ) : (
+                            <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                              {entry.username}
+                            </span>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </section>
         ) : !hasContent ? (
-          <p className="text-sm text-accent-2">No reactions yet.</p>
+          <p className="text-sm text-muted">No reactions yet.</p>
         ) : null}
       </div>
     </div>

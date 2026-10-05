@@ -16,33 +16,33 @@ export function presenceRingFraction(lastMs: number | null, nowMs: number) {
   if (dt > ONE_WEEK_MS) {
     return {
       ringFrac: 1,
-       color: 'gray'
+       color: 'var(--muted)'
     }
   }
   if (dt > ONE_DAY_MS) {
     return {
       ringFrac: 1 - dt / ONE_WEEK_MS,
-      color: 'orange',
-      underColor: 'gray',
+      color: 'var(--warning)',
+      underColor: 'var(--muted)',
     }
   }
   if (dt > ONE_HOUR_MS) {
     return {
       ringFrac: 1 - dt / ONE_DAY_MS,
-      color: '#f2c22e',
-      underColor: 'orange',
+      color: 'var(--warning)',
+      underColor: 'var(--warning)',
     }
   }
   if (dt > ONE_MINUTE_MS) {
     return {
       ringFrac: 1 - dt / ONE_HOUR_MS,
-      color: '#22c55e',
-      underColor: '#f2c22e',
+      color: 'var(--success)',
+      underColor: 'var(--warning)',
     }
   }
   return {
     ringFrac: 1,
-    color: '#22c55e'
+    color: 'var(--success)'
   }
 }
 
@@ -87,7 +87,7 @@ export default function UserProfileImage({
 
   return (
     <div
-      className={`relative shrink-0 rounded-full bg-secondary-background ${showRing ? "" : "border border-accent-1"} ${className ?? ""}`}
+      className={`relative shrink-0 rounded-full bg-surface ${showRing ? "" : "border border-border"} ${className ?? ""}`}
       style={{ width: sizePx, height: sizePx }}
     >
       {showPhoto ? (
@@ -102,7 +102,7 @@ export default function UserProfileImage({
       ) : (
         <div className="flex h-full w-full items-center justify-center rounded-full">
           <CircleUserRound
-            className="text-accent-2"
+            className="text-muted"
             style={{
               width: Math.round(sizePx * 0.55),
               height: Math.round(sizePx * 0.55),

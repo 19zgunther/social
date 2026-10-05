@@ -757,8 +757,8 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
       ? `Save Edits to '${displayEmojiName}'`
       : `Create Emoji '${displayEmojiName}'`;
 
-  const sectionClass = `border-b border-accent-1 px-3 py-3 ${DONT_SWIPE_TABS_CLASSNAME}`;
-  const canvasClass = "h-full w-full touch-none rounded border border-accent-1 [image-rendering:pixelated]";
+  const sectionClass = `border-b border-border px-3 py-3 ${DONT_SWIPE_TABS_CLASSNAME}`;
+  const canvasClass = "h-full w-full touch-none rounded border border-border [image-rendering:pixelated]";
   const thumbBoxClass = "mb-1 h-[20vw] w-[20vw] overflow-hidden rounded";
 
   useEffect(() => {
@@ -779,14 +779,14 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
             <button
               type="button"
               onClick={onNewEmoji}
-              className="rounded-lg flex gap-2 border border-accent-1 flex-1 bg-secondary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
+              className="rounded-lg flex gap-2 border border-border flex-1 bg-surface px-3 py-3 text-sm text-muted hover:text-foreground"
             >
               <Plus /> New Emoji
             </button>
             <button
               type="button"
               onClick={() => uploadInputRef.current?.click()}
-              className="rounded-lg flex gap-2 border border-accent-1 flex-1 bg-secondary-background px-3 py-3 text-sm text-accent-2 hover:text-foreground"
+              className="rounded-lg flex gap-2 border border-border flex-1 bg-surface px-3 py-3 text-sm text-muted hover:text-foreground"
             >
               <ImagePlus /> Upload Image
             </button>
@@ -825,7 +825,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
               role="dialog"
               aria-modal="true"
               aria-label={editorMode === "editing" ? "Edit emoji" : "Create emoji"}
-              className="relative flex h-[min(92dvh,900px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-accent-1 bg-secondary-background p-3 shadow-xl shadow-black/40"
+              className="relative flex h-[min(92dvh,900px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-surface p-3 shadow-xl shadow-black/40"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex min-h-0 flex-1 flex-col">
@@ -834,14 +834,14 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                     {editorMode === "editing" ? "Edit Emoji" : "Create Emoji"}
                   </p>
                   <div className="mb-1">
-                    <label className="mb-1 block text-xs text-accent-2" htmlFor="emoji-name-input">Name</label>
+                    <label className="mb-1 block text-xs text-muted" htmlFor="emoji-name-input">Name</label>
                     <input
                       id="emoji-name-input"
                       type="text"
                       value={emojiName}
                       onChange={(event) => setEmojiName(event.target.value)}
                       maxLength={40}
-                      className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+                      className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
                       placeholder="Enter emoji name..."
                     />
                   </div>
@@ -859,7 +859,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
 
                     <div className="mt-1 flex gap-4">
                       <div className="mt-1 flex-1">
-                        <label className="block text-xs text-accent-2" htmlFor="emoji-shade-slider">
+                        <label className="block text-xs text-muted" htmlFor="emoji-shade-slider">
                           Shade
                         </label>
                         <PixelGradientSlider
@@ -873,7 +873,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                         />
                       </div>
                       <div className="mt-1 flex-1">
-                        <label className="block text-xs text-accent-2" htmlFor="emoji-thickness-slider">
+                        <label className="block text-xs text-muted" htmlFor="emoji-thickness-slider">
                           Thickness
                         </label>
                         <TriangleThicknessSlider
@@ -891,8 +891,8 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                 </div>
 
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="mb-1 flex shrink-0 items-center justify-between px-1 text-[11px] text-accent-2">
-                    <div className="flex items-center gap-1 rounded-lg border border-accent-1 bg-primary-background">
+                  <div className="mb-1 flex shrink-0 items-center justify-between px-1 text-[11px] text-muted">
+                    <div className="flex items-center gap-1 rounded-lg border border-border bg-bg">
                       {[
                         { id: "draw" as const, label: "", icon: Brush },
                         { id: "move" as const, label: "", icon: Hand },
@@ -906,7 +906,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                             type="button"
                             onClick={() => setActiveTool(tool.id)}
                             className={`flex items-center gap-1 rounded-md px-2 py-2 text-xs ${
-                              selected ? "bg-accent-3 text-primary-background" : "text-accent-2 hover:text-foreground"
+                              selected ? "bg-accent text-on-accent" : "text-muted hover:text-foreground"
                             }`}
                             title={tool.label}
                           >
@@ -921,7 +921,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                         type="button"
                         onClick={onUndo}
                         disabled={undoStack.length === 0}
-                        className="flex items-center justify-center rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2"
+                        className="flex items-center justify-center rounded-lg border border-border bg-bg px-2 py-2 text-muted hover:text-foreground disabled:opacity-40 disabled:hover:text-muted"
                         title="Undo"
                         aria-label="Undo"
                       >
@@ -931,7 +931,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                         type="button"
                         onClick={onRedo}
                         disabled={redoStack.length === 0}
-                        className="flex items-center justify-center rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2"
+                        className="flex items-center justify-center rounded-lg border border-border bg-bg px-2 py-2 text-muted hover:text-foreground disabled:opacity-40 disabled:hover:text-muted"
                         title="Redo"
                         aria-label="Redo"
                       >
@@ -944,7 +944,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                         type="button"
                         onClick={zoomOut}
                         disabled={zoom <= EDITOR_ZOOM_LEVELS[0]}
-                        className="flex items-center justify-center rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2"
+                        className="flex items-center justify-center rounded-lg border border-border bg-bg px-2 py-2 text-muted hover:text-foreground disabled:opacity-40 disabled:hover:text-muted"
                         title="Zoom out"
                         aria-label="Zoom out"
                       >
@@ -954,7 +954,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                         type="button"
                         onClick={zoomIn}
                         disabled={zoom >= EDITOR_ZOOM_LEVELS[EDITOR_ZOOM_LEVELS.length - 1]}
-                        className="flex items-center justify-center rounded-lg border border-accent-1 bg-primary-background px-2 py-2 text-accent-2 hover:text-foreground disabled:opacity-40 disabled:hover:text-accent-2"
+                        className="flex items-center justify-center rounded-lg border border-border bg-bg px-2 py-2 text-muted hover:text-foreground disabled:opacity-40 disabled:hover:text-muted"
                         title="Zoom in"
                         aria-label="Zoom in"
                       >
@@ -966,7 +966,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                   <div className="relative min-h-0 flex-1 [container-type:size]">
                     <div
                       ref={canvasViewportRef}
-                      className="absolute left-1/2 top-1/2 aspect-square -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg border border-accent-1 bg-primary-background"
+                      className="absolute left-1/2 top-1/2 aspect-square -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg border border-border bg-bg"
                       style={{ width: "min(100cqw, 100cqh)" }}
                     >
                       <canvas
@@ -989,12 +989,12 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                 </div>
 
                 <div className="mt-2 flex shrink-0 flex-col gap-2">
-                  {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
+                  {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
                   <button
                     type="button"
                     onClick={() => { void onSaveEmoji(); }}
                     disabled={isSaving}
-                    className="w-full rounded-lg bg-accent-3 px-3 py-2 text-sm font-semibold text-primary-background disabled:opacity-50"
+                    className="w-full rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
                   >
                     {isSaving ? "Saving..." : saveButtonLabel}
                   </button>
@@ -1002,7 +1002,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                     type="button"
                     onClick={onCancelEditor}
                     disabled={isSaving}
-                    className="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-accent-2 hover:text-foreground disabled:opacity-50"
+                    className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -1017,8 +1017,8 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
       {editorMode === "none" ? (
         <>
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold text-accent-2">Your emojis</p>
-            {isLoading ? <p className="text-xs text-accent-2">Loading...</p> : null}
+            <p className="text-xs font-semibold text-muted">Your emojis</p>
+            {isLoading ? <p className="text-xs text-muted">Loading...</p> : null}
           </div>
           <div className="grid grid-cols-4 gap-2">
             {emojis.map((emoji) => (
@@ -1026,7 +1026,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                 key={emoji.uuid}
                 type="button"
                 onClick={() => onSelectEmoji(emoji)}
-                className={`rounded-lg p-2 text-left ${selectedEmojiUuid === emoji.uuid ? "border border-accent-3" : "border-accent-1"}`}
+                className={`rounded-lg p-2 text-left ${selectedEmojiUuid === emoji.uuid ? "border border-accent" : "border-border"}`}
               >
                 <div className={thumbBoxClass}>
                   <canvas
@@ -1055,7 +1055,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                     className="h-full w-full [image-rendering:pixelated]"
                   />
                 </div>
-                <p className="truncate text-[10px] text-accent-2">{emoji.name || "Untitled"}</p>
+                <p className="truncate text-[10px] text-muted">{emoji.name || "Untitled"}</p>
               </button>
             ))}
           </div>
@@ -1063,7 +1063,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
       ) : null}
 
       {editorMode === "none" && statusMessage ? (
-        <p className="mt-3 text-xs text-accent-2">{statusMessage}</p>
+        <p className="mt-3 text-xs text-muted">{statusMessage}</p>
       ) : null}
     </section>
   );

@@ -279,17 +279,17 @@ export default function VideoCall({ threadId, currentUserId, onBack }: VideoCall
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background">
-      <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-bg">
+      <div className="flex items-center justify-between border-b border-border bg-surface px-3 py-3">
         <BackButton onBack={onEndCall} />
         <div className="flex items-center gap-2">
-          <Video className="h-4 w-4 text-accent-2" />
+          <Video className="h-4 w-4 text-muted" />
           <p className="text-sm font-semibold text-foreground">Video call</p>
         </div>
         <button
           type="button"
           onClick={onEndCall}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-primary-background hover:bg-red-500"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-danger-fill text-on-accent hover:bg-danger-fill"
         >
           <PhoneOff className="h-4 w-4" />
         </button>
@@ -305,7 +305,7 @@ export default function VideoCall({ threadId, currentUserId, onBack }: VideoCall
           />
           <video
             ref={localVideoRef}
-            className="pointer-events-none absolute bottom-3 right-3 h-32 w-24 rounded-xl border border-accent-1 object-cover shadow-lg shadow-black/60"
+            className="pointer-events-none absolute bottom-3 right-3 h-32 w-24 rounded-xl border border-border object-cover shadow-lg shadow-black/60"
             muted
             autoPlay
             playsInline
@@ -313,14 +313,14 @@ export default function VideoCall({ threadId, currentUserId, onBack }: VideoCall
         </div>
       </div>
 
-      <div className="border-t border-accent-1 bg-secondary-background px-3 py-2">
-        <p className="text-xs text-accent-2">{renderStatusLabel()}</p>
+      <div className="border-t border-border bg-surface px-3 py-2">
+        <p className="text-xs text-muted">{renderStatusLabel()}</p>
         <div className="mt-2 flex items-center gap-2">
           <button
             type="button"
             onClick={onStartCall}
             disabled={status === "acquiring_media" || status === "connecting"}
-            className="flex-1 rounded-full bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background hover:brightness-110 disabled:opacity-60"
+            className="flex-1 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-on-accent hover:brightness-110 disabled:opacity-60"
           >
             {status === "connected" ? "Reconnect" : "Start call"}
           </button>

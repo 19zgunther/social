@@ -45,7 +45,7 @@ export default function ThreadEventListRow({
     <button
       type="button"
       onClick={onOpen}
-      className={`relative w-full min-h-[3rem] overflow-hidden rounded-xl border border-accent-1/60 text-left shadow-sm shadow-black/20 touch-manipulation active:opacity-90 ${
+      className={`relative w-full min-h-[3rem] overflow-hidden rounded-xl border border-border/60 text-left shadow-sm shadow-black/20 touch-manipulation active:opacity-90 ${
         metaLine ? "h-[18vh] max-h-[18vh]" : "h-[15vh] max-h-[15vh]"
       }`}
     >
@@ -62,7 +62,7 @@ export default function ThreadEventListRow({
         />
       ) : (
         <div
-          className="absolute inset-0 bg-gradient-to-br from-accent-1 via-accent-1/80 to-secondary-background"
+          className="absolute inset-0 bg-gradient-to-br from-border via-border/80 to-surface"
           aria-hidden
         />
       )}
@@ -71,7 +71,7 @@ export default function ThreadEventListRow({
         aria-hidden
       />
       <div className="absolute inset-x-0 bottom-0 z-10 px-3 pb-2.5 pt-10">
-        <div className="rounded-xl border border-white/18 bg-primary-background/45 px-3 py-2 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-xl backdrop-saturate-150">
+        <div className="rounded-xl border border-white/18 bg-bg/45 px-3 py-2 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-xl backdrop-saturate-150">
           <p className="truncate text-base font-semibold tracking-tight text-foreground [text-shadow:0_2px_10px_rgba(0,0,0,0.88)]">
             {event.name}
           </p>

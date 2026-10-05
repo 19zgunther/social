@@ -7,7 +7,6 @@ import {
   CircleUserRound,
   MessageSquare,
   Play,
-  Plus,
   Settings as SettingsIcon,
   Trash2,
   ListChecks,
@@ -106,8 +105,8 @@ function ProfilePictureRow({
     localProfileImageUrl || (localProfileImageAccessGrant && localProfileImageId),
   );
   return (
-    <div className="border-none border-accent-1 px-4 py-4">
-      <div className="flex items-start justify-between gap-3">
+    <div className="border-none border-border px-4 py-4">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           {isCurrentUsers ? (
             <button
@@ -127,9 +126,9 @@ function ProfilePictureRow({
                   imageId={localProfileImageId}
                 />
               ) : (
-                <div className="flex h-16 w-16 flex-col items-center justify-center rounded-full border border-accent-1 bg-secondary-background p-2 text-xs">
-                  <CircleUserRound className="h-10 w-10 text-accent-2" />
-                  <p className="text-accent-2">Click to add</p>
+                <div className="flex h-16 w-16 flex-col items-center justify-center rounded-full border border-border bg-surface p-2 text-xs">
+                  <CircleUserRound className="h-10 w-10 text-muted" />
+                  <p className="text-muted">Click to add</p>
                 </div>
               )}
             </button>
@@ -146,15 +145,15 @@ function ProfilePictureRow({
                   imageId={localProfileImageId}
                 />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-accent-1 bg-secondary-background p-2">
-                  <CircleUserRound className="h-14 w-14 text-accent-2" />
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-surface p-2">
+                  <CircleUserRound className="h-14 w-14 text-muted" />
                 </div>
               )}
             </div>
           )}
           <div className="min-w-0">
             <p className="truncate text-lg font-semibold text-foreground">{username}</p>
-            {isCurrentUsers && <p className="truncate text-xs text-accent-2">{email ?? "No email"}</p>}
+            {isCurrentUsers && <p className="truncate text-xs text-muted">{email ?? "No email"}</p>}
           </div>
         </div>
 
@@ -162,7 +161,7 @@ function ProfilePictureRow({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="rounded-full border border-accent-1 bg-secondary-background p-2 text-accent-2 transition hover:text-foreground"
+            className="rounded-full p-2 text-muted"
             aria-label="Settings"
             title="Settings"
           >
@@ -204,21 +203,23 @@ function ProfilePostsSection({
           type="button"
           onClick={onOpenCreatePost}
           aria-label="Create post"
-          className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-accent-3 text-primary-background transition hover:opacity-90"
+          className="create-post-rgb-border absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full transition hover:opacity-90"
           style={{ boxShadow: "0 1px 10px 2px black" }}
         >
-          <Plus aria-hidden className="h-5 w-5" strokeWidth={2.5} />
+          <span className="create-post-rgb-text text-2xl font-semibold leading-none" aria-hidden>
+            +
+          </span>
         </button>
       ) : null}
 
-      {isLoadingPosts ? <p className="px-3 py-3 text-xs text-accent-2">Loading posts...</p> : null}
+      {isLoadingPosts ? <p className="px-3 py-3 text-xs text-muted">Loading posts...</p> : null}
       {!isLoadingPosts && posts.length === 0 ? (
-        <p className="px-3 py-3 text-xs text-accent-2">
+        <p className="px-3 py-3 text-xs text-muted">
           {showCreateButton ? "No posts yet. Create your first post." : "No posts yet."}
         </p>
       ) : null}
 
-      <div className="grid grid-cols-3 border-t border-accent-1">
+      <div className="grid grid-cols-3 border-t border-border">
         {posts.map((post, index) => {
           const showRightBorder = index % 3 !== 2;
           const hasImageAttachment = Boolean(post.image_id);
@@ -232,8 +233,8 @@ function ProfilePostsSection({
               key={post.id}
               type="button"
               onClick={() => setSelectedPostId(post.id)}
-              className={`relative aspect-square min-h-0 overflow-hidden bg-primary-background p-0 ${showRightBorder ? "border-r border-accent-1" : ""
-                } border-b border-accent-1`}
+              className={`relative aspect-square min-h-0 overflow-hidden bg-bg p-0 ${showRightBorder ? "border-r border-border" : ""
+                } border-b border-border`}
             >
               {hasPostImageSource ? (
                 <>
@@ -251,12 +252,12 @@ function ProfilePostsSection({
                 ) : null}
                 </>
               ) : hasImageAttachment ? (
-                <div className="flex h-full w-full items-center justify-center bg-black text-[10px] text-accent-2">
+                <div className="flex h-full w-full items-center justify-center bg-black text-[10px] text-muted">
                   Loading...
                 </div>
               ) : poll ? (
                 <div className="flex h-full w-full flex-col items-start justify-start gap-1 overflow-hidden bg-black p-1.5">
-                  <ListChecks className="h-4 w-4 shrink-0 text-accent-3" />
+                  <ListChecks className="h-4 w-4 shrink-0 text-accent" />
                   <p
                     className="w-full overflow-hidden text-left text-[9px] leading-tight text-foreground/80 break-words"
                     style={{
@@ -297,7 +298,7 @@ function ProfilePostsSection({
               }
             }}
             disabled={!nextCursorPostId || isLoadingMorePosts}
-            className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs font-medium text-accent-2 transition hover:text-foreground disabled:opacity-50"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs font-medium text-muted transition hover:text-foreground disabled:opacity-50"
           >
             {isLoadingMorePosts ? "Loading..." : "Load more"}
           </button>
@@ -602,13 +603,13 @@ function Profile({
     }
 
     return (
-      <div className="flex h-full min-h-0 w-full flex-col bg-primary-background">
-        <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
+      <div className="flex h-full min-h-0 w-full flex-col bg-bg">
+        <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <BackButton onBack={() => setSelectedPostId(null)} />
           <button
             type="button"
             onClick={() => { void onDeleteSelectedPost(); }}
-            className="rounded-full flex gap-2 border border-accent-1 bg-secondary-background px-3 py-1 text-xs hover:text-foreground"
+            className="rounded-full flex gap-2 px-3 py-1 text-xs hover:text-foreground"
             style={{ color: confirmedDeletePost ? "red" : undefined }}
           >
             <Trash2 className="h-4 w-4" /> {confirmedDeletePost && "Confirm Delete"}
@@ -643,13 +644,13 @@ function Profile({
             }}
           />
         </div>
-        {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
+        {statusMessage ? <p className="px-3 py-2 text-xs text-muted">{statusMessage}</p> : null}
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain touch-pan-y bg-primary-background">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain touch-pan-y bg-bg">
       <ProfilePictureEditor
         isOpen={isProfilePictureEditorOpen}
         onClose={() => setIsProfilePictureEditorOpen(false)}
@@ -672,15 +673,15 @@ function Profile({
         setIsProfilePictureEditorOpen={setIsProfilePictureEditorOpen}
       />
 
-      <section className="border-none border-accent-1 px-3 py-2.5">
+      <section className="border-none border-border px-3 py-2.5">
         <div
           role="tablist"
           aria-label="Profile sections"
-          className="relative flex w-full rounded-full bg-black border-accent-1 border-2 rounded-full p-1"
+          className="relative flex w-full rounded-full bg-black border-border border-2 rounded-full p-1"
         >
           <div
             aria-hidden
-            className="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/4)] rounded-full bg-accent-3 transition-transform duration-200 ease-out"
+            className="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/4)] rounded-full bg-accent transition-transform duration-200 ease-out"
             style={{ transform: `translateX(${Math.max(activeSubTabIndex, 0) * 100}%)` }}
           />
           {PROFILE_SUB_TABS.map((tab) => {
@@ -693,7 +694,7 @@ function Profile({
                 aria-selected={isActive}
                 onClick={() => setActiveSubTab(tab.id)}
                 className={`relative z-10 flex flex-1 items-center justify-center gap-1 rounded-full px-1 py-2.5 text-xs font-semibold transition-colors ${
-                  isActive ? "text-primary-background" : "text-accent-2 hover:text-foreground"
+                  isActive ? "text-on-accent" : "text-muted hover:text-foreground"
                 }`}
               >
                 {isActive ? <Check aria-hidden className="h-3 w-3 shrink-0" strokeWidth={2.75} /> : null}
@@ -705,7 +706,7 @@ function Profile({
       </section>
 
       {activeSubTab === "friends" ? (
-        <section className="border-b border-accent-1 px-3 w-full">
+        <section className="border-b border-border px-3 w-full">
           <div className="mt-3 w-full">
             <UserSearch
               value={friendSearchQuery}
@@ -713,7 +714,7 @@ function Profile({
               onSelect={onSelectUserFromSearch}
               searchUsers={searchFriendOptions}
               placeholder="Search to add or find friends..."
-              inputClassName="w-full rounded-lg border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+              inputClassName="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
               dropdownClassName="min-h-[30vh] max-h-[30vh]"
               getOptionActionLabel={(option) => {
                 if (option.friendshipStatus === "none" || option.friendshipStatus === "rejected") {
@@ -735,24 +736,24 @@ function Profile({
 
           <div className="mt-5">
             {isLoadingFriendRows ? (
-              <p className="text-xs text-accent-2">Loading friends...</p>
+              <p className="text-xs text-muted">Loading friends...</p>
             ) : null}
 
             {!isLoadingFriendRows && incomingRequests.length === 0 && acceptedFriends.length === 0 ? (
-              <p className="text-xs text-accent-2">No friends or requests yet.</p>
+              <p className="text-xs text-muted">No friends or requests yet.</p>
             ) : null}
 
             <div className="space-y-2">
               {incomingRequests.length > 0 ? (
                 <>
-                  <p className="mb-1 text-xs font-semibold text-accent-2">
+                  <p className="mb-1 text-xs font-semibold text-muted">
                     Incoming requests ({incomingRequests.length})
                   </p>
                   <div className="space-y-2 pt-2">
                     {incomingRequests.map((requestRow) => (
                       <div
                         key={requestRow.id}
-                        className="w-full border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3 flex items-center gap-4"
+                        className="w-full border-b border-border/50 bg-bg px-3 py-0 pb-3 flex items-center gap-4"
                       >
                         <UserProfileImage
                           userId={requestRow.requesting_user_id}
@@ -766,7 +767,7 @@ function Profile({
                         <div className="flex-1 min-w-0 text-left">
                           <p className="text-sm font-medium text-foreground truncate">{requestRow.username}</p>
                           {requestRow.email ? (
-                            <p className="text-xs text-accent-2 truncate">{requestRow.email}</p>
+                            <p className="text-xs text-muted truncate">{requestRow.email}</p>
                           ) : null}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
@@ -776,7 +777,7 @@ function Profile({
                               void onRespondToFriendRequest(requestRow.id, true);
                             }}
                             disabled={activeIncomingRequestId === requestRow.id}
-                            className="rounded-lg bg-accent-3 px-2 py-1 text-xs font-semibold text-primary-background disabled:opacity-50"
+                            className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-on-accent disabled:opacity-50"
                           >
                             Confirm
                           </button>
@@ -786,7 +787,7 @@ function Profile({
                               void onRespondToFriendRequest(requestRow.id, false);
                             }}
                             disabled={activeIncomingRequestId === requestRow.id}
-                            className="rounded-lg border border-accent-1 px-2 py-1 text-xs text-accent-2 hover:text-foreground disabled:opacity-50"
+                            className="rounded-lg border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-50"
                           >
                             Reject
                           </button>
@@ -797,14 +798,14 @@ function Profile({
                 </>
               ) : null}
 
-              <p className="mb-1 text-xs font-semibold text-accent-2">Your friends ({acceptedFriends.length})</p>
+              <p className="mb-1 text-xs font-semibold text-muted">Your friends ({acceptedFriends.length})</p>
               <div className="space-y-2 pt-2">
                 {acceptedFriends.map((friend) => (
                   <button
                     key={friend.id}
                     type="button"
                     onClick={() => { onViewUserProfile(friend.user_id); }}
-                    className="w-full border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3 flex items-center gap-4 transition hover:bg-secondary-background"
+                    className="w-full border-b border-border/50 bg-bg px-3 py-0 pb-3 flex items-center gap-4 transition hover:bg-surface"
                   >
                     <UserProfileImage
                       userId={friend.user_id}
@@ -818,10 +819,10 @@ function Profile({
                     <div className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-medium text-foreground truncate">{friend.username}</p>
                       {friend.email && (
-                        <p className="text-xs text-accent-2 truncate">{friend.email}</p>
+                        <p className="text-xs text-muted truncate">{friend.email}</p>
                       )}
                     </div>
-                    <ChevronRight className="h-4 w-4 text-accent-2 flex-shrink-0" />
+                    <ChevronRight className="h-4 w-4 text-muted flex-shrink-0" />
                   </button>
                 ))}
               </div>
@@ -830,12 +831,12 @@ function Profile({
 
           {pendingOutgoingRequests.length > 0 ? (
             <div className="mt-3">
-              <p className="mb-1 text-xs font-semibold text-accent-2">Pending sent requests</p>
+              <p className="mb-1 text-xs font-semibold text-muted">Pending sent requests</p>
               <div className="space-y-2 pt-2">
                 {pendingOutgoingRequests.map((row) => (
                   <div
                     key={row.id}
-                    className="w-full border-b border-accent-1/50 bg-primary-background px-3 py-0 pb-3 flex items-center gap-4"
+                    className="w-full border-b border-border/50 bg-bg px-3 py-0 pb-3 flex items-center gap-4"
                   >
                     <UserProfileImage
                       userId={row.other_user_id}
@@ -849,9 +850,9 @@ function Profile({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{row.username}</p>
                       {row.email && (
-                        <p className="text-xs text-accent-2 truncate">{row.email}</p>
+                        <p className="text-xs text-muted truncate">{row.email}</p>
                       )}
-                      <p className="mt-0.5 text-xs text-accent-2">Pending</p>
+                      <p className="mt-0.5 text-xs text-muted">Pending</p>
                     </div>
                   </div>
                 ))}
@@ -881,7 +882,7 @@ function Profile({
         />
       )}
 
-      {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
+      {statusMessage ? <p className="px-3 py-2 text-xs text-muted">{statusMessage}</p> : null}
     </div>
   );
 }
@@ -1064,9 +1065,9 @@ function ProfileOtherUser({
 
     return (
       <div
-        className="flex h-full min-h-0 w-full flex-col bg-primary-background"
+        className="flex h-full min-h-0 w-full flex-col bg-bg"
       >
-        <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
+        <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <BackButton onBack={() => setSelectedPostId(null)} />
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
@@ -1101,7 +1102,7 @@ function ProfileOtherUser({
             }}
           />
         </div>
-        {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
+        {statusMessage ? <p className="px-3 py-2 text-xs text-muted">{statusMessage}</p> : null}
       </div>
     );
   }
@@ -1109,13 +1110,13 @@ function ProfileOtherUser({
   if (isLoadingProfile || !profileData) {
     return (
       <div
-        className="flex h-full min-h-0 flex-col bg-primary-background"
+        className="flex h-full min-h-0 flex-col bg-bg"
       >
-        <div className="border-b border-accent-1 px-3 py-2">
+        <div className="border-b border-border px-3 py-2">
           <BackButton onBack={onBack} />
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-xs text-accent-2">
+          <p className="text-xs text-muted">
             {isLoadingProfile ? "Loading profile..." : statusMessage || "Profile not found."}
           </p>
         </div>
@@ -1128,9 +1129,9 @@ function ProfileOtherUser({
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain touch-pan-y bg-primary-background"
+      className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain touch-pan-y bg-bg"
     >
-      <div className="border-b border-accent-1 px-3 py-2">
+      <div className="border-b border-border px-3 py-2">
         <BackButton onBack={onBack} />
       </div>
 
@@ -1151,7 +1152,7 @@ function ProfileOtherUser({
                 type="button"
                 onClick={() => { void onOpenMessage(); }}
                 disabled={isOpeningDirectThread}
-                className="rounded-full border border-accent-1 bg-secondary-background p-2 text-accent-2 transition hover:text-foreground disabled:opacity-50"
+                className="rounded-full border border-border bg-surface p-2 text-muted transition hover:text-foreground disabled:opacity-50"
                 aria-label={isOpeningDirectThread ? "Opening messages" : "Message"}
                 title={isOpeningDirectThread ? "Opening..." : "Message"}
               >
@@ -1161,8 +1162,8 @@ function ProfileOtherUser({
                 type="button"
                 onClick={() => { void onRemoveFriend(); }}
                 disabled={isRemovingFriend}
-                className={`rounded-full border bg-secondary-background p-2 text-accent-2 transition hover:text-foreground disabled:opacity-50 ${
-                  removeFriendConfirmed ? "border-red-500 text-red-500" : "border-accent-1"
+                className={`rounded-full border bg-surface p-2 text-muted transition hover:text-foreground disabled:opacity-50 ${
+                  removeFriendConfirmed ? "border-danger text-danger" : "border-border"
                 }`}
                 aria-label={
                   isRemovingFriend
@@ -1187,27 +1188,27 @@ function ProfileOtherUser({
       />
 
       {!isFriends ? (
-        <div className="border-b border-accent-1 px-4 py-6 flex flex-col items-center justify-center gap-3">
+        <div className="border-b border-border px-4 py-6 flex flex-col items-center justify-center gap-3">
           {canSendRequest ? (
             <>
-              <p className="text-sm text-accent-2 text-center">
+              <p className="text-sm text-muted text-center">
                 Send a friend request to view {profileData.user.username}'s posts.
               </p>
               <button
                 type="button"
                 onClick={() => { void onSendFriendRequest(); }}
                 disabled={isSendingRequest}
-                className="rounded-lg bg-accent-3 px-6 py-3 text-sm font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-50"
+                className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-50"
               >
                 {isSendingRequest ? "Sending..." : "Request To Follow"}
               </button>
             </>
           ) : profileData.friendship_status === "pending_sent" ? (
-            <p className="text-sm text-accent-2 text-center">
+            <p className="text-sm text-muted text-center">
               Friend request sent. Waiting for {profileData.user.username} to accept.
             </p>
           ) : profileData.friendship_status === "pending_received" ? (
-            <p className="text-sm text-accent-2 text-center">
+            <p className="text-sm text-muted text-center">
               {profileData.user.username} has sent you a friend request. Check your Profile tab to respond.
             </p>
           ) : null}
@@ -1215,8 +1216,8 @@ function ProfileOtherUser({
       ) : (
         <>
           {removeFriendConfirmed ? (
-            <div className="flex items-center justify-between gap-3 border-b border-accent-1 bg-secondary-background px-4 py-2">
-              <p className="min-w-0 text-xs text-accent-2">
+            <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2">
+              <p className="min-w-0 text-xs text-muted">
                 Tap the trash icon again to remove{" "}
                 <span className="font-medium text-foreground">{profileData.user.username}</span>{" "}
                 as a friend.
@@ -1224,7 +1225,7 @@ function ProfileOtherUser({
               <button
                 type="button"
                 onClick={() => setRemoveFriendConfirmed(false)}
-                className="shrink-0 rounded-lg border border-accent-1 px-3 py-1 text-xs font-medium text-accent-2 transition hover:text-foreground"
+                className="shrink-0 rounded-lg border border-border px-3 py-1 text-xs font-medium text-muted transition hover:text-foreground"
               >
                 Cancel
               </button>
@@ -1244,7 +1245,7 @@ function ProfileOtherUser({
         </>
       )}
 
-      {statusMessage ? <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p> : null}
+      {statusMessage ? <p className="px-3 py-2 text-xs text-muted">{statusMessage}</p> : null}
     </div>
   );
 }

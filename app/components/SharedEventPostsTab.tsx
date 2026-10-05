@@ -447,23 +447,23 @@ export default function SharedEventPostsTab({
   ) => (
     <div
       key={item.id}
-      className="flex items-stretch overflow-hidden rounded-xl border border-accent-1 bg-secondary-background"
+      className="flex items-stretch overflow-hidden rounded-xl border border-border bg-surface"
     >
       <button
         type="button"
         onClick={onMainClick}
-        className="min-w-0 flex-1 px-3 py-3 text-left transition hover:bg-primary-background/40"
+        className="min-w-0 flex-1 px-3 py-3 text-left transition hover:bg-bg/40"
       >
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
-          <span className="shrink-0 text-[11px] text-accent-2">
+          <span className="shrink-0 text-[11px] text-muted">
             <Users className="mr-1 inline h-3 w-3" />
             {item.contributor_count}
           </span>
         </div>
-        <p className="mt-1 text-xs text-accent-2">{subtitle}</p>
+        <p className="mt-1 text-xs text-muted">{subtitle}</p>
         {item.viewer_has_contributed ? (
-          <p className="mt-0.5 text-[11px] text-accent-3">You contributed</p>
+          <p className="mt-0.5 text-[11px] text-accent">You contributed</p>
         ) : null}
       </button>
       {item.is_creator ? (
@@ -471,7 +471,7 @@ export default function SharedEventPostsTab({
           type="button"
           aria-label="Shared post settings"
           onClick={() => onOpenSettings(item.id)}
-          className="flex shrink-0 items-center justify-center border-l border-accent-1 px-3 text-accent-2 transition hover:bg-primary-background/40 hover:text-foreground"
+          className="flex shrink-0 items-center justify-center border-l border-border px-3 text-muted transition hover:bg-bg/40 hover:text-foreground"
         >
           <Settings className="h-5 w-5" />
         </button>
@@ -482,8 +482,8 @@ export default function SharedEventPostsTab({
   if (view.kind === "create" || view.kind === "settings") {
     const isSettings = view.kind === "settings";
     return (
-      <div className="flex h-full min-h-0 flex-col bg-primary-background">
-        <header className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
+      <div className="flex h-full min-h-0 flex-col bg-bg">
+        <header className="flex items-center justify-between border-b border-border px-3 py-2">
           <BackButton onBack={() => setView({ kind: "list" })} />
           <h1 className="text-sm font-semibold text-foreground">
             {isSettings ? "Shared Event Settings" : "Create Shared Event"}
@@ -492,18 +492,18 @@ export default function SharedEventPostsTab({
         </header>
         <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-3">
           {isSettings && isLoadingSettings ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-8 text-xs text-accent-2">
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-xs text-muted">
               <Loader />
               <span>Loading</span>
             </div>
           ) : (
             <>
               <label className="block space-y-1">
-                <span className="text-xs text-accent-2">Event title</span>
+                <span className="text-xs text-muted">Event title</span>
                 <input
                   value={createTitle}
                   onChange={(event) => setCreateTitle(event.target.value)}
-                  className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
                   placeholder="Weekend trip"
                 />
               </label>
@@ -521,19 +521,19 @@ export default function SharedEventPostsTab({
               />
 
               <div className="space-y-2">
-                <p className="text-xs text-accent-2">
+                <p className="text-xs text-muted">
                   Invite friends
                   {selectedInviteeIds.size > 0 ? ` (${selectedInviteeIds.size})` : ""}
                 </p>
                 {isLoadingFriends ? (
-                  <div className="flex items-center gap-2 py-3 text-xs text-accent-2">
+                  <div className="flex items-center gap-2 py-3 text-xs text-muted">
                     <Loader scale={0.7} />
                     <span>Loading friends</span>
                   </div>
                 ) : friends.length === 0 ? (
-                  <p className="text-xs text-accent-2">No friends to invite yet.</p>
+                  <p className="text-xs text-muted">No friends to invite yet.</p>
                 ) : (
-                  <div className="overflow-hidden rounded-xl border border-accent-1">
+                  <div className="overflow-hidden rounded-xl border border-border">
                     {friends.map((friend) => {
                       const selected = selectedInviteeIds.has(friend.user_id);
                       return (
@@ -541,7 +541,7 @@ export default function SharedEventPostsTab({
                           key={friend.user_id}
                           type="button"
                           onClick={() => toggleCreateInvitee(friend.user_id)}
-                          className="flex w-full items-center gap-3 border-b border-accent-1 px-3 py-2.5 text-left last:border-b-0 transition hover:bg-secondary-background"
+                          className="flex w-full items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0 transition hover:bg-surface"
                         >
                           <UserProfileImage
                             userId={friend.user_id}
@@ -558,8 +558,8 @@ export default function SharedEventPostsTab({
                           <span
                             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
                               selected
-                                ? "border-accent-3 bg-accent-3 text-primary-background"
-                                : "border-accent-2 text-transparent"
+                                ? "border-accent bg-accent text-on-accent"
+                                : "border-muted text-transparent"
                             }`}
                             aria-hidden
                           >
@@ -572,13 +572,13 @@ export default function SharedEventPostsTab({
                 )}
               </div>
 
-              {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
+              {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
 
               <button
                 type="button"
                 disabled={isSavingEditor || !createTitle.trim()}
                 onClick={() => void (isSettings ? onSettingsSubmit() : onCreateSubmit())}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-3 bg-secondary-background py-3 text-sm font-semibold text-accent-3 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent bg-surface py-3 text-sm font-semibold text-accent disabled:opacity-50"
               >
                 {isSavingEditor ? (
                   <Loader scale={0.55} />
@@ -596,8 +596,8 @@ export default function SharedEventPostsTab({
 
   if (view.kind === "detail") {
     return (
-      <div className="flex h-full min-h-0 flex-col bg-primary-background">
-        <header className="flex items-center gap-2 border-b border-accent-1 px-2 py-2">
+      <div className="flex h-full min-h-0 flex-col bg-bg">
+        <header className="flex items-center gap-2 border-b border-border px-2 py-2">
           <BackButton
             onBack={() => {
               setDetailPost(null);
@@ -611,7 +611,7 @@ export default function SharedEventPostsTab({
 
         <div className="flex-1 min-h-0 overflow-y-auto">
           {isLoadingDetail || !detailPost ? (
-            <div className="flex flex-col items-center justify-center gap-2 px-3 py-8 text-xs text-accent-2">
+            <div className="flex flex-col items-center justify-center gap-2 px-3 py-8 text-xs text-muted">
               <Loader />
               <span>Loading</span>
             </div>
@@ -625,11 +625,11 @@ export default function SharedEventPostsTab({
             <div className="space-y-4 px-3 py-3">
               <div className="space-y-1">
                 <p className="text-base font-semibold text-foreground">{detailPost.title}</p>
-                <p className="text-xs text-accent-2">
+                <p className="text-xs text-muted">
                   Closes {formatDateLabel(detailPost.close_at)} · Releases{" "}
                   {formatDateLabel(detailPost.release_at)}
                 </p>
-                <p className="text-xs text-accent-2">
+                <p className="text-xs text-muted">
                   {detailPost.phase === "open"
                     ? "Photos stay hidden until release. You can only add photos."
                     : "Contributions are closed. Waiting for release."}
@@ -650,7 +650,7 @@ export default function SharedEventPostsTab({
                     type="button"
                     disabled={isContributing}
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent-3 bg-secondary-background py-3 text-sm font-semibold text-accent-3 disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent bg-surface py-3 text-sm font-semibold text-accent disabled:opacity-50"
                   >
                     {isContributing ? (
                       <Loader scale={0.55} />
@@ -659,26 +659,26 @@ export default function SharedEventPostsTab({
                     )}
                     Add photos
                   </button>
-                  <p className="text-[11px] text-accent-2">
+                  <p className="text-[11px] text-muted">
                     Up to {MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR} photos per person. No previews.
                   </p>
                 </div>
               ) : null}
 
-              {contributeStatus ? <p className="text-xs text-accent-2">{contributeStatus}</p> : null}
+              {contributeStatus ? <p className="text-xs text-muted">{contributeStatus}</p> : null}
 
               <div className="space-y-2">
-                <p className="text-xs font-medium text-accent-2">
+                <p className="text-xs font-medium text-muted">
                   Invitees ({detailPost.contributors?.length ?? detailPost.contributor_count})
                 </p>
                 <div className="space-y-1">
                   {(detailPost.contributors ?? []).map((contributor) => (
                     <div
                       key={contributor.user_id}
-                      className="flex items-center justify-between rounded-lg border border-accent-1 px-3 py-2"
+                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
                     >
                       <span className="text-sm text-foreground">{contributor.username}</span>
-                      <span className="text-[11px] text-accent-2">
+                      <span className="text-[11px] text-muted">
                         {contributor.has_contributed ? "Contributed" : "Invited"}
                       </span>
                     </div>
@@ -693,38 +693,40 @@ export default function SharedEventPostsTab({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-primary-background">
-      <header className="flex items-center justify-between gap-3 border-b border-accent-1 px-3 py-3">
+    <div className="flex h-full min-h-0 flex-col bg-bg">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-3 py-3">
         <div className="min-w-0">
           <h1 className="text-base font-semibold text-foreground">Shared Event Posts</h1>
-          <p className="text-xs text-accent-2">Contribute blindly. Reveal together.</p>
+          <p className="text-xs text-muted">Contribute blindly. Reveal together.</p>
         </div>
         <button
           type="button"
           onClick={onOpenCreate}
           aria-label="Create Shared Post"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-accent-3 text-accent-3 transition hover:bg-accent-3/10"
+          className="create-post-rgb-border flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition hover:opacity-90"
         >
-          <Plus className="h-4 w-4" />
+          <span className="create-post-rgb-text text-xl font-semibold leading-none" aria-hidden>
+            +
+          </span>
         </button>
       </header>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-4">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-6 text-xs text-accent-2">
+          <div className="flex flex-col items-center justify-center gap-2 py-6 text-xs text-muted">
             <Loader />
             <span>Loading</span>
           </div>
         ) : null}
 
-        {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
+        {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
 
         <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-accent-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
             Open Shared Posts
           </h2>
           {openPosts.length === 0 ? (
-            <p className="text-xs text-accent-2">No open shared posts.</p>
+            <p className="text-xs text-muted">No open shared posts.</p>
           ) : (
             openPosts.map((item) =>
               renderSharedPostRow(item, `Closes ${formatDateLabel(item.close_at)}`, () => {
@@ -736,11 +738,11 @@ export default function SharedEventPostsTab({
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-accent-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
             Pending Posts
           </h2>
           {pendingPosts.length === 0 ? (
-            <p className="text-xs text-accent-2">Nothing waiting to release.</p>
+            <p className="text-xs text-muted">Nothing waiting to release.</p>
           ) : (
             pendingPosts.map((item) =>
               renderSharedPostRow(item, `Releases ${formatDateLabel(item.release_at)}`, () => {
@@ -751,11 +753,11 @@ export default function SharedEventPostsTab({
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-accent-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
             Released
           </h2>
           {releasedPosts.length === 0 ? (
-            <p className="text-xs text-accent-2">No released shared posts yet.</p>
+            <p className="text-xs text-muted">No released shared posts yet.</p>
           ) : (
             releasedPosts.map((item) =>
               renderSharedPostRow(item, `Released ${formatDateLabel(item.release_at)}`, () => {

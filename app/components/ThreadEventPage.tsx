@@ -104,10 +104,10 @@ function writePageCache(eventId: string, members: ThreadMember[], event: ThreadE
 
 /** Frosted panels over full-bleed event imagery */
 const glassCard =
-  "rounded-2xl border border-white/14 bg-secondary-background/50 shadow-[0_10px_44px_rgba(0,0,0,0.48),0_3px_16px_rgba(0,0,0,0.32)] backdrop-blur-[28px] backdrop-saturate-[1.4]";
+  "rounded-2xl border border-white/14 bg-surface/50 shadow-[0_10px_44px_rgba(0,0,0,0.48),0_3px_16px_rgba(0,0,0,0.32)] backdrop-blur-[28px] backdrop-saturate-[1.4]";
 
 const iconBtn =
-  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/24 bg-primary-background/58 text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.55),0_2px_8px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-primary-background/76 hover:shadow-[0_8px_28px_rgba(0,0,0,0.58)]";
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/24 bg-bg/58 text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.55),0_2px_8px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-bg/76 hover:shadow-[0_8px_28px_rgba(0,0,0,0.58)]";
 
 const sectionLabel =
   "text-[11px] font-semibold uppercase tracking-wide text-foreground/92 [text-shadow:0_2px_10px_rgba(0,0,0,0.95),0_1px_3px_rgba(0,0,0,0.9)]";
@@ -119,13 +119,13 @@ const titleDisplay =
   "text-xl font-bold leading-snug text-foreground [text-shadow:0_3px_18px_rgba(0,0,0,0.96),0_2px_6px_rgba(0,0,0,0.9)]";
 
 const fieldGlass =
-  "border-white/18 bg-primary-background/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_6px_24px_rgba(0,0,0,0.42)] backdrop-blur-xl";
+  "border-white/18 bg-bg/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_6px_24px_rgba(0,0,0,0.42)] backdrop-blur-xl";
 
 const ghostActionBtn =
-  "rounded-xl border border-white/20 bg-primary-background/52 py-2 text-xs font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.48)] backdrop-blur-xl [text-shadow:0_2px_8px_rgba(0,0,0,0.88)] transition hover:bg-primary-background/64";
+  "rounded-xl border border-white/20 bg-bg/52 py-2 text-xs font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.48)] backdrop-blur-xl [text-shadow:0_2px_8px_rgba(0,0,0,0.88)] transition hover:bg-bg/64";
 
 const primaryActionBtn =
-  "rounded-xl border border-white/25 bg-accent-3/92 py-2 text-xs font-semibold text-primary-background shadow-[0_8px_28px_rgba(10,132,255,0.5),0_4px_16px_rgba(0,0,0,0.4)] backdrop-blur-xl [text-shadow:0_1px_3px_rgba(0,0,0,0.45)] transition hover:bg-accent-3";
+  "rounded-xl border border-white/25 bg-accent/92 py-2 text-xs font-semibold text-on-accent shadow-[0_8px_28px_color-mix(in_srgb,var(--accent)_50%,transparent),0_4px_16px_rgba(0,0,0,0.4)] backdrop-blur-xl [text-shadow:0_1px_3px_rgba(0,0,0,0.45)] transition hover:bg-accent";
 
 /** Frosted RSVP chips — white type, strong blur; selected state gets a colored glow per status */
 const rsvpBtnBase =
@@ -136,11 +136,11 @@ const rsvpBtnIdle =
 
 const rsvpBtnSelected: Record<ThreadEventRsvpStatus, string> = {
   going:
-    "border-emerald-200/55 bg-gradient-to-b from-emerald-400/45 via-emerald-500/35 to-emerald-900/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_0_36px_rgba(52,211,153,0.55),0_10px_36px_rgba(0,0,0,0.5)] ring-1 ring-emerald-200/35",
+    "border-success/55 bg-gradient-to-b from-success/45 via-success/35 to-success/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_0_36px_rgba(34,197,94,0.55),0_10px_36px_rgba(0,0,0,0.5)] ring-1 ring-success/35",
   maybe:
-    "border-amber-200/50 bg-gradient-to-b from-amber-400/42 via-amber-500/32 to-amber-950/38 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_0_32px_rgba(251,191,36,0.45),0_10px_36px_rgba(0,0,0,0.48)] ring-1 ring-amber-200/30",
+    "border-warning/50 bg-gradient-to-b from-warning/42 via-warning/32 to-warning/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_0_32px_rgba(245,158,11,0.45),0_10px_36px_rgba(0,0,0,0.48)] ring-1 ring-warning/30",
   not_going:
-    "border-rose-200/45 bg-gradient-to-b from-rose-400/38 via-rose-600/28 to-rose-950/42 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_0_28px_rgba(251,113,133,0.4),0_10px_36px_rgba(0,0,0,0.5)] ring-1 ring-rose-200/25",
+    "border-danger/45 bg-gradient-to-b from-danger/38 via-danger/28 to-danger/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_0_28px_rgba(248,113,113,0.4),0_10px_36px_rgba(0,0,0,0.5)] ring-1 ring-danger/25",
 };
 
 type RosterEntry = {
@@ -524,18 +524,18 @@ export default function ThreadEventPage({
           />
         ) : (
           <div
-            className="h-full min-h-full w-full bg-gradient-to-br from-accent-1/90 via-secondary-background to-primary-background"
+            className="h-full min-h-full w-full bg-gradient-to-br from-border/90 via-surface to-bg"
             aria-hidden
           />
         )}
         <div
-          className="absolute inset-0 bg-primary-background/58"
+          className="absolute inset-0 bg-bg/58"
           aria-hidden
         />
       </div>
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-        <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-white/14 bg-secondary-background/70 px-3 py-3 shadow-[0_8px_36px_rgba(0,0,0,0.48)] backdrop-blur-[28px] backdrop-saturate-150">
+        <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-white/14 bg-surface/70 px-3 py-3 shadow-[0_8px_36px_rgba(0,0,0,0.48)] backdrop-blur-[28px] backdrop-saturate-150">
           <div className="flex min-w-0 items-center gap-1 justify-self-start">
             <BackButton onBack={onBack} />
           </div>
@@ -547,7 +547,7 @@ export default function ThreadEventPage({
               <button
                 type="button"
                 onClick={onOpenThread}
-                className="rounded-lg border border-white/24 bg-primary-background/58 px-2 py-1 text-[11px] font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.55),0_2px_8px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-primary-background/76"
+                className="rounded-lg border border-white/24 bg-bg/58 px-2 py-1 text-[11px] font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.55),0_2px_8px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-bg/76"
               >
                 Open Thread
               </button>
@@ -616,7 +616,7 @@ export default function ThreadEventPage({
                     value={titleDraft}
                     onChange={(ev) => setTitleDraft(ev.target.value)}
                     disabled={fieldBusy}
-                    className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-lg font-semibold text-foreground outline-none focus:border-accent-2 ${fieldGlass}`}
+                    className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-lg font-semibold text-foreground outline-none focus:border-muted ${fieldGlass}`}
                     autoFocus
                   />
                   <button
@@ -629,7 +629,7 @@ export default function ThreadEventPage({
                     }}
                     aria-label="Save name"
                   >
-                    <Check className="h-4 w-4 text-accent-3" aria-hidden />
+                    <Check className="h-4 w-4 text-accent" aria-hidden />
                   </button>
                   <button
                     type="button"
@@ -738,7 +738,7 @@ export default function ThreadEventPage({
                   onChange={(ev) => setLocationDraft(ev.target.value)}
                   disabled={fieldBusy}
                   placeholder="Location"
-                  className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2 ${fieldGlass}`}
+                  className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-muted ${fieldGlass}`}
                   autoFocus
                 />
                 <button
@@ -751,7 +751,7 @@ export default function ThreadEventPage({
                   }}
                   aria-label="Save location"
                 >
-                  <Check className="h-4 w-4 text-accent-3 drop-shadow-md" aria-hidden />
+                  <Check className="h-4 w-4 text-accent drop-shadow-md" aria-hidden />
                 </button>
                 <button
                   type="button"
@@ -792,7 +792,7 @@ export default function ThreadEventPage({
                   onChange={(ev) => setDescriptionDraft(ev.target.value)}
                   disabled={fieldBusy}
                   rows={4}
-                  className={`w-full resize-none rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2 ${fieldGlass}`}
+                  className={`w-full resize-none rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-muted ${fieldGlass}`}
                 />
                 <div className="flex gap-2">
                   <button
@@ -849,7 +849,7 @@ export default function ThreadEventPage({
                       }}
                       searchUsers={searchThreadMemberOptions}
                       placeholder="Username or email"
-                      inputClassName={`w-full rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2 ${fieldGlass}`}
+                      inputClassName={`w-full rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-muted ${fieldGlass}`}
                       dropdownClassName="z-[10000] max-h-[40vh]"
                     />
                     {memberFormError ? <p className={`mt-1 text-xs ${readableText}`}>{memberFormError}</p> : null}
@@ -969,7 +969,7 @@ export default function ThreadEventPage({
                   type="button"
                   disabled={isDeleting}
                   onClick={() => setDeleteConfirm(true)}
-                  className="w-full rounded-xl border border-white/15 bg-primary-background/50 px-3 py-2.5 text-xs font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.45)] backdrop-blur-xl transition hover:bg-primary-background/60 disabled:opacity-50 [text-shadow:0_2px_8px_rgba(0,0,0,0.85)]"
+                  className="w-full rounded-xl border border-white/15 bg-bg/50 px-3 py-2.5 text-xs font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.45)] backdrop-blur-xl transition hover:bg-bg/60 disabled:opacity-50 [text-shadow:0_2px_8px_rgba(0,0,0,0.85)]"
                 >
                   Delete event
                 </button>
@@ -993,7 +993,7 @@ export default function ThreadEventPage({
                       onClick={() => {
                         void performDelete();
                       }}
-                      className="flex-1 rounded-xl border border-red-400/55 bg-red-950/40 py-2 text-xs font-semibold text-red-200 shadow-[0_6px_22px_rgba(0,0,0,0.45)] backdrop-blur-xl transition hover:bg-red-950/55 disabled:opacity-50 [text-shadow:0_1px_4px_rgba(0,0,0,0.75)]"
+                      className="flex-1 rounded-xl border border-danger/55 bg-danger/20 py-2 text-xs font-semibold text-danger shadow-[0_6px_22px_rgba(0,0,0,0.45)] backdrop-blur-xl transition hover:bg-danger/25 disabled:opacity-50 [text-shadow:0_1px_4px_rgba(0,0,0,0.75)]"
                     >
                       {isDeleting ? "Deleting…" : "Delete"}
                     </button>

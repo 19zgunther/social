@@ -219,14 +219,14 @@ export default function Feedback({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-primary-background">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-accent-1 px-2 py-1.5">
+    <div className="flex h-full min-h-0 flex-col bg-bg">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-2 py-1.5">
         <h1 className="text-lg font-semibold text-foreground">Feedback</h1>
         <button
           type="button"
           onClick={() => void load({ refresh: true })}
           disabled={isRefreshing || isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-accent-1 px-1 py-0.5 text-sm text-accent-2 transition hover:border-accent-3 hover:text-accent-3 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-md border border-border px-1 py-0.5 text-sm text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
           aria-label="Refresh feedback"
         >
           {isRefreshing ? (
@@ -238,7 +238,7 @@ export default function Feedback({
         </button>
       </header>
 
-      <div className="shrink-0 border-b border-accent-1 p-2">
+      <div className="shrink-0 border-b border-border p-2">
         <label htmlFor="feedback-draft" className="sr-only">
           New bug report or message
         </label>
@@ -248,7 +248,7 @@ export default function Feedback({
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Describe a bug, idea, or message for everyone…"
           rows={3}
-          className="w-full resize-none rounded-md border border-accent-1 bg-secondary-background px-1.5 py-1 text-sm text-foreground placeholder:text-accent-2 focus:border-accent-3 focus:outline-none"
+          className="w-full resize-none rounded-md border border-border bg-surface px-1.5 py-1 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
         />
         <input
           ref={fileInputRef}
@@ -262,7 +262,7 @@ export default function Feedback({
             type="button"
             onClick={onPickImageClick}
             disabled={isPickingImage || isSubmitting}
-            className="inline-flex items-center gap-1.5 rounded-md border border-accent-1 px-1 py-0.5 text-sm text-accent-2 transition hover:border-accent-3 hover:text-accent-3 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-1 py-0.5 text-sm text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
           >
             {isPickingImage ? (
               <Loader scale={0.45} />
@@ -277,12 +277,12 @@ export default function Feedback({
               <img
                 src={pendingImage.previewDataUrl}
                 alt=""
-                className="h-16 max-w-[8rem] rounded-md border border-accent-1 object-cover"
+                className="h-16 max-w-[8rem] rounded-md border border-border object-cover"
               />
               <button
                 type="button"
                 onClick={() => setPendingImage(null)}
-                className="absolute -right-1 -top-1 rounded-full border border-accent-1 bg-secondary-background p-0 text-accent-2 shadow hover:text-foreground"
+                className="absolute -right-1 -top-1 rounded-full border border-border bg-surface p-0 text-muted shadow hover:text-foreground"
                 aria-label="Remove image"
               >
                 <X className="h-3.5 w-3.5" aria-hidden />
@@ -295,7 +295,7 @@ export default function Feedback({
               type="button"
               onClick={() => void onSubmit()}
               disabled={!canSubmit || isSubmitting}
-              className="rounded-md bg-accent-3 px-2 py-1 text-sm font-medium text-primary-background transition hover:opacity-90 disabled:opacity-40"
+              className="rounded-md bg-accent px-2 py-1 text-sm font-medium text-on-accent transition hover:opacity-90 disabled:opacity-40"
             >
               {isSubmitting ? "Sending…" : "Submit"}
             </button>
@@ -304,7 +304,7 @@ export default function Feedback({
       </div>
 
       {statusMessage ? (
-        <p className="shrink-0 px-2 py-1 text-center text-sm text-red-400">{statusMessage}</p>
+        <p className="shrink-0 px-2 py-1 text-center text-sm text-danger">{statusMessage}</p>
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
@@ -313,7 +313,7 @@ export default function Feedback({
             <Loader />
           </div>
         ) : items.length === 0 ? (
-          <p className="py-4 text-center text-sm text-accent-2">No feedback yet. Be the first to post.</p>
+          <p className="py-4 text-center text-sm text-muted">No feedback yet. Be the first to post.</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {items.map((item) => {
@@ -327,7 +327,7 @@ export default function Feedback({
               return (
                 <li
                   key={item.id}
-                  className="rounded-lg border border-accent-1 bg-secondary-background p-0.5"
+                  className="rounded-lg border border-border bg-surface p-0.5"
                 >
                   <div className="flex items-start gap-0">
                     <button
@@ -335,19 +335,19 @@ export default function Feedback({
                       onClick={() => void toggleStatus(item)}
                       disabled={busy}
                       title={isResolved ? "Mark unresolved" : "Mark resolved"}
-                      className="shrink-0 rounded-md p-1 transition hover:bg-primary-background disabled:opacity-40"
+                      className="shrink-0 rounded-md p-1 transition hover:bg-bg disabled:opacity-40"
                       aria-label={isResolved ? "Mark unresolved" : "Mark resolved"}
                     >
                       {busy ? (
                         <Loader scale={0.5} />
                       ) : isResolved ? (
-                        <Check className="h-5 w-5 text-green-500" aria-hidden strokeWidth={2.5} />
+                        <Check className="h-5 w-5 text-success" aria-hidden strokeWidth={2.5} />
                       ) : (
-                        <Square className="h-5 w-5 fill-orange-500/25 text-orange-500" aria-hidden strokeWidth={2} />
+                        <Square className="h-5 w-5 fill-warning/25 text-warning" aria-hidden strokeWidth={2} />
                       )}
                     </button>
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-accent-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
                         <span className="font-medium text-foreground">{item.username}</span>
                         <span aria-hidden>·</span>
                         <time dateTime={item.created_at}>
@@ -378,7 +378,7 @@ export default function Feedback({
                             imageStorageUserId={item.created_by}
                             imageId={item.image_id}
                             alt="Feedback attachment"
-                            className="pointer-events-none max-h-32 max-w-full rounded-md border border-accent-1 object-contain"
+                            className="pointer-events-none max-h-32 max-w-full rounded-md border border-border object-contain"
                           />
                         </button>
                       ) : null}
@@ -389,7 +389,7 @@ export default function Feedback({
                         onClick={() => void onDelete(item)}
                         disabled={busy}
                         title="Delete"
-                        className="shrink-0 rounded-md p-1 text-accent-2 transition hover:bg-primary-background hover:text-red-400 disabled:opacity-40"
+                        className="shrink-0 rounded-md p-1 text-muted transition hover:bg-bg hover:text-danger disabled:opacity-40"
                         aria-label="Delete feedback"
                       >
                         <Trash2 className="h-5 w-5" aria-hidden />

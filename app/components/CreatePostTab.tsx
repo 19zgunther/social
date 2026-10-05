@@ -10,7 +10,6 @@ import {
   Contrast,
   Crop,
   Droplets,
-  ImagePlus,
   Palette,
   RotateCcw,
   Sun,
@@ -1046,13 +1045,13 @@ export default function CreatePostTab({
   const progressPercent = postProgress ?? 0;
 
   return (
-    <div className={`relative flex h-full min-h-0 w-full flex-col bg-primary-background ${DONT_SWIPE_TABS_CLASSNAME}`}>
-      <div className="flex items-center justify-between border-b border-accent-1 px-3 py-2">
+    <div className={`relative flex h-full min-h-0 w-full flex-col bg-bg ${DONT_SWIPE_TABS_CLASSNAME}`}>
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <button
           type="button"
           onClick={onCancel}
           disabled={isPosting}
-          className="rounded-full flex items-center gap-2 px-3 py-2 text-sm text-accent-2 hover:text-foreground disabled:opacity-50"
+          className="rounded-full flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
         >
           <ArrowLeft className="h-5 w-5" />
           Cancel
@@ -1080,8 +1079,8 @@ export default function CreatePostTab({
               onClick={() => setPostKind(entry.kind)}
               className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
                 postKind === entry.kind
-                  ? "border-accent-3 bg-accent-3 text-primary-background"
-                  : "border-accent-1 bg-secondary-background text-accent-2 hover:text-foreground"
+                  ? "border-accent bg-accent text-on-accent"
+                  : "border-border bg-surface text-muted hover:text-foreground"
               }`}
             >
               {entry.label}
@@ -1090,7 +1089,7 @@ export default function CreatePostTab({
         </div>
 
         <div className="mb-3">
-          <label htmlFor="post-audience" className="mb-1 block text-xs font-semibold text-accent-2">
+          <label htmlFor="post-audience" className="mb-1 block text-xs font-semibold text-muted">
             Who can see this {postKind === "poll" ? "poll" : "post"}?
           </label>
           <div className="relative">
@@ -1098,7 +1097,7 @@ export default function CreatePostTab({
               id="post-audience"
               value={audienceSelectValue}
               onChange={(event) => onSelectAudience(event.target.value)}
-              className="w-full appearance-none rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 pr-10 text-sm text-foreground outline-none focus:border-accent-2"
+              className="w-full appearance-none rounded-lg border border-border bg-surface px-3 py-2 pr-10 text-sm text-foreground outline-none focus:border-muted"
             >
               <option value="permanent">All friends (including future)</option>
               <option value="all">All friends right now</option>
@@ -1108,19 +1107,19 @@ export default function CreatePostTab({
                 </option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-accent-2" />
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
           </div>
-          <p className="mt-1 text-xs text-accent-2">{audienceHint}</p>
+          <p className="mt-1 text-xs text-muted">{audienceHint}</p>
         </div>
 
         <div className="flex justify-center pt-2">
           <button
             type="button"
             onClick={() => createInputRef.current?.click()}
-            className="inline-flex min-w-[10rem] flex-col items-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-6 py-4 text-sm text-accent-3 hover:text-foreground"
+            className="create-post-rgb-border inline-flex min-w-[10rem] flex-col items-center gap-2 rounded-xl px-6 py-4 text-sm font-semibold transition"
           >
-            <ImagePlus className="h-10 w-10" />
-            <span>Add photos or videos</span>
+            <span className="create-post-rgb-icon" aria-hidden />
+            <span className="create-post-rgb-text">Add photos or videos</span>
           </button>
         </div>
 
@@ -1131,7 +1130,7 @@ export default function CreatePostTab({
                 type="button"
                 onClick={() => goToIndex(activeIndex - 1)}
                 disabled={activeIndex <= 0}
-                className="absolute left-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-accent-1 bg-primary-background/90 p-3 text-accent-2 shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
+                className="absolute left-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-border bg-bg/90 p-3 text-muted shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
                 aria-label="Previous media"
               >
                 <ChevronLeft className="h-7 w-7" />
@@ -1153,7 +1152,7 @@ export default function CreatePostTab({
                     return (
                       <div
                         key={item.id}
-                        className="absolute left-1/2 top-1/2 h-[90%] w-[90%] origin-center overflow-hidden rounded-lg border border-accent-1 bg-primary-background shadow-lg shadow-black/45 transition-[transform,opacity] duration-300 ease-out"
+                        className="absolute left-1/2 top-1/2 h-[90%] w-[90%] origin-center overflow-hidden rounded-lg border border-border bg-bg shadow-lg shadow-black/45 transition-[transform,opacity] duration-300 ease-out"
                         style={{
                           transform: slideStyle.transform,
                           opacity: slideStyle.opacity,
@@ -1196,7 +1195,7 @@ export default function CreatePostTab({
                   return (
                     <div
                       key={item.id}
-                      className="absolute left-1/2 top-1/2 h-[90%] w-[90%] origin-center overflow-hidden rounded-lg border border-accent-1 bg-primary-background shadow-lg shadow-black/45 transition-[transform,opacity] duration-300 ease-out"
+                      className="absolute left-1/2 top-1/2 h-[90%] w-[90%] origin-center overflow-hidden rounded-lg border border-border bg-bg shadow-lg shadow-black/45 transition-[transform,opacity] duration-300 ease-out"
                       style={{
                         transform: slideStyle.transform,
                         opacity: slideStyle.opacity,
@@ -1230,7 +1229,7 @@ export default function CreatePostTab({
                             />
                           ) : null}
                           {isActive && cropMode ? (
-                            <div className="pointer-events-none absolute inset-0 border-2 border-dashed border-accent-3/80" />
+                            <div className="pointer-events-none absolute inset-0 border-2 border-dashed border-accent/80" />
                           ) : null}
                         </div>
                       ) : (
@@ -1261,7 +1260,7 @@ export default function CreatePostTab({
                 type="button"
                 onClick={() => goToIndex(activeIndex + 1)}
                 disabled={activeIndex >= mediaItems.length - 1}
-                className="absolute right-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-accent-1 bg-primary-background/90 p-3 text-accent-2 shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
+                className="absolute right-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-border bg-bg/90 p-3 text-muted shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
                 aria-label="Next media"
               >
                 <ChevronRight className="h-7 w-7" />
@@ -1269,13 +1268,13 @@ export default function CreatePostTab({
             </div>
 
             {mediaItems.length > 1 ? (
-              <p className="text-center text-xs text-accent-2">
+              <p className="text-center text-xs text-muted">
                 {activeIndex + 1} / {mediaItems.length}
               </p>
             ) : null}
 
             {activeImage ? (
-            <div className="rounded-lg border-accent-1 px-2 py-2">
+            <div className="rounded-lg border-border px-2 py-2">
               <div className="flex items-center justify-center gap-1.5 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {ADJUSTMENT_OPTIONS.map((option) => {
                     const Icon = option.icon;
@@ -1286,8 +1285,8 @@ export default function CreatePostTab({
                         onClick={() => setActiveAdjustment(option.key)}
                         className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border transition ${
                           option.key === activeAdjustment
-                            ? "border-accent-3 bg-accent-3 text-primary-background"
-                            : "border-accent-1 bg-primary-background text-accent-2 hover:text-foreground"
+                            ? "border-accent bg-accent text-on-accent"
+                            : "border-border bg-bg text-muted hover:text-foreground"
                         }`}
                         aria-label={option.label}
                         title={option.label}
@@ -1308,7 +1307,7 @@ export default function CreatePostTab({
                     }));
                     setActiveAdjustment("brightness");
                   }}
-                  className="inline-flex opacity-50 h-11 w-11 shrink-0 items-center justify-center rounded-md border border-accent-1 bg-primary-background text-accent-2 transition hover:text-foreground"
+                  className="inline-flex opacity-50 h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-bg text-muted transition hover:text-foreground"
                   aria-label="Reset"
                   title="Reset"
                 >
@@ -1336,9 +1335,9 @@ export default function CreatePostTab({
                       },
                     });
                   }}
-                  className="h-10 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-transparent accent-accent-3 [&::-webkit-slider-runnable-track]:h-2.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-accent-1 [&::-webkit-slider-thumb]:-mt-1.5 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent-3 [&::-moz-range-track]:h-2.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-accent-1 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent-3"
+                  className="h-10 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-transparent accent-accent [&::-webkit-slider-runnable-track]:h-2.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-border [&::-webkit-slider-thumb]:-mt-1.5 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-moz-range-track]:h-2.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-border [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-accent"
                 />
-                <span className="w-10 shrink-0 text-right text-xs text-accent-2">
+                <span className="w-10 shrink-0 text-right text-xs text-muted">
                   {cropMode
                     ? `${activeDraft.zoom.toFixed(1)}x`
                     : activeSliderValue > 0
@@ -1347,11 +1346,11 @@ export default function CreatePostTab({
                 </span>
               </div>
               {cropMode ? (
-                <p className="mt-0.5 text-center text-[10px] text-accent-2">Pinch to zoom, drag to pan</p>
+                <p className="mt-0.5 text-center text-[10px] text-muted">Pinch to zoom, drag to pan</p>
               ) : null}
             </div>
             ) : (
-              <p className="text-center text-xs text-accent-2">Video ready — no filters in this version.</p>
+              <p className="text-center text-xs text-muted">Video ready — no filters in this version.</p>
             )}
           </div>
         ) : null}
@@ -1362,14 +1361,14 @@ export default function CreatePostTab({
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             placeholder={postKind === "poll" ? "Ask a question..." : "Write a comment..."}
-            className="min-h-[20vh] max-h-[20vh] w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+            className="min-h-[20vh] max-h-[20vh] w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
           />
         </div>
 
         {postKind === "poll" ? (
           <div className="mt-4 space-y-4">
             <div>
-              <p className="mb-2 text-xs font-semibold text-accent-2">Options (2–10)</p>
+              <p className="mb-2 text-xs font-semibold text-muted">Options (2–10)</p>
               <div className="space-y-2">
                 {pollOptions.map((option, index) => (
                   <div key={`poll-option-${index}`} className="flex items-center gap-2">
@@ -1386,7 +1385,7 @@ export default function CreatePostTab({
                       }}
                       placeholder={`Option ${index + 1}`}
                       maxLength={200}
-                      className="w-full rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
                     />
                     {pollOptions.length > 2 ? (
                       <button
@@ -1394,7 +1393,7 @@ export default function CreatePostTab({
                         onClick={() =>
                           setPollOptions((previous) => previous.filter((_, entryIndex) => entryIndex !== index))
                         }
-                        className="rounded-lg border border-accent-1 px-2 py-2 text-accent-2 hover:text-foreground"
+                        className="rounded-lg border border-border px-2 py-2 text-muted hover:text-foreground"
                         aria-label={`Remove option ${index + 1}`}
                       >
                         <X className="h-4 w-4" />
@@ -1407,7 +1406,7 @@ export default function CreatePostTab({
                 <button
                   type="button"
                   onClick={() => setPollOptions((previous) => [...previous, ""])}
-                  className="mt-2 text-sm font-semibold text-accent-3 hover:brightness-110"
+                  className="mt-2 text-sm font-semibold text-accent hover:brightness-110"
                 >
                   + Add option
                 </button>
@@ -1415,7 +1414,7 @@ export default function CreatePostTab({
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-semibold text-accent-2">Selection</p>
+              <p className="mb-2 text-xs font-semibold text-muted">Selection</p>
               <div className="flex gap-2">
                 {([
                   { mode: "single", label: "One choice" },
@@ -1427,8 +1426,8 @@ export default function CreatePostTab({
                     onClick={() => setPollSelectionMode(entry.mode)}
                     className={`flex-1 rounded-lg border px-3 py-2 text-sm transition ${
                       pollSelectionMode === entry.mode
-                        ? "border-accent-3 bg-accent-3/20 text-foreground"
-                        : "border-accent-1 bg-secondary-background text-accent-2"
+                        ? "border-accent bg-accent/20 text-foreground"
+                        : "border-border bg-surface text-muted"
                     }`}
                   >
                     {entry.label}
@@ -1448,7 +1447,7 @@ export default function CreatePostTab({
             </label>
 
             <div>
-              <label htmlFor="poll-duration" className="mb-1 block text-xs font-semibold text-accent-2">
+              <label htmlFor="poll-duration" className="mb-1 block text-xs font-semibold text-muted">
                 Duration
               </label>
               <div className="relative">
@@ -1458,7 +1457,7 @@ export default function CreatePostTab({
                   onChange={(event) =>
                     setPollDurationHours(Number(event.target.value) as PollDurationHours)
                   }
-                  className="w-full appearance-none rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 pr-10 text-sm text-foreground outline-none focus:border-accent-2"
+                  className="w-full appearance-none rounded-lg border border-border bg-surface px-3 py-2 pr-10 text-sm text-foreground outline-none focus:border-muted"
                 >
                   {POLL_DURATION_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -1466,7 +1465,7 @@ export default function CreatePostTab({
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-accent-2" />
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
               </div>
             </div>
           </div>
@@ -1474,36 +1473,38 @@ export default function CreatePostTab({
 
         {hasPreviewContent ? (
           <div className="mt-[10vh]">
-            <p className="mb-2 text-xs font-semibold text-accent-2">Preview</p>
+            <p className="mb-2 text-xs font-semibold text-muted">Preview</p>
             <PostSection
               post={previewPost}
               currentUserId={currentUserId}
               previewMedia={previewMediaUrls}
               isPreview
               disableCommentSendInput={true}
-              className="rounded-lg border border-accent-1"
+              className="rounded-lg border border-border"
             />
           </div>
         ) : null}
 
-        {statusMessage ? <p className="mt-2 text-xs text-accent-2">{statusMessage}</p> : null}
+        {statusMessage ? <p className="mt-2 text-xs text-muted">{statusMessage}</p> : null}
       </div>
 
       <div className="absolute bottom-4 right-4">
         <button
           type="button"
           onClick={onPost}
-          style={{ boxShadow: "0 0 10px 2px rgba(0, 0, 0, 1)" }}
+          style={{ boxShadow: "0 0 10px 2px var(--black)" }}
           disabled={!canSubmit}
-          className="rounded-xl bg-accent-3 px-6 py-3 text-base font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-50"
+          className="create-post-rgb-border rounded-xl px-6 py-3 text-base font-semibold transition disabled:opacity-50"
         >
-          {isPosting ? "Posting..." : "Post ->"}
+          <span className="create-post-rgb-text">
+            {isPosting ? "Posting..." : "Post ->"}
+          </span>
         </button>
       </div>
 
       {postProgress !== null ? (
         <div
-          className="absolute inset-0 z-20 flex items-center justify-center bg-primary-background/80 px-8"
+          className="absolute inset-0 z-20 flex items-center justify-center bg-bg/80 px-8"
           role="status"
           aria-live="polite"
           aria-busy={isPosting}
@@ -1512,13 +1513,13 @@ export default function CreatePostTab({
             <p className="mb-3 text-center text-sm font-semibold text-foreground">
               {statusMessage || "Posting…"}
             </p>
-            <div className="h-2 overflow-hidden rounded-full bg-accent-1">
+            <div className="h-2 overflow-hidden rounded-full bg-border">
               <div
-                className="h-full rounded-full bg-accent-3 transition-[width] duration-100 ease-out"
+                className="h-full rounded-full bg-accent transition-[width] duration-100 ease-out"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <p className="mt-2 text-center text-xs text-accent-2">{progressPercent}%</p>
+            <p className="mt-2 text-center text-xs text-muted">{progressPercent}%</p>
           </div>
         </div>
       ) : null}

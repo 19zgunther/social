@@ -6,10 +6,10 @@ export default function CheckingSessionPage() {
     <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0">
       <section
         style={MOBILE_FRAME_STYLE}
-        className="flex h-full flex-col items-center justify-center gap-4 border border-accent-1 bg-secondary-background px-6"
+        className="flex h-full flex-col items-center justify-center gap-4 border border-border bg-surface px-6"
       >
         <Loader />
-        <p className="text-sm text-accent-2">Checking your session...</p>
+        <p className="text-sm text-muted">Checking your session...</p>
       </section>
     </main>
   );

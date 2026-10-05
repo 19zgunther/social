@@ -1,13 +1,12 @@
 
-
 export default function NavRowButton({
-    icon,
+    iconClassName,
     isActive,
     showCircle,
     onClick,
     className,
 }: {
-    icon: React.ReactNode;
+    iconClassName: string;
     isActive: boolean;
     showCircle: boolean;
     onClick: () => void;
@@ -17,13 +16,13 @@ export default function NavRowButton({
         <button
             type="button"
             onClick={onClick}
-            className={`flex flex-1 items-center justify-center gap-2 py-3 text-sm font-medium transition ${className} ${isActive
-                ? "text-accent-3"
-                : "text-accent-2 hover:text-foreground"
-                }`}
+            className={`flex flex-1 items-center justify-center gap-2 py-3 text-sm font-medium transition ${className ?? ""}`}
         >
-            {icon}
-            {showCircle && <div className="rounded-full bg-accent-3 text-primary-background text-xs font-medium px-1 py-1" />}
+            <span
+                aria-hidden
+                className={`nav-rgb-icon ${iconClassName}${isActive ? " nav-rgb-icon-active" : ""}`}
+            />
+            {showCircle && <div className="rounded-full bg-accent text-on-accent text-xs font-medium px-1 py-1" />}
         </button>
     )
 }

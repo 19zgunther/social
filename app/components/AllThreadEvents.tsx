@@ -172,8 +172,8 @@ export default function AllThreadEvents({
   };
 
   return (
-    <section className="overflow-hidden rounded-xl border border-accent-1 bg-secondary-background">
-      <div className="flex items-center justify-between gap-2 border-b border-accent-1 px-3 py-3">
+    <section className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <h2 className="truncate text-sm font-semibold text-foreground">Upcoming events</h2>
           <button
@@ -182,7 +182,7 @@ export default function AllThreadEvents({
             onClick={() => {
               void fetchEvents(true);
             }}
-            className="shrink-0 rounded-lg border border-accent-1 p-1.5 text-accent-2 transition hover:border-accent-2 hover:text-foreground disabled:opacity-50"
+            className="shrink-0 rounded-lg border border-border p-1.5 text-muted transition hover:border-muted hover:text-foreground disabled:opacity-50"
             aria-label="Refresh events"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshBusy ? "animate-spin" : ""}`} aria-hidden />
@@ -194,7 +194,7 @@ export default function AllThreadEvents({
             setShowCreateName((open) => !open);
             setCreateError("");
           }}
-          className="shrink-0 rounded-xl border border-accent-1 px-3 py-1.5 text-xs font-semibold text-accent-2 transition hover:text-foreground"
+          className="shrink-0 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted transition hover:text-foreground"
         >
           {showCreateName ? "Cancel" : "Create"}
         </button>
@@ -202,7 +202,7 @@ export default function AllThreadEvents({
 
       {showCreateName ? (
         <form
-          className="space-y-2 border-b border-accent-1 px-3 py-3"
+          className="space-y-2 border-b border-border px-3 py-3"
           onSubmit={(e) => {
             e.preventDefault();
             void onCreate();
@@ -213,14 +213,14 @@ export default function AllThreadEvents({
             value={createName}
             onChange={(e) => setCreateName(e.target.value)}
             placeholder="Event name"
-            className="w-full rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+            className="w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
             autoFocus
           />
-          {createError ? <p className="text-xs text-accent-2">{createError}</p> : null}
+          {createError ? <p className="text-xs text-muted">{createError}</p> : null}
           <button
             type="submit"
             disabled={isCreating}
-            className="w-full rounded-xl bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+            className="w-full rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
           >
             {isCreating ? "Creating…" : "Continue"}
           </button>
@@ -229,10 +229,10 @@ export default function AllThreadEvents({
 
       <div className="flex w-full flex-col gap-3 px-3 pb-3">
         {isLoading ? (
-          <p className="py-2 text-xs text-accent-2">Loading events…</p>
+          <p className="py-2 text-xs text-muted">Loading events…</p>
         ) : null}
         {!isLoading && events.length === 0 ? (
-          <p className="py-2 text-xs text-accent-2">No upcoming events.</p>
+          <p className="py-2 text-xs text-muted">No upcoming events.</p>
         ) : null}
         {events.map((event) => (
           <ThreadEventListRow

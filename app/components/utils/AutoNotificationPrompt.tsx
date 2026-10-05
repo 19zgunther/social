@@ -107,12 +107,12 @@ export function AutoNotificationPrompt({
   }
   return (
     <div className="absolute inset-0 z-[9999] flex items-center justify-center bg-black/50">
-      <div className="mx-4 max-w-sm rounded-lg border border-accent-1 bg-secondary-background p-4 shadow-lg">
-        <p className="text-sm text-accent-2">
+      <div className="mx-4 max-w-sm rounded-lg border border-border bg-surface p-4 shadow-lg">
+        <p className="text-sm text-muted">
           Enable notifications to get alerts for new posts, replies, and thread messages.
         </p>
         {errorMessage ? (
-          <p className="mt-3 text-sm text-red-400" role="alert">
+          <p className="mt-3 text-sm text-danger" role="alert">
             {errorMessage}
           </p>
         ) : null}
@@ -123,14 +123,14 @@ export function AutoNotificationPrompt({
               void onEnableNotifications();
             }}
             disabled={isEnablingNotifications}
-            className="flex-1 rounded-lg bg-accent-3 px-4 py-2 text-sm font-semibold text-primary-background disabled:opacity-60"
+            className="flex-1 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
             {isEnablingNotifications ? "Enabling..." : "Enable notifications"}
           </button>
           <button
             type="button"
             onClick={onDismissNotificationsPrompt}
-            className="flex-1 rounded-lg border border-accent-1 px-4 py-2 text-sm text-accent-2 hover:text-foreground"
+            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-muted hover:text-foreground"
           >
             Not now
           </button>

@@ -144,10 +144,10 @@ export default function PollBlock({
   return (
     <div className="mt-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-accent-2">
+        <p className="text-xs font-semibold text-muted">
           {poll.selection_mode === "single" ? "Poll · pick one" : "Poll · pick any"}
         </p>
-        <p className="text-xs text-accent-2">{formatPollStatus(poll)}</p>
+        <p className="text-xs text-muted">{formatPollStatus(poll)}</p>
       </div>
 
       <div className="space-y-2">
@@ -168,16 +168,16 @@ export default function PollBlock({
               <div
                 key={option.id}
                 className={`relative overflow-hidden rounded-lg border px-3 py-2 ${
-                  wasViewerChoice ? "border-accent-3" : "border-accent-1"
+                  wasViewerChoice ? "border-accent" : "border-border"
                 }`}
               >
                 <div
-                  className="absolute inset-y-0 left-0 bg-accent-3/20"
+                  className="absolute inset-y-0 left-0 bg-accent/20"
                   style={{ width: `${percentage}%` }}
                 />
                 <div className="relative flex items-center justify-between gap-2 text-sm">
                   <span className="min-w-0 break-words text-foreground">{option.text}</span>
-                  <span className="shrink-0 tabular-nums text-accent-2">
+                  <span className="shrink-0 tabular-nums text-muted">
                     {resultCount}
                     {poll.total_voters != null ? ` · ${percentage}%` : ""}
                   </span>
@@ -194,17 +194,17 @@ export default function PollBlock({
               disabled={!showVotingUi}
               className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition ${
                 isSelected
-                  ? "border-accent-3 bg-accent-3/15 text-foreground"
-                  : "border-accent-1 bg-secondary-background text-foreground"
+                  ? "border-accent bg-accent/15 text-foreground"
+                  : "border-border bg-surface text-foreground"
               } disabled:opacity-60`}
             >
               <span
                 className={`flex h-4 w-4 shrink-0 items-center justify-center border ${
                   poll.selection_mode === "single" ? "rounded-full" : "rounded-sm"
-                } ${isSelected ? "border-accent-3 bg-accent-3" : "border-accent-2"}`}
+                } ${isSelected ? "border-accent bg-accent" : "border-muted"}`}
               >
                 {isSelected ? (
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary-background" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-bg" />
                 ) : null}
               </span>
               <span className="min-w-0 break-words">{option.text}</span>
@@ -214,7 +214,7 @@ export default function PollBlock({
       </div>
 
       {showResults && poll.total_voters != null ? (
-        <p className="text-xs text-accent-2">
+        <p className="text-xs text-muted">
           {poll.total_voters} vote{poll.total_voters === 1 ? "" : "s"}
         </p>
       ) : null}
@@ -226,7 +226,7 @@ export default function PollBlock({
             void onSubmitVote();
           }}
           disabled={isSubmitting || selectedOptionIds.length === 0}
-          className="rounded-lg bg-accent-3 px-3 py-2 text-sm font-semibold text-primary-background disabled:opacity-50"
+          className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
         >
           {isSubmitting ? "Submitting..." : isChangingVote ? "Update vote" : "Vote"}
         </button>
@@ -240,7 +240,7 @@ export default function PollBlock({
             setIsChangingVote(true);
             setStatusMessage("");
           }}
-          className="text-sm font-semibold text-accent-3 hover:brightness-110"
+          className="text-sm font-semibold text-accent hover:brightness-110"
         >
           Change vote
         </button>
@@ -254,7 +254,7 @@ export default function PollBlock({
             setIsChangingVote(true);
             setStatusMessage("");
           }}
-          className="text-sm font-semibold text-accent-3 hover:brightness-110"
+          className="text-sm font-semibold text-accent hover:brightness-110"
         >
           Cast a vote
         </button>
@@ -268,13 +268,13 @@ export default function PollBlock({
             setIsChangingVote(false);
             setStatusMessage("");
           }}
-          className="ml-3 text-sm text-accent-2 hover:text-foreground"
+          className="ml-3 text-sm text-muted hover:text-foreground"
         >
           Cancel
         </button>
       ) : null}
 
-      {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
+      {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
     </div>
   );
 }

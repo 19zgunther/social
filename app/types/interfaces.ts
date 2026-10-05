@@ -170,35 +170,9 @@ export type ThreadMemberFriendshipStatus =
   | "pending_received"
   | "rejected";
 
-export type PoolBallState = {
-  id: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  r: number;
-  pocketed: boolean;
-};
-
-/** Turn-based pool game payload stored on thread_messages.data.pool_game */
-export type PoolGameMessageData = {
-  v: 1;
-  game_id: string;
-  /** Creator / first participant (always set). */
-  player_a_username: string;
-  /** Second participant — null until the first non-creator sends a pool move (first responder). */
-  player_b_username: string | null;
-  /** Whose shot; null means “waiting for first opponent shot” after the opener, or opponent’s turn when b is set (see isPoolTurnForUser). */
-  current_turn_username: string | null;
-  table_w: number;
-  table_h: number;
-  balls: PoolBallState[];
-};
-
 export type MessageData = {
   image_overlay?: ImageOverlayData;
   video_call_signal?: VideoCallSignal;
-  pool_game?: PoolGameMessageData;
 };
 
 export type ThreadMessage = {

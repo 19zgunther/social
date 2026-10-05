@@ -152,7 +152,7 @@ export function TriangleThicknessSlider({
       aria-valuemin={min}
       aria-valuemax={max}
       aria-valuenow={value}
-      className={`relative h-3 w-full cursor-pointer touch-none select-none overflow-visible text-accent-2 outline-none focus-visible:ring-2 focus-visible:ring-accent-3 ${DONT_SWIPE_TABS_CLASSNAME} ${className}`}
+      className={`relative h-3 w-full cursor-pointer touch-none select-none overflow-visible text-muted outline-none focus-visible:ring-2 focus-visible:ring-accent ${DONT_SWIPE_TABS_CLASSNAME} ${className}`}
       onPointerDown={(event) => {
         event.preventDefault();
         draggingRef.current = true;
@@ -176,11 +176,11 @@ export function TriangleThicknessSlider({
         }
       }}
     >
-      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-accent-1 bg-secondary-background">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-border bg-surface">
         <canvas ref={canvasRef} className="h-full w-full" aria-hidden />
       </div>
       <div
-        className="pointer-events-none absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-accent-2 shadow-[0_0_0_1px_rgba(0,0,0,0.55)]"
+        className="pointer-events-none absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-muted shadow-[0_0_0_1px_rgba(0,0,0,0.55)]"
         style={{ left: `${ratio * 100}%` }}
       />
     </div>

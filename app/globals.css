@@ -1,22 +1,45 @@
 @import "tailwindcss";
 
 :root {
-  --primary-background: #030304;
-  --secondary-background: #040406;
-
-  --accent-1: #2d3440;
-  --accent-2: #8e9cb0;
-  --accent-3: #0a84ff;
+  --bg: #050608;
+  --surface: #1b1f27;
+  --border: #2d3440;
   --foreground: #f3f6fc;
+  --muted: #a29da9;
+  --accent: #764fad;
+  --on-accent: #050608;
+  --danger: #f87171;
+  --danger-fill: #dc2626;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --black: #000000;
+  --white: #ffffff;
+  --rainbow-1: #0061ac;
+  --rainbow-2: #382075;
+  --rainbow-3: #e94e1b;
+  --rainbow-4: #f4d54f;
+  --rainbow-5: #84bcec;
 }
 
 @theme inline {
-  --color-primary-background: var(--primary-background);
-  --color-secondary-background: var(--secondary-background);
-  --color-accent-1: var(--accent-1);
-  --color-accent-2: var(--accent-2);
-  --color-accent-3: var(--accent-3);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-danger-fill: var(--danger-fill);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-black: var(--black);
+  --color-white: var(--white);
+  --color-rainbow-1: var(--rainbow-1);
+  --color-rainbow-2: var(--rainbow-2);
+  --color-rainbow-3: var(--rainbow-3);
+  --color-rainbow-4: var(--rainbow-4);
+  --color-rainbow-5: var(--rainbow-5);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
@@ -31,22 +54,12 @@
   --text-lg--line-height: 1.5;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --primary-background: #050608;
-    --secondary-background: #1b1f27;
-    --accent-1: #2d3440;
-    --accent-2: #8e9cb0;
-    --accent-3: #0a84ff;
-    --foreground: #f3f6fc;
-  }
-}
-
 body {
-  background: var(--primary-background);
+  background: var(--bg);
   color: var(--foreground);
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 15px;
+  color-scheme: dark;
 }
 
 html,
@@ -93,8 +106,13 @@ body {
   width: 2.4rem;
   height: 3rem;
   border-radius: 50% 50% 50% 50% / 55% 55% 45% 45%;
-  background: radial-gradient(circle at 35% 30%, #ffffffaa 0%, var(--balloon-color) 45%, color-mix(in srgb, var(--balloon-color) 70%, black) 100%);
-  box-shadow: inset -4px -6px 12px rgba(0, 0, 0, 0.15);
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--white) 67%, transparent) 0%,
+    var(--balloon-color) 45%,
+    color-mix(in srgb, var(--balloon-color) 70%, var(--black)) 100%
+  );
+  box-shadow: inset -4px -6px 12px color-mix(in srgb, var(--black) 15%, transparent);
 }
 
 .congrats-balloon-knot {
@@ -102,16 +120,22 @@ body {
   height: 0.45rem;
   margin-top: -0.1rem;
   border-radius: 9999px;
-  background: color-mix(in srgb, var(--balloon-color) 80%, black);
+  background: color-mix(in srgb, var(--balloon-color) 80%, var(--black));
 }
 
 .congrats-balloon-string {
   width: 1px;
   height: 1.75rem;
-  background: linear-gradient(to bottom, #ffffff88, #ffffff33);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--white) 53%, transparent),
+    color-mix(in srgb, var(--white) 20%, transparent)
+  );
 }
 
 .loader {
+  --loader-dot-gap: 18px;
+  --loader-dot-cycle: calc(var(--loader-dot-gap) * 5);
   width: 90px;
   height: 24px;
   position: relative;
@@ -127,9 +151,23 @@ body {
   height: 20px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: #ffff2d;
+  --create-post-angle: 0deg;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--accent), var(--accent)) padding-box,
+    conic-gradient(
+      from var(--create-post-angle),
+      var(--rainbow-1),
+      var(--rainbow-2),
+      var(--rainbow-3),
+      var(--rainbow-4),
+      var(--rainbow-5),
+      var(--rainbow-1)
+    ) border-box;
   z-index: 1;
-  animation: l5-chomp 0.25s 0.153s infinite steps(5) alternate;
+  animation:
+    l5-chomp 0.25s 0.153s infinite steps(5) alternate,
+    create-post-border-spin 4s linear infinite;
 }
 
 .loader::after {
@@ -139,8 +177,21 @@ body {
   bottom: 0;
   left: calc(50% + 2px);
   right: 0;
-  background: radial-gradient(circle 3px, #eeee89 90%, transparent 91%) 0 50% / 18px 100% repeat-x;
-  animation: l5-dots 0.5s linear infinite;
+  background-image:
+    radial-gradient(circle 3px, var(--rainbow-1) 90%, transparent 91%),
+    radial-gradient(circle 3px, var(--rainbow-2) 90%, transparent 91%),
+    radial-gradient(circle 3px, var(--rainbow-3) 90%, transparent 91%),
+    radial-gradient(circle 3px, var(--rainbow-4) 90%, transparent 91%),
+    radial-gradient(circle 3px, var(--rainbow-5) 90%, transparent 91%);
+  background-size: var(--loader-dot-cycle) 100%;
+  background-position:
+    0 50%,
+    calc(var(--loader-dot-gap) * 1) 50%,
+    calc(var(--loader-dot-gap) * 2) 50%,
+    calc(var(--loader-dot-gap) * 3) 50%,
+    calc(var(--loader-dot-gap) * 4) 50%;
+  background-repeat: repeat-x;
+  animation: l5-dots 2.5s linear infinite;
 }
 
 @keyframes l5-chomp {
@@ -154,7 +205,12 @@ body {
 
 @keyframes l5-dots {
   to {
-    background-position: -18px 50%;
+    background-position:
+      calc(var(--loader-dot-cycle) * -1) 50%,
+      calc(var(--loader-dot-gap) * 1 - var(--loader-dot-cycle)) 50%,
+      calc(var(--loader-dot-gap) * 2 - var(--loader-dot-cycle)) 50%,
+      calc(var(--loader-dot-gap) * 3 - var(--loader-dot-cycle)) 50%,
+      calc(var(--loader-dot-gap) * 4 - var(--loader-dot-cycle)) 50%;
   }
 }
 
@@ -174,17 +230,17 @@ body {
   --create-post-angle: 0deg;
   border: 2px solid transparent;
   background:
-    linear-gradient(var(--secondary-background), var(--secondary-background)) padding-box,
+    linear-gradient(var(--surface), var(--surface)) padding-box,
     conic-gradient(
       from var(--create-post-angle),
-      #ff3b5c,
-      #ffb020,
-      #5cff8a,
-      #3db8ff,
-      #b56bff,
-      #ff3b5c
+      var(--rainbow-1),
+      var(--rainbow-2),
+      var(--rainbow-3),
+      var(--rainbow-4),
+      var(--rainbow-5),
+      var(--rainbow-1)
     ) border-box;
-  animation: create-post-border-spin 3.5s linear infinite;
+  animation: create-post-border-spin 20s linear infinite;
 }
 
 .create-post-rgb-border:hover {
@@ -194,12 +250,12 @@ body {
 .create-post-rgb-text {
   background: conic-gradient(
     from var(--create-post-angle),
-    #ff3b5c,
-    #ffb020,
-    #5cff8a,
-    #3db8ff,
-    #b56bff,
-    #ff3b5c
+    var(--rainbow-1),
+    var(--rainbow-2),
+    var(--rainbow-3),
+    var(--rainbow-4),
+    var(--rainbow-5),
+    var(--rainbow-1)
   );
   background-clip: text;
   -webkit-background-clip: text;
@@ -207,17 +263,205 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+.create-post-rgb-icon {
+  display: inline-block;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  background: conic-gradient(
+    from var(--create-post-angle),
+    var(--rainbow-1),
+    var(--rainbow-2),
+    var(--rainbow-3),
+    var(--rainbow-4),
+    var(--rainbow-5),
+    var(--rainbow-1)
+  );
+  /* Mask to the ImagePlus stroke so only the lines get the swirl */
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 5h6'/%3E%3Cpath d='M19 2v6'/%3E%3Cpath d='M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 5h6'/%3E%3Cpath d='M19 2v6'/%3E%3Cpath d='M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+@keyframes liked-heart-gradient-shift {
+  to {
+    /* Move exactly one duplicated cycle so the loop has no seam */
+    transform: translate(-50%, -50%);
+  }
+}
+
+.liked-heart-rgb {
+  position: relative;
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.liked-heart-rgb::before {
+  content: "";
+  position: absolute;
+  width: 400%;
+  height: 400%;
+  left: 0;
+  top: 0;
+  /* Two identical cycles; heart shows ~1/4 of the layer (~2–3 colors) */
+  background: linear-gradient(
+    135deg,
+    var(--rainbow-1) 0%,
+    var(--rainbow-2) 10%,
+    var(--rainbow-3) 20%,
+    var(--rainbow-4) 30%,
+    var(--rainbow-5) 40%,
+    var(--rainbow-1) 50%,
+    var(--rainbow-2) 60%,
+    var(--rainbow-3) 70%,
+    var(--rainbow-4) 80%,
+    var(--rainbow-5) 90%,
+    var(--rainbow-1) 100%
+  );
+  animation: liked-heart-gradient-shift 12s linear infinite;
+}
+
+.nav-rgb-row {
+  --create-post-angle: 0deg;
+  animation: create-post-border-spin 12s linear infinite;
+}
+
+.nav-rgb-icon {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  background: var(--muted);
+  -webkit-mask: var(--nav-rgb-mask) center / contain no-repeat;
+  mask: var(--nav-rgb-mask) center / contain no-repeat;
+  transition: background 150ms ease, opacity 150ms ease;
+}
+
+.nav-rgb-icon-active {
+  background: conic-gradient(
+    from var(--create-post-angle),
+    var(--rainbow-1),
+    var(--rainbow-2),
+    var(--rainbow-3),
+    var(--rainbow-4),
+    var(--rainbow-5),
+    var(--rainbow-1)
+  );
+}
+
+button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
+  background: var(--foreground);
+}
+
+.nav-rgb-icon-house {
+  --nav-rgb-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8'/%3E%3Cpath d='M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E");
+}
+
+.nav-rgb-icon-users {
+  --nav-rgb-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Cpath d='M16 3.128a4 4 0 0 1 0 7.744'/%3E%3Cpath d='M22 21v-2a4 4 0 0 0-3-3.87'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3C/svg%3E");
+}
+
+.nav-rgb-icon-images {
+  --nav-rgb-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16'/%3E%3Cpath d='M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2'/%3E%3Ccircle cx='13' cy='7' r='1' fill='white'/%3E%3Crect x='8' y='2' width='14' height='14' rx='2'/%3E%3C/svg%3E");
+}
+
+.nav-rgb-icon-user-round {
+  --nav-rgb-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='5'/%3E%3Cpath d='M20 21a8 8 0 0 0-16 0'/%3E%3C/svg%3E");
+}
+
+.nav-rgb-icon-message-square {
+  --nav-rgb-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z'/%3E%3C/svg%3E");
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .loader::before {
+    animation: l5-chomp 0.25s 0.153s infinite steps(5) alternate;
+    background:
+      linear-gradient(var(--accent), var(--accent)) padding-box,
+      linear-gradient(
+          135deg,
+          var(--rainbow-1),
+          var(--rainbow-2),
+          var(--rainbow-3),
+          var(--rainbow-4),
+          var(--rainbow-5)
+        )
+        border-box;
+  }
+
   .create-post-rgb-border {
     animation: none;
     background:
-      linear-gradient(var(--secondary-background), var(--secondary-background)) padding-box,
-      linear-gradient(135deg, #ff3b5c, #ffb020, #5cff8a, #3db8ff, #b56bff) border-box;
+      linear-gradient(var(--surface), var(--surface)) padding-box,
+      linear-gradient(
+          135deg,
+          var(--rainbow-1),
+          var(--rainbow-2),
+          var(--rainbow-3),
+          var(--rainbow-4),
+          var(--rainbow-5)
+        )
+        border-box;
   }
 
   .create-post-rgb-text {
-    background: linear-gradient(135deg, #ff3b5c, #ffb020, #5cff8a, #3db8ff, #b56bff);
+    background: linear-gradient(
+      135deg,
+      var(--rainbow-1),
+      var(--rainbow-2),
+      var(--rainbow-3),
+      var(--rainbow-4),
+      var(--rainbow-5)
+    );
     background-clip: text;
     -webkit-background-clip: text;
+  }
+
+  .create-post-rgb-icon {
+    background: linear-gradient(
+      135deg,
+      var(--rainbow-1),
+      var(--rainbow-2),
+      var(--rainbow-3),
+      var(--rainbow-4),
+      var(--rainbow-5)
+    );
+  }
+
+  .liked-heart-rgb::before {
+    animation: none;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      135deg,
+      var(--rainbow-1),
+      var(--rainbow-2),
+      var(--rainbow-3),
+      var(--rainbow-4),
+      var(--rainbow-5)
+    );
+  }
+
+  .nav-rgb-row {
+    animation: none;
+  }
+
+  .nav-rgb-icon-active {
+    background: linear-gradient(
+      135deg,
+      var(--rainbow-1),
+      var(--rainbow-2),
+      var(--rainbow-3),
+      var(--rainbow-4),
+      var(--rainbow-5)
+    );
   }
 }

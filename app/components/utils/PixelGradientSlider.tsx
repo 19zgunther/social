@@ -144,7 +144,7 @@ export function PixelGradientSlider({
       aria-valuemin={min}
       aria-valuemax={max}
       aria-valuenow={value}
-      className={`relative h-3 w-full cursor-pointer touch-none select-none overflow-visible outline-none focus-visible:ring-2 focus-visible:ring-accent-3 ${DONT_SWIPE_TABS_CLASSNAME} ${className}`}
+      className={`relative h-3 w-full cursor-pointer touch-none select-none overflow-visible outline-none focus-visible:ring-2 focus-visible:ring-accent ${DONT_SWIPE_TABS_CLASSNAME} ${className}`}
       onPointerDown={(event) => {
         event.preventDefault();
         draggingRef.current = true;
@@ -168,7 +168,7 @@ export function PixelGradientSlider({
         }
       }}
     >
-      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-accent-1">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-md border border-border">
         <canvas ref={canvasRef} className="h-full w-full" aria-hidden />
       </div>
       <div

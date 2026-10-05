@@ -467,7 +467,7 @@ export default function EmojiPicker({
       <button
         type="button"
         onClick={() => setIsOpen((previous) => !previous)}
-        className={`rounded-lg border border-accent-1 px-2 py-1 text-accent-2 transition hover:text-foreground ${buttonClassName ?? ""}`}
+        className={`rounded-lg border border-border px-2 py-1 text-muted transition hover:text-foreground ${buttonClassName ?? ""}`}
         aria-label="Add emoji"
         disabled={disabled}
       >
@@ -480,7 +480,7 @@ export default function EmojiPicker({
             className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2000] flex items-center justify-center px-2`}
           >
             <div
-              className="absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(10,132,255,0.22),transparent_55%),radial-gradient(ellipse_80%_60%_at_100%_100%,rgba(142,156,176,0.12),transparent_50%)] bg-black/45 backdrop-blur-md"
+              className="absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,color-mix(in_srgb,var(--accent)_22%,transparent),transparent_55%),radial-gradient(ellipse_80%_60%_at_100%_100%,color-mix(in_srgb,var(--muted)_12%,transparent),transparent_50%)] bg-black/45 backdrop-blur-md"
               onClick={() => setIsOpen(false)}
               aria-hidden="true"
             />
@@ -493,10 +493,10 @@ export default function EmojiPicker({
             >
               <div className="pointer-events-none absolute -inset-px rounded-[1.6rem] bg-gradient-to-br from-white/25 via-white/[0.07] to-white/[0.02] opacity-90 blur-[1px]" />
               <div
-                className="relative overflow-hidden rounded-[1.55rem] border border-white/[0.14] bg-gradient-to-b from-white/[0.11] via-secondary-background/35 to-secondary-background/55 px-1 py-3 shadow-[0_28px_90px_-20px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.22),inset_0_-1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-[1.35]"
+                className="relative overflow-hidden rounded-[1.55rem] border border-white/[0.14] bg-gradient-to-b from-white/[0.11] via-surface/35 to-surface/55 px-1 py-3 shadow-[0_28px_90px_-20px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.22),inset_0_-1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-[1.35]"
               >
                 <div className="pointer-events-none absolute -left-1/4 -top-1/3 h-[85%] w-[85%] rounded-full bg-gradient-to-br from-white/30 via-white/[0.06] to-transparent opacity-70 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-12 -right-8 h-48 w-48 rounded-full bg-accent-3/20 blur-3xl" />
+                <div className="pointer-events-none absolute -bottom-12 -right-8 h-48 w-48 rounded-full bg-accent/20 blur-3xl" />
                 <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" />
                 <div className="relative z-[1] max-h-[min(85vh,720px)] overflow-y-auto overscroll-contain pr">
                   {showEmojiEditor ? (
@@ -505,7 +505,7 @@ export default function EmojiPicker({
                         <button
                           type="button"
                           onClick={() => setShowEmojiEditor(false)}
-                          className="inline-flex items-center gap-1.5 text-sm text-accent-2 transition hover:text-foreground"
+                          className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
                         >
                           <ArrowLeft className="h-4 w-4 shrink-0" />
                           Back to picker
@@ -557,7 +557,7 @@ export default function EmojiPicker({
                           value={searchTerm}
                           onChange={(event) => setSearchTerm(event.target.value)}
                           placeholder="Emoji, keyword, or your custom emoji name..."
-                          className="w-full rounded-xl border border-white/[0.1] bg-black/25 px-3 py-2 text-sm text-foreground shadow-[inset_0_2px_8px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none backdrop-blur-md placeholder:text-accent-2/55 focus:border-accent-3/40 focus:ring-2 focus:ring-accent-3/25"
+                          className="w-full rounded-xl border border-white/[0.1] bg-black/25 px-3 py-2 text-sm text-foreground shadow-[inset_0_2px_8px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none backdrop-blur-md placeholder:text-muted/55 focus:border-accent/40 focus:ring-2 focus:ring-accent/25"
                         />
                       </div>
 
@@ -586,7 +586,7 @@ export default function EmojiPicker({
                                 return (
                                   <span
                                     key={`recent-pending-${emoji}-${index}`}
-                                    className="flex h-[3rem] w-[3rem] items-center justify-center text-sm text-accent-2/45 animate-pulse"
+                                    className="flex h-[3rem] w-[3rem] items-center justify-center text-sm text-muted/45 animate-pulse"
                                     aria-hidden="true"
                                   >
                                     …
@@ -614,7 +614,7 @@ export default function EmojiPicker({
                         <>
                           <p className="text-[13px] font-semibold text-foreground/55">Your custom emojis</p>
                           <div className="mb-2 overflow-x-auto overflow-y-hidden pb-1">
-                            <div className="grid h-[calc(3*2.6rem)] grid-flow-col grid-rows-3 gap-0.5 py-0.5">
+                            <div className="grid h-[calc(4*2.6rem)] grid-flow-col grid-rows-4 gap-0.5 py-0.5">
                               {filteredCustomEmojis.map((emoji) => (
                                 <button
                                   key={emoji.uuid}
@@ -633,8 +633,8 @@ export default function EmojiPicker({
                       ) : null}
 
                       {/** All emojis */}
-                      <p className="mb-1.5 text-[13px] font-semibold text-foreground/55">All emojis</p>
-                      <div className="overflow-x-auto overflow-y-hidden rounded-xl border border-white/[0.06] bg-black/15 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-sm">
+                      <p className="text-[13px] font-semibold text-foreground/55">All emojis</p>
+                      <div className="overflow-x-auto overflow-y-hidden rounded-xl">
                         <div className="grid h-[11rem] grid-flow-col grid-rows-4 gap-0 px-0.5">
                           {filteredEmojiOptions.map((emoji, index) => (
                             <button

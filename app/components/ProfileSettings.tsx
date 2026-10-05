@@ -150,9 +150,9 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col bg-primary-background"
+      className="flex h-full min-h-0 flex-col bg-bg"
     >
-      <div className="flex items-center justify-between border-b border-accent-1 px-3 py-3">
+      <div className="flex items-center justify-between border-b border-border px-3 py-3">
         <BackButton onBack={onBack} />
         <h1 className="text-lg font-semibold text-foreground">Settings</h1>
         <div className="w-20" />
@@ -168,12 +168,12 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
                 void onEnableNotifications();
               }}
               disabled={isEnablingNotifications}
-              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-4 py-3 text-left text-sm text-foreground hover:bg-accent-1/30 transition disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition disabled:cursor-not-allowed disabled:opacity-60"
             >
               <p className="font-medium">
                 {isEnablingNotifications ? "Enabling notifications..." : "Enable notifications"}
               </p>
-              <p className="text-xs text-accent-2 mt-1">
+              <p className="text-xs text-muted mt-1">
                 Register this device for post, reply, and thread message alerts
               </p>
             </button>
@@ -183,22 +183,22 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
                 void onTestNotifications();
               }}
               disabled={isTestingNotifications}
-              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-4 py-3 text-left text-sm text-foreground hover:bg-accent-1/30 transition mt-2 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition mt-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <p className="font-medium">
                 {isTestingNotifications ? "Sending test notification..." : "Send test notification"}
               </p>
-              <p className="text-xs text-accent-2 mt-1">
+              <p className="text-xs text-muted mt-1">
                 Push a sample alert to this device to verify notifications work
               </p>
             </button>
             <button
               type="button"
               onClick={onResetNotificationPrompt}
-              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-4 py-3 text-left text-sm text-foreground hover:bg-accent-1/30 transition mt-2"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition mt-2"
             >
               <p className="font-medium">Reset notification prompt</p>
-              <p className="text-xs text-accent-2 mt-1">
+              <p className="text-xs text-muted mt-1">
                 Make the notification permission prompt appear again
               </p>
             </button>
@@ -210,10 +210,10 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
               type="button"
               onClick={() => { void onClearImageCache(); }}
               disabled={isClearingImageCache}
-              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-4 py-3 text-left text-sm text-foreground hover:bg-accent-1/30 transition disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition disabled:cursor-not-allowed disabled:opacity-60"
             >
               <p className="font-medium">{isClearingImageCache ? "Clearing image cache..." : "Clear cached images"}</p>
-              <p className="text-xs text-accent-2 mt-1">
+              <p className="text-xs text-muted mt-1">
                 Remove all locally cached images and reload them as needed
               </p>
             </button>
@@ -221,10 +221,10 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
               type="button"
               onClick={() => { void onClearCustomEmojiCache(); }}
               disabled={isClearingEmojiCache}
-              className="w-full rounded-lg border border-accent-1 bg-secondary-background px-4 py-3 text-left text-sm text-foreground hover:bg-accent-1/30 transition disabled:cursor-not-allowed disabled:opacity-60 mt-2"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition disabled:cursor-not-allowed disabled:opacity-60 mt-2"
             >
               <p className="font-medium">{isClearingEmojiCache ? "Clearing custom emoji cache..." : "Clear cached custom emojis"}</p>
-              <p className="text-xs text-accent-2 mt-1">
+              <p className="text-xs text-muted mt-1">
                 Remove locally cached custom emoji pixel data (they reload from the server when needed)
               </p>
             </button>
@@ -235,7 +235,7 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
             <button
               type="button"
               onClick={onLogout}
-              className="w-full rounded-lg border border-red-600/50 bg-red-600/10 px-4 py-3 text-left text-sm text-red-600 hover:bg-red-600/20 transition flex items-center gap-2"
+              className="w-full rounded-lg border border-danger-fill/50 bg-danger-fill/10 px-4 py-3 text-left text-sm text-danger hover:bg-danger-fill/20 transition flex items-center gap-2"
             >
               <LogOut className="h-4 w-4" />
               <p className="font-medium">Log out</p>
@@ -254,8 +254,8 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
       </div>
 
       {statusMessage ? (
-        <div className="border-t border-accent-1 px-4 py-3">
-          <p className="text-xs text-accent-2">{statusMessage}</p>
+        <div className="border-t border-border px-4 py-3">
+          <p className="text-xs text-muted">{statusMessage}</p>
         </div>
       ) : null}
     </div>

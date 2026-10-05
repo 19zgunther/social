@@ -132,12 +132,12 @@ export default function SignUpPage({
         <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0">
             <section
                 style={MOBILE_FRAME_STYLE}
-                className="flex h-full flex-col justify-center border border-accent-1 bg-secondary-background px-6 shadow-lg shadow-black/20"
+                className="flex h-full flex-col justify-center border border-border bg-surface px-6 shadow-lg shadow-black/20"
             >
                 <h1 className="text-lg font-semibold text-foreground">{pageTitle}</h1>
-                <p className="mt-1 text-sm text-accent-2">Single-page auth flow for mobile-first layout.</p>
+                <p className="mt-1 text-sm text-muted">Single-page auth flow for mobile-first layout.</p>
                 {mode === "signup" ? (
-                    <p className="mt-3 text-sm text-accent-2">
+                    <p className="mt-3 text-sm text-muted">
                         Sorry ppl are dumb and I hate resetting passwords so enter your emails so we can automate it
                     </p>
                 ) : null}
@@ -145,7 +145,7 @@ export default function SignUpPage({
                 {mode === "login" ? (
                     <form className="mt-6 flex flex-col gap-3" onSubmit={submitLogin}>
                         <input
-                            className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent-2"
+                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-muted"
                             placeholder="Username or email"
                             value={identifier}
                             onChange={(event) => setIdentifier(event.target.value)}
@@ -154,7 +154,7 @@ export default function SignUpPage({
                             required
                         />
                         <input
-                            className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent-2"
+                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-muted"
                             placeholder="Password"
                             type="password"
                             value={password}
@@ -165,7 +165,7 @@ export default function SignUpPage({
                         <button
                             type="submit"
                             disabled={isSubmitting || isSendingTempEmail}
-                            className="mt-2 rounded-xl bg-accent-3 px-4 py-3 text-sm font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+                            className="mt-2 rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
                         >
                             {isSubmitting ? "Logging in..." : "Log in"}
                         </button>
@@ -173,7 +173,7 @@ export default function SignUpPage({
                             type="button"
                             onClick={() => void sendTempLoginEmail()}
                             disabled={isSubmitting || isSendingTempEmail}
-                            className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm font-medium text-foreground transition hover:border-accent-2 disabled:opacity-60"
+                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm font-medium text-foreground transition hover:border-muted disabled:opacity-60"
                         >
                             {isSendingTempEmail ? "Sending…" : "Email me a temporary login code"}
                         </button>
@@ -181,7 +181,7 @@ export default function SignUpPage({
                 ) : (
                     <form className="mt-6 flex flex-col gap-3" onSubmit={submitSignup}>
                         <input
-                            className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent-2"
+                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-muted"
                             placeholder="Username"
                             value={username}
                             onChange={(event) => setUsername(event.target.value)}
@@ -190,7 +190,7 @@ export default function SignUpPage({
                             required
                         />
                         <input
-                            className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent-2"
+                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-muted"
                             placeholder="Email"
                             type="email"
                             value={email}
@@ -200,7 +200,7 @@ export default function SignUpPage({
                             required
                         />
                         <input
-                            className="rounded-xl border border-accent-1 bg-primary-background px-4 py-3 text-sm text-foreground outline-none focus:border-accent-2"
+                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-muted"
                             placeholder="Password"
                             type="password"
                             value={password}
@@ -211,7 +211,7 @@ export default function SignUpPage({
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="mt-2 rounded-xl bg-accent-3 px-4 py-3 text-sm font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+                            className="mt-2 rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
                         >
                             {isSubmitting ? "Creating account..." : "Sign up"}
                         </button>
@@ -224,12 +224,12 @@ export default function SignUpPage({
                         setMode((previousMode) => (previousMode === "login" ? "signup" : "login"));
                         setStatusMessage("");
                     }}
-                    className="mt-4 text-sm text-accent-2 underline underline-offset-4 hover:text-foreground"
+                    className="mt-4 text-sm text-muted underline underline-offset-4 hover:text-foreground"
                 >
                     {mode === "login" ? "Need an account? Sign up" : "Have an account? Log in"}
                 </button>
 
-                {statusMessage ? <p className="mt-4 text-sm text-accent-2">{statusMessage}</p> : null}
+                {statusMessage ? <p className="mt-4 text-sm text-muted">{statusMessage}</p> : null}
             </section>
         </main>
     )

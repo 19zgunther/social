@@ -291,7 +291,7 @@ export default function ThreadSettings({
 
   return (
     <div
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-bg"
     >
       <ThreadPictureEditor
         threadId={thread.id}
@@ -306,7 +306,7 @@ export default function ThreadSettings({
         }}
       />
 
-      <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
+      <div className="flex items-center justify-between border-b border-border bg-surface px-3 py-3">
         <BackButton onBack={onBack} />
         <div className="min-w-0 text-center">
           <p className="truncate text-sm font-semibold text-foreground">Group Settings</p>
@@ -315,14 +315,14 @@ export default function ThreadSettings({
       </div>
 
       <div className="flex-1 min-h-0 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 touch-pan-y">
-        <section className="rounded-xl border border-accent-1 bg-secondary-background p-3">
+        <section className="rounded-xl border border-border bg-surface p-3">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => {
                 setIsPictureEditorOpen(true);
               }}
-              className="overflow-hidden rounded-full border border-accent-1 bg-primary-background"
+              className="overflow-hidden rounded-full border border-border bg-bg"
               aria-label="Edit group photo"
             >
               {localImageId && (localImageUrl || localImageAccessGrant) ? (
@@ -335,7 +335,7 @@ export default function ThreadSettings({
                   className="h-16 w-16 object-cover"
                 />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center text-xs text-accent-2">
+                <div className="flex h-16 w-16 items-center justify-center text-xs text-muted">
                   Add group photo
                 </div>
               )}
@@ -355,7 +355,7 @@ export default function ThreadSettings({
                     type="text"
                     value={localName}
                     onChange={(event) => setLocalName(event.target.value)}
-                    className="min-w-0 w-full rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+                    className="min-w-0 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
                     placeholder="Group name"
                     autoFocus
                   />
@@ -367,7 +367,7 @@ export default function ThreadSettings({
                         setLocalName(thread.name);
                         setIsEditingName(false);
                       }}
-                      className="flex-1 rounded-xl border border-accent-1 px-3 py-1.5 text-xs font-semibold text-accent-2 transition hover:text-foreground"
+                      className="flex-1 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted transition hover:text-foreground"
                     >
                       Cancel
                     </button>
@@ -378,7 +378,7 @@ export default function ThreadSettings({
                         !localName.trim() ||
                         localName.trim() === thread.name
                       }
-                      className="flex-1 rounded-xl bg-accent-3 px-3 py-1.5 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+                      className="flex-1 rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
                     >
                       {isRenaming ? "Saving..." : "Save"}
                     </button>
@@ -395,21 +395,21 @@ export default function ThreadSettings({
                       setLocalName(thread.name);
                       setIsEditingName(true);
                     }}
-                    className="shrink-0 rounded-xl border border-accent-1 px-3 py-1.5 text-xs font-semibold text-accent-2 transition hover:text-foreground"
+                    className="shrink-0 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted transition hover:text-foreground"
                   >
                     Edit
                   </button>
                 </div>
               )}
 
-              <p className="truncate text-xs text-accent-2">
+              <p className="truncate text-xs text-muted">
                 Owner: {thread.owner_username}
               </p>
             </div>
           </div>
         </section>
 
-        <section className="rounded-xl border border-accent-1 bg-secondary-background p-3">
+        <section className="rounded-xl border border-border bg-surface p-3">
           <div className="space-y-3">
             {!isDirect ? (
               <form
@@ -436,16 +436,16 @@ export default function ThreadSettings({
                     }}
                     searchUsers={searchThreadMemberOptions}
                     placeholder="Username or email"
-                    inputClassName="w-full rounded-xl border border-accent-1 bg-secondary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+                    inputClassName="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
                   />
                   {memberFormError ? (
-                    <p className="mt-1 text-xs text-accent-2">{memberFormError}</p>
+                    <p className="mt-1 text-xs text-muted">{memberFormError}</p>
                   ) : null}
                 </div>
                 <button
                   type="submit"
                   disabled={isUpdatingMembers}
-                  className="rounded-xl bg-accent-3 px-3 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+                  className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
                 >
                   Add
                 </button>
@@ -453,23 +453,23 @@ export default function ThreadSettings({
             ) : null}
 
             <div className="space-y-2">
-              {isLoadingMembers ? <p className="text-xs text-accent-2">Loading members...</p> : null}
+              {isLoadingMembers ? <p className="text-xs text-muted">Loading members...</p> : null}
 
               {!isLoadingMembers && members.length === 0 ? (
-                <p className="text-xs text-accent-2">No members found.</p>
+                <p className="text-xs text-muted">No members found.</p>
               ) : null}
 
               {members.map((member) => (
                 <div
                   key={member.user_id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-accent-1 bg-secondary-background py-2 pl-3 pr-2"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface py-2 pl-3 pr-2"
                 >
                   <button
                     type="button"
                     onClick={() => {
                       onViewUserProfile(member.user_id);
                     }}
-                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition hover:bg-primary-background/60 active:bg-primary-background/80"
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition hover:bg-bg/60 active:bg-bg/80"
                   >
                     <UserProfileImage
                       userId={member.user_id}
@@ -484,7 +484,7 @@ export default function ThreadSettings({
                       <p className="text-sm text-foreground">
                         {member.username} {member.is_owner ? "(owner)" : ""}
                       </p>
-                      <p className="text-xs text-accent-2">{member.email ?? "No email"}</p>
+                      <p className="text-xs text-muted">{member.email ?? "No email"}</p>
                     </div>
                   </button>
 
@@ -501,16 +501,16 @@ export default function ThreadSettings({
                           disabled={
                             sendingFriendUserId === member.user_id || isUpdatingMembers
                           }
-                          className="rounded-lg border border-accent-1 px-2 py-1 text-[11px] font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
+                          className="rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-muted transition hover:text-foreground disabled:opacity-50"
                         >
                           {sendingFriendUserId === member.user_id ? "Sending…" : "Add Friend"}
                         </button>
                       ) : member.friendship_status === "pending_sent" ? (
-                        <span className="max-w-[5.5rem] text-center text-[11px] text-accent-2">
+                        <span className="max-w-[5.5rem] text-center text-[11px] text-muted">
                           Request sent
                         </span>
                       ) : member.friendship_status === "pending_received" ? (
-                        <span className="max-w-[6rem] text-center text-[11px] text-accent-2">
+                        <span className="max-w-[6rem] text-center text-[11px] text-muted">
                           Respond in Profile
                         </span>
                       ) : null
@@ -523,7 +523,7 @@ export default function ThreadSettings({
                           void onRemoveMember(member.user_id);
                         }}
                         disabled={isUpdatingMembers}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-accent-2 transition hover:bg-primary-background/60 hover:text-foreground disabled:opacity-60"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-bg/60 hover:text-foreground disabled:opacity-60"
                         aria-label={
                           confirmedRemoveMember === member.user_id
                             ? "Tap again to confirm remove from group"
@@ -533,7 +533,7 @@ export default function ThreadSettings({
                         <Trash2
                           className={`h-4 w-4 ${
                             confirmedRemoveMember === member.user_id
-                              ? "text-red-400"
+                              ? "text-danger"
                               : "opacity-50"
                           }`}
                           aria-hidden
@@ -548,9 +548,9 @@ export default function ThreadSettings({
         </section>
 
         {isOwner ? (
-          <section className="rounded-xl border border-accent-1 border-red-500/40 bg-secondary-background p-3 mt-[10rem]">
+          <section className="rounded-xl border border-border border-danger/40 bg-surface p-3 mt-[10rem]">
             <p className="text-xs font-semibold text-foreground">Admin</p>
-            <p className="mt-1 text-xs text-accent-2">
+            <p className="mt-1 text-xs text-muted">
               Permanently delete this group and all of its messages. This cannot be undone.
             </p>
             <button
@@ -561,8 +561,8 @@ export default function ThreadSettings({
               disabled={isDeletingThread}
               className="mt-3 w-full rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:opacity-60"
               style={{
-                borderColor: confirmDeleteThread ? "rgb(239 68 68)" : undefined,
-                color: confirmDeleteThread ? "rgb(239 68 68)" : undefined,
+                borderColor: confirmDeleteThread ? "var(--danger)" : undefined,
+                color: confirmDeleteThread ? "var(--danger)" : undefined,
               }}
             >
               {isDeletingThread
@@ -577,7 +577,7 @@ export default function ThreadSettings({
                 onClick={() => {
                   setConfirmDeleteThread(false);
                 }}
-                className="mt-2 w-full rounded-xl border border-accent-1 px-3 py-2 text-xs font-semibold text-accent-2 transition hover:text-foreground"
+                className="mt-2 w-full rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted transition hover:text-foreground"
               >
                 Cancel
               </button>
@@ -587,7 +587,7 @@ export default function ThreadSettings({
       </div>
 
       {statusMessage ? (
-        <p className="px-3 py-2 text-xs text-accent-2">{statusMessage}</p>
+        <p className="px-3 py-2 text-xs text-muted">{statusMessage}</p>
       ) : null}
     </div>
   );

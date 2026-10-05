@@ -14,16 +14,8 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { Camera, Image, Plus, Video } from "lucide-react";
+import { Camera, Image, Video } from "lucide-react";
 import CameraModal from "@/app/components/Camera";
-import Pool from "@/app/components/games/Pool";
-import {
-  createInitialPoolGame,
-  getPoolGameFromMessageData,
-  isPoolTurnForUser,
-  latestPoolMessagesByGameId,
-  withSecondPlayerClaimed,
-} from "@/app/components/games/poolGameUtils";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
@@ -40,7 +32,6 @@ import {
   ImageOverlayData,
   MessageData,
   EmojiItem,
-  PoolGameMessageData,
   SyncResponse,
   ThreadItem,
   ThreadMember,
@@ -79,7 +70,7 @@ const MIN_BOTTOM_SWIPE_SPINNER_MS = 1_000;
 const MESSAGE_LONG_PRESS_TO_REPLY_MS = 500;
 /** Quick reactions shown on the message options overlay (before EmojiPicker). */
 const MESSAGE_OPTIONS_QUICK_EMOJIS = ["❤️", "👍", "😄", "😂", "❓", "‼️"] as const;
-/** Portal stack: below EmojiPicker (2000) and games (2100). */
+/** Portal stack: below EmojiPicker (2000). */
 const MESSAGE_OPTIONS_OVERLAY_Z = 1950;
 const EMOJI_ONLY_MESSAGE_REGEX =
   /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
@@ -207,8 +198,6 @@ export default function Thread({
   const [statusMessage, setStatusMessage] = useState("");
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
-  const [isGamesModalOpen, setIsGamesModalOpen] = useState(false);
-  const [poolSession, setPoolSession] = useState<PoolGameMessageData | null>(null);
   const isFollowingBottomRef = useRef(true);
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
   const [replyTargetMessageId, setReplyTargetMessageId] = useState<string | null>(null);
@@ -377,8 +366,6 @@ export default function Thread({
     setOldestLoadedMessageId(null);
     setIsLoadingOlderMessages(false);
     setIsCameraModalOpen(false);
-    setIsGamesModalOpen(false);
-    setPoolSession(null);
     setImageViewer(null);
     setCustomEmojiByUuid({});
     setCollapsedReplyMessageIds([]);
@@ -909,75 +896,6 @@ export default function Thread({
     }
   };
 
-  const sendPoolGameMessage = async (poolGame: PoolGameMessageData): Promise<PoolGameMessageData> => {
-    setIsSendingMessage(true);
-    setStatusMessage("");
-    const claimSecondSeat = (pg: PoolGameMessageData): PoolGameMessageData => {
-      if (pg.player_b_username !== null) {
-        return pg;
-      }
-      if (pg.player_a_username === currentUsername) {
-        return pg;
-      }
-      return { ...pg, player_b_username: currentUsername };
-    };
-    try {
-      const response = await postWithAuth("/api/thread-send", {
-        thread_id: selectedThread.id,
-        text: "",
-        message_data: { pool_game: claimSecondSeat(poolGame) },
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
-
-      const payload = (await response.json()) as ThreadSendResponse;
-      const sanitized = getPoolGameFromMessageData(payload.message.data);
-      if (!sanitized) {
-        throw new Error("Server did not accept pool game data.");
-      }
-
-      const newMessage: ThreadMessage = {
-        ...payload.message,
-        direct_reply_count: 0,
-      };
-
-      setMessages((previous) => [...previous, newMessage]);
-      if (!oldestLoadedMessageId) {
-        setOldestLoadedMessageId(payload.message.id);
-      }
-
-      setShowNewMessagesButton(false);
-      isFollowingBottomRef.current = true;
-      pendingBottomScrollRef.current = "smooth";
-      return sanitized;
-    } finally {
-      setIsSendingMessage(false);
-    }
-  };
-
-  const startNewPoolGame = async () => {
-    const hasSomeoneElse = members.some((member) => member.user_id !== currentUserId);
-    if (!hasSomeoneElse) {
-      setStatusMessage("Add another member to this thread to play Pool.");
-      return;
-    }
-
-    try {
-      const game = createInitialPoolGame({
-        gameId: crypto.randomUUID(),
-        playerAUsername: currentUsername,
-        startingUsername: currentUsername,
-      });
-      const saved = await sendPoolGameMessage(game);
-      setIsGamesModalOpen(false);
-      setPoolSession(saved);
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Could not start Pool.");
-    }
-  };
-
   const onSendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!messageDraft.trim()) {
@@ -1163,22 +1081,12 @@ export default function Thread({
     });
   };
 
-  const latestPoolByGameId = latestPoolMessagesByGameId(messages);
-  const latestPoolMessageIds = new Set(
-    Array.from(latestPoolByGameId.values()).map((entry) => entry.message.id),
-  );
-
   const visibleMessages = messages.filter((message) => {
     const hasText = message.text.trim().length > 0;
     const hasImage = threadMessageHasRenderableImage(message);
     const hasOverlay = Boolean(toImageOverlayData(message.data));
-    const poolGame = getPoolGameFromMessageData(message.data);
-    if (poolGame && !latestPoolMessageIds.has(message.id)) {
-      return false;
-    }
-    const showLatestPool = Boolean(poolGame && latestPoolMessageIds.has(message.id));
     // Hide pure signaling / data-only messages (e.g., video call signals) from the chat UI.
-    return hasText || hasImage || hasOverlay || showLatestPool;
+    return hasText || hasImage || hasOverlay;
   });
 
   const rootMessages = visibleMessages.filter((message) => message.parent_id === selectedThread.id);
@@ -1345,107 +1253,9 @@ export default function Thread({
     const hasImage = threadMessageHasRenderableImage(message);
     const isImageOnly = hasImage && !hasText;
     const messageImageOverlay = toImageOverlayData(message.data);
-    const poolGame = getPoolGameFromMessageData(message.data);
-    const showPoolCard = poolGame && latestPoolMessageIds.has(message.id);
 
     if (depth > 0 && isHiddenUnderCollapsedParent(message)) {
       return null;
-    }
-
-    if (showPoolCard && poolGame) {
-      const isLockedPlayer =
-        poolGame.player_a_username === currentUsername ||
-        poolGame.player_b_username === currentUsername;
-      const canJoinAsOpponent =
-        poolGame.player_b_username === null &&
-        poolGame.current_turn_username === null &&
-        currentUsername !== poolGame.player_a_username;
-      const canInteract = isLockedPlayer || canJoinAsOpponent;
-      const myTurn = canInteract && isPoolTurnForUser(poolGame, currentUsername);
-
-      const opponentUsername =
-        poolGame.player_a_username === currentUsername
-          ? poolGame.player_b_username
-          : poolGame.player_b_username === currentUsername
-            ? poolGame.player_a_username
-            : null;
-
-      let statusHint: string;
-      if (myTurn) {
-        statusHint = "Your turn — take a shot.";
-      } else if (!canInteract) {
-        statusHint = "Spectating — only the host and first responder play.";
-      } else if (poolGame.current_turn_username !== null) {
-        statusHint = `Waiting for ${poolGame.current_turn_username}.`;
-      } else if (poolGame.player_b_username === null) {
-        statusHint =
-          currentUsername === poolGame.player_a_username
-            ? "Waiting for someone to take the first shot as Player 2."
-            : "Tap Play to join as Player 2 (first tap wins if several people try).";
-      } else {
-        statusHint = `Waiting for ${poolGame.player_b_username}.`;
-      }
-
-      if (depth > 0) {
-        return null;
-      }
-
-      return (
-        <div key={message.id} className="relative max-w-[85%]">
-          <div
-            className={`rounded-2xl border border-accent-1 bg-secondary-background px-3 py-3 shadow-sm ${isOwnMessage ? "ml-auto" : ""}`}
-          >
-            <p className="text-xs opacity-60">{isOwnMessage ? "You" : message.username}</p>
-            <p className="text-sm font-semibold text-foreground">🎱 Pool</p>
-            <p className="mt-1 text-xs text-accent-2">
-              {isLockedPlayer ? (
-                <>
-                  vs{" "}
-                  <span className="text-foreground">
-                    {opponentUsername ?? "…"}
-                  </span>
-                  {!opponentUsername ? (
-                    <span className="text-accent-2"> (Player 2 not joined yet)</span>
-                  ) : null}
-                </>
-              ) : canJoinAsOpponent ? (
-                <>
-                  Host <span className="text-foreground">{poolGame.player_a_username}</span> — you can join as Player 2
-                </>
-              ) : (
-                <>
-                  {poolGame.player_a_username}
-                  {poolGame.player_b_username ? (
-                    <> vs {poolGame.player_b_username}</>
-                  ) : (
-                    <> — waiting for Player 2</>
-                  )}
-                </>
-              )}
-            </p>
-            <p className="mt-2 text-xs text-accent-2">{statusHint}</p>
-            <button
-              type="button"
-              disabled={!myTurn || Boolean(editTargetMessageId)}
-              onClick={() => {
-                if (!myTurn) {
-                  return;
-                }
-                setPoolSession(withSecondPlayerClaimed(poolGame, currentUsername));
-              }}
-              className="mt-3 w-full rounded-full border border-accent-1 bg-accent-3/20 py-2 text-xs font-semibold text-foreground transition hover:bg-accent-3/30 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {myTurn ? "Play" : "Not your turn"}
-            </button>
-          </div>
-          <p
-            className="pointer-events-none absolute right-[-68px] top-1/2 w-16 -translate-y-1/2 text-right text-[11px] text-accent-2/90 transition-opacity duration-75"
-            style={{ opacity: timestampRevealPercent }}
-          >
-            {formatMessageTimestamp(message.created_at)}
-          </p>
-        </div>
-      );
     }
 
     const children = childMessagesByParentId.get(message.id) ?? [];
@@ -1497,7 +1307,7 @@ export default function Thread({
             onImageLoaded={handleMessageImageLoad}
           />
           <p
-            className="pointer-events-none absolute right-[-68px] top-1/2 w-16 -translate-y-1/2 text-right text-[11px] text-accent-2/90 transition-opacity duration-75"
+            className="pointer-events-none absolute right-[-68px] top-1/2 w-16 -translate-y-1/2 text-right text-[11px] text-muted/90 transition-opacity duration-75"
             style={{ opacity: timestampRevealPercent }}
           >
             {formatMessageTimestamp(message.created_at)}
@@ -1525,20 +1335,20 @@ export default function Thread({
           <button
             type="button"
             onClick={() => toggleRepliesCollapsedForMessageId(message.id)}
-            className="mt-1 ml-1 text-xs text-accent-2 underline underline-offset-2 hover:text-foreground"
+            className="mt-1 ml-1 text-xs text-muted underline underline-offset-2 hover:text-foreground"
           >
             {isRepliesSubtreeExpanded ? "Hide replies" : `${threadedChildren.length} replies`}
           </button>
         ) : null}
 
         {threadedChildren.length > 0 && isRepliesSubtreeExpanded ? (
-          <div className="mt-1 mx-2 space-y-1 border-l border-r border-accent-1/60">
+          <div className="mt-1 mx-2 space-y-1 border-l border-r border-border/60">
             {threadedChildren.map((childMessage) => renderMessage(childMessage, depth + 1))}
           </div>
         ) : null}
 
         {isReplyTargetMessage ? (
-          <div className="mt-1 ml-1 text-xs text-accent-2">
+          <div className="mt-1 ml-1 text-xs text-muted">
             Replying to this message
             <button
               type="button"
@@ -1572,19 +1382,6 @@ export default function Thread({
     });
   };
 
-  if (poolSession) {
-    return (
-      <Pool
-        game={poolSession}
-        currentUsername={currentUsername}
-        onBack={() => setPoolSession(null)}
-        onTurnComplete={async (nextGame) => {
-          await sendPoolGameMessage(nextGame);
-        }}
-      />
-    );
-  }
-
   if (isVideoCallOpen) {
     return (
       <VideoCall
@@ -1600,7 +1397,7 @@ export default function Thread({
       <textarea
         ref={composerTextareaRef}
         rows={1}
-        className={`min-h-10 resize-none overflow-hidden rounded-2xl border border-accent-1 bg-secondary-background px-4 py-2 text-sm leading-normal text-foreground break-words outline-none focus:border-accent-2 transition-[border-color] duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
+        className={`min-h-10 resize-none overflow-hidden rounded-2xl border border-border bg-surface px-4 py-2 text-sm leading-normal text-foreground break-words outline-none focus:border-muted transition-[border-color] duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
           }`}
         placeholder={
           editTargetMessageId
@@ -1638,26 +1435,17 @@ export default function Thread({
               openCameraModal();
             }}
             disabled={Boolean(editTargetMessageId)}
-            className="flex-1 rounded-full border border-accent-1 px-3 py-3 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
+            className="flex-1 rounded-full border border-border px-3 py-3 text-xs font-semibold text-muted transition hover:text-foreground disabled:opacity-50"
             aria-label="Take photo"
           >
             <Camera className="mx-auto h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsGamesModalOpen(true)}
-            disabled={Boolean(editTargetMessageId)}
-            className="flex shrink-0 items-center justify-center rounded-full border border-accent-1 px-3 py-3 text-xs font-semibold text-accent-2 transition hover:text-foreground disabled:opacity-50"
-            aria-label="Games"
-          >
-            <Plus className="h-4 w-4" />
           </button>
         </>
       ) : (
         <button
           type="submit"
           disabled={isSendingMessage || !messageDraft.trim()}
-          className="rounded-full bg-accent-3 px-4 py-3 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+          className="rounded-full bg-accent px-4 py-3 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
         >
           {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}
         </button>
@@ -1683,7 +1471,7 @@ export default function Thread({
 
   return (
     <div
-      className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-primary-background"
+      className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-bg"
     >
       {selectedThread.event_background_image_id &&
       selectedThread.event_background_image_access_grant ? (
@@ -1697,11 +1485,11 @@ export default function Thread({
             aria-hidden
             className="h-full w-full object-cover object-center"
           />
-          <div className="absolute inset-0 bg-primary-background/62" aria-hidden />
+          <div className="absolute inset-0 bg-bg/62" aria-hidden />
         </div>
       ) : null}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b border-accent-1 bg-secondary-background px-3 py-3">
+      <div className="flex items-center justify-between border-b border-border bg-surface px-3 py-3">
         <BackButton onBack={onBack} />
         <div
           className="min-w-0 text-center flex items-center gap-2"
@@ -1729,12 +1517,12 @@ export default function Thread({
                 imageThreadId={selectedThread.id}
                 imageId={selectedThread.image_id ?? null}
                 alt="Group photo"
-                className="h-10 w-10 rounded-full border border-accent-1 object-cover"
+                className="h-10 w-10 rounded-full border border-border object-cover"
               />
             </button>
           ) : (
             <div className="flex h-10 w-10 items-center justify-center">
-              <Image className="h-10 w-10 text-accent-2" />
+              <Image className="h-10 w-10 text-muted" />
             </div>
           )}
           <p className="truncate text-sm font-semibold text-foreground">
@@ -1745,7 +1533,7 @@ export default function Thread({
           type="button"
           aria-label="Start video call"
           onClick={() => setIsVideoCallOpen(true)}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-accent-2 hover:bg-accent-1/30 hover:text-foreground"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-border/30 hover:text-foreground"
         >
           <Video className="h-4 w-4" />
         </button>
@@ -1774,12 +1562,12 @@ export default function Thread({
           className="h-full min-h-0 space-y-2 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 touch-pan-y"
         >
           {isLoadingMessages ? (
-            <div className="flex items-center gap-2 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2">
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
               <span
                 aria-hidden
-                className="h-3 w-3 animate-spin rounded-full border-2 border-accent-2 border-t-transparent"
+                className="h-3 w-3 animate-spin rounded-full border-2 border-muted border-t-transparent"
               />
-              <p className="text-xs text-accent-2">Loading messages...</p>
+              <p className="text-xs text-muted">Loading messages...</p>
             </div>
           ) : null}
 
@@ -1787,13 +1575,13 @@ export default function Thread({
             <div className="flex items-center justify-center py-1">
               <span
                 aria-hidden
-                className="h-3 w-3 animate-spin rounded-full border-2 border-accent-2 border-t-transparent"
+                className="h-3 w-3 animate-spin rounded-full border-2 border-muted border-t-transparent"
               />
             </div>
           ) : null}
 
           {!isLoadingMessages && messages.length === 0 ? (
-            <p className="text-xs text-accent-2">No messages yet. Send the first one.</p>
+            <p className="text-xs text-muted">No messages yet. Send the first one.</p>
           ) : null}
 
           <div
@@ -1818,7 +1606,7 @@ export default function Thread({
                 behavior: "smooth",
               });
             }}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background shadow-lg shadow-black/30"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-on-accent shadow-lg shadow-black/30"
           >
             New messages
           </button>
@@ -1829,14 +1617,14 @@ export default function Thread({
         <div className="mx-3 mb-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2">
           <span
             aria-hidden
-            className="h-3 w-3 animate-spin rounded-full border-2 border-accent-2 border-t-transparent"
+            className="h-3 w-3 animate-spin rounded-full border-2 border-muted border-t-transparent"
           />
-          <p className="text-xs text-accent-2">Loading latest messages...</p>
+          <p className="text-xs text-muted">Loading latest messages...</p>
         </div>
       ) : null}
 
       {editTargetMessageId && !activeOptionsMessageId ? (
-        <div className="mx-2 mb-1 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs text-accent-2">
+        <div className="mx-2 mb-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted">
           Editing message
           <button
             type="button"
@@ -1874,37 +1662,6 @@ export default function Thread({
         onSendPhoto={onSendPhotoFromCamera}
         isSending={isSendingMessage}
       />
-
-      {isGamesModalOpen
-        ? createPortal(
-          <div
-            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2100] flex items-end justify-center bg-black/45 px-3 pb-6 pt-16 sm:items-center`}
-          >
-            <button
-              type="button"
-              aria-label="Close games"
-              className="absolute inset-0 cursor-default"
-              onClick={() => setIsGamesModalOpen(false)}
-            />
-            <div className="relative z-10 w-full max-w-sm rounded-2xl border border-accent-1 bg-secondary-background p-4 shadow-xl">
-              <p className="text-sm font-semibold text-foreground">Games</p>
-              <p className="mt-1 text-xs text-accent-2">Start a turn-based game in this thread.</p>
-              <button
-                type="button"
-                disabled={isSendingMessage || isLoadingMembers || members.length < 2}
-                onClick={() => void startNewPoolGame()}
-                className="mt-4 w-full rounded-xl border border-accent-1 bg-primary-background px-3 py-3 text-left text-sm font-medium text-foreground transition hover:border-accent-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span className="block">🎱 Pool</span>
-                <span className="mt-0.5 block text-xs font-normal text-accent-2">
-                  Top-down billiards — one shot per turn, state syncs in chat.
-                </span>
-              </button>
-            </div>
-          </div>,
-          document.body,
-        )
-        : null}
 
       {activeOptionsMessage && activeOptionsMessageId
         ? createPortal(
@@ -1959,11 +1716,11 @@ export default function Thread({
                     </div>
 
                     {/** Actions row */}
-                    <div className="flex flex-col gap-1 mt-4 rounded-2xl border border-accent-1 bg-secondary-background px-2 py-2 shadow-lg">
+                    <div className="flex flex-col gap-1 mt-4 rounded-2xl border border-border bg-surface px-2 py-2 shadow-lg">
                       {activeOptionsMessage.created_by === currentUserId ? (
                         <button
                           type="button"
-                          className="w-full border-b border-accent-1 px-4 py-1 text-left text-sm font-medium text-foreground"
+                          className="w-full border-b border-border px-4 py-1 text-left text-sm font-medium text-foreground"
                           onClick={() => {
                             setMessageDraft(activeOptionsMessage.text);
                             setEditTargetMessageId(activeOptionsMessage.id);
@@ -1982,7 +1739,7 @@ export default function Thread({
                       ) : null}
                       <button
                         type="button"
-                        className="w-full border-none border-accent-1 px-4 py-1 text-left text-sm font-medium text-foreground"
+                        className="w-full border-none border-border px-4 py-1 text-left text-sm font-medium text-foreground"
                         onClick={() => { copyActiveOptionsMessage(activeOptionsMessage); }}
                       >
                         Copy
@@ -1990,9 +1747,9 @@ export default function Thread({
                     </div>
                   </div>
                 </div>
-                <div className="pointer-events-auto mt-auto shrink-0 border-t border-accent-1 bg-primary-background pt-1">
+                <div className="pointer-events-auto mt-auto shrink-0 border-t border-border bg-bg pt-1">
                   {editTargetMessageId ? (
-                    <div className="mx-2 mb-1 rounded-lg border border-accent-1 bg-secondary-background px-3 py-2 text-xs text-accent-2">
+                    <div className="mx-2 mb-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted">
                       Editing message
                       <button
                         type="button"
@@ -2021,7 +1778,7 @@ export default function Thread({
 
       {!activeOptionsMessageId ? messageComposerForm : null}
 
-      {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
+      {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
       </div>
     </div>
   );

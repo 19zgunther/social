@@ -110,10 +110,10 @@ export function threadMessageBubbleShellClassName(
   const shape = isImageOnly
     ? `${isOwnMessage ? "ml-auto" : ""}`
     : `rounded-2xl px-3 py-1 shadow-sm ${isOwnMessage
-      ? "ml-auto rounded-br-sm bg-accent-3 text-primary-background"
-      : "rounded-bl-sm bg-secondary-background text-foreground"
+      ? "ml-auto rounded-br-sm bg-accent text-on-accent"
+      : "rounded-bl-sm bg-surface text-foreground"
     }`;
-  const thread = depth > 0 ? "ml-5 border-l border-accent-1/60" : "";
+  const thread = depth > 0 ? "ml-5 border-l border-border/60" : "";
   return `${base} ${shape} ${thread}`;
 }
 

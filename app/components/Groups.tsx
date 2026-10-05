@@ -491,7 +491,7 @@ export default function Groups({
   return (
     <div className="flex h-full min-h-0 flex-col space-y-3 px-2 bg-black">
       <div>
-        <header className="flex items-center justify-between border-b border-accent-1 px-4 py-3">
+        <header className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-foreground">Groups</h1>
             {isLoadingThreads || isRefreshingList ? (
@@ -502,7 +502,7 @@ export default function Groups({
                 onClick={() => {
                   void onRefreshGroupsList();
                 }}
-                className="rounded-md p-0.5 text-accent-2 transition hover:text-foreground"
+                className="rounded-md p-0.5 text-muted transition hover:text-foreground"
                 aria-label="Refresh groups"
               >
                 <RefreshCw className="h-5 w-5 shrink-0" aria-hidden />
@@ -510,14 +510,14 @@ export default function Groups({
             )}
           </div>
           <button type="button" onClick={() => { setCreateThreadIsVisible(true); }}>
-            <MessageCirclePlus className="h-6 w-6 text-accent-3" />
+            <MessageCirclePlus className="h-6 w-6 text-accent" />
           </button>
         </header>
       </div>
 
       {createThreadIsVisible && <form onSubmit={onCreateThread} className="w-full block relative">
         <input
-          className="flex-1 w-full rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent-2"
+          className="flex-1 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
           placeholder="New thread name"
           value={threadName}
           onChange={(event) => setThreadName(event.target.value)}
@@ -528,14 +528,14 @@ export default function Groups({
             type="button"
             onClick={() => { setCreateThreadIsVisible(false); }}
             disabled={isCreatingThread}
-            className="flex-1 rounded-xl bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+            className="flex-1 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isCreatingThread}
-            className="flex-1 rounded-xl bg-accent-3 px-4 py-2 text-xs font-semibold text-primary-background transition hover:brightness-110 disabled:opacity-60"
+            className="flex-1 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
           >
             {isCreatingThread ? "Creating..." : "Create"}
           </button>
@@ -543,7 +543,7 @@ export default function Groups({
       </form>}
 
       {isLoadingThreads ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-accent-1 bg-primary-background px-3 py-2 text-xs text-accent-2">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-bg px-3 py-2 text-xs text-muted">
           <Loader scale={0.7} />
           <span>Loading threads...</span>
         </div>
@@ -559,7 +559,7 @@ export default function Groups({
         className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y"
       >
         {!isLoadingThreads && threads.length === 0 ? (
-          <p className="text-xs text-accent-2 px-4">No threads yet. Create your first one.</p>
+          <p className="text-xs text-muted px-4">No threads yet. Create your first one.</p>
         ) : null}
 
         {threads.map((thread) => (
@@ -573,7 +573,7 @@ export default function Groups({
         ))}
       </div>
 
-      {statusMessage ? <p className="text-xs text-accent-2">{statusMessage}</p> : null}
+      {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
 
       <ImageViewerModal
         open={groupsPhotoViewer !== null}
@@ -647,9 +647,9 @@ function GroupThreadRow({
           onOpenThread(thread);
         }
       }}
-      className={`relative w-full cursor-pointer px-4 py-3 text-left transition border-b border-accent-1/30 outline-none focus-visible:ring-2 focus-visible:ring-accent-2/50 focus-visible:ring-offset-2 focus-visible:ring-offset-primary-background ${isUnread
-        ? "bg-secondary-background/50"
-        : "bg-primary-background hover:bg-secondary-background/20"
+      className={`relative w-full cursor-pointer px-4 py-3 text-left transition border-b border-border/30 outline-none focus-visible:ring-2 focus-visible:ring-muted/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${isUnread
+        ? "bg-surface/50"
+        : "bg-bg hover:bg-surface/20"
         }`}
     >
       <div className="flex items-start gap-3">
@@ -663,8 +663,8 @@ function GroupThreadRow({
             className="h-12 w-12 rounded-full object-cover flex-shrink-0"
           />
         ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-1/20 flex-shrink-0">
-            <Image className="h-6 w-6 text-accent-2" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-border/20 flex-shrink-0">
+            <Image className="h-6 w-6 text-muted" />
           </div>
         )}
 
@@ -677,11 +677,11 @@ function GroupThreadRow({
               {isUnread ? (
                 <span
                   aria-label="Unread messages"
-                  className="h-2 w-2 flex-shrink-0 rounded-full bg-accent-3"
+                  className="h-2 w-2 flex-shrink-0 rounded-full bg-accent"
                 />
               ) : null}
             </div>
-            {thread.is_direct ? null : <p className="mt-0.5 truncate text-sm text-accent-2">
+            {thread.is_direct ? null : <p className="mt-0.5 truncate text-sm text-muted">
               Members: {thread.participant_count ?? 1}
             </p>}
           </div>
@@ -700,11 +700,11 @@ function GroupThreadRow({
                 className={`h-8 w-8 flex-shrink-0 rounded-md ${
                   isUnread
                     ? hasPhotoPreview
-                      ? "bg-red-600 shadow-sm ring-1 ring-red-500/40"
-                      : "bg-blue-600 shadow-sm ring-1 ring-blue-500/40"
+                      ? "bg-danger-fill shadow-sm ring-1 ring-danger/40"
+                      : "bg-accent shadow-sm ring-1 ring-accent/40"
                     : hasPhotoPreview
-                      ? "border-2 border-red-500/70 bg-transparent"
-                      : "border-2 border-blue-500/70 bg-transparent"
+                      ? "border-2 border-danger/70 bg-transparent"
+                      : "border-2 border-accent/70 bg-transparent"
                 }`}
               />
             ) : showSelfLastArrow ? (
@@ -715,13 +715,13 @@ function GroupThreadRow({
                   event.stopPropagation();
                   onOpenThread(thread);
                 }}
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border-2 border-accent-2/80 bg-transparent text-accent-2"
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border-2 border-muted/80 bg-transparent text-muted"
               >
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </button>
             ) : null}
 
-            {listTime ? <span className="text-xs text-accent-2">{listTime}</span> : null}
+            {listTime ? <span className="text-xs text-muted">{listTime}</span> : null}
           </div>
         </div>
       </div>

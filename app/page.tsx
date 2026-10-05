@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { /* Calendar, */ House, Images, MessageSquare, UserRound, Users } from "lucide-react";
+// import { Calendar } from "lucide-react"; // events tab hidden
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
 import { Profile, ProfileOtherUser } from "@/app/components/Profile";
@@ -592,35 +592,35 @@ export default function Home() {
         </div>
 
         {activeTab !== "create_post" ? (
-          <div className="w-full h-fit flex justify-between border-t border-accent-1 bg-primary-background z-[1000]" style={{boxShadow: "0 0 20px 10px rgba(0, 0, 0, 0.6)"}}>
+          <div className="nav-rgb-row w-full h-fit flex justify-between border-t border-border bg-bg z-[1000]" style={{boxShadow: "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)"}}>
             <NavRowButton
-              icon={<House aria-hidden className="h-5 w-5" />}
+              iconClassName="nav-rgb-icon-house"
               isActive={activeTab === "feed"}
               showCircle={false}
               onClick={() => setActiveTab("feed")}
             />
             <NavRowButton
-              icon={<Users aria-hidden className="h-5 w-5" />}
+              iconClassName="nav-rgb-icon-users"
               isActive={activeTab === "groups"}
               showCircle={groupsUnreadCount > 0}
               onClick={() => setActiveTab("groups")}
             />
             <NavRowButton
-              icon={<Images aria-hidden className="h-5 w-5" />}
+              iconClassName="nav-rgb-icon-images"
               isActive={activeTab === "shared_event_posts"}
               showCircle={false}
               onClick={() => setActiveTab("shared_event_posts")}
             />
             {/* events tab hidden
             <NavRowButton
-              icon={<Calendar aria-hidden className="h-4 w-4" />}
+              iconClassName="nav-rgb-icon-calendar"
               isActive={activeTab === "events"}
               showCircle={false}
               onClick={() => setActiveTab("events")}
             />
             */}
             <NavRowButton
-              icon={<UserRound aria-hidden className="h-5 w-5" />}
+              iconClassName="nav-rgb-icon-user-round"
               isActive={activeTab === "profile"}
               showCircle={profileIncomingRequestCount > 0}
               onClick={() => {
@@ -628,7 +628,7 @@ export default function Home() {
               }}
             />
             <NavRowButton
-              icon={<MessageSquare aria-hidden className="h-5 w-5" />}
+              iconClassName="nav-rgb-icon-message-square"
               isActive={activeTab === "feedback"}
               showCircle={false}
               onClick={() => setActiveTab("feedback")}
