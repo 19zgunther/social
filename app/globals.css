@@ -65,20 +65,10 @@ body {
 html,
 body {
   height: 100%;
-  width: 100%;
   overflow: hidden;
   overscroll-behavior: none;
-  /* `none` blocks iOS taps/focus on inputs in standalone PWA (ancestor intersection) */
-  touch-action: manipulation;
+  touch-action: none;
   -webkit-text-size-adjust: 100%;
-}
-
-input,
-textarea,
-select,
-button,
-a {
-  touch-action: manipulation;
 }
 
 @keyframes congrats-balloon-float {
