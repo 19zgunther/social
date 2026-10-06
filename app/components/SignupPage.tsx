@@ -126,6 +126,17 @@ export default function SignUpPage({
         }
     };
 
+    const [pageTitleClicked, setPageTitleClicked] = useState(false);
+    const [tempInputFocused, setTempInputFocused] = useState(false);
+    const handleInputFocus = () => {
+        setTempInputFocused(true);
+        setTimeout(() => { setTempInputFocused(false); }, 10000);
+    }
+    const handlePageTitleClick = () => {
+        setPageTitleClicked(true);
+        setTimeout(() => { setPageTitleClicked(false); }, 3000);
+    }
+
     const pageTitle = useMemo(() => (mode === "login" ? "Log in" : "Create account"), [mode]);
 
     return (
@@ -134,7 +145,18 @@ export default function SignUpPage({
                 style={MOBILE_FRAME_STYLE}
                 className="flex h-full flex-col justify-center border border-border bg-surface px-6 shadow-lg shadow-black/20"
             >
-                <h1 className="text-lg font-semibold text-foreground">{pageTitle}</h1>
+                <h1 className="text-lg font-semibold text-foreground"
+                    onClick={handlePageTitleClick}    
+                >
+                    {pageTitle}
+                </h1>
+                {pageTitleClicked && (
+                    <div className="text-sm text-muted">
+                        Hello there! Testing...
+                        <input type="text" onFocus={handleInputFocus} placeholder="Type something..." className="rounded-xl border border-border bg-bg px-4 py-3" />
+                        {tempInputFocused && <p className="text-sm text-muted">Input focused</p>}
+                    </div>
+                )}
                 <p className="mt-1 text-sm text-muted">Single-page auth flow for mobile-first layout.</p>
                 {mode === "signup" ? (
                     <p className="mt-3 text-sm text-muted">
