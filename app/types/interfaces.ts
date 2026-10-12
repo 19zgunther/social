@@ -303,6 +303,7 @@ export type SharedPostListItem = {
   release_at: string;
   phase: SharedPostPhase;
   contributor_count: number;
+  others_contributed_count: number;
   viewer_has_contributed: boolean;
   is_creator: boolean;
   /** Only populated when phase is "released". */

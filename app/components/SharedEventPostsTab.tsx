@@ -462,9 +462,17 @@ export default function SharedEventPostsTab({
           </span>
         </div>
         <p className="mt-1 text-xs text-muted">{subtitle}</p>
-        {item.viewer_has_contributed ? (
-          <p className="mt-0.5 text-[11px] text-accent">You contributed</p>
-        ) : null}
+        <p
+          className={`mt-0.5 text-[11px] ${
+            item.viewer_has_contributed ? "text-accent" : "text-muted"
+          }`}
+        >
+          {item.viewer_has_contributed ? "You've contributed" : "You haven't contributed"}
+          {" · "}
+          {item.others_contributed_count === 1
+            ? "1 other contributed"
+            : `${item.others_contributed_count} others contributed`}
+        </p>
       </button>
       {item.is_creator ? (
         <button
