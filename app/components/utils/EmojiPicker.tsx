@@ -9,6 +9,7 @@ import { loadAllCustomEmojis, resolveEmojisByUuid } from "@/app/lib/customEmojiC
 import { EmojiItem } from "@/app/types/interfaces";
 import { CustomEmoji } from "@/app/lib/customEmojiCanvas";
 import EmojiEditorTab from "@/app/components/EmojiEditorTab";
+import Loader from "@/app/components/Loader";
 const RECENT_EMOJIS_STORAGE_KEY = "emojiPickerRecentUsage";
 const RECENT_EMOJIS_STORAGE_BACKUP_KEY = "emojiPickerRecentUsageBackup";
 const MAX_RECENT_EMOJIS = 50;
@@ -209,6 +210,7 @@ export default function EmojiPicker({
   const [searchTerm, setSearchTerm] = useState("");
   const [recentEmojiUsage, setRecentEmojiUsage] = useState<EmojiUsageEntry[]>([]);
   const [customEmojis, setCustomEmojis] = useState<EmojiItem[]>([]);
+  const [hasLoadedCustomEmojis, setHasLoadedCustomEmojis] = useState(false);
   const customEmojiByUuid = useMemo(
     () => Object.fromEntries(customEmojis.map((emoji) => [emoji.uuid, emoji])),
     [customEmojis],
@@ -323,6 +325,8 @@ export default function EmojiPicker({
       setCustomEmojis(mergeCustomEmojiLists(emojis, resolved));
     } catch {
       // Ignore custom emoji loading failures; default emoji picker still works.
+    } finally {
+      setHasLoadedCustomEmojis(true);
     }
   }, []);
 
@@ -351,6 +355,10 @@ export default function EmojiPicker({
         }
       } catch {
         // Ignore custom emoji loading failures; default emoji picker still works.
+      } finally {
+        if (!cancelled) {
+          setHasLoadedCustomEmojis(true);
+        }
       }
     };
     void loadCustomEmojis();
@@ -609,25 +617,39 @@ export default function EmojiPicker({
                         </div>
                       </div>
 
-                      {/** Custom emojis */}
-                      {filteredCustomEmojis.length > 0 ? (
+                      {/** Custom emojis — always reserve 4 rows until first load so All emojis never shifts */}
+                      {!hasLoadedCustomEmojis || filteredCustomEmojis.length > 0 || !trimmedSearchTerm ? (
                         <>
                           <p className="text-[13px] font-semibold text-foreground/55">Your custom emojis</p>
-                          <div className="mb-2 overflow-x-auto overflow-y-hidden pb-1">
-                            <div className="grid h-[calc(4*2.6rem)] grid-flow-col grid-rows-4 gap-0.5 py-0.5">
-                              {filteredCustomEmojis.map((emoji) => (
-                                <button
-                                  key={emoji.uuid}
-                                  type="button"
-                                  onClick={() => handleSelectEmoji(customEmojiToken(emoji.uuid))}
-                                  className={`flex h-[2.6rem] w-[2.6rem] items-center justify-center px-1 py-1 [&_canvas]:!h-9 [&_canvas]:!w-9 ${emojiTileBase}`}
-                                  aria-label={`Insert custom emoji ${emoji.name}`}
-                                  title={emoji.name}
-                                >
-                                  <CustomEmoji customEmoji={emoji} enablePeek={false} />
-                                </button>
-                              ))}
+                          <div className="relative mb-2 overflow-x-auto overflow-y-hidden pb-1">
+                            <div
+                              className="grid h-[calc(4*2.6rem)] grid-flow-col grid-rows-4 gap-0.5 py-0.5"
+                              aria-busy={!hasLoadedCustomEmojis || undefined}
+                            >
+                              {hasLoadedCustomEmojis
+                                ? filteredCustomEmojis.map((emoji) => (
+                                    <button
+                                      key={emoji.uuid}
+                                      type="button"
+                                      onClick={() => handleSelectEmoji(customEmojiToken(emoji.uuid))}
+                                      className={`flex h-[2.6rem] w-[2.6rem] items-center justify-center px-1 py-1 [&_canvas]:!h-9 [&_canvas]:!w-9 ${emojiTileBase}`}
+                                      aria-label={`Insert custom emoji ${emoji.name}`}
+                                      title={emoji.name}
+                                    >
+                                      <CustomEmoji customEmoji={emoji} enablePeek={false} />
+                                    </button>
+                                  ))
+                                : null}
                             </div>
+                            {!hasLoadedCustomEmojis ? (
+                              <div
+                                className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                                role="status"
+                                aria-label="Loading custom emojis"
+                              >
+                                <Loader scale={0.55} animateHeight={false} />
+                              </div>
+                            ) : null}
                           </div>
                         </>
                       ) : null}
