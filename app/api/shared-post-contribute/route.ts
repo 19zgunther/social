@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@/app/generated/prisma/client";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { sanitizeNotificationText } from "@/app/lib/notification_text";
+import { sendPushToUsers } from "@/app/lib/push_notifications";
 import {
   appendSharedPostMedia,
   asSharedPostDataObject,
@@ -61,10 +63,14 @@ export async function POST(request: Request) {
       where: { id: sharedPostId },
       select: {
         id: true,
+        title: true,
         close_at: true,
         release_at: true,
         data: true,
         image_id: true,
+        shared_posts_contributors: {
+          select: { user_id: true },
+        },
       },
     });
     if (!existing) {
@@ -105,6 +111,33 @@ export async function POST(request: Request) {
         image_id: existing.image_id ?? appended.imageId,
       },
     });
+
+    const recipientUserIds = existing.shared_posts_contributors
+      .map((contributor) => contributor.user_id)
+      .filter((userId) => userId !== authResult.user_id);
+    if (recipientUserIds.length > 0) {
+      const eventTitle = sanitizeNotificationText(existing.title) || "a shared event";
+      const mediaCount = parsedMedia.length;
+      const allVideos = parsedMedia.every((item) => item.kind === "video");
+      const mediaLabel =
+        mediaCount === 1
+          ? allVideos
+            ? "a video"
+            : "a photo"
+          : allVideos
+            ? `${mediaCount} videos`
+            : `${mediaCount} photos`;
+      void sendPushToUsers({
+        recipientUserIds,
+        payload: {
+          title: eventTitle,
+          body: `${authResult.username} added ${mediaLabel} to ${eventTitle}.`,
+          url: "/?tab=shared_event_posts",
+        },
+      }).catch((error) => {
+        console.error("shared_post_contribute_push_dispatch_failed", error);
+      });
+    }
 
     const contributedCount = countContributorMedia(appended.data.media ?? [], authResult.user_id);
     const payload: SharedPostContributeResponse = {
