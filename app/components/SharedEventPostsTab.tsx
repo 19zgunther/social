@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Check, ImagePlus, Plus, Settings, Users } from "lucide-react";
+import { Check, ChevronDown, ImagePlus, Plus, Settings, Users } from "lucide-react";
 import Loader from "@/app/components/Loader";
 import Camera from "@/app/components/Camera";
 import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
@@ -10,7 +10,9 @@ import UserProfileImage from "@/app/components/UserProfileImage";
 import BackButton from "@/app/components/utils/BackButton";
 import {
   prepareImageForUpload,
+  prepareVideoForUpload,
   uploadPreparedImageToMainBucket,
+  uploadPreparedVideoToMainBucket,
 } from "@/app/components/utils/client_file_storage_utils";
 import { MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR } from "@/app/lib/sharedPosts";
 import {
@@ -21,8 +23,11 @@ import {
   PostItem,
   PostMediaItem,
   SharedPostListItem,
+  SharedPostsListRequest,
   SharedPostsListResponse,
 } from "@/app/types/interfaces";
+
+const SHARED_POST_UPLOAD_ACCEPT = "image/*,video/mp4,video/webm,video/quicktime,.mov";
 
 type ViewMode =
   | { kind: "list" }
@@ -112,6 +117,9 @@ export default function SharedEventPostsTab({
   const [openPosts, setOpenPosts] = useState<SharedPostListItem[]>([]);
   const [pendingPosts, setPendingPosts] = useState<SharedPostListItem[]>([]);
   const [releasedPosts, setReleasedPosts] = useState<SharedPostListItem[]>([]);
+  const [isReleasedExpanded, setIsReleasedExpanded] = useState(false);
+  const [isLoadingReleased, setIsLoadingReleased] = useState(false);
+  const [hasLoadedReleased, setHasLoadedReleased] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
 
@@ -129,13 +137,16 @@ export default function SharedEventPostsTab({
   const [isContributing, setIsContributing] = useState(false);
   const [contributeStatus, setContributeStatus] = useState("");
   const [contributeCameraPostId, setContributeCameraPostId] = useState<string | null>(null);
+  const [contributeUploadPostId, setContributeUploadPostId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const listUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadList = useCallback(async () => {
     setIsLoading(true);
     setStatusMessage("");
     try {
-      const response = await postWithAuth("/api/shared-posts-list");
+      const body: SharedPostsListRequest = { phases: ["open", "pending"] };
+      const response = await postWithAuth("/api/shared-posts-list", body);
       if (!response.ok) {
         setStatusMessage(await readErrorMessage(response));
         return;
@@ -143,11 +154,30 @@ export default function SharedEventPostsTab({
       const payload = (await response.json()) as SharedPostsListResponse;
       setOpenPosts(payload.open);
       setPendingPosts(payload.pending);
-      setReleasedPosts(payload.released);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to load shared posts.");
     } finally {
       setIsLoading(false);
+    }
+  }, []);
+
+  const loadReleased = useCallback(async () => {
+    setIsLoadingReleased(true);
+    setStatusMessage("");
+    try {
+      const body: SharedPostsListRequest = { phases: ["released"] };
+      const response = await postWithAuth("/api/shared-posts-list", body);
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+      const payload = (await response.json()) as SharedPostsListResponse;
+      setReleasedPosts(payload.released);
+      setHasLoadedReleased(true);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to load released posts.");
+    } finally {
+      setIsLoadingReleased(false);
     }
   }, []);
 
@@ -157,6 +187,17 @@ export default function SharedEventPostsTab({
     }
     void loadList();
   }, [isActive, view.kind, loadList]);
+
+  useEffect(() => {
+    if (!isActive || view.kind !== "list" || !isReleasedExpanded) {
+      return;
+    }
+    void loadReleased();
+  }, [isActive, view.kind, isReleasedExpanded, loadReleased]);
+
+  const onToggleReleasedSection = () => {
+    setIsReleasedExpanded((prev) => !prev);
+  };
 
   const loadDetail = useCallback(async (sharedPostId: string) => {
     setIsLoadingDetail(true);
@@ -327,23 +368,39 @@ export default function SharedEventPostsTab({
     }
   };
 
-  const contributePhotoFiles = async (sharedPostId: string, files: File[]) => {
+  const contributeMediaFiles = async (sharedPostId: string, files: File[]) => {
     const filesToUpload = files
-      .filter((file) => file.type.startsWith("image/"))
+      .filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/"))
       .slice(0, MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR);
     if (filesToUpload.length === 0) {
-      throw new Error("No photos to upload.");
+      throw new Error("No photos or videos to upload.");
     }
 
     const media: PostMediaItem[] = [];
     for (const file of filesToUpload) {
-      const prepared = await prepareImageForUpload(file);
-      const uploaded = await uploadPreparedImageToMainBucket(prepared, postWithAuth);
-      media.push({
-        id: uploaded.image_id,
-        kind: "image",
-        owner_user_id: currentUserId,
-      });
+      if (file.type.startsWith("image/")) {
+        const prepared = await prepareImageForUpload(file);
+        const uploaded = await uploadPreparedImageToMainBucket(prepared, postWithAuth);
+        media.push({
+          id: uploaded.image_id,
+          kind: "image",
+          owner_user_id: currentUserId,
+        });
+        continue;
+      }
+
+      const preparedVideo = await prepareVideoForUpload(file);
+      try {
+        const uploaded = await uploadPreparedVideoToMainBucket(preparedVideo, postWithAuth);
+        media.push({
+          id: uploaded.video_id,
+          kind: "video",
+          poster_id: uploaded.poster_id,
+          owner_user_id: currentUserId,
+        });
+      } finally {
+        URL.revokeObjectURL(preparedVideo.previewObjectUrl);
+      }
     }
 
     const response = await postWithAuth("/api/shared-post-contribute", {
@@ -360,6 +417,21 @@ export default function SharedEventPostsTab({
     };
   };
 
+  const markOpenPostContributed = (sharedPostId: string) => {
+    setOpenPosts((previous) =>
+      previous.map((item) =>
+        item.id === sharedPostId ? { ...item, viewer_has_contributed: true } : item,
+      ),
+    );
+  };
+
+  const contributeStatusLabel = (addedCount: number): string => {
+    if (addedCount === 1) {
+      return "Added 1 item (hidden until release).";
+    }
+    return `Added ${addedCount} items (hidden until release).`;
+  };
+
   const onPickContributeFiles = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
@@ -370,9 +442,9 @@ export default function SharedEventPostsTab({
     setIsContributing(true);
     setContributeStatus("");
     try {
-      const result = await contributePhotoFiles(detailPost.id, files);
+      const result = await contributeMediaFiles(detailPost.id, files);
       setContributeStatus(
-        `Added ${result.addedCount} photo${result.addedCount === 1 ? "" : "s"}. You have contributed ${result.contributedCount} total (photos stay hidden until release).`,
+        `${contributeStatusLabel(result.addedCount)} You have contributed ${result.contributedCount} total.`,
       );
       setDetailPost((previous) =>
         previous
@@ -383,10 +455,41 @@ export default function SharedEventPostsTab({
           : previous,
       );
     } catch (error) {
-      setContributeStatus(error instanceof Error ? error.message : "Failed to contribute photos.");
+      setContributeStatus(error instanceof Error ? error.message : "Failed to contribute media.");
     } finally {
       setIsContributing(false);
     }
+  };
+
+  const onPickListContributeFiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    const sharedPostId = contributeUploadPostId;
+    setContributeUploadPostId(null);
+    if (!sharedPostId || files.length === 0 || isContributing) {
+      return;
+    }
+
+    setIsContributing(true);
+    setStatusMessage("");
+    try {
+      const result = await contributeMediaFiles(sharedPostId, files);
+      markOpenPostContributed(sharedPostId);
+      setStatusMessage(contributeStatusLabel(result.addedCount));
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to contribute media.");
+    } finally {
+      setIsContributing(false);
+    }
+  };
+
+  const onOpenUploadPicker = (sharedPostId: string) => {
+    if (isContributing) {
+      return;
+    }
+    setStatusMessage("");
+    setContributeUploadPostId(sharedPostId);
+    listUploadInputRef.current?.click();
   };
 
   const onSendPhotoFromCamera = async (payload: {
@@ -401,15 +504,9 @@ export default function SharedEventPostsTab({
     setIsContributing(true);
     setStatusMessage("");
     try {
-      const result = await contributePhotoFiles(sharedPostId, [payload.file]);
-      setOpenPosts((previous) =>
-        previous.map((item) =>
-          item.id === sharedPostId ? { ...item, viewer_has_contributed: true } : item,
-        ),
-      );
-      setStatusMessage(
-        `Added ${result.addedCount} photo${result.addedCount === 1 ? "" : "s"} (hidden until release).`,
-      );
+      const result = await contributeMediaFiles(sharedPostId, [payload.file]);
+      markOpenPostContributed(sharedPostId);
+      setStatusMessage(contributeStatusLabel(result.addedCount));
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to contribute photo.");
       throw error;
@@ -440,6 +537,20 @@ export default function SharedEventPostsTab({
     });
   };
 
+  const renderContributionMeta = (item: SharedPostListItem) => (
+    <p
+      className={`mt-0.5 text-[11px] ${
+        item.viewer_has_contributed ? "text-accent" : "text-muted"
+      }`}
+    >
+      {item.viewer_has_contributed ? "You've contributed" : "You haven't contributed"}
+      {" · "}
+      {item.others_contributed_count === 1
+        ? "1 other contributed"
+        : `${item.others_contributed_count} others contributed`}
+    </p>
+  );
+
   const renderSharedPostRow = (
     item: SharedPostListItem,
     subtitle: string,
@@ -462,18 +573,60 @@ export default function SharedEventPostsTab({
           </span>
         </div>
         <p className="mt-1 text-xs text-muted">{subtitle}</p>
-        <p
-          className={`mt-0.5 text-[11px] ${
-            item.viewer_has_contributed ? "text-accent" : "text-muted"
-          }`}
-        >
-          {item.viewer_has_contributed ? "You've contributed" : "You haven't contributed"}
-          {" · "}
-          {item.others_contributed_count === 1
-            ? "1 other contributed"
-            : `${item.others_contributed_count} others contributed`}
-        </p>
+        {renderContributionMeta(item)}
       </button>
+      {item.is_creator ? (
+        <button
+          type="button"
+          aria-label="Shared post settings"
+          onClick={() => onOpenSettings(item.id)}
+          className="flex shrink-0 items-center justify-center border-l border-border px-3 text-muted transition hover:bg-bg/40 hover:text-foreground"
+        >
+          <Settings className="h-5 w-5" />
+        </button>
+      ) : null}
+    </div>
+  );
+
+  const renderOpenSharedPostRow = (item: SharedPostListItem) => (
+    <div
+      key={item.id}
+      className="flex items-stretch overflow-hidden rounded-xl border border-border bg-surface"
+    >
+      <div className="min-w-0 flex-1 px-3 py-3">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
+          <span className="shrink-0 text-[11px] text-muted">
+            <Users className="mr-1 inline h-3 w-3" />
+            {item.contributor_count}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-muted">Closes {formatDateLabel(item.close_at)}</p>
+        {renderContributionMeta(item)}
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            disabled={isContributing}
+            onClick={() => {
+              setStatusMessage("");
+              setContributeCameraPostId(item.id);
+            }}
+            className="create-post-rgb-border inline-flex min-w-0 flex-1 flex-col items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition disabled:opacity-50"
+          >
+            <span className="create-post-rgb-icon create-post-rgb-icon-camera" aria-hidden />
+            <span className="create-post-rgb-text text-center">Take Photo</span>
+          </button>
+          <button
+            type="button"
+            disabled={isContributing}
+            onClick={() => onOpenUploadPicker(item.id)}
+            className="create-post-rgb-border inline-flex min-w-0 flex-1 flex-col items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition disabled:opacity-50"
+          >
+            <span className="create-post-rgb-icon" aria-hidden />
+            <span className="create-post-rgb-text text-center">Upload Photos</span>
+          </button>
+        </div>
+      </div>
       {item.is_creator ? (
         <button
           type="button"
@@ -639,7 +792,7 @@ export default function SharedEventPostsTab({
                 </p>
                 <p className="text-xs text-muted">
                   {detailPost.phase === "open"
-                    ? "Photos stay hidden until release. You can only add photos."
+                    ? "Photos and videos stay hidden until release."
                     : "Contributions are closed. Waiting for release."}
                 </p>
               </div>
@@ -649,7 +802,7 @@ export default function SharedEventPostsTab({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept={SHARED_POST_UPLOAD_ACCEPT}
                     multiple
                     className="hidden"
                     onChange={(event) => void onPickContributeFiles(event)}
@@ -665,10 +818,11 @@ export default function SharedEventPostsTab({
                     ) : (
                       <ImagePlus className="h-4 w-4" />
                     )}
-                    Add photos
+                    Upload photos or videos
                   </button>
                   <p className="text-[11px] text-muted">
-                    Up to {MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR} photos per person. No previews.
+                    Up to {MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR} photos or videos per person. No
+                    previews.
                   </p>
                 </div>
               ) : null}
@@ -736,12 +890,7 @@ export default function SharedEventPostsTab({
           {openPosts.length === 0 ? (
             <p className="text-xs text-muted">No open shared posts.</p>
           ) : (
-            openPosts.map((item) =>
-              renderSharedPostRow(item, `Closes ${formatDateLabel(item.close_at)}`, () => {
-                setStatusMessage("");
-                setContributeCameraPostId(item.id);
-              }),
-            )
+            openPosts.map((item) => renderOpenSharedPostRow(item))
           )}
         </section>
 
@@ -761,20 +910,48 @@ export default function SharedEventPostsTab({
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Released
-          </h2>
-          {releasedPosts.length === 0 ? (
-            <p className="text-xs text-muted">No released shared posts yet.</p>
-          ) : (
-            releasedPosts.map((item) =>
-              renderSharedPostRow(item, `Released ${formatDateLabel(item.release_at)}`, () => {
-                setView({ kind: "detail", sharedPostId: item.id });
-              }),
+          <button
+            type="button"
+            onClick={onToggleReleasedSection}
+            aria-expanded={isReleasedExpanded}
+            className="flex w-full items-center justify-between gap-2 text-left"
+          >
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Released
+            </h2>
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 text-muted transition-transform ${
+                isReleasedExpanded ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+          {isReleasedExpanded ? (
+            isLoadingReleased && !hasLoadedReleased ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-4 text-xs text-muted">
+                <Loader />
+                <span>Loading</span>
+              </div>
+            ) : releasedPosts.length === 0 ? (
+              <p className="text-xs text-muted">No released shared posts yet.</p>
+            ) : (
+              releasedPosts.map((item) =>
+                renderSharedPostRow(item, `Released ${formatDateLabel(item.release_at)}`, () => {
+                  setView({ kind: "detail", sharedPostId: item.id });
+                }),
+              )
             )
-          )}
+          ) : null}
         </section>
       </div>
+
+      <input
+        ref={listUploadInputRef}
+        type="file"
+        accept={SHARED_POST_UPLOAD_ACCEPT}
+        multiple
+        className="hidden"
+        onChange={(event) => void onPickListContributeFiles(event)}
+      />
 
       <Camera
         isOpen={contributeCameraPostId !== null}

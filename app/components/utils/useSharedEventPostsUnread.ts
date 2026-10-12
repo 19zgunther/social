@@ -93,7 +93,7 @@ export default function useSharedEventPostsUnread({
         const response = await fetch("/api/shared-posts-list", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ phases: ["open", "pending", "released"] }),
         });
         if (!response.ok) {
           return;

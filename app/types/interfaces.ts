@@ -340,6 +340,11 @@ export type SharedPostUpdateRequest = {
 };
 export type SharedPostUpdateResponse = { shared_post: SharedPostListItem };
 
+export type SharedPostsListRequest = {
+  /** Defaults to open + pending. Pass "released" to include released posts. */
+  phases?: SharedPostPhase[];
+};
+
 export type SharedPostsListResponse = {
   open: SharedPostListItem[];
   pending: SharedPostListItem[];
