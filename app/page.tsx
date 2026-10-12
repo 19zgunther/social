@@ -28,6 +28,7 @@ import ThreadSettings from "./components/ThreadSettings";
 import ThreadEventPage from "./components/ThreadEventPage";
 // import UpcomingEventsTab from "./components/UpcomingEventsTab"; // events tab hidden
 import useSwipeBack from "./components/utils/useSwipeBack";
+import useSharedEventPostsUnread from "./components/utils/useSharedEventPostsUnread";
 import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
 import SharedEventPostsTab from "./components/SharedEventPostsTab";
@@ -58,6 +59,10 @@ export default function Home() {
   const [pendingDeepLinkThreadId, setPendingDeepLinkThreadId] = useState<string | null>(null);
   const [groupsUnreadCount, setGroupsUnreadCount] = useState(0);
   const [profileIncomingRequestCount, setProfileIncomingRequestCount] = useState(0);
+  const sharedEventPostsUnread = useSharedEventPostsUnread({
+    userId: authUser?.user_id ?? null,
+    isTabActive: activeTab === "shared_event_posts",
+  });
   const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
   const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
   const [threadEventFocus, setThreadEventFocus] = useState<ThreadEventItem | null>(null);
@@ -608,7 +613,7 @@ export default function Home() {
             <NavRowButton
               iconClassName="nav-rgb-icon-images"
               isActive={activeTab === "shared_event_posts"}
-              showCircle={false}
+              showCircle={sharedEventPostsUnread}
               onClick={() => setActiveTab("shared_event_posts")}
             />
             {/* events tab hidden

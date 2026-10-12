@@ -296,6 +296,9 @@ export const serializeSharedPostListItem = ({
     (contributor) =>
       contributor.user_id !== viewerUserId && contributorHasUploaded(dataObject, contributor.user_id),
   ).length;
+  const viewerContributor = row.shared_posts_contributors.find(
+    (contributor) => contributor.user_id === viewerUserId,
+  );
 
   return {
     id: row.id,
@@ -309,6 +312,7 @@ export const serializeSharedPostListItem = ({
     contributor_count: row.shared_posts_contributors.length,
     others_contributed_count: othersContributedCount,
     viewer_has_contributed: contributorHasUploaded(dataObject, viewerUserId),
+    viewer_invited_at: viewerContributor ? viewerContributor.invited_at.toISOString() : null,
     is_creator: row.created_by === viewerUserId,
     image_id: isReleased ? row.image_id : null,
     image_url: null,

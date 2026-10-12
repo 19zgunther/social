@@ -305,6 +305,7 @@ export type SharedPostListItem = {
   contributor_count: number;
   others_contributed_count: number;
   viewer_has_contributed: boolean;
+  viewer_invited_at: string | null;
   is_creator: boolean;
   /** Only populated when phase is "released". */
   image_id: string | null;
