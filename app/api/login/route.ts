@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { mintUserToken, verifyPassword } from "@/app/api/auth_utils";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
-import { LoginRequest, LoginResponse } from "@/app/types/interfaces";
+import { parseThemeInfo } from "@/app/lib/theme";
+import { LoginRequest, LoginResponse, ThemeInfo } from "@/app/types/interfaces";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -13,6 +14,7 @@ type LoginUser = {
   email: string | null;
   password_hash: string | null;
   profile_image_id: string | null;
+  theme_info: ThemeInfo | null;
 };
 
 async function jsonLoginSuccess(user: LoginUser): Promise<NextResponse> {
@@ -43,6 +45,7 @@ async function jsonLoginSuccess(user: LoginUser): Promise<NextResponse> {
       profile_image_id: user.profile_image_id,
       profile_image_url: profileImageUrl,
       minted_at: Date.now(),
+      theme_info: user.theme_info,
     },
   };
   const response = NextResponse.json(payload, { status: 200 });
@@ -81,6 +84,7 @@ export async function POST(request: Request) {
         email: true,
         password_hash: true,
         profile_image_id: true,
+        theme_info: true,
       },
     });
 
@@ -117,7 +121,10 @@ export async function POST(request: Request) {
       );
     }
 
-    return jsonLoginSuccess(user);
+    return jsonLoginSuccess({
+      ...user,
+      theme_info: parseThemeInfo(user.theme_info),
+    });
   } catch (error) {
     console.error("login_failed", error);
     return NextResponse.json(

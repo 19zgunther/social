@@ -676,7 +676,7 @@ function Profile({
         <div
           role="tablist"
           aria-label="Profile sections"
-          className="relative flex w-full rounded-full bg-black border-border border-2 rounded-full p-1"
+          className="relative flex w-full rounded-full bg-surface border-border border-2 p-1"
         >
           <div
             aria-hidden

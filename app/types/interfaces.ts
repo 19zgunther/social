@@ -5,6 +5,13 @@ export type ApiError = {
   };
 };
 
+export type {
+  ThemeColors,
+  ThemeInfo,
+  ThemePresetId,
+} from "@/app/lib/theme";
+import type { ThemeInfo } from "@/app/lib/theme";
+
 export type AuthUser = {
   user_id: string;
   username: string;
@@ -12,6 +19,7 @@ export type AuthUser = {
   profile_image_id: string | null;
   profile_image_url: string | null;
   minted_at: number;
+  theme_info?: ThemeInfo | null;
 };
 
 export type PostCommentNode = {

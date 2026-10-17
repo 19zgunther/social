@@ -84,6 +84,7 @@ export async function POST(request: Request) {
         profile_image_id: createdUser.profile_image_id,
         profile_image_url: profileImageUrl,
         minted_at: Date.now(),
+        theme_info: null,
       },
     };
     const response = NextResponse.json(payload, { status: 200 });

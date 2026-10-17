@@ -33,6 +33,11 @@ import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
 import SharedEventPostsTab from "./components/SharedEventPostsTab";
 import { UserSessionSyncProvider } from "./components/UserSessionSyncContext";
+import {
+  DEFAULT_THEME,
+  persistAndApplyTheme,
+  resetThemeToDefault,
+} from "@/app/lib/theme";
 
 
 const TAB_TO_BACK_BASE: { [key in AppTab]: { forward: AppTab | null; back: AppTab | null } } = {
@@ -104,6 +109,7 @@ export default function Home() {
     }
 
     document.cookie = "auth_token=; Max-Age=0; path=/";
+    resetThemeToDefault();
     setAuthUser(null);
     setActiveTab("feed");
     setViewingUserId(null);
@@ -205,6 +211,7 @@ export default function Home() {
       }
 
       const sessionUser = (await response.json()) as AuthCheckResponse;
+      persistAndApplyTheme(sessionUser.theme_info ?? DEFAULT_THEME);
       setAuthUser(sessionUser);
       setIsCheckingSession(false);
     };

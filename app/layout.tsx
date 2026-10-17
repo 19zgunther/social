@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Press_Start_2P } from "next/font/google";
+import { THEME_BOOT_SCRIPT } from "@/app/lib/theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -48,6 +49,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${logoPressStart.variable} antialiased`}

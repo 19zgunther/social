@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
+import { parseThemeInfo } from "@/app/lib/theme";
 import { AuthCheckResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
     },
     select: {
       profile_image_id: true,
+      theme_info: true,
     },
   });
 
@@ -37,6 +39,7 @@ export async function POST(request: Request) {
     ...authResult,
     profile_image_id: user?.profile_image_id ?? null,
     profile_image_url: profileImageUrl,
+    theme_info: parseThemeInfo(user?.theme_info),
   };
 
   return NextResponse.json(payload, { status: 200 });

@@ -489,7 +489,7 @@ export default function Groups({
   }, [deepLinkThreadId, isLoadingThreads, onDeepLinkThreadHandled, onOpenThread, selectedThread, threads]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col space-y-3 px-2 bg-black">
+    <div className="flex h-full min-h-0 flex-col space-y-3 px-2 bg-bg">
       <div>
         <header className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">

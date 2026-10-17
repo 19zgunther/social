@@ -1,17 +1,40 @@
 "use client";
 
 import { LogOut } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import BackButton from "@/app/components/utils/BackButton";
 import { clearAllCachedCustomEmojis, getCustomEmojiCacheStats, type CustomEmojiCacheStats } from "@/app/lib/customEmojiCache";
 import { clearAllCachedImages, getImageCacheStats, type ImageCacheStats } from "@/app/lib/imageCache";
 import { ensurePushSubscription, isInstalledPwa, PUSH_PROMPT_DISMISSED_KEY } from "@/app/lib/pushClient";
+import {
+  DEFAULT_THEME,
+  isHexColor,
+  NAMED_THEME_PRESETS,
+  persistAndApplyTheme,
+  readStoredTheme,
+  THEME_COLOR_KEYS,
+  THEME_COLOR_LABELS,
+  themeFromPreset,
+  themeWithColorOverride,
+  type NamedPresetId,
+  type ThemeColors,
+  type ThemeInfo,
+} from "@/app/lib/theme";
 import { globalDebugData } from "./utils/globalDebugData";
 
 type ProfileSettingsProps = {
   onBack: () => void;
   onLogout: () => void;
 };
+
+async function postTheme(themeToSave: ThemeInfo): Promise<boolean> {
+  const response = await fetch("/api/theme-set", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(themeToSave),
+  });
+  return response.ok;
+}
 
 export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsProps) {
   const [statusMessage, setStatusMessage] = useState("");
@@ -21,9 +44,73 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
   const [isClearingEmojiCache, setIsClearingEmojiCache] = useState(false);
   const [imageCacheStats, setImageCacheStats] = useState<ImageCacheStats | null>(null);
   const [emojiCacheStats, setEmojiCacheStats] = useState<CustomEmojiCacheStats | null>(null);
+  const [theme, setTheme] = useState<ThemeInfo>(() => readStoredTheme() ?? DEFAULT_THEME);
+  const [hexDrafts, setHexDrafts] = useState<Record<keyof ThemeColors, string>>({
+    ...theme.colors,
+  });
+  const [isSavingTheme, setIsSavingTheme] = useState(false);
+  const themeRef = useRef<ThemeInfo>(theme);
+  const themeSaveTimerRef = useRef<number | null>(null);
   const [debugDataSnapshot, setDebugDataSnapshot] = useState(
     JSON.stringify(globalDebugData, null, 2),
   );
+
+  const saveTheme = (nextTheme: ThemeInfo) => {
+    themeRef.current = nextTheme;
+    setTheme(nextTheme);
+    setHexDrafts({ ...nextTheme.colors });
+    persistAndApplyTheme(nextTheme);
+
+    if (themeSaveTimerRef.current !== null) {
+      window.clearTimeout(themeSaveTimerRef.current);
+    }
+
+    themeSaveTimerRef.current = window.setTimeout(() => {
+      themeSaveTimerRef.current = null;
+
+      async function savePendingTheme() {
+        setIsSavingTheme(true);
+        try {
+          const ok = await postTheme(themeRef.current);
+          if (!ok) {
+            setStatusMessage("Could not save theme. Try again.");
+            return;
+          }
+          setStatusMessage("Theme saved.");
+        } catch {
+          setStatusMessage("Could not save theme. Try again.");
+        } finally {
+          setIsSavingTheme(false);
+        }
+      }
+
+      void savePendingTheme();
+    }, 400);
+  };
+
+  const onSelectPreset = (presetId: NamedPresetId) => {
+    saveTheme(themeFromPreset(presetId));
+  };
+
+  const onColorPickerChange = (key: keyof ThemeColors, value: string) => {
+    if (!isHexColor(value)) {
+      return;
+    }
+    saveTheme(themeWithColorOverride(themeRef.current, key, value));
+  };
+
+  const onHexDraftChange = (key: keyof ThemeColors, value: string) => {
+    setHexDrafts((previous) => ({ ...previous, [key]: value }));
+    const normalized = value.trim();
+    if (!isHexColor(normalized)) {
+      return;
+    }
+    saveTheme(themeWithColorOverride(themeRef.current, key, normalized));
+  };
+
+  const onResetTheme = () => {
+    saveTheme(DEFAULT_THEME);
+  };
 
   const onResetNotificationPrompt = () => {
     window.localStorage.removeItem(PUSH_PROMPT_DISMISSED_KEY);
@@ -167,6 +254,17 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (themeSaveTimerRef.current === null) {
+        return;
+      }
+      window.clearTimeout(themeSaveTimerRef.current);
+      themeSaveTimerRef.current = null;
+      void postTheme(themeRef.current);
+    };
+  }, []);
+
   const formatCacheStatsLabel = (
     stats: { count: number; totalBytes: number } | null,
     singular: string,
@@ -201,6 +299,90 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
 
       <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4">
         <section className="space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground mb-3">Appearance</h2>
+            <p className="text-xs text-muted mb-3">
+              Choose a preset or customize individual colors
+              {isSavingTheme ? " · Saving…" : ""}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {NAMED_THEME_PRESETS.map((preset) => {
+                const isSelected = theme.presetId === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => {
+                      onSelectPreset(preset.id);
+                    }}
+                    className={`rounded-lg border px-3 py-3 text-left transition ${
+                      isSelected
+                        ? "border-accent bg-accent/15"
+                        : "border-border bg-surface hover:bg-border/30"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-8 w-8 shrink-0 rounded-md border border-border"
+                        style={{
+                          background: `linear-gradient(135deg, ${preset.colors.bg} 45%, ${preset.colors.accent} 45%)`,
+                        }}
+                        aria-hidden
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{preset.label}</p>
+                        <p className="text-xs text-muted truncate">{preset.colors.accent}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {theme.presetId === "custom" ? (
+              <p className="mt-2 text-xs text-muted">Custom palette</p>
+            ) : null}
+
+            <div className="mt-3 space-y-2 rounded-lg border border-border bg-surface px-3 py-3">
+              <p className="text-sm font-medium text-foreground">Customize colors</p>
+              {THEME_COLOR_KEYS.map((key) => (
+                <div key={key} className="flex items-center gap-2">
+                  <label className="w-24 shrink-0 text-xs text-muted" htmlFor={`theme-color-${key}`}>
+                    {THEME_COLOR_LABELS[key]}
+                  </label>
+                  <input
+                    id={`theme-color-${key}`}
+                    type="color"
+                    value={theme.colors[key]}
+                    onChange={(event) => {
+                      onColorPickerChange(key, event.target.value);
+                    }}
+                    className="h-9 w-10 shrink-0 cursor-pointer rounded border border-border bg-bg p-0.5"
+                  />
+                  <input
+                    type="text"
+                    value={hexDrafts[key]}
+                    onChange={(event) => {
+                      onHexDraftChange(key, event.target.value);
+                    }}
+                    spellCheck={false}
+                    maxLength={7}
+                    className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-xs text-foreground outline-none focus:border-accent"
+                    aria-label={`${THEME_COLOR_LABELS[key]} hex`}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={onResetTheme}
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition mt-2"
+            >
+              <p className="font-medium">Reset to default theme</p>
+              <p className="text-xs text-muted mt-1">Restore the original dark purple palette</p>
+            </button>
+          </div>
+
           <div>
             <h2 className="text-sm font-semibold text-foreground mb-3">Notifications</h2>
             <button
@@ -279,6 +461,10 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
                 Remove locally cached custom emoji pixel data (they reload from the server when needed)
               </p>
             </button>
+          </div>
+
+          <div className="h-10">
+
           </div>
 
           <div>

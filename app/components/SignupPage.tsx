@@ -8,6 +8,7 @@ import {
 } from "@/app/types/interfaces";
 import { useMemo } from "react";
 import { Mode, MOBILE_FRAME_STYLE, APP_VIEWPORT_STYLE } from "@/app/components/utils";
+import { DEFAULT_THEME, persistAndApplyTheme } from "@/app/lib/theme";
 
 
 export default function SignUpPage({
@@ -67,6 +68,7 @@ export default function SignUpPage({
             }
 
             const payload = (await response.json()) as LoginResponse;
+            persistAndApplyTheme(payload.user.theme_info ?? DEFAULT_THEME);
             setAuthUser(payload.user);
             setStatusMessage("");
         } finally {
@@ -119,6 +121,7 @@ export default function SignUpPage({
             }
 
             const payload = (await response.json()) as SignupResponse;
+            persistAndApplyTheme(payload.user.theme_info ?? DEFAULT_THEME);
             setAuthUser(payload.user);
             setStatusMessage("");
         } finally {
