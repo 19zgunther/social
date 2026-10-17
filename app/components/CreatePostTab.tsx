@@ -132,7 +132,7 @@ const DEFAULT_EDIT_DRAFT: ImageEditDraft = {
   adjustments: DEFAULT_ADJUSTMENTS,
 };
 const ADJUSTMENT_OPTIONS: ImageAdjustmentOption[] = [
-  { key: "crop", label: "Crop", min: 1, max: 3, step: 0.01, icon: Crop },
+  { key: "crop", label: "Crop", min: 0.25, max: 3, step: 0.01, icon: Crop },
   { key: "brightness", label: "Brightness", min: -100, max: 100, step: 1, icon: Sun },
   { key: "contrast", label: "Contrast", min: -100, max: 100, step: 1, icon: Contrast },
   { key: "saturation", label: "Saturation", min: -100, max: 100, step: 1, icon: Droplets },
@@ -268,6 +268,8 @@ const bakeEditedImage = async ({
   if (!context) {
     throw new Error("Failed to prepare edited image.");
   }
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, OUTPUT_SIZE_PX, OUTPUT_SIZE_PX);
   context.filter = buildCanvasFilter(adjustments);
   context.drawImage(imageElement, drawX, drawY, drawWidth, drawHeight);
   context.filter = "none";
@@ -797,7 +799,7 @@ export default function CreatePostTab({
         return;
       }
       const nextZoom = Math.max(
-        1,
+        0.25,
         Math.min(3, pinchStartRef.current.zoom * (distance / pinchStartRef.current.distance)),
       );
       const clamped = clampDraftOffsets({
@@ -1195,7 +1197,7 @@ export default function CreatePostTab({
                   return (
                     <div
                       key={item.id}
-                      className="absolute left-1/2 top-1/2 h-[90%] w-[90%] origin-center overflow-hidden rounded-lg border border-border bg-bg shadow-lg shadow-black/45 transition-[transform,opacity] duration-300 ease-out"
+                      className="absolute left-1/2 top-1/2 h-[90%] w-[90%] origin-center overflow-hidden rounded-lg border border-border bg-black shadow-lg shadow-black/45 transition-[transform,opacity] duration-300 ease-out"
                       style={{
                         transform: slideStyle.transform,
                         opacity: slideStyle.opacity,
@@ -1205,7 +1207,7 @@ export default function CreatePostTab({
                       }}
                     >
                       {imageSize ? (
-                        <div className="relative h-full w-full overflow-hidden rounded-lg">
+                        <div className="relative h-full w-full overflow-hidden rounded-lg bg-black">
                           <img
                             src={item.previewDataUrl}
                             alt="New post preview"
@@ -1346,7 +1348,9 @@ export default function CreatePostTab({
                 </span>
               </div>
               {cropMode ? (
-                <p className="mt-0.5 text-center text-[10px] text-muted">Pinch to zoom, drag to pan</p>
+                <p className="mt-0.5 text-center text-[10px] text-muted">
+                  Pinch or zoom out to fit; drag to pan
+                </p>
               ) : null}
             </div>
             ) : (
