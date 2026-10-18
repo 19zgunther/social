@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ImagePlus, RefreshCw, Square, Trash2, X } from "lucide-react";
+import { CheckIcon, AddImageIcon, RefreshIcon, UnresolvedIcon, DeleteIcon, CloseIcon } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
@@ -232,7 +232,7 @@ export default function Feedback({
           {isRefreshing ? (
             <Loader scale={0.45} />
           ) : (
-            <RefreshCw className="h-4 w-4" aria-hidden />
+            <RefreshIcon className="h-4 w-4" aria-hidden />
           )}
           Refresh
         </button>
@@ -267,7 +267,7 @@ export default function Feedback({
             {isPickingImage ? (
               <Loader scale={0.45} />
             ) : (
-              <ImagePlus className="h-4 w-4" aria-hidden />
+              <AddImageIcon className="h-4 w-4" aria-hidden />
             )}
             Add image
           </button>
@@ -285,7 +285,7 @@ export default function Feedback({
                 className="absolute -right-1 -top-1 rounded-full border border-border bg-surface p-0 text-muted shadow hover:text-foreground"
                 aria-label="Remove image"
               >
-                <X className="h-3.5 w-3.5" aria-hidden />
+                <CloseIcon className="h-3.5 w-3.5" aria-hidden />
               </button>
             </div>
           ) : null}
@@ -341,9 +341,9 @@ export default function Feedback({
                       {busy ? (
                         <Loader scale={0.5} />
                       ) : isResolved ? (
-                        <Check className="h-5 w-5 text-success" aria-hidden strokeWidth={2.5} />
+                        <CheckIcon className="h-5 w-5 text-success" aria-hidden strokeWidth={2.5} />
                       ) : (
-                        <Square className="h-5 w-5 fill-warning/25 text-warning" aria-hidden strokeWidth={2} />
+                        <UnresolvedIcon className="h-5 w-5 fill-warning/25 text-warning" aria-hidden strokeWidth={2} />
                       )}
                     </button>
                     <div className="min-w-0 flex-1">
@@ -392,7 +392,7 @@ export default function Feedback({
                         className="shrink-0 rounded-md p-1 text-muted transition hover:bg-bg hover:text-danger disabled:opacity-40"
                         aria-label="Delete feedback"
                       >
-                        <Trash2 className="h-5 w-5" aria-hidden />
+                        <DeleteIcon className="h-5 w-5" aria-hidden />
                       </button>
                     ) : null}
                   </div>

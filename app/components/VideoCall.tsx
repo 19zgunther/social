@@ -2,7 +2,7 @@
 
 import type { MutableRefObject } from "react";
 import { useEffect, useRef, useState } from "react";
-import { PhoneOff, Video } from "lucide-react";
+import { HangUpIcon, VideoIcon } from "@/app/components/Icons";
 import BackButton from "@/app/components/utils/BackButton";
 import {
   createVideoCallController,
@@ -283,7 +283,7 @@ export default function VideoCall({ threadId, currentUserId, onBack }: VideoCall
       <div className="flex items-center justify-between border-b border-border bg-surface px-3 py-3">
         <BackButton onBack={onEndCall} />
         <div className="flex items-center gap-2">
-          <Video className="h-4 w-4 text-muted" />
+          <VideoIcon className="h-4 w-4 text-muted" />
           <p className="text-sm font-semibold text-foreground">Video call</p>
         </div>
         <button
@@ -291,7 +291,7 @@ export default function VideoCall({ threadId, currentUserId, onBack }: VideoCall
           onClick={onEndCall}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-danger-fill text-on-accent hover:bg-danger-fill"
         >
-          <PhoneOff className="h-4 w-4" />
+          <HangUpIcon className="h-4 w-4" />
         </button>
       </div>
 

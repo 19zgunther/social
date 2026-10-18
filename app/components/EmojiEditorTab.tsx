@@ -7,7 +7,7 @@ import { ApiError, EmojiItem, EmojiSaveResponse } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import { PixelGradientSlider } from "@/app/components/utils/PixelGradientSlider";
 import { TriangleThicknessSlider } from "@/app/components/utils/TriangleThicknessSlider";
-import { Brush, Eraser, Hand, ImagePlus, Plus, Redo2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { BrushIcon, EraserIcon, PanIcon, AddImageIcon, AddIcon, RedoIcon, UndoIcon, ZoomInIcon, ZoomOutIcon } from "@/app/components/Icons";
 
 const GRID_SIZE = 64;
 const PIXEL_COUNT = GRID_SIZE * GRID_SIZE;
@@ -781,14 +781,14 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
               onClick={onNewEmoji}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-accent/50 bg-accent/15 px-3 py-3 text-sm font-semibold text-accent transition hover:border-accent hover:bg-accent/25"
             >
-              <Plus className="h-4 w-4" /> New Emoji
+              <AddIcon className="h-4 w-4" /> New Emoji
             </button>
             <button
               type="button"
               onClick={() => uploadInputRef.current?.click()}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-accent/50 bg-accent/15 px-3 py-3 text-sm font-semibold text-accent transition hover:border-accent hover:bg-accent/25"
             >
-              <ImagePlus className="h-4 w-4" /> Upload Image
+              <AddImageIcon className="h-4 w-4" /> Upload Image
             </button>
             <input
               ref={uploadInputRef}
@@ -894,9 +894,9 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                   <div className="mb-1 flex shrink-0 items-center justify-between px-1 text-[11px] text-muted">
                     <div className="flex items-center gap-1 rounded-lg border border-border bg-bg">
                       {[
-                        { id: "draw" as const, label: "", icon: Brush },
-                        { id: "move" as const, label: "", icon: Hand },
-                        { id: "erase" as const, label: "", icon: Eraser },
+                        { id: "draw" as const, label: "", icon: BrushIcon },
+                        { id: "move" as const, label: "", icon: PanIcon },
+                        { id: "erase" as const, label: "", icon: EraserIcon },
                       ].map((tool) => {
                         const Icon = tool.icon;
                         const selected = activeTool === tool.id;
@@ -925,7 +925,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                         title="Undo"
                         aria-label="Undo"
                       >
-                        <Undo2 size={20} />
+                        <UndoIcon size={20} />
                       </button>
                       <button
                         type="button"
@@ -935,7 +935,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                         title="Redo"
                         aria-label="Redo"
                       >
-                        <Redo2 size={20} />
+                        <RedoIcon size={20} />
                       </button>
                     </div>
 
@@ -948,7 +948,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                         title="Zoom out"
                         aria-label="Zoom out"
                       >
-                        <ZoomOut size={20} />
+                        <ZoomOutIcon size={20} />
                       </button>
                       <button
                         type="button"
@@ -958,7 +958,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                         title="Zoom in"
                         aria-label="Zoom in"
                       >
-                        <ZoomIn size={20} />
+                        <ZoomInIcon size={20} />
                       </button>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshIcon } from "@/app/components/Icons";
 import ThreadEventListRow from "@/app/components/ThreadEventListRow";
 import type {
   ApiError,
@@ -210,7 +210,7 @@ export default function UpcomingEventsTab({
             className="shrink-0 rounded-lg border border-white/20 p-1.5 text-muted transition hover:border-white/35 hover:text-white disabled:opacity-50"
             aria-label="Refresh events"
           >
-            <RefreshCw className={`h-4 w-4 ${refreshBusy ? "animate-spin" : ""}`} aria-hidden />
+            <RefreshIcon className={`h-4 w-4 ${refreshBusy ? "animate-spin" : ""}`} aria-hidden />
           </button>
         </div>
         <p className="mt-0.5 text-xs text-muted">Across all your groups</p>

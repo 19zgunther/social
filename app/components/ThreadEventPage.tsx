@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ImagePlus, Pencil, Trash2, X } from "lucide-react";
+import { CheckIcon, AddImageIcon, EditIcon, DeleteIcon, CloseIcon } from "@/app/components/Icons";
 import BackButton from "@/app/components/utils/BackButton";
 import CachedImage from "@/app/components/utils/CachedImage";
 import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
@@ -570,7 +570,7 @@ export default function ThreadEventPage({
                   className={iconBtn}
                   aria-label="Add or change background image"
                 >
-                  <ImagePlus className="h-3.5 w-3.5" aria-hidden />
+                  <AddImageIcon className="h-3.5 w-3.5" aria-hidden />
                 </button>
                 {local.background_image_id ? (
                   <button
@@ -582,7 +582,7 @@ export default function ThreadEventPage({
                     className={iconBtn}
                     aria-label="Remove background image"
                   >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                    <DeleteIcon className="h-3.5 w-3.5" aria-hidden />
                   </button>
                 ) : null}
               </>
@@ -605,7 +605,7 @@ export default function ThreadEventPage({
                     }}
                     aria-label="Edit name"
                   >
-                    <Pencil className="h-3.5 w-3.5" aria-hidden />
+                    <EditIcon className="h-3.5 w-3.5" aria-hidden />
                   </button>
                 ) : null}
               </div>
@@ -629,7 +629,7 @@ export default function ThreadEventPage({
                     }}
                     aria-label="Save name"
                   >
-                    <Check className="h-4 w-4 text-accent" aria-hidden />
+                    <CheckIcon className="h-4 w-4 text-accent" aria-hidden />
                   </button>
                   <button
                     type="button"
@@ -638,7 +638,7 @@ export default function ThreadEventPage({
                     onClick={() => setEditingTitle(false)}
                     aria-label="Cancel"
                   >
-                    <X className="h-4 w-4" aria-hidden />
+                    <CloseIcon className="h-4 w-4" aria-hidden />
                   </button>
                 </div>
               ) : (
@@ -659,7 +659,7 @@ export default function ThreadEventPage({
                   }}
                   aria-label="Edit schedule"
                 >
-                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  <EditIcon className="h-3.5 w-3.5" aria-hidden />
                 </button>
               ) : null}
             </div>
@@ -726,7 +726,7 @@ export default function ThreadEventPage({
                   }}
                   aria-label="Edit location"
                 >
-                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  <EditIcon className="h-3.5 w-3.5" aria-hidden />
                 </button>
               ) : null}
             </div>
@@ -751,7 +751,7 @@ export default function ThreadEventPage({
                   }}
                   aria-label="Save location"
                 >
-                  <Check className="h-4 w-4 text-accent drop-shadow-md" aria-hidden />
+                  <CheckIcon className="h-4 w-4 text-accent drop-shadow-md" aria-hidden />
                 </button>
                 <button
                   type="button"
@@ -760,7 +760,7 @@ export default function ThreadEventPage({
                   onClick={() => setEditingLocation(false)}
                   aria-label="Cancel"
                 >
-                  <X className="h-4 w-4" aria-hidden />
+                  <CloseIcon className="h-4 w-4" aria-hidden />
                 </button>
               </div>
             ) : (
@@ -781,7 +781,7 @@ export default function ThreadEventPage({
                   }}
                   aria-label="Edit description"
                 >
-                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  <EditIcon className="h-3.5 w-3.5" aria-hidden />
                 </button>
               ) : null}
             </div>

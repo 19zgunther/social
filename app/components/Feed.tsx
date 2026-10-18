@@ -6,7 +6,7 @@ import PostOptionsPane from "@/app/components/PostOptionsPane";
 import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
-import { Plus } from "lucide-react";
+import { AddIcon } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
 const FEED_CACHE_KEY = "feed_cache_v3";
 const TOP_REFRESH_COOLDOWN_MS = 1500;

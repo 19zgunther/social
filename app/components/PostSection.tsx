@@ -2,7 +2,7 @@
 
 import { memo, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CongratsBalloonOverlay from "@/app/components/CongratsBalloonOverlay";
-import { Heart, ChevronDown, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { LikeIcon, ChevronDownIcon, MoreIcon, EditIcon, DeleteIcon } from "@/app/components/Icons";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import CachedVideo from "@/app/components/utils/CachedVideo";
@@ -754,7 +754,7 @@ function PostSectionComponent({
                 disabled={isDeletingCommentPath === pathKey}
                 aria-label={aboutToDeleteCommentPath === pathKey ? "Confirm delete comment" : "Delete comment"}
               >
-                <Trash2
+                <DeleteIcon
                   className={`h-5 w-5 ${aboutToDeleteCommentPath === pathKey ? "text-danger" : "text-muted opacity-30"}`}
                 />
               </button>
@@ -788,7 +788,7 @@ function PostSectionComponent({
               onClick={() => toggleReplies(pathKey)}
               className="text-xs flex text-muted underline underline-offset-2 hover:text-foreground opacity-50"
             >
-              <ChevronDown className={`h-4 w-4 ${isExpanded ? "rotate-180" : ""}`} />
+              <ChevronDownIcon className={`h-4 w-4 ${isExpanded ? "rotate-180" : ""}`} />
               {isExpanded
                 ? "Hide replies"
                 : `${threadedReplyEntries.length} repl${threadedReplyEntries.length === 1 ? "y" : "ies"}`}
@@ -826,7 +826,7 @@ function PostSectionComponent({
               disabled={isSubmittingComment || replyDraft.trim().length === 0}
               className="rounded-lg border border-border px-2 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
             >
-              Send
+              SendIcon
             </button>
           </div>
         ) : null}
@@ -890,7 +890,7 @@ function PostSectionComponent({
               className="rounded-lg border-none bg-transparent p-1 text-muted hover:text-foreground"
               aria-label="Post options"
             >
-              <MoreHorizontal className="h-5 w-5" />
+              <MoreIcon className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -1071,7 +1071,7 @@ function PostSectionComponent({
                 aria-label="Edit post text"
                 className="shrink-0 rounded-lg border-none bg-transparent p-1.5 text-muted"
               >
-                <Pencil className="h-4 w-4" />
+                <EditIcon className="h-4 w-4" />
               </button>
             ) : null}
           </div>
@@ -1111,7 +1111,7 @@ function PostSectionComponent({
             {isLikedByViewer ? (
               <span className="liked-heart-rgb" aria-hidden />
             ) : (
-              <Heart className="h-7 w-7 shrink-0 text-muted" />
+              <LikeIcon className="h-7 w-7 shrink-0 text-muted" />
             )}
             <span className="text-sm leading-none tabular-nums">{likeCount}</span>
           </button>
@@ -1160,7 +1160,7 @@ function PostSectionComponent({
                 disabled={isSubmittingComment || rootCommentDraft.trim().length === 0}
                 className="rounded-lg border border-border px-2 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
               >
-                Send
+                SendIcon
               </button>
             </div>
 

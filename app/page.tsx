@@ -1,9 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
-// import { Calendar } from "lucide-react"; // events tab hidden
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
+import {
+  NavFeedIcon,
+  NavSharedPostsIcon,
+  NavFeedbackIcon,
+  NavProfileIcon,
+  NavGroupsIcon,
+} from "@/app/components/Icons";
 import { Profile, ProfileOtherUser } from "@/app/components/Profile";
 import ProfileSettings from "@/app/components/ProfileSettings";
 import {
@@ -582,6 +588,7 @@ export default function Home() {
             <ProfileSettings
               onBack={() => setActiveTab("profile")}
               onLogout={onLogout}
+              swipeBackOverrideRef={swipeBackOverrideRef}
             />
           </div>
 
@@ -606,42 +613,36 @@ export default function Home() {
         {activeTab !== "create_post" ? (
           <div className="nav-rgb-row w-full h-fit flex justify-between border-t border-border bg-bg z-[1000]" style={{boxShadow: "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)"}}>
             <NavRowButton
-              iconClassName="nav-rgb-icon-house"
-              isActive={activeTab === "feed"}
+              icon={<NavFeedIcon active={activeTab === "feed"} />}
               showCircle={false}
               onClick={() => setActiveTab("feed")}
             />
             <NavRowButton
-              iconClassName="nav-rgb-icon-users"
-              isActive={activeTab === "groups"}
+              icon={<NavGroupsIcon active={activeTab === "groups"} />}
               showCircle={groupsUnreadCount > 0}
               onClick={() => setActiveTab("groups")}
             />
             <NavRowButton
-              iconClassName="nav-rgb-icon-images"
-              isActive={activeTab === "shared_event_posts"}
+              icon={<NavSharedPostsIcon active={activeTab === "shared_event_posts"} />}
               showCircle={sharedEventPostsUnread}
               onClick={() => setActiveTab("shared_event_posts")}
             />
-            {/* events tab hidden
+            {/* events tab hidden — import NavEventsIcon from Icons when restoring
             <NavRowButton
-              iconClassName="nav-rgb-icon-calendar"
-              isActive={activeTab === "events"}
+              icon={<NavEventsIcon active={activeTab === "events"} />}
               showCircle={false}
               onClick={() => setActiveTab("events")}
             />
             */}
             <NavRowButton
-              iconClassName="nav-rgb-icon-user-round"
-              isActive={activeTab === "profile"}
+              icon={<NavProfileIcon active={activeTab === "profile"} />}
               showCircle={profileIncomingRequestCount > 0}
               onClick={() => {
                 setActiveTab("profile");
               }}
             />
             <NavRowButton
-              iconClassName="nav-rgb-icon-message-square"
-              isActive={activeTab === "feedback"}
+              icon={<NavFeedbackIcon active={activeTab === "feedback"} />}
               showCircle={false}
               onClick={() => setActiveTab("feedback")}
               className="max-w-[2rem] opacity-30"

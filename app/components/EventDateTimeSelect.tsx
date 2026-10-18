@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent } from "react";
-import { Calendar, Clock } from "lucide-react";
+import { CalendarIcon, ClockIcon } from "@/app/components/Icons";
 
 const DEFAULT_TIME = "12:00";
 
@@ -99,7 +99,7 @@ export default function EventDateTimeSelect({
     >
       <div className="mb-2 flex items-center gap-2 border-b border-white/10 pb-2">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-border/70 text-accent shadow-md backdrop-blur-sm">
-          <Calendar className="h-3.5 w-3.5" aria-hidden />
+          <CalendarIcon className="h-3.5 w-3.5" aria-hidden />
         </span>
         <span className="text-xs font-semibold tracking-wide text-foreground [text-shadow:0_2px_8px_rgba(0,0,0,0.9)]">
           {label}
@@ -130,7 +130,7 @@ export default function EventDateTimeSelect({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="min-w-0 flex-1 space-y-1">
             <label className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground/88 [text-shadow:0_2px_6px_rgba(0,0,0,0.88)]">
-              <Calendar className="h-3 w-3 opacity-80" aria-hidden />
+              <CalendarIcon className="h-3 w-3 opacity-80" aria-hidden />
               Date
             </label>
             <input
@@ -143,7 +143,7 @@ export default function EventDateTimeSelect({
           </div>
           <div className="w-full shrink-0 space-y-1 sm:w-[9.5rem]">
             <label className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground/88 [text-shadow:0_2px_6px_rgba(0,0,0,0.88)]">
-              <Clock className="h-3 w-3 opacity-80" aria-hidden />
+              <ClockIcon className="h-3 w-3 opacity-80" aria-hidden />
               Time
             </label>
             <input

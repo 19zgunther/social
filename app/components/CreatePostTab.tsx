@@ -2,20 +2,20 @@
 
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Aperture,
-  ArrowLeft,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Contrast,
-  Crop,
-  Droplets,
-  Palette,
-  RotateCcw,
-  Sun,
-  Thermometer,
-  X,
-} from "lucide-react";
+  VignetteIcon,
+  BackIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ContrastIcon,
+  CropIcon,
+  SaturationIcon,
+  TintIcon,
+  RotateIcon,
+  BrightnessIcon,
+  WarmthIcon,
+  CloseIcon,
+} from "@/app/components/Icons";
 import {
   prepareImageForUpload,
   prepareVideoForUpload,
@@ -97,7 +97,7 @@ type ImageAdjustmentOption = {
   min: number;
   max: number;
   step: number;
-  icon: typeof Sun;
+  icon: typeof BrightnessIcon;
 };
 
 type ImageEditDraft = {
@@ -132,13 +132,13 @@ const DEFAULT_EDIT_DRAFT: ImageEditDraft = {
   adjustments: DEFAULT_ADJUSTMENTS,
 };
 const ADJUSTMENT_OPTIONS: ImageAdjustmentOption[] = [
-  { key: "crop", label: "Crop", min: 0.25, max: 3, step: 0.01, icon: Crop },
-  { key: "brightness", label: "Brightness", min: -100, max: 100, step: 1, icon: Sun },
-  { key: "contrast", label: "Contrast", min: -100, max: 100, step: 1, icon: Contrast },
-  { key: "saturation", label: "Saturation", min: -100, max: 100, step: 1, icon: Droplets },
-  { key: "warmth", label: "Warmth", min: -100, max: 100, step: 1, icon: Thermometer },
-  { key: "tint", label: "Tint", min: -100, max: 100, step: 1, icon: Palette },
-  { key: "vignette", label: "Vignette", min: 0, max: 100, step: 1, icon: Aperture },
+  { key: "crop", label: "Crop", min: 0.25, max: 3, step: 0.01, icon: CropIcon },
+  { key: "brightness", label: "Brightness", min: -100, max: 100, step: 1, icon: BrightnessIcon },
+  { key: "contrast", label: "Contrast", min: -100, max: 100, step: 1, icon: ContrastIcon },
+  { key: "saturation", label: "Saturation", min: -100, max: 100, step: 1, icon: SaturationIcon },
+  { key: "warmth", label: "Warmth", min: -100, max: 100, step: 1, icon: WarmthIcon },
+  { key: "tint", label: "Tint", min: -100, max: 100, step: 1, icon: TintIcon },
+  { key: "vignette", label: "Vignette", min: 0, max: 100, step: 1, icon: VignetteIcon },
 ];
 
 const buildPreviewPollState = ({
@@ -1055,7 +1055,7 @@ export default function CreatePostTab({
           disabled={isPosting}
           className="rounded-full flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <BackIcon className="h-5 w-5" />
           Cancel
         </button>
       </div>
@@ -1109,7 +1109,7 @@ export default function CreatePostTab({
                 </option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+            <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
           </div>
           <p className="mt-1 text-xs text-muted">{audienceHint}</p>
         </div>
@@ -1135,7 +1135,7 @@ export default function CreatePostTab({
                 className="absolute left-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-border bg-bg/90 p-3 text-muted shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
                 aria-label="Previous media"
               >
-                <ChevronLeft className="h-7 w-7" />
+                <ChevronLeftIcon className="h-7 w-7" />
               </button>
 
               <div
@@ -1180,7 +1180,7 @@ export default function CreatePostTab({
                             className="absolute right-2 top-2 z-20 rounded-full bg-black/60 p-2.5 text-white opacity-70 hover:bg-black/80"
                             aria-label="Remove video"
                           >
-                            <X className="h-6 w-6" />
+                            <CloseIcon className="h-6 w-6" />
                           </button>
                         ) : null}
                       </div>
@@ -1250,7 +1250,7 @@ export default function CreatePostTab({
                           className="absolute right-2 top-2 z-20 rounded-full bg-black/60 p-2.5 text-white opacity-70 hover:bg-black/80"
                           aria-label="Remove image"
                         >
-                          <X className="h-6 w-6" />
+                          <CloseIcon className="h-6 w-6" />
                         </button>
                       ) : null}
                     </div>
@@ -1265,7 +1265,7 @@ export default function CreatePostTab({
                 className="absolute right-0 top-1/2 z-30 -translate-y-1/2 rounded-full border border-border bg-bg/90 p-3 text-muted shadow-md backdrop-blur-sm transition hover:text-foreground disabled:opacity-30"
                 aria-label="Next media"
               >
-                <ChevronRight className="h-7 w-7" />
+                <ChevronRightIcon className="h-7 w-7" />
               </button>
             </div>
 
@@ -1313,7 +1313,7 @@ export default function CreatePostTab({
                   aria-label="Reset"
                   title="Reset"
                 >
-                  <RotateCcw className="h-5 w-5" />
+                  <RotateIcon className="h-5 w-5" />
                 </button>
               </div>
 
@@ -1400,7 +1400,7 @@ export default function CreatePostTab({
                         className="rounded-lg border border-border px-2 py-2 text-muted hover:text-foreground"
                         aria-label={`Remove option ${index + 1}`}
                       >
-                        <X className="h-4 w-4" />
+                        <CloseIcon className="h-4 w-4" />
                       </button>
                     ) : null}
                   </div>
@@ -1469,7 +1469,7 @@ export default function CreatePostTab({
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+                <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
               </div>
             </div>
           </div>

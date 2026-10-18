@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { CheckIcon, EditIcon, AddIcon, DeleteIcon, CloseIcon } from "@/app/components/Icons";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import {
   AcceptedFriend,
@@ -371,7 +371,7 @@ export default function PostGroupsTab({
           className={`${chipClass(false)} disabled:opacity-50`}
           aria-label="Create group"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <AddIcon className="h-3.5 w-3.5" />
         </button>
       </div>
 
@@ -407,7 +407,7 @@ export default function PostGroupsTab({
             className="rounded-lg border border-border px-2 py-2 text-muted hover:text-foreground"
             aria-label="Cancel create"
           >
-            <X className="h-4 w-4" />
+            <CloseIcon className="h-4 w-4" />
           </button>
         </div>
       ) : null}
@@ -449,7 +449,7 @@ export default function PostGroupsTab({
                 className="rounded-lg border border-border px-2 py-1.5 text-muted"
                 aria-label="Cancel rename"
               >
-                <X className="h-4 w-4" />
+                <CloseIcon className="h-4 w-4" />
               </button>
             </div>
           ) : (
@@ -471,7 +471,7 @@ export default function PostGroupsTab({
                 className="rounded-lg border border-border p-1.5 text-muted hover:text-foreground"
                 aria-label="Rename group"
               >
-                <Pencil className="h-5 w-5" />
+                <EditIcon className="h-5 w-5" />
               </button>
               <button
                 type="button"
@@ -483,7 +483,7 @@ export default function PostGroupsTab({
                 }`}
                 aria-label={confirmDelete ? "Confirm delete group" : "Delete group"}
               >
-                {confirmDelete ? "Delete?" : <Trash2 className="h-5 w-5" />}
+                {confirmDelete ? "Delete?" : <DeleteIcon className="h-5 w-5" />}
               </button>
             </div>
           )}
@@ -540,7 +540,7 @@ export default function PostGroupsTab({
               }}
               className="mt-3 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <AddIcon className="h-3.5 w-3.5" />
               New group
             </button>
           </div>
@@ -612,7 +612,7 @@ export default function PostGroupsTab({
                         : "border-border bg-bg text-transparent"
                     }`}
                   >
-                    <Check className="h-3.5 w-3.5" />
+                    <CheckIcon className="h-3.5 w-3.5" />
                   </span>
                   <UserProfileImage
                     userId={friend.user_id}

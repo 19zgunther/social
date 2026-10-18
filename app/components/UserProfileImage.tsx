@@ -1,7 +1,7 @@
 "use client";
 
 import { useContext, useMemo } from "react";
-import { CircleUserRound } from "lucide-react";
+import { UserPlaceholderIcon } from "@/app/components/Icons";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { UserSessionSyncContext } from "@/app/components/UserSessionSyncContext";
 
@@ -101,7 +101,7 @@ export default function UserProfileImage({
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center rounded-full">
-          <CircleUserRound
+          <UserPlaceholderIcon
             className="text-muted"
             style={{
               width: Math.round(sizePx * 0.55),

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Pencil, Smile, X } from "lucide-react";
+import { BackIcon, EditIcon, EmojiIcon, CloseIcon } from "@/app/components/Icons";
 import { createPortal } from "react-dom";
 import emojiKeywordsByEmoji from "emojilib";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./useSwipeBack";
@@ -479,7 +479,7 @@ export default function EmojiPicker({
         aria-label="Add emoji"
         disabled={disabled}
       >
-        <Smile className={`h-4 w-4 ${buttonSmileIconClassName ?? ""}`} />
+        <EmojiIcon className={`h-4 w-4 ${buttonSmileIconClassName ?? ""}`} />
       </button>
 
       {isMounted && isOpen
@@ -515,7 +515,7 @@ export default function EmojiPicker({
                           onClick={() => setShowEmojiEditor(false)}
                           className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
                         >
-                          <ArrowLeft className="h-4 w-4 shrink-0" />
+                          <BackIcon className="h-4 w-4 shrink-0" />
                           Back to picker
                         </button>
                         <button
@@ -524,7 +524,7 @@ export default function EmojiPicker({
                           className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
                           aria-label="Close emoji picker"
                         >
-                          <X className="h-5 w-5" />
+                          <CloseIcon className="h-5 w-5" />
                         </button>
                       </div>
                       <EmojiEditorTab isActive onSaved={refreshCustomEmojis} />
@@ -543,7 +543,7 @@ export default function EmojiPicker({
                             aria-label="Create or edit custom emoji"
                             title="Create or edit custom emoji"
                           >
-                            <Pencil className="h-5 w-5" />
+                            <EditIcon className="h-5 w-5" />
                           </button>
                           <button
                             type="button"
@@ -551,7 +551,7 @@ export default function EmojiPicker({
                             className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
                             aria-label="Close emoji picker"
                           >
-                            <X className="h-5 w-5" />
+                            <CloseIcon className="h-5 w-5" />
                           </button>
                         </div>
                       </div>

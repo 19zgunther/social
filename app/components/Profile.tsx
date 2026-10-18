@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useState, type MutableRefObject, type ReactNode } from "react";
 import {
-  Check,
-  ChevronRight,
-  CircleUserRound,
-  MessageSquare,
-  Play,
-  Settings as SettingsIcon,
-  Trash2,
-  ListChecks,
-} from "lucide-react";
+  CheckIcon,
+  ChevronRightIcon,
+  UserPlaceholderIcon,
+  MessageIcon,
+  PlayIcon,
+  SettingsIcon,
+  DeleteIcon,
+  PollIcon,
+} from "@/app/components/Icons";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
 import BackButton from "@/app/components/utils/BackButton";
@@ -127,7 +127,7 @@ function ProfilePictureRow({
                 />
               ) : (
                 <div className="flex h-16 w-16 flex-col items-center justify-center rounded-full border border-border bg-surface p-2 text-xs">
-                  <CircleUserRound className="h-10 w-10 text-muted" />
+                  <UserPlaceholderIcon className="h-10 w-10 text-muted" />
                   <p className="text-muted">Click to add</p>
                 </div>
               )}
@@ -146,7 +146,7 @@ function ProfilePictureRow({
                 />
               ) : (
                 <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-surface p-2">
-                  <CircleUserRound className="h-14 w-14 text-muted" />
+                  <UserPlaceholderIcon className="h-14 w-14 text-muted" />
                 </div>
               )}
             </div>
@@ -246,7 +246,7 @@ function ProfilePostsSection({
                 />
                 {isVideoFirst ? (
                   <span className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/55 p-1 text-white">
-                    <Play className="h-3 w-3 fill-white" />
+                    <PlayIcon className="h-3 w-3 fill-white" />
                   </span>
                 ) : null}
                 </>
@@ -256,7 +256,7 @@ function ProfilePostsSection({
                 </div>
               ) : poll ? (
                 <div className="flex h-full w-full flex-col items-start justify-start gap-1 overflow-hidden bg-black p-1.5">
-                  <ListChecks className="h-4 w-4 shrink-0 text-accent" />
+                  <PollIcon className="h-4 w-4 shrink-0 text-accent" />
                   <p
                     className="w-full overflow-hidden text-left text-[9px] leading-tight text-foreground/80 break-words"
                     style={{
@@ -611,7 +611,7 @@ function Profile({
             className="rounded-full flex gap-2 px-3 py-1 text-xs hover:text-foreground"
             style={{ color: confirmedDeletePost ? "red" : undefined }}
           >
-            <Trash2 className="h-4 w-4" /> {confirmedDeletePost && "Confirm Delete"}
+            <DeleteIcon className="h-4 w-4" /> {confirmedDeletePost && "Confirm Delete"}
           </button>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
@@ -696,7 +696,7 @@ function Profile({
                   isActive ? "text-on-accent" : "text-muted hover:text-foreground"
                 }`}
               >
-                {isActive ? <Check aria-hidden className="h-3 w-3 shrink-0" strokeWidth={2.75} /> : null}
+                {isActive ? <CheckIcon aria-hidden className="h-3 w-3 shrink-0" strokeWidth={2.75} /> : null}
                 <span className="truncate">{tab.label}</span>
               </button>
             );
@@ -821,7 +821,7 @@ function Profile({
                         <p className="text-xs text-muted truncate">{friend.email}</p>
                       )}
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted flex-shrink-0" />
+                    <ChevronRightIcon className="h-4 w-4 text-muted flex-shrink-0" />
                   </button>
                 ))}
               </div>
@@ -1155,7 +1155,7 @@ function ProfileOtherUser({
                 aria-label={isOpeningDirectThread ? "Opening messages" : "Message"}
                 title={isOpeningDirectThread ? "Opening..." : "Message"}
               >
-                <MessageSquare className="h-5 w-5" />
+                <MessageIcon className="h-5 w-5" />
               </button>
               <button
                 type="button"
@@ -1179,7 +1179,7 @@ function ProfileOtherUser({
                       : "Remove friend"
                 }
               >
-                <Trash2 className="h-5 w-5" />
+                <DeleteIcon className="h-5 w-5" />
               </button>
             </div>
           ) : undefined

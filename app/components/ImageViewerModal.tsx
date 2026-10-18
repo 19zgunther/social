@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { CloseIcon } from "@/app/components/Icons";
 import CachedImage from "@/app/components/utils/CachedImage";
 import type { ImageOverlayData } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
@@ -311,7 +311,7 @@ export default function ImageViewerModal({
         onClick={onClose}
         className="absolute right-3 top-10 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white shadow-lg ring-1 ring-white/25 hover:bg-black/75"
       >
-        <X className="h-6 w-6" strokeWidth={2.5} />
+        <CloseIcon className="h-6 w-6" strokeWidth={2.5} />
       </button>
 
       <div

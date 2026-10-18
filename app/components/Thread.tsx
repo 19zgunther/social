@@ -14,7 +14,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { Camera, Image, Video } from "lucide-react";
+import { CameraIcon, ImageIcon, VideoIcon } from "@/app/components/Icons";
 import CameraModal from "@/app/components/Camera";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
@@ -1438,7 +1438,7 @@ export default function Thread({
             className="flex-1 rounded-full border border-border px-3 py-3 text-xs font-semibold text-muted transition hover:text-foreground disabled:opacity-50"
             aria-label="Take photo"
           >
-            <Camera className="mx-auto h-4 w-4" />
+            <CameraIcon className="mx-auto h-4 w-4" />
           </button>
         </>
       ) : (
@@ -1522,7 +1522,7 @@ export default function Thread({
             </button>
           ) : (
             <div className="flex h-10 w-10 items-center justify-center">
-              <Image className="h-10 w-10 text-muted" />
+              <ImageIcon className="h-10 w-10 text-muted" />
             </div>
           )}
           <p className="truncate text-sm font-semibold text-foreground">
@@ -1535,7 +1535,7 @@ export default function Thread({
           onClick={() => setIsVideoCallOpen(true)}
           className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-border/30 hover:text-foreground"
         >
-          <Video className="h-4 w-4" />
+          <VideoIcon className="h-4 w-4" />
         </button>
       </div>
 

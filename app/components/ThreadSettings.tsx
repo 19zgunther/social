@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { DeleteIcon } from "@/app/components/Icons";
 import CachedImage from "@/app/components/utils/CachedImage";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import ThreadPictureEditor from "@/app/components/ThreadPictureEditor";
@@ -309,7 +309,7 @@ export default function ThreadSettings({
       <div className="flex items-center justify-between border-b border-border bg-surface px-3 py-3">
         <BackButton onBack={onBack} />
         <div className="min-w-0 text-center">
-          <p className="truncate text-sm font-semibold text-foreground">Group Settings</p>
+          <p className="truncate text-sm font-semibold text-foreground">Group SettingsIcon</p>
         </div>
         <div className="w-[72px]" />
       </div>
@@ -530,7 +530,7 @@ export default function ThreadSettings({
                             : `Remove ${member.username} from group`
                         }
                       >
-                        <Trash2
+                        <DeleteIcon
                           className={`h-4 w-4 ${
                             confirmedRemoveMember === member.user_id
                               ? "text-danger"

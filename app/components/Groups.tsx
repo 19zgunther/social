@@ -13,7 +13,7 @@ import CameraModal from "@/app/components/Camera";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import CachedImage from "./utils/CachedImage";
-import { ArrowRight, Image, MessageCirclePlus, RefreshCw } from "lucide-react";
+import { ForwardIcon, ImageIcon, NewChatIcon, RefreshIcon } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
 import { AppTab } from "./utils";
 
@@ -505,12 +505,12 @@ export default function Groups({
                 className="rounded-md p-0.5 text-muted transition hover:text-foreground"
                 aria-label="Refresh groups"
               >
-                <RefreshCw className="h-5 w-5 shrink-0" aria-hidden />
+                <RefreshIcon className="h-5 w-5 shrink-0" aria-hidden />
               </button>
             )}
           </div>
           <button type="button" onClick={() => { setCreateThreadIsVisible(true); }}>
-            <MessageCirclePlus className="h-6 w-6 text-accent" />
+            <NewChatIcon className="h-6 w-6 text-accent" />
           </button>
         </header>
       </div>
@@ -664,7 +664,7 @@ function GroupThreadRow({
           />
         ) : (
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-border/20 flex-shrink-0">
-            <Image className="h-6 w-6 text-muted" />
+            <ImageIcon className="h-6 w-6 text-muted" />
           </div>
         )}
 
@@ -717,7 +717,7 @@ function GroupThreadRow({
                 }}
                 className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border-2 border-muted/80 bg-transparent text-muted"
               >
-                <ArrowRight className="h-4 w-4" aria-hidden />
+                <ForwardIcon className="h-4 w-4" aria-hidden />
               </button>
             ) : null}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshIcon } from "@/app/components/Icons";
 import ThreadEventListRow from "@/app/components/ThreadEventListRow";
 import type {
   ApiError,
@@ -185,7 +185,7 @@ export default function AllThreadEvents({
             className="shrink-0 rounded-lg border border-border p-1.5 text-muted transition hover:border-muted hover:text-foreground disabled:opacity-50"
             aria-label="Refresh events"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshBusy ? "animate-spin" : ""}`} aria-hidden />
+            <RefreshIcon className={`h-3.5 w-3.5 ${refreshBusy ? "animate-spin" : ""}`} aria-hidden />
           </button>
         </div>
         <button

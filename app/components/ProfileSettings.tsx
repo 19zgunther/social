@@ -1,8 +1,9 @@
 "use client";
 
-import { LogOut } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { NotificationsIcon, DebugIcon, ChevronRightIcon, StorageIcon, LogOutIcon, ThemeIcon, type LucideIcon } from "@/app/components/Icons";
+import { useState, useEffect, useRef, type MutableRefObject } from "react";
 import BackButton from "@/app/components/utils/BackButton";
+import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
 import { clearAllCachedCustomEmojis, getCustomEmojiCacheStats, type CustomEmojiCacheStats } from "@/app/lib/customEmojiCache";
 import { clearAllCachedImages, getImageCacheStats, type ImageCacheStats } from "@/app/lib/imageCache";
 import { ensurePushSubscription, isInstalledPwa, PUSH_PROMPT_DISMISSED_KEY } from "@/app/lib/pushClient";
@@ -22,10 +23,24 @@ import {
 } from "@/app/lib/theme";
 import { globalDebugData } from "./utils/globalDebugData";
 
+type SettingsView = "root" | "appearance" | "notifications" | "storage" | "debug";
+
 type ProfileSettingsProps = {
   onBack: () => void;
   onLogout: () => void;
+  swipeBackOverrideRef: MutableRefObject<(() => void) | null>;
 };
+
+const SETTINGS_MENU_ITEMS: {
+  view: Exclude<SettingsView, "root">;
+  label: string;
+  icon: LucideIcon;
+}[] = [
+  { view: "appearance", label: "Appearance", icon: ThemeIcon },
+  { view: "notifications", label: "Notifications", icon: NotificationsIcon },
+  { view: "storage", label: "Storage", icon: StorageIcon },
+  { view: "debug", label: "Debug", icon: DebugIcon },
+];
 
 async function postTheme(themeToSave: ThemeInfo): Promise<boolean> {
   const response = await fetch("/api/theme-set", {
@@ -36,7 +51,12 @@ async function postTheme(themeToSave: ThemeInfo): Promise<boolean> {
   return response.ok;
 }
 
-export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsProps) {
+export default function ProfileSettings({
+  onBack,
+  onLogout,
+  swipeBackOverrideRef,
+}: ProfileSettingsProps) {
+  const [settingsView, setSettingsView] = useState<SettingsView>("root");
   const [statusMessage, setStatusMessage] = useState("");
   const [isEnablingNotifications, setIsEnablingNotifications] = useState(false);
   const [isTestingNotifications, setIsTestingNotifications] = useState(false);
@@ -54,6 +74,12 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
   const [debugDataSnapshot, setDebugDataSnapshot] = useState(
     JSON.stringify(globalDebugData, null, 2),
   );
+
+  const onBackToRoot = () => {
+    setSettingsView("root");
+  };
+
+  useSwipeBackOverride(swipeBackOverrideRef, onBackToRoot, settingsView !== "root");
 
   const saveTheme = (nextTheme: ThemeInfo) => {
     themeRef.current = nextTheme;
@@ -248,11 +274,14 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
   }, []);
 
   useEffect(() => {
+    if (settingsView !== "debug") {
+      return;
+    }
     const interval = setInterval(() => {
       setDebugDataSnapshot(JSON.stringify(globalDebugData, null, 2));
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [settingsView]);
 
   useEffect(() => {
     return () => {
@@ -287,21 +316,56 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
   const imageCacheStatsLabel = formatCacheStatsLabel(imageCacheStats, "image", "images");
   const emojiCacheStatsLabel = formatCacheStatsLabel(emojiCacheStats, "emoji", "emojis");
 
+  const headerTitle =
+    settingsView === "root"
+      ? "Settings"
+      : SETTINGS_MENU_ITEMS.find((item) => item.view === settingsView)?.label ?? "Settings";
+
   return (
-    <div
-      className="flex h-full min-h-0 flex-col bg-bg"
-    >
+    <div className="flex h-full min-h-0 flex-col bg-bg">
       <div className="flex items-center justify-between border-b border-border px-3 py-3">
-        <BackButton onBack={onBack} />
-        <h1 className="text-lg font-semibold text-foreground">Settings</h1>
+        <BackButton onBack={settingsView === "root" ? onBack : onBackToRoot} />
+        <h1 className="text-lg font-semibold text-foreground">{headerTitle}</h1>
         <div className="w-20" />
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4">
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3">Appearance</h2>
-            <p className="text-xs text-muted mb-3">
+        {settingsView === "root" ? (
+          <section className="space-y-2">
+            {SETTINGS_MENU_ITEMS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.view}
+                  type="button"
+                  onClick={() => {
+                    setSettingsView(item.view);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition"
+                >
+                  <span className="flex items-center gap-3">
+                    <Icon className="h-4 w-4 shrink-0 text-muted" />
+                    <span className="font-medium">{item.label}</span>
+                  </span>
+                  <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={onLogout}
+              className="mt-4 flex w-full items-center gap-2 rounded-lg border border-danger-fill/50 bg-danger-fill/10 px-4 py-3 text-left text-sm text-danger hover:bg-danger-fill/20 transition"
+            >
+              <LogOutIcon className="h-4 w-4" />
+              <p className="font-medium">Log out</p>
+            </button>
+          </section>
+        ) : null}
+
+        {settingsView === "appearance" ? (
+          <section className="space-y-3">
+            <p className="text-xs text-muted">
               Choose a preset or customize individual colors
               {isSavingTheme ? " · Saving…" : ""}
             </p>
@@ -339,10 +403,10 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
               })}
             </div>
             {theme.presetId === "custom" ? (
-              <p className="mt-2 text-xs text-muted">Custom palette</p>
+              <p className="text-xs text-muted">Custom palette</p>
             ) : null}
 
-            <div className="mt-3 space-y-2 rounded-lg border border-border bg-surface px-3 py-3">
+            <div className="space-y-2 rounded-lg border border-border bg-surface px-3 py-3">
               <p className="text-sm font-medium text-foreground">Customize colors</p>
               {THEME_COLOR_KEYS.map((key) => (
                 <div key={key} className="flex items-center gap-2">
@@ -376,15 +440,16 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
             <button
               type="button"
               onClick={onResetTheme}
-              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition mt-2"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition"
             >
               <p className="font-medium">Reset to default theme</p>
               <p className="text-xs text-muted mt-1">Restore the original dark purple palette</p>
             </button>
-          </div>
+          </section>
+        ) : null}
 
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3">Notifications</h2>
+        {settingsView === "notifications" ? (
+          <section className="space-y-2">
             <button
               type="button"
               onClick={() => {
@@ -406,7 +471,7 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
                 void onTestNotifications();
               }}
               disabled={isTestingNotifications}
-              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition mt-2 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition disabled:cursor-not-allowed disabled:opacity-60"
             >
               <p className="font-medium">
                 {isTestingNotifications ? "Sending test notification..." : "Send test notification"}
@@ -418,17 +483,18 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
             <button
               type="button"
               onClick={onResetNotificationPrompt}
-              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition mt-2"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition"
             >
               <p className="font-medium">Reset notification prompt</p>
               <p className="text-xs text-muted mt-1">
                 Make the notification permission prompt appear again
               </p>
             </button>
-          </div>
+          </section>
+        ) : null}
 
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3">Storage</h2>
+        {settingsView === "storage" ? (
+          <section className="space-y-2">
             <button
               type="button"
               onClick={() => { void onClearImageCache(); }}
@@ -449,7 +515,7 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
               type="button"
               onClick={() => { void onClearCustomEmojiCache(); }}
               disabled={isClearingEmojiCache}
-              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition disabled:cursor-not-allowed disabled:opacity-60 mt-2"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition disabled:cursor-not-allowed disabled:opacity-60"
             >
               <div className="flex items-baseline justify-between gap-3">
                 <p className="font-medium">{isClearingEmojiCache ? "Clearing custom emoji cache..." : "Clear cached custom emojis"}</p>
@@ -461,50 +527,38 @@ export default function ProfileSettings({ onBack, onLogout }: ProfileSettingsPro
                 Remove locally cached custom emoji pixel data (they reload from the server when needed)
               </p>
             </button>
-          </div>
+          </section>
+        ) : null}
 
-          <div className="h-10">
-
-          </div>
-
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3">Account</h2>
-            <button
-              type="button"
-              onClick={onLogout}
-              className="w-full rounded-lg border border-danger-fill/50 bg-danger-fill/10 px-4 py-3 text-left text-sm text-danger hover:bg-danger-fill/20 transition flex items-center gap-2"
-            >
-              <LogOut className="h-4 w-4" />
-              <p className="font-medium">Log out</p>
-            </button>
-          </div>
-
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3">Logo</h2>
-            <div className="flex justify-center">
-              <div
-                className="logo-rgb-bg h-48 w-48"
-                aria-label="Zo logo"
-              >
-                <span className="logo-zo-mark text-[3.25rem]" data-text="Zo">
-                  <span className="logo-zo-face">Zo</span>
-                </span>
+        {settingsView === "debug" ? (
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground mb-3">Logo</h2>
+              <div className="flex justify-center">
+                <div
+                  className="logo-rgb-bg h-48 w-48"
+                  aria-label="Zo logo"
+                >
+                  <span className="logo-zo-mark text-[3.25rem]" data-text="Zo">
+                    <span className="logo-zo-face">Zo</span>
+                  </span>
+                </div>
               </div>
+              <p className="mt-2 text-center text-xs text-muted">
+                Screenshot this mark for favicon and app icons
+              </p>
             </div>
-            <p className="mt-2 text-center text-xs text-muted">
-              Screenshot this mark for favicon and app icons
-            </p>
-          </div>
 
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3 min-h-100vh overflow-y-scroll min-w-80vw">Debug</h2>
-            <textarea
-              className="min-h-[100vh] overflow-y-scroll min-w-[80vw]"
-              value={debugDataSnapshot}
-              readOnly
-            />
-          </div>
-        </section>
+            <div>
+              <h2 className="text-sm font-semibold text-foreground mb-3">Debug data</h2>
+              <textarea
+                className="min-h-[100vh] w-full overflow-y-scroll rounded-lg border border-border bg-surface p-3 font-mono text-xs text-foreground"
+                value={debugDataSnapshot}
+                readOnly
+              />
+            </div>
+          </section>
+        ) : null}
       </div>
 
       {statusMessage ? (

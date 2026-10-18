@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Circle, RotateCcw, Send, Undo2, X } from "lucide-react";
+import { ShutterIcon, RotateIcon, SendIcon, UndoIcon, CloseIcon } from "@/app/components/Icons";
 
 type CameraFacingMode = "environment" | "user";
 
@@ -349,7 +349,7 @@ export default function Camera({
           className="rounded-full border border-white/30 bg-black/40 p-2 text-white"
           aria-label="Close camera"
         >
-          <X className="h-5 w-5" />
+          <CloseIcon className="h-5 w-5" />
         </button>
         <button
           type="button"
@@ -449,7 +449,7 @@ export default function Camera({
               className="rounded-full border border-white/30 bg-white/10 p-3 text-white transition hover:bg-white/20 disabled:opacity-50"
               aria-label="Retake photo"
             >
-              <Undo2 className="h-6 w-6" />
+              <UndoIcon className="h-6 w-6" />
             </button>
             <button
               type="button"
@@ -460,7 +460,7 @@ export default function Camera({
               className="rounded-full border border-white/30 bg-white/10 p-3 text-white transition hover:bg-white/20 disabled:opacity-50"
               aria-label="Send photo"
             >
-              <Send className="h-8 w-8" />
+              <SendIcon className="h-8 w-8" />
             </button>
             <button
               type="button"
@@ -481,7 +481,7 @@ export default function Camera({
               className="rounded-full border border-white/30 bg-white/10 p-3 text-white transition hover:bg-white/20 disabled:opacity-50"
               aria-label="Flip camera"
             >
-              <RotateCcw className="h-6 w-6" />
+              <RotateIcon className="h-6 w-6" />
             </button>
             <button
               type="button"
@@ -492,7 +492,7 @@ export default function Camera({
               className="rounded-full border border-white/30 bg-white/10 p-3 text-white transition hover:bg-white/20 disabled:opacity-50"
               aria-label="Capture photo"
             >
-              <Circle className="h-12 w-12" />
+              <ShutterIcon className="h-12 w-12" />
             </button>
             <button
               type="button"

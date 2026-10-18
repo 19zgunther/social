@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ImagePlus, Plus, Settings, Users } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, AddImageIcon, AddIcon, SettingsIcon, PeopleIcon } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
 import Camera from "@/app/components/Camera";
 import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
@@ -568,7 +568,7 @@ export default function SharedEventPostsTab({
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
           <span className="shrink-0 text-[11px] text-muted">
-            <Users className="mr-1 inline h-3 w-3" />
+            <PeopleIcon className="mr-1 inline h-3 w-3" />
             {item.contributor_count}
           </span>
         </div>
@@ -582,7 +582,7 @@ export default function SharedEventPostsTab({
           onClick={() => onOpenSettings(item.id)}
           className="flex shrink-0 items-center justify-center border-l border-border px-3 text-muted transition hover:bg-bg/40 hover:text-foreground"
         >
-          <Settings className="h-5 w-5" />
+          <SettingsIcon className="h-5 w-5" />
         </button>
       ) : null}
     </div>
@@ -597,7 +597,7 @@ export default function SharedEventPostsTab({
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
           <span className="shrink-0 text-[11px] text-muted">
-            <Users className="mr-1 inline h-3 w-3" />
+            <PeopleIcon className="mr-1 inline h-3 w-3" />
             {item.contributor_count}
           </span>
         </div>
@@ -634,7 +634,7 @@ export default function SharedEventPostsTab({
           onClick={() => onOpenSettings(item.id)}
           className="flex shrink-0 items-center justify-center border-l border-border px-3 text-muted transition hover:bg-bg/40 hover:text-foreground"
         >
-          <Settings className="h-5 w-5" />
+          <SettingsIcon className="h-5 w-5" />
         </button>
       ) : null}
     </div>
@@ -724,7 +724,7 @@ export default function SharedEventPostsTab({
                             }`}
                             aria-hidden
                           >
-                            <Check className="h-3.5 w-3.5" />
+                            <CheckIcon className="h-3.5 w-3.5" />
                           </span>
                         </button>
                       );
@@ -744,7 +744,7 @@ export default function SharedEventPostsTab({
                 {isSavingEditor ? (
                   <Loader scale={0.55} />
                 ) : isSettings ? null : (
-                  <Plus className="h-4 w-4" />
+                  <AddIcon className="h-4 w-4" />
                 )}
                 {isSettings ? "Save" : "Create"}
               </button>
@@ -816,7 +816,7 @@ export default function SharedEventPostsTab({
                     {isContributing ? (
                       <Loader scale={0.55} />
                     ) : (
-                      <ImagePlus className="h-4 w-4" />
+                      <AddImageIcon className="h-4 w-4" />
                     )}
                     Upload photos or videos
                   </button>
@@ -919,7 +919,7 @@ export default function SharedEventPostsTab({
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
               Released
             </h2>
-            <ChevronDown
+            <ChevronDownIcon
               className={`h-4 w-4 shrink-0 text-muted transition-transform ${
                 isReleasedExpanded ? "rotate-180" : ""
               }`}

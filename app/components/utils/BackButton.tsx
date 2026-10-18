@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { BackIcon } from "@/app/components/Icons";
 
 export default function BackButton({
   onBack,
@@ -13,7 +13,7 @@ export default function BackButton({
       onClick={onBack}
       className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
     >
-      <ArrowLeft className="h-4 w-4 shrink-0" />
+      <BackIcon className="h-4 w-4 shrink-0" />
       {backLabel}
     </button>
   );
