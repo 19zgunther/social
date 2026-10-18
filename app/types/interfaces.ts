@@ -774,3 +774,110 @@ export type PostGroupsGetResponse = PostGroupsData;
 export type PostGroupsSetRequest = PostGroupsData;
 
 export type PostGroupsSetResponse = PostGroupsData;
+
+export type BotWakePeriod = "24h" | "1w";
+
+export type BotListItem = {
+  id: string;
+  user_id: string;
+  username: string;
+  profile_image_id: string | null;
+  profile_image_url: string | null;
+  wake_period: BotWakePeriod;
+  last_woke_at: string | null;
+};
+
+export type BotsListResponse = {
+  bots: BotListItem[];
+};
+
+export type BotCreateRequest = {
+  username?: string;
+};
+
+export type BotCreateResponse = {
+  bot: BotDetail;
+};
+
+export type BotGetRequest = {
+  bot_id?: string;
+};
+
+export type BotDetail = {
+  id: string;
+  user_id: string;
+  username: string;
+  profile_image_id: string | null;
+  profile_image_url: string | null;
+  system_prompt: string;
+  wake_period: BotWakePeriod;
+  rss_feeds: string[];
+  last_woke_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BotGetResponse = {
+  bot: BotDetail;
+};
+
+export type BotUpdateRequest = {
+  bot_id?: string;
+  username?: string;
+  system_prompt?: string;
+  wake_period?: BotWakePeriod;
+  rss_feeds?: string[];
+};
+
+export type BotUpdateResponse = {
+  bot: BotDetail;
+};
+
+export type BotProfileImageSetRequest = {
+  bot_id?: string;
+  image_base64_data?: string;
+  image_mime_type?: string;
+};
+
+export type BotProfileImageRemoveRequest = {
+  bot_id?: string;
+};
+
+export type BotWakeRequest = {
+  bot_id?: string;
+};
+
+export type BotWakeResponse = {
+  log_id: string;
+  status: "completed" | "failed";
+  error?: string;
+};
+
+export type BotLogListItem = {
+  id: string;
+  created_at: string;
+  finished_at: string | null;
+  status: string;
+  error: string | null;
+};
+
+export type BotLogsListRequest = {
+  bot_id?: string;
+};
+
+export type BotLogsListResponse = {
+  logs: BotLogListItem[];
+};
+
+export type BotLogGetRequest = {
+  log_id?: string;
+};
+
+export type BotLogDetail = BotLogListItem & {
+  bot_id: string;
+  messages: unknown;
+};
+
+export type BotLogGetResponse = {
+  log: BotLogDetail;
+};

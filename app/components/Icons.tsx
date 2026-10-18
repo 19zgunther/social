@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
+  Bot,
   Brush,
   Bug,
   Calendar,
@@ -38,6 +39,7 @@ import {
   Redo2,
   RefreshCw,
   RotateCcw,
+  Rss,
   Send,
   Settings,
   Smile,
@@ -104,6 +106,10 @@ export const StorageIcon = HardDrive;
 export const LogOutIcon = LogOut;
 /** Appearance / theme */
 export const ThemeIcon = Palette;
+/** Personal bots */
+export const BotIcon = Bot;
+/** RSS feeds / syndication */
+export const RssIcon = Rss;
 /** Open emoji picker */
 export const EmojiIcon = Smile;
 /** Take a photo */

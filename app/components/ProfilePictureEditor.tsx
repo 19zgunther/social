@@ -8,6 +8,12 @@ type ProfilePictureEditorProps = {
   isOpen: boolean;
   onClose: () => void;
   onSaved: (profileImageId: string | null, profileImageUrl: string | null) => void;
+  /** Defaults to /api/profile-image-set */
+  setApiPath?: string;
+  /** Defaults to /api/profile-image-remove */
+  removeApiPath?: string;
+  /** Merged into set/remove request bodies (e.g. bot_id). */
+  extraBody?: Record<string, unknown>;
 };
 
 const PREVIEW_SIZE_PX = 280;
@@ -17,6 +23,9 @@ export default function ProfilePictureEditor({
   isOpen,
   onClose,
   onSaved,
+  setApiPath = "/api/profile-image-set",
+  removeApiPath = "/api/profile-image-remove",
+  extraBody,
 }: ProfilePictureEditorProps) {
   const [sourceDataUrl, setSourceDataUrl] = useState<string | null>(null);
   const [imageElement, setImageElement] = useState<HTMLImageElement | null>(null);
@@ -177,10 +186,11 @@ export default function ProfilePictureEditor({
         return;
       }
 
-      const response = await fetch("/api/profile-image-set", {
+      const response = await fetch(setApiPath, {
         method: "POST",
         headers: { "Content-Type": "application/json"},
         body: JSON.stringify({
+          ...(extraBody ?? {}),
           image_base64_data: base64Data,
           image_mime_type: "image/jpeg",
         }),
@@ -210,10 +220,12 @@ export default function ProfilePictureEditor({
     setIsSaving(true);
     setStatusMessage("");
     try {
-      const response = await fetch("/api/profile-image-remove", {
+      const response = await fetch(removeApiPath, {
         method: "POST",
         headers: { "Content-Type": "application/json"},
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          ...(extraBody ?? {}),
+        }),
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };

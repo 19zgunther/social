@@ -1,9 +1,21 @@
 "use client";
 
-import { NotificationsIcon, DebugIcon, ChevronRightIcon, StorageIcon, LogOutIcon, ThemeIcon, type LucideIcon } from "@/app/components/Icons";
+import {
+  BotIcon,
+  NotificationsIcon,
+  DebugIcon,
+  ChevronRightIcon,
+  StorageIcon,
+  LogOutIcon,
+  ThemeIcon,
+  AddIcon,
+  UserPlaceholderIcon,
+  type LucideIcon,
+} from "@/app/components/Icons";
 import { useState, useEffect, useRef, type MutableRefObject } from "react";
 import BackButton from "@/app/components/utils/BackButton";
 import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
+import EditBot from "@/app/components/EditBot";
 import { clearAllCachedCustomEmojis, getCustomEmojiCacheStats, type CustomEmojiCacheStats } from "@/app/lib/customEmojiCache";
 import { clearAllCachedImages, getImageCacheStats, type ImageCacheStats } from "@/app/lib/imageCache";
 import { ensurePushSubscription, isInstalledPwa, PUSH_PROMPT_DISMISSED_KEY } from "@/app/lib/pushClient";
@@ -21,9 +33,24 @@ import {
   type ThemeColors,
   type ThemeInfo,
 } from "@/app/lib/theme";
+import {
+  BotCreateResponse,
+  BotListItem,
+  BotsListResponse,
+} from "@/app/types/interfaces";
 import { globalDebugData } from "./utils/globalDebugData";
 
-type SettingsView = "root" | "appearance" | "notifications" | "storage" | "debug";
+/** Keep in sync with MAX_BOTS_PER_USER in botHelpers. */
+const MAX_BOTS_PER_USER = 3;
+
+type SettingsView =
+  | "root"
+  | "appearance"
+  | "notifications"
+  | "storage"
+  | "debug"
+  | "bots"
+  | "edit_bot";
 
 type ProfileSettingsProps = {
   onBack: () => void;
@@ -32,10 +59,11 @@ type ProfileSettingsProps = {
 };
 
 const SETTINGS_MENU_ITEMS: {
-  view: Exclude<SettingsView, "root">;
+  view: Exclude<SettingsView, "root" | "edit_bot">;
   label: string;
   icon: LucideIcon;
 }[] = [
+  { view: "bots", label: "Bots", icon: BotIcon },
   { view: "appearance", label: "Appearance", icon: ThemeIcon },
   { view: "notifications", label: "Notifications", icon: NotificationsIcon },
   { view: "storage", label: "Storage", icon: StorageIcon },
@@ -74,12 +102,101 @@ export default function ProfileSettings({
   const [debugDataSnapshot, setDebugDataSnapshot] = useState(
     JSON.stringify(globalDebugData, null, 2),
   );
+  const [bots, setBots] = useState<BotListItem[]>([]);
+  const [isLoadingBots, setIsLoadingBots] = useState(false);
+  const [isCreatingBot, setIsCreatingBot] = useState(false);
+  const [newBotUsername, setNewBotUsername] = useState("");
+  const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
 
-  const onBackToRoot = () => {
-    setSettingsView("root");
+  const onSettingsBack = () => {
+    if (settingsView === "edit_bot") {
+      setSettingsView("bots");
+      setSelectedBotId(null);
+      return;
+    }
+    if (settingsView !== "root") {
+      setSettingsView("root");
+      return;
+    }
+    onBack();
   };
 
-  useSwipeBackOverride(swipeBackOverrideRef, onBackToRoot, settingsView !== "root");
+  useSwipeBackOverride(
+    swipeBackOverrideRef,
+    onSettingsBack,
+    settingsView !== "root" && settingsView !== "edit_bot",
+  );
+
+  const loadBots = async () => {
+    setIsLoadingBots(true);
+    try {
+      const response = await fetch("/api/bots-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: { message?: string } }
+          | null;
+        setStatusMessage(payload?.error?.message ?? "Failed to load bots.");
+        return;
+      }
+      const payload = (await response.json()) as BotsListResponse;
+      setBots(payload.bots);
+    } catch {
+      setStatusMessage("Failed to load bots.");
+    } finally {
+      setIsLoadingBots(false);
+    }
+  };
+
+  useEffect(() => {
+    if (settingsView !== "bots") {
+      return;
+    }
+    void loadBots();
+  }, [settingsView]);
+
+  const onCreateBot = async () => {
+    if (isCreatingBot) {
+      return;
+    }
+    if (bots.length >= MAX_BOTS_PER_USER) {
+      setStatusMessage(`You can have at most ${MAX_BOTS_PER_USER} bots.`);
+      return;
+    }
+    const username = newBotUsername.trim();
+    if (!username) {
+      setStatusMessage("Enter a username for the bot.");
+      return;
+    }
+    setIsCreatingBot(true);
+    setStatusMessage("");
+    try {
+      const response = await fetch("/api/bot-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: { message?: string } }
+          | null;
+        setStatusMessage(payload?.error?.message ?? "Failed to create bot.");
+        return;
+      }
+      const payload = (await response.json()) as BotCreateResponse;
+      setNewBotUsername("");
+      setSelectedBotId(payload.bot.id);
+      setSettingsView("edit_bot");
+      setStatusMessage("Bot created.");
+    } catch {
+      setStatusMessage("Failed to create bot.");
+    } finally {
+      setIsCreatingBot(false);
+    }
+  };
 
   const saveTheme = (nextTheme: ThemeInfo) => {
     themeRef.current = nextTheme;
@@ -316,6 +433,20 @@ export default function ProfileSettings({
   const imageCacheStatsLabel = formatCacheStatsLabel(imageCacheStats, "image", "images");
   const emojiCacheStatsLabel = formatCacheStatsLabel(emojiCacheStats, "emoji", "emojis");
 
+  if (settingsView === "edit_bot" && selectedBotId) {
+    return (
+      <EditBot
+        botId={selectedBotId}
+        onBack={() => {
+          setSettingsView("bots");
+          setSelectedBotId(null);
+          void loadBots();
+        }}
+        swipeBackOverrideRef={swipeBackOverrideRef}
+      />
+    );
+  }
+
   const headerTitle =
     settingsView === "root"
       ? "Settings"
@@ -324,7 +455,7 @@ export default function ProfileSettings({
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg">
       <div className="flex items-center justify-between border-b border-border px-3 py-3">
-        <BackButton onBack={settingsView === "root" ? onBack : onBackToRoot} />
+        <BackButton onBack={settingsView === "root" ? onBack : onSettingsBack} />
         <h1 className="text-lg font-semibold text-foreground">{headerTitle}</h1>
         <div className="w-20" />
       </div>
@@ -360,6 +491,86 @@ export default function ProfileSettings({
               <LogOutIcon className="h-4 w-4" />
               <p className="font-medium">Log out</p>
             </button>
+          </section>
+        ) : null}
+
+        {settingsView === "bots" ? (
+          <section className="space-y-3">
+            <div className="space-y-2 rounded-lg border border-border bg-surface px-3 py-3">
+              <p className="text-sm font-medium text-foreground">Create a bot</p>
+              {bots.length >= MAX_BOTS_PER_USER ? (
+                <p className="text-sm text-muted">
+                  You already have {MAX_BOTS_PER_USER} bots (the maximum).
+                </p>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newBotUsername}
+                    onChange={(event) => setNewBotUsername(event.target.value)}
+                    placeholder="username"
+                    className="min-w-0 flex-1 rounded-xl border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void onCreateBot();
+                    }}
+                    disabled={isCreatingBot}
+                    className="inline-flex items-center gap-1 rounded-xl bg-accent px-3 py-2 text-sm font-medium text-on-accent disabled:opacity-60"
+                  >
+                    <AddIcon className="h-4 w-4" />
+                    {isCreatingBot ? "…" : "Create"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {isLoadingBots ? <p className="text-sm text-muted">Loading bots…</p> : null}
+            {!isLoadingBots && bots.length === 0 ? (
+              <p className="text-sm text-muted">No bots yet. Create one to get started.</p>
+            ) : null}
+            {bots.map((bot) => (
+              <button
+                key={bot.id}
+                type="button"
+                onClick={() => {
+                  setSelectedBotId(bot.id);
+                  setSettingsView("edit_bot");
+                }}
+                className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-border bg-bg">
+                    {bot.profile_image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={bot.profile_image_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-muted">
+                        <UserPlaceholderIcon className="h-5 w-5" />
+                      </span>
+                    )}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-medium truncate">@{bot.username}</span>
+                    <span className="block text-xs text-muted">
+                      Wake {bot.wake_period === "1w" ? "weekly" : "daily"}
+                      {bot.last_woke_at
+                        ? ` · last ${new Date(bot.last_woke_at).toLocaleDateString()}`
+                        : " · never woken"}
+                    </span>
+                  </span>
+                </span>
+                <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
+              </button>
+            ))}
           </section>
         ) : null}
 
