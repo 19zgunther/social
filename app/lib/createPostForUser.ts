@@ -343,7 +343,10 @@ export async function createPostForUser(
 
   const author = await prisma.users.findFirst({
     where: { id: authorUserId },
-    select: { profile_image_id: true },
+    select: {
+      profile_image_id: true,
+      bots_bots_user_idTousers: { select: { id: true }, take: 1 },
+    },
   });
   let authorProfileImageAccessGrant: string | null = null;
   if (author?.profile_image_id) {
@@ -380,6 +383,7 @@ export async function createPostForUser(
         is_liked_by_viewer: false,
         username: authorUsername,
         email: authorEmail,
+        is_bot: (author?.bots_bots_user_idTousers.length ?? 0) > 0,
         author_profile_image_id: author?.profile_image_id ?? null,
         author_profile_image_url: null,
         author_profile_image_access_grant: authorProfileImageAccessGrant,

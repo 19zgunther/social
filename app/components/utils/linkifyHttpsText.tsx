@@ -13,7 +13,7 @@ function trimUrlForHref(raw: string): { href: string; rest: string } {
 }
 
 /** Turns segments starting with https:// into external links; leaves the rest as plain text. */
-export function linkifyHttpsText(text: string): ReactNode {
+export function linkifyHttpsText(text: string, keyPrefix = "u"): ReactNode {
   const nodes: ReactNode[] = [];
   let last = 0;
   const re = new RegExp(HTTPS_URL_RE.source, HTTPS_URL_RE.flags);
@@ -28,7 +28,7 @@ export function linkifyHttpsText(text: string): ReactNode {
     if (href.length > 0) {
       nodes.push(
         <a
-          key={`u-${key++}`}
+          key={`${keyPrefix}-${key++}`}
           href={href}
           target="_blank"
           rel="noopener noreferrer"

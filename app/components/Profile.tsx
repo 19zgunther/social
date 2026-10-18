@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type MutableRefObject, type ReactNode } from "react";
 import {
+  BotIcon,
   CheckIcon,
   ChevronRightIcon,
   UserPlaceholderIcon,
@@ -19,6 +20,7 @@ import { PostSection } from "@/app/components/PostSection";
 import PostOptionsPane from "@/app/components/PostOptionsPane";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
+import EditBot from "@/app/components/EditBot";
 import EmojiEditorTab from "@/app/components/EmojiEditorTab";
 import PostGroupsTab from "@/app/components/PostGroupsTab";
 import { getPollViewerState } from "@/app/components/PollBlock";
@@ -88,6 +90,7 @@ function ProfilePictureRow({
   localProfileImageId,
   username,
   email,
+  isBot = false,
   onOpenSettings,
   setIsProfilePictureEditorOpen,
   trailingAction,
@@ -99,6 +102,7 @@ function ProfilePictureRow({
   localProfileImageId: string | null;
   username: string;
   email: string | null;
+  isBot?: boolean;
   onOpenSettings: () => void;
   setIsProfilePictureEditorOpen: (isOpen: boolean) => void;
   trailingAction?: ReactNode;
@@ -108,13 +112,13 @@ function ProfilePictureRow({
   );
   return (
     <div className="border-none border-border px-4 py-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
           {isCurrentUsers ? (
             <button
               type="button"
               onClick={() => setIsProfilePictureEditorOpen(true)}
-              className="cursor-pointer rounded-full"
+              className="shrink-0 cursor-pointer rounded-full"
               aria-label="Edit profile picture"
             >
               {showProfilePhoto ? (
@@ -135,7 +139,7 @@ function ProfilePictureRow({
               )}
             </button>
           ) : (
-            <div>
+            <div className="shrink-0">
               {showProfilePhoto ? (
                 <UserProfileImage
                   userId={profileUserId}
@@ -153,8 +157,21 @@ function ProfilePictureRow({
               )}
             </div>
           )}
-          <div className="min-w-0">
-            <p className="truncate text-lg font-semibold text-foreground">{username}</p>
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p className="min-w-0 truncate text-lg font-semibold text-foreground" title={username}>
+                {username}
+              </p>
+              {isBot ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-muted"
+                  title="Bot account"
+                >
+                  <BotIcon className="h-4 w-4" aria-hidden />
+                  Bot
+                </span>
+              ) : null}
+            </div>
             {isCurrentUsers && <p className="truncate text-xs text-muted">{email ?? "No email"}</p>}
           </div>
         </div>
@@ -163,15 +180,15 @@ function ProfilePictureRow({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="rounded-full p-2 text-muted"
+            className="shrink-0 rounded-full p-2 text-muted"
             aria-label="Settings"
             title="Settings"
           >
             <SettingsIcon className="h-5 w-5" />
           </button>
-        ) : (
-          trailingAction ?? null
-        )}
+        ) : trailingAction ? (
+          <div className="shrink-0">{trailingAction}</div>
+        ) : null}
       </div>
     </div>
   )
@@ -894,6 +911,7 @@ function ProfileOtherUser({
   currentUserId,
   onBack,
   onOpenDirectThread,
+  onViewUserProfile,
   swipeBackOverrideRef,
 }: {
   isActive: boolean;
@@ -901,6 +919,7 @@ function ProfileOtherUser({
   currentUserId: string;
   onBack: () => void;
   onOpenDirectThread: (thread: ThreadItem) => void;
+  onViewUserProfile?: (userId: string) => void;
   swipeBackOverrideRef: MutableRefObject<(() => void) | null>;
 }) {
   const [profileData, setProfileData] = useState<UserProfileResponse | null>(null);
@@ -911,6 +930,7 @@ function ProfileOtherUser({
   const [showSelectedPostOptions, setShowSelectedPostOptions] = useState(false);
   const [isSendingRequest, setIsSendingRequest] = useState(false);
   const [isOpeningDirectThread, setIsOpeningDirectThread] = useState(false);
+  const [isBotSettingsOpen, setIsBotSettingsOpen] = useState(false);
 
   const [removeFriendConfirmed, setRemoveFriendConfirmed] = useState(false);
   const [isRemovingFriend, setIsRemovingFriend] = useState(false);
@@ -947,7 +967,10 @@ function ProfileOtherUser({
   };
 
   // Clear remove friend confirmation when the profile changes
-  useEffect(() => {setRemoveFriendConfirmed(false)}, [userId, isActive, currentUserId])
+  useEffect(() => {
+    setRemoveFriendConfirmed(false);
+    setIsBotSettingsOpen(false);
+  }, [userId, isActive, currentUserId]);
   useEffect(() => { setShowSelectedPostOptions(false); }, [selectedPostId]);
 
   const selectedPost = selectedPostId && profileData
@@ -961,7 +984,7 @@ function ProfileOtherUser({
   useSwipeBackOverride(
     swipeBackOverrideRef,
     onCloseSelectedPostOptions,
-    Boolean(selectedPost) && showSelectedPostOptions,
+    Boolean(selectedPost) && showSelectedPostOptions && !isBotSettingsOpen,
   );
 
   const loadProfile = async (cursorPostId?: string) => {
@@ -1008,6 +1031,11 @@ function ProfileOtherUser({
     setRemoveFriendConfirmed(false);
   }, [profileData?.friendship_status]);
 
+  const onCloseBotSettings = () => {
+    setIsBotSettingsOpen(false);
+    void loadProfile();
+  };
+
   const onOpenMessage = async () => {
     setIsOpeningDirectThread(true);
     setStatusMessage("");
@@ -1053,6 +1081,16 @@ function ProfileOtherUser({
     }
   };
 
+  if (isBotSettingsOpen && profileData?.bot?.bot_id) {
+    return (
+      <EditBot
+        botId={profileData.bot.bot_id}
+        onBack={onCloseBotSettings}
+        swipeBackOverrideRef={swipeBackOverrideRef}
+      />
+    );
+  }
+
   if (selectedPost) {
     if (showSelectedPostOptions) {
       return (
@@ -1077,6 +1115,7 @@ function ProfileOtherUser({
             currentUserId={currentUserId}
             showComments
             onOpenPostOptions={() => setShowSelectedPostOptions(true)}
+            onViewUserProfile={onViewUserProfile}
             onPostUpdated={(updated) => {
               setProfileData((previous) => {
                 if (!previous) {
@@ -1127,6 +1166,7 @@ function ProfileOtherUser({
 
   const isFriends = profileData.friendship_status === "friends";
   const canSendRequest = profileData.friendship_status === "none" || profileData.friendship_status === "rejected";
+  const botInfo = profileData.bot ?? null;
 
   return (
     <div
@@ -1144,49 +1184,85 @@ function ProfileOtherUser({
         localProfileImageId={profileData.user.profile_image_id}
         username={profileData.user.username}
         email={null}
+        isBot={Boolean(botInfo)}
         onOpenSettings={() => { }}
         setIsProfilePictureEditorOpen={() => { }}
         trailingAction={
-          isFriends ? (
-            <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            {botInfo ? (
               <button
                 type="button"
-                onClick={() => { void onOpenMessage(); }}
-                disabled={isOpeningDirectThread}
-                className="rounded-full border border-border bg-surface p-2 text-muted transition hover:text-foreground disabled:opacity-50"
-                aria-label={isOpeningDirectThread ? "Opening messages" : "Message"}
-                title={isOpeningDirectThread ? "Opening..." : "Message"}
+                onClick={() => setIsBotSettingsOpen(true)}
+                className="rounded-full border border-border bg-surface p-2 text-muted transition hover:text-foreground"
+                aria-label={botInfo.is_owner ? "Bot settings" : "View bot settings"}
+                title={botInfo.is_owner ? "Bot settings" : "View bot settings"}
               >
-                <MessageIcon className="h-5 w-5" />
+                <SettingsIcon className="h-5 w-5" />
               </button>
-              <button
-                type="button"
-                onClick={() => { void onRemoveFriend(); }}
-                disabled={isRemovingFriend}
-                className={`rounded-full border bg-surface p-2 text-muted transition hover:text-foreground disabled:opacity-50 ${
-                  removeFriendConfirmed ? "border-danger text-danger" : "border-border"
-                }`}
-                aria-label={
-                  isRemovingFriend
-                    ? "Removing friend"
-                    : removeFriendConfirmed
-                      ? "Confirm remove friend"
-                      : "Remove friend"
-                }
-                title={
-                  isRemovingFriend
-                    ? "Removing..."
-                    : removeFriendConfirmed
-                      ? "Tap again to confirm"
-                      : "Remove friend"
-                }
-              >
-                <DeleteIcon className="h-5 w-5" />
-              </button>
-            </div>
-          ) : undefined
+            ) : null}
+            {isFriends ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { void onOpenMessage(); }}
+                  disabled={isOpeningDirectThread}
+                  className="rounded-full border border-border bg-surface p-2 text-muted transition hover:text-foreground disabled:opacity-50"
+                  aria-label={isOpeningDirectThread ? "Opening messages" : "Message"}
+                  title={isOpeningDirectThread ? "Opening..." : "Message"}
+                >
+                  <MessageIcon className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { void onRemoveFriend(); }}
+                  disabled={isRemovingFriend}
+                  className={`rounded-full border bg-surface p-2 text-muted transition hover:text-foreground disabled:opacity-50 ${
+                    removeFriendConfirmed ? "border-danger text-danger" : "border-border"
+                  }`}
+                  aria-label={
+                    isRemovingFriend
+                      ? "Removing friend"
+                      : removeFriendConfirmed
+                        ? "Confirm remove friend"
+                        : "Remove friend"
+                  }
+                  title={
+                    isRemovingFriend
+                      ? "Removing..."
+                      : removeFriendConfirmed
+                        ? "Tap again to confirm"
+                        : "Remove friend"
+                  }
+                >
+                  <DeleteIcon className="h-5 w-5" />
+                </button>
+              </>
+            ) : null}
+          </div>
         }
       />
+
+      {botInfo ? (
+        <div className="border-b border-border px-4 py-3 space-y-2">
+          <p className="text-xs text-muted">
+            Created by{" "}
+            <button
+              type="button"
+              onClick={() => onViewUserProfile?.(botInfo.owner_user_id)}
+              className="font-medium text-foreground hover:underline"
+            >
+              @{botInfo.owner_username}
+            </button>
+          </p>
+          {botInfo.description.trim() ? (
+            <p className="whitespace-pre-wrap text-sm text-foreground break-words">
+              {botInfo.description}
+            </p>
+          ) : (
+            <p className="text-sm italic text-muted">No description yet.</p>
+          )}
+        </div>
+      ) : null}
 
       {!isFriends ? (
         <div className="border-b border-border px-4 py-6 flex flex-col items-center justify-center gap-3">

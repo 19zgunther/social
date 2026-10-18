@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AddImageIcon, CloseIcon, DeleteIcon } from "@/app/components/Icons";
 import { ThreadImageRemoveResponse, ThreadImageSetResponse } from "@/app/types/interfaces";
 
 type ThreadPictureEditorProps = {
@@ -232,8 +233,9 @@ export default function ThreadPictureEditor({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
           >
+            <CloseIcon className="h-3.5 w-3.5" />
             Close
           </button>
         </div>
@@ -251,8 +253,9 @@ export default function ThreadPictureEditor({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="h-20 w-full rounded-lg border border-border bg-bg px-3 py-3 text-sm text-muted hover:text-foreground"
+              className="flex h-20 w-full flex-col items-center justify-center gap-1 rounded-lg border border-border bg-bg px-3 py-3 text-sm text-muted hover:text-foreground"
             >
+              <AddImageIcon className="h-6 w-6" />
               Select image
             </button>
             <button
@@ -261,8 +264,9 @@ export default function ThreadPictureEditor({
                 void onRemoveThreadPicture();
               }}
               disabled={isSaving}
-              className="h-20 w-full rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted hover:text-foreground disabled:opacity-50"
+              className="flex h-20 w-full flex-col items-center justify-center gap-1 rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted hover:text-foreground disabled:opacity-50"
             >
+              <DeleteIcon className="h-5 w-5" />
               {isSaving ? "Removing..." : "Remove Group Photo"}
             </button>
           </div>

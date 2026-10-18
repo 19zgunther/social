@@ -2,7 +2,7 @@
 
 import { memo, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CongratsBalloonOverlay from "@/app/components/CongratsBalloonOverlay";
-import { LikeIcon, ChevronDownIcon, MoreIcon, EditIcon, DeleteIcon, SendIcon } from "@/app/components/Icons";
+import { LikeIcon, ChevronDownIcon, MoreIcon, EditIcon, DeleteIcon, SendIcon, BotIcon } from "@/app/components/Icons";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import CachedVideo from "@/app/components/utils/CachedVideo";
@@ -18,7 +18,7 @@ import { customEmojiUuidFromToken } from "@/app/lib/customEmojiCanvas";
 import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
 import { collectPostMediaObjectIds, getPostMediaSlides } from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
-import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
+import { formatPostText } from "@/app/components/utils/formatPostText";
 import { hasCongratsComment } from "@/app/lib/congratsComment";
 import PollBlock, { getPollViewerState } from "@/app/components/PollBlock";
 import TierListBlock, { getTierListViewerState } from "@/app/components/TierListBlock";
@@ -750,7 +750,7 @@ function PostSectionComponent({
               onClick={() => onViewUserProfile?.(comment.user_id)}
             />
             <span className="shrink-0 font-semibold text-foreground/90">{comment.username || comment.user_id}</span>
-            <span className="min-w-0 flex-1 break-words">{linkifyHttpsText(comment.text)}</span>
+            <span className="min-w-0 flex-1 break-words whitespace-pre-wrap">{formatPostText(comment.text)}</span>
             {canDeleteComment ? (
               <button
                 type="button"
@@ -852,7 +852,11 @@ function PostSectionComponent({
   };
 
   return (
-    <article className={`w-full border-t border-border post-rgb-top-border bg-bg mb-10 rounded-t-2xl ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}>
+    <article
+      className={`w-full border-t border-border post-rgb-top-border mb-10 rounded-t-2xl ${
+        post.is_bot ? "bg-surface/50 border-l-2 border-l-accent/40" : "bg-bg"
+      } ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}
+    >
       <header className="px-2 py-2">
         <div className="flex items-center gap-2">
           <UserProfileImage
@@ -866,14 +870,24 @@ function PostSectionComponent({
             onClick={() => onViewUserProfile?.(post.created_by)}
           />
           <div className="min-w-0 flex-1">
-            <button
-              type="button"
-              onClick={() => onViewUserProfile?.(post.created_by)}
-              className="text-sm font-semibold text-foreground hover:underline"
-            >
-              {post.username}
-            </button>
-            
+            <div className="flex min-w-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => onViewUserProfile?.(post.created_by)}
+                className="truncate text-sm font-semibold text-foreground hover:underline"
+              >
+                {post.username}
+              </button>
+              {post.is_bot ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-muted"
+                  title="Bot account"
+                >
+                  <BotIcon className="h-3.5 w-3.5" aria-hidden />
+                  Bot
+                </span>
+              ) : null}
+            </div>
             {post.title ? (
               <p className="truncate text-[11px] text-accent">{post.title}</p>
             ) : null}
@@ -1062,7 +1076,7 @@ function PostSectionComponent({
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               {post.text.trim() ? (
-                <p className="whitespace-pre-wrap text-sm text-foreground break-words">{linkifyHttpsText(post.text)}</p>
+                <div className="whitespace-pre-wrap text-sm text-foreground break-words">{formatPostText(post.text)}</div>
               ) : (
                 <p className="text-sm text-muted italic">No text</p>
               )}

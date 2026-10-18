@@ -45,6 +45,20 @@ export async function POST(request: Request) {
         username: true,
         email: true,
         profile_image_id: true,
+        bots_bots_user_idTousers: {
+          take: 1,
+          select: {
+            id: true,
+            description: true,
+            owner_id: true,
+            users_owner: {
+              select: {
+                id: true,
+                username: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -54,6 +68,17 @@ export async function POST(request: Request) {
         { status: 404 },
       );
     }
+
+    const botRow = targetUser.bots_bots_user_idTousers[0] ?? null;
+    const botInfo = botRow
+      ? {
+          bot_id: botRow.id,
+          description: botRow.description,
+          owner_user_id: botRow.users_owner.id,
+          owner_username: botRow.users_owner.username,
+          is_owner: botRow.owner_id === authResult.user_id,
+        }
+      : null;
 
     const friendshipRow = await prisma.friends.findFirst({
       where: {
@@ -136,6 +161,7 @@ export async function POST(request: Request) {
               username: true,
               email: true,
               profile_image_id: true,
+              bots_bots_user_idTousers: { select: { id: true }, take: 1 },
             },
           },
         },
@@ -202,6 +228,7 @@ export async function POST(request: Request) {
         }),
         username: post.users.username,
         email: post.users.email,
+        is_bot: post.users.bots_bots_user_idTousers.length > 0,
         author_profile_image_id: post.users.profile_image_id,
         author_profile_image_url: null,
         author_profile_image_access_grant:
@@ -219,6 +246,7 @@ export async function POST(request: Request) {
         profile_image_url: null,
         profile_image_access_grant: profileImageAccessGrant,
       },
+      bot: botInfo,
       friendship_status: friendshipStatus,
       friendship_id: friendshipId,
       posts,

@@ -599,6 +599,7 @@ export default function Home() {
               currentUserId={authUser.user_id}
               onBack={() => setActiveTab("profile")}
               swipeBackOverrideRef={swipeBackOverrideRef}
+              onViewUserProfile={onViewUserProfile}
               onOpenDirectThread={(thread) => {
                 setSelectedThread(thread);
                 setThreadReturnTab("other_user_profile");

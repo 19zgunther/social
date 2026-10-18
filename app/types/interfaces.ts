@@ -155,6 +155,8 @@ export type PostItem = {
   is_liked_by_viewer?: boolean;
   username: string;
   email: string | null;
+  /** True when the author user_id is a bot persona (bots.user_id). */
+  is_bot?: boolean;
   author_profile_image_id?: string | null;
   /** Legacy; always null from list/create APIs. */
   author_profile_image_url?: string | null;
@@ -711,6 +713,14 @@ export type UserProfileRequest = {
   cursor_post_id?: string;
 };
 
+export type UserProfileBotInfo = {
+  bot_id: string;
+  description: string;
+  owner_user_id: string;
+  owner_username: string;
+  is_owner: boolean;
+};
+
 export type UserProfileResponse = {
   user: {
     id: string;
@@ -719,6 +729,8 @@ export type UserProfileResponse = {
     profile_image_url: string | null;
     profile_image_access_grant?: string | null;
   };
+  /** Present when this profile is a bot persona account. */
+  bot?: UserProfileBotInfo | null;
   friendship_status: "none" | "friends" | "pending_sent" | "pending_received" | "rejected";
   friendship_id: string | null;
   posts: PostItem[];
@@ -810,11 +822,16 @@ export type BotDetail = {
   profile_image_id: string | null;
   profile_image_url: string | null;
   system_prompt: string;
+  description: string;
   wake_period: BotWakePeriod;
   rss_feeds: string[];
   last_woke_at: string | null;
   created_at: string;
   updated_at: string;
+  owner_user_id: string;
+  owner_username: string;
+  /** True when the authenticated viewer owns this bot. */
+  is_owner: boolean;
 };
 
 export type BotGetResponse = {
@@ -825,6 +842,7 @@ export type BotUpdateRequest = {
   bot_id?: string;
   username?: string;
   system_prompt?: string;
+  description?: string;
   wake_period?: BotWakePeriod;
   rss_feeds?: string[];
 };

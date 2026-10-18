@@ -76,6 +76,22 @@ function stringifyContent(content: unknown): string {
   }
 }
 
+function botDraftJson(input: {
+  username: string;
+  description: string;
+  systemPrompt: string;
+  wakePeriod: BotWakePeriod;
+  rssFeeds: string[];
+}): string {
+  return JSON.stringify({
+    username: input.username.trim(),
+    description: input.description.trim(),
+    system_prompt: input.systemPrompt,
+    wake_period: input.wakePeriod,
+    rss_feeds: input.rssFeeds.map((feed) => feed.trim()).filter((feed) => feed.length > 0),
+  });
+}
+
 export default function EditBot({
   botId,
   onBack,
@@ -84,6 +100,7 @@ export default function EditBot({
   const [view, setView] = useState<EditView>("config");
   const [bot, setBot] = useState<BotDetail | null>(null);
   const [username, setUsername] = useState("");
+  const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [wakePeriod, setWakePeriod] = useState<BotWakePeriod>("24h");
   const [rssFeeds, setRssFeeds] = useState<string[]>([""]);
@@ -96,6 +113,18 @@ export default function EditBot({
   const [isLoadingLog, setIsLoadingLog] = useState(false);
   const [isPictureEditorOpen, setIsPictureEditorOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [savedDraftJson, setSavedDraftJson] = useState<string | null>(null);
+
+  const canEdit = Boolean(bot?.is_owner);
+  const currentDraftJson = botDraftJson({
+    username,
+    description,
+    systemPrompt,
+    wakePeriod,
+    rssFeeds,
+  });
+  const hasUnsavedEdits =
+    canEdit && savedDraftJson !== null && currentDraftJson !== savedDraftJson;
 
   const onBackFromNested = () => {
     if (view === "log") {
@@ -127,9 +156,21 @@ export default function EditBot({
     const payload = (await response.json()) as BotGetResponse;
     setBot(payload.bot);
     setUsername(payload.bot.username);
+    setDescription(payload.bot.description);
     setSystemPrompt(payload.bot.system_prompt);
     setWakePeriod(payload.bot.wake_period);
-    setRssFeeds(payload.bot.rss_feeds.length > 0 ? payload.bot.rss_feeds : [""]);
+    const nextFeeds = payload.bot.rss_feeds.length > 0 ? payload.bot.rss_feeds : [""];
+    setRssFeeds(nextFeeds);
+    setSavedDraftJson(
+      botDraftJson({
+        username: payload.bot.username,
+        description: payload.bot.description,
+        systemPrompt: payload.bot.system_prompt,
+        wakePeriod: payload.bot.wake_period,
+        rssFeeds: nextFeeds,
+      }),
+    );
+    return payload.bot;
   };
 
   const loadLogs = async () => {
@@ -151,8 +192,12 @@ export default function EditBot({
       setIsLoading(true);
       setStatusMessage("");
       try {
-        await loadBot();
-        await loadLogs();
+        const loaded = await loadBot();
+        if (loaded.is_owner) {
+          await loadLogs();
+        } else {
+          setLogs([]);
+        }
       } catch (error) {
         if (!cancelled) {
           setStatusMessage(error instanceof Error ? error.message : "Failed to load bot.");
@@ -170,7 +215,7 @@ export default function EditBot({
   }, [botId]);
 
   const onSave = async () => {
-    if (isSaving) {
+    if (isSaving || !canEdit) {
       return;
     }
     setIsSaving(true);
@@ -183,6 +228,7 @@ export default function EditBot({
         body: JSON.stringify({
           bot_id: botId,
           username: username.trim(),
+          description: description.trim(),
           system_prompt: systemPrompt,
           wake_period: wakePeriod,
           rss_feeds: cleanedFeeds,
@@ -195,9 +241,20 @@ export default function EditBot({
       const payload = (await response.json()) as BotUpdateResponse;
       setBot(payload.bot);
       setUsername(payload.bot.username);
+      setDescription(payload.bot.description);
       setSystemPrompt(payload.bot.system_prompt);
       setWakePeriod(payload.bot.wake_period);
-      setRssFeeds(payload.bot.rss_feeds.length > 0 ? payload.bot.rss_feeds : [""]);
+      const nextFeeds = payload.bot.rss_feeds.length > 0 ? payload.bot.rss_feeds : [""];
+      setRssFeeds(nextFeeds);
+      setSavedDraftJson(
+        botDraftJson({
+          username: payload.bot.username,
+          description: payload.bot.description,
+          systemPrompt: payload.bot.system_prompt,
+          wakePeriod: payload.bot.wake_period,
+          rssFeeds: nextFeeds,
+        }),
+      );
       setStatusMessage("Bot saved.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to save bot.");
@@ -207,7 +264,7 @@ export default function EditBot({
   };
 
   const onWakeNow = async () => {
-    if (isWaking) {
+    if (isWaking || !canEdit) {
       return;
     }
     setIsWaking(true);
@@ -270,8 +327,10 @@ export default function EditBot({
       : view === "rss"
         ? "RSS feeds"
         : bot
-          ? `@${bot.username}`
-          : "Edit bot";
+          ? canEdit
+            ? `@${bot.username}`
+            : `@${bot.username} (view)`
+          : "Bot";
 
   const transcriptMessages: TranscriptMessage[] = Array.isArray(selectedLog?.messages)
     ? (selectedLog.messages as TranscriptMessage[])
@@ -285,36 +344,63 @@ export default function EditBot({
         <div className="w-20" />
       </div>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4">
+      <div
+        className={`flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4 ${
+          hasUnsavedEdits ? "pb-24" : ""
+        }`}
+      >
         {isLoading ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : null}
 
         {!isLoading && view === "config" && bot ? (
           <section className="space-y-4">
+            {!canEdit ? (
+              <p className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted">
+                Viewing only — created by @{bot.owner_username}. You can’t save or wake this bot.
+              </p>
+            ) : null}
+
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setIsPictureEditorOpen(true)}
-                className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-border bg-surface"
-                aria-label="Edit bot profile picture"
-              >
-                {bot.profile_image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={bot.profile_image_url}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center text-muted">
-                    <UserPlaceholderIcon className="h-8 w-8" />
-                  </span>
-                )}
-              </button>
+              {canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => setIsPictureEditorOpen(true)}
+                  className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-border bg-surface"
+                  aria-label="Edit bot profile picture"
+                >
+                  {bot.profile_image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={bot.profile_image_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-muted">
+                      <UserPlaceholderIcon className="h-8 w-8" />
+                    </span>
+                  )}
+                </button>
+              ) : (
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-border bg-surface">
+                  {bot.profile_image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={bot.profile_image_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-muted">
+                      <UserPlaceholderIcon className="h-8 w-8" />
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground">Profile image</p>
-                <p className="text-xs text-muted">Tap to change</p>
+                <p className="text-xs text-muted">{canEdit ? "Tap to change" : "Read only"}</p>
               </div>
             </div>
 
@@ -324,10 +410,23 @@ export default function EditBot({
                 type="text"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                className="w-full rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent"
+                readOnly={!canEdit}
+                className="w-full rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent read-only:opacity-80"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-xs text-muted">Description</span>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                readOnly={!canEdit}
+                rows={3}
+                placeholder="What this bot does / who it is"
+                className="w-full rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent read-only:opacity-80"
               />
             </label>
 
@@ -345,11 +444,16 @@ export default function EditBot({
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => setWakePeriod(option.value)}
-                      className={`rounded-lg border px-3 py-3 text-left text-sm transition ${
+                      onClick={() => {
+                        if (canEdit) {
+                          setWakePeriod(option.value);
+                        }
+                      }}
+                      disabled={!canEdit}
+                      className={`rounded-lg border px-3 py-3 text-left text-sm transition disabled:cursor-default ${
                         selected
                           ? "border-accent bg-accent/15 text-foreground"
-                          : "border-border bg-surface text-foreground hover:bg-border/30"
+                          : "border-border bg-surface text-foreground hover:bg-border/30 disabled:hover:bg-surface"
                       }`}
                     >
                       {option.label}
@@ -357,8 +461,23 @@ export default function EditBot({
                   );
                 })}
               </div>
+              {canEdit ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void onWakeNow();
+                  }}
+                  disabled={isSaving || isWaking}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-foreground disabled:opacity-60"
+                >
+                  <RefreshIcon className={`h-4 w-4 ${isWaking ? "animate-spin" : ""}`} />
+                  {isWaking ? "Waking…" : "Wake now"}
+                </button>
+              ) : null}
               <p className="text-xs text-muted">
-                Stored for future auto-wake. Use Wake now to run immediately.
+                {canEdit
+                  ? "Stored for future auto-wake. Use Wake now to run immediately."
+                  : "Wake schedule for this bot."}
                 {bot.last_woke_at
                   ? ` Last woke ${formatDate(bot.last_woke_at)}.`
                   : " Never woken yet."}
@@ -370,8 +489,9 @@ export default function EditBot({
               <textarea
                 value={systemPrompt}
                 onChange={(event) => setSystemPrompt(event.target.value)}
+                readOnly={!canEdit}
                 rows={6}
-                className="w-full rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent"
+                className="w-full rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent read-only:opacity-80"
               />
             </label>
 
@@ -399,57 +519,35 @@ export default function EditBot({
               </button>
             </div>
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  void onSave();
-                }}
-                disabled={isSaving || isWaking}
-                className="flex-1 rounded-xl bg-accent px-4 py-3 text-sm font-medium text-on-accent disabled:opacity-60"
-              >
-                {isSaving ? "Saving…" : "Save"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void onWakeNow();
-                }}
-                disabled={isSaving || isWaking}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-foreground disabled:opacity-60"
-              >
-                <RefreshIcon className={`h-4 w-4 ${isWaking ? "animate-spin" : ""}`} />
-                {isWaking ? "Waking…" : "Wake now"}
-              </button>
-            </div>
-
-            <div className="space-y-2 pt-2">
-              <h2 className="text-sm font-semibold text-foreground">Wake logs</h2>
-              {logs.length === 0 ? (
-                <p className="text-xs text-muted">No wake sessions yet.</p>
-              ) : (
-                logs.map((log) => (
-                  <button
-                    key={log.id}
-                    type="button"
-                    onClick={() => {
-                      void openLog(log.id);
-                    }}
-                    disabled={isLoadingLog}
-                    className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition disabled:opacity-60"
-                  >
-                    <span className="min-w-0">
-                      <span className="block font-medium capitalize">{log.status}</span>
-                      <span className="block text-xs text-muted">
-                        {formatDate(log.created_at)}
-                        {log.error ? ` · ${log.error}` : ""}
+            {canEdit ? (
+              <div className="space-y-2 pt-2">
+                <h2 className="text-sm font-semibold text-foreground">Wake logs</h2>
+                {logs.length === 0 ? (
+                  <p className="text-xs text-muted">No wake sessions yet.</p>
+                ) : (
+                  logs.map((log) => (
+                    <button
+                      key={log.id}
+                      type="button"
+                      onClick={() => {
+                        void openLog(log.id);
+                      }}
+                      disabled={isLoadingLog}
+                      className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition disabled:opacity-60"
+                    >
+                      <span className="min-w-0">
+                        <span className="block font-medium capitalize">{log.status}</span>
+                        <span className="block text-xs text-muted">
+                          {formatDate(log.created_at)}
+                          {log.error ? ` · ${log.error}` : ""}
+                        </span>
                       </span>
-                    </span>
-                    <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
-                  </button>
-                ))
-              )}
-            </div>
+                      <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
           </section>
         ) : null}
 
@@ -459,59 +557,58 @@ export default function EditBot({
               <p className="text-xs text-muted">
                 Feed URLs this bot can fetch when woken.
               </p>
-              <button
-                type="button"
-                onClick={() => setRssFeeds((previous) => [...previous, ""])}
-                className="inline-flex items-center gap-1 text-xs text-accent"
-              >
-                <AddIcon className="h-3.5 w-3.5" />
-                Add
-              </button>
-            </div>
-            {rssFeeds.map((feed, index) => (
-              <div key={`rss-${index}`} className="flex items-center gap-2">
-                <input
-                  type="url"
-                  value={feed}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setRssFeeds((previous) =>
-                      previous.map((entry, entryIndex) =>
-                        entryIndex === index ? value : entry,
-                      ),
-                    );
-                  }}
-                  placeholder="https://example.com/feed.xml"
-                  className="min-w-0 flex-1 rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                />
+              {canEdit ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setRssFeeds((previous) => {
-                      const next = previous.filter((_, entryIndex) => entryIndex !== index);
-                      return next.length > 0 ? next : [""];
-                    });
-                  }}
-                  className="rounded-lg border border-border bg-surface p-2 text-muted hover:bg-border/30"
-                  aria-label="Remove feed"
+                  onClick={() => setRssFeeds((previous) => [...previous, ""])}
+                  className="inline-flex items-center gap-1 text-xs text-accent"
                 >
-                  <DeleteIcon className="h-4 w-4" />
+                  <AddIcon className="h-3.5 w-3.5" />
+                  Add
                 </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                void onSave();
-              }}
-              disabled={isSaving}
-              className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-medium text-on-accent disabled:opacity-60"
-            >
-              {isSaving ? "Saving…" : "Save feeds"}
-            </button>
+              ) : null}
+            </div>
+            {!canEdit && configuredFeedCount === 0 ? (
+              <p className="text-xs text-muted">No feeds configured.</p>
+            ) : (
+              rssFeeds.map((feed, index) => (
+                <div key={`rss-${index}`} className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={feed}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setRssFeeds((previous) =>
+                        previous.map((entry, entryIndex) =>
+                          entryIndex === index ? value : entry,
+                        ),
+                      );
+                    }}
+                    readOnly={!canEdit}
+                    placeholder="https://example.com/feed.xml"
+                    className="min-w-0 flex-1 rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent read-only:opacity-80"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRssFeeds((previous) => {
+                          const next = previous.filter((_, entryIndex) => entryIndex !== index);
+                          return next.length > 0 ? next : [""];
+                        });
+                      }}
+                      className="rounded-lg border border-border bg-surface p-2 text-muted hover:bg-border/30"
+                      aria-label="Remove feed"
+                    >
+                      <DeleteIcon className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              ))
+            )}
           </section>
         ) : null}
 
@@ -587,31 +684,51 @@ export default function EditBot({
         ) : null}
       </div>
 
-      {statusMessage ? (
+      {statusMessage && !hasUnsavedEdits ? (
         <div className="border-t border-border px-4 py-3">
           <p className="text-xs text-muted">{statusMessage}</p>
         </div>
       ) : null}
 
-      <ProfilePictureEditor
-        isOpen={isPictureEditorOpen}
-        onClose={() => setIsPictureEditorOpen(false)}
-        setApiPath="/api/bot-profile-image-set"
-        removeApiPath="/api/bot-profile-image-remove"
-        extraBody={{ bot_id: botId }}
-        onSaved={(profileImageId, profileImageUrl) => {
-          setBot((previous) =>
-            previous
-              ? {
-                  ...previous,
-                  profile_image_id: profileImageId,
-                  profile_image_url: profileImageUrl,
-                }
-              : previous,
-          );
-          setStatusMessage("Profile image updated.");
-        }}
-      />
+      {hasUnsavedEdits ? (
+        <div className="shrink-0 border-t border-border bg-bg px-4 py-3">
+          {statusMessage ? (
+            <p className="mb-2 text-xs text-muted">{statusMessage}</p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              void onSave();
+            }}
+            disabled={isSaving || isWaking}
+            className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-medium text-on-accent disabled:opacity-60"
+          >
+            {isSaving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      ) : null}
+
+      {canEdit ? (
+        <ProfilePictureEditor
+          isOpen={isPictureEditorOpen}
+          onClose={() => setIsPictureEditorOpen(false)}
+          setApiPath="/api/bot-profile-image-set"
+          removeApiPath="/api/bot-profile-image-remove"
+          extraBody={{ bot_id: botId }}
+          onSaved={(profileImageId, profileImageUrl) => {
+            setBot((previous) =>
+              previous
+                ? {
+                    ...previous,
+                    profile_image_id: profileImageId,
+                    profile_image_url: profileImageUrl,
+                  }
+                : previous,
+            );
+            setStatusMessage("Profile image updated.");
+          }}
+        />
+      ) : null}
     </div>
   );
 }

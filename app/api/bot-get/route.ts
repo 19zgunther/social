@@ -20,8 +20,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // Any authenticated user can view bot config; mutations stay owner-gated.
     const bot = await prisma.bots.findFirst({
-      where: { id: botId, owner_id: authResult.user_id },
+      where: { id: botId },
       select: BOT_WITH_USER_SELECT,
     });
     if (!bot) {
@@ -31,7 +32,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const payload: BotGetResponse = { bot: await toBotDetail(bot) };
+    const payload: BotGetResponse = {
+      bot: await toBotDetail(bot, authResult.user_id),
+    };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("bot_get_failed", error);

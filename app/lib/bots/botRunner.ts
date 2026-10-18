@@ -49,7 +49,7 @@ const TOOLS: ChatCompletionTool[] = [
     function: {
       name: "list_my_posts",
       description:
-        "List this bot's recent posts (newest first). Use before posting to avoid repeating stories already covered.",
+        "List this bot's recent posts (newest first). Use only to avoid repeating the same stories/topics. Do NOT copy the formatting or layout of older posts — follow the current formatting rules instead.",
       parameters: {
         type: "object",
         properties: {
@@ -72,7 +72,8 @@ const TOOLS: ChatCompletionTool[] = [
         properties: {
           text: {
             type: "string",
-            description: "The post body text.",
+            description:
+              "Post body. Exact collapse syntax (required when the job asks for collapsible sections): a line `:::collapse Title`, then body lines, then a line that is only `:::`. Also supports **bold** and *italic*. Paste raw https:// URLs (they are linkified); do not use markdown [text](url) links. Do not invent other fence variants such as bare `:::`.",
           },
         },
         required: ["text"],
@@ -81,6 +82,26 @@ const TOOLS: ChatCompletionTool[] = [
     },
   },
 ];
+
+const POST_FORMATTING_SYSTEM_APPENDIX =
+  `Post text formatting rules (mandatory; override any older post style you see):\n` +
+  `- **bold** and *italic* only (no headings, no markdown links).\n` +
+  `- Paste raw https:// URLs; they become clickable automatically. Never write [Read more](https://...).\n` +
+  `- Collapsible sections MUST use this exact fence (nothing else counts as collapse):\n` +
+  `:::collapse Story title here\n` +
+  `3–6 sentences of detail and a raw https:// link\n` +
+  `:::\n` +
+  `- Example multi-story post:\n` +
+  `Today's AI roundup:\n` +
+  `\n` +
+  `:::collapse Disney hires Character.AI staff\n` +
+  `Disney agreed to hire most of Character.AI's workforce under a stalking-horse bid. Competing offers could still emerge. https://techcrunch.com/example\n` +
+  `:::\n` +
+  `\n` +
+  `:::collapse Anthropic public benefit fund\n` +
+  `Anthropic said it will commit 5% of its shares to a public benefit fund. https://techcrunch.com/example2\n` +
+  `:::\n` +
+  `- If your job asks for collapsible story sections, every story must be wrapped in :::collapse … ::: as above. Numbered lists alone are not enough.`;
 
 function parseToolArgs(raw: string): Record<string, unknown> {
   try {
@@ -143,6 +164,7 @@ export async function runBotWake(input: {
   const defaultSystemPrompt =
     bot.system_prompt.trim() ||
     "You are a helpful personal bot";
+  const systemPrompt = `${defaultSystemPrompt}\n\n${POST_FORMATTING_SYSTEM_APPENDIX}`;
 
   const wakeMessage =
     `Wake up and do your job.\n` +
@@ -150,10 +172,10 @@ export async function runBotWake(input: {
     (configuredFeeds.length > 0
       ? configuredFeeds.map((url) => `- ${url}`).join("\n")
       : "- (none configured)") +
-    `\nUse list_my_posts, fetch_rss, and/or create_post as needed. Check recent posts before creating a new one. Prefer at most one post per wake.`;
+    `\nUse list_my_posts, fetch_rss, and/or create_post as needed. Check recent posts before creating a new one (for topic overlap only — do not copy their formatting). Prefer at most one post per wake. When posting, use the exact :::collapse Title / ::: fences from the formatting rules; numbered **bold** lists without collapses are wrong if your job asks for collapsible sections.`;
 
   const messages: ChatCompletionMessageParam[] = [
-    { role: "system", content: defaultSystemPrompt },
+    { role: "system", content: systemPrompt },
     { role: "user", content: wakeMessage },
   ];
 

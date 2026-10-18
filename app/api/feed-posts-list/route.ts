@@ -96,6 +96,7 @@ export async function POST(request: Request) {
               username: true,
               email: true,
               profile_image_id: true,
+              bots_bots_user_idTousers: { select: { id: true }, take: 1 },
             },
           },
         },
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
               username: true,
               email: true,
               profile_image_id: true,
+              bots_bots_user_idTousers: { select: { id: true }, take: 1 },
             },
           },
         },
@@ -157,6 +159,7 @@ export async function POST(request: Request) {
             is_liked_by_viewer: likesInfo.isLikedByViewer,
             username: post.users.username,
             email: post.users.email,
+            is_bot: post.users.bots_bots_user_idTousers.length > 0,
             author_profile_image_id: post.users.profile_image_id,
             author_profile_image_url: null,
             author_profile_image_access_grant: mintGrant(
@@ -196,6 +199,7 @@ export async function POST(request: Request) {
             is_liked_by_viewer: likesInfo.isLikedByViewer,
             username: shared.users.username,
             email: shared.users.email,
+            is_bot: shared.users.bots_bots_user_idTousers.length > 0,
             author_profile_image_id: shared.users.profile_image_id,
             author_profile_image_url: null,
             author_profile_image_access_grant: mintGrant(

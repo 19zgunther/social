@@ -4,7 +4,7 @@ import { BotDetail, BotWakePeriod } from "@/app/types/interfaces";
 export const MAX_BOTS_PER_USER = 3;
 
 export const DEFAULT_BOT_SYSTEM_PROMPT =
-  "You are a personal AI & software startup news bot. Once woken, use list_my_posts to see what you already posted, fetch configured RSS feeds, pick the most interesting recent stories you have not covered yet, and create one short text post summarizing them with links. Keep it concise and factual.";
+  "You are a personal AI & software startup news bot. Once woken, use list_my_posts to see what you already posted, fetch configured RSS feeds, pick the most interesting recent stories you have not covered yet, and create one short text post summarizing them with links. Keep it concise and factual. Put longer detail or extra sources in a :::collapse section.";
 
 export function isBotWakePeriod(value: string): value is BotWakePeriod {
   return value === "24h" || value === "1w";
@@ -23,7 +23,9 @@ export function parseRssFeedsJson(value: unknown): string[] {
 export type BotRowWithUser = {
   id: string;
   user_id: string;
+  owner_id: string;
   system_prompt: string;
+  description: string;
   wake_period: string;
   rss_feeds: unknown;
   last_woke_at: Date | null;
@@ -33,9 +35,16 @@ export type BotRowWithUser = {
     username: string;
     profile_image_id: string | null;
   };
+  users_owner: {
+    id: string;
+    username: string;
+  };
 };
 
-export async function toBotDetail(bot: BotRowWithUser): Promise<BotDetail> {
+export async function toBotDetail(
+  bot: BotRowWithUser,
+  viewerUserId: string,
+): Promise<BotDetail> {
   let profileImageUrl: string | null = null;
   if (bot.users_bot.profile_image_id) {
     try {
@@ -57,18 +66,24 @@ export async function toBotDetail(bot: BotRowWithUser): Promise<BotDetail> {
     profile_image_id: bot.users_bot.profile_image_id,
     profile_image_url: profileImageUrl,
     system_prompt: bot.system_prompt,
+    description: bot.description,
     wake_period: wakePeriod,
     rss_feeds: parseRssFeedsJson(bot.rss_feeds),
     last_woke_at: bot.last_woke_at?.toISOString() ?? null,
     created_at: bot.created_at.toISOString(),
     updated_at: bot.updated_at.toISOString(),
+    owner_user_id: bot.users_owner.id,
+    owner_username: bot.users_owner.username,
+    is_owner: bot.owner_id === viewerUserId,
   };
 }
 
 export const BOT_WITH_USER_SELECT = {
   id: true,
   user_id: true,
+  owner_id: true,
   system_prompt: true,
+  description: true,
   wake_period: true,
   rss_feeds: true,
   last_woke_at: true,
@@ -78,6 +93,12 @@ export const BOT_WITH_USER_SELECT = {
     select: {
       username: true,
       profile_image_id: true,
+    },
+  },
+  users_owner: {
+    select: {
+      id: true,
+      username: true,
     },
   },
 } as const;

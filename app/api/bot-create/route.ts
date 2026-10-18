@@ -97,7 +97,9 @@ export async function POST(request: Request) {
       return createdBot;
     });
 
-    const payload: BotCreateResponse = { bot: await toBotDetail(bot) };
+    const payload: BotCreateResponse = {
+      bot: await toBotDetail(bot, authResult.user_id),
+    };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("bot_create_failed", error);

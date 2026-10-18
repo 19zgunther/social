@@ -97,6 +97,9 @@ export async function POST(request: Request) {
           ...(body.system_prompt !== undefined
             ? { system_prompt: body.system_prompt }
             : {}),
+          ...(body.description !== undefined
+            ? { description: body.description.trim() }
+            : {}),
           ...(body.wake_period !== undefined ? { wake_period: body.wake_period } : {}),
           ...(body.rss_feeds !== undefined
             ? { rss_feeds: parseRssFeedsJson(body.rss_feeds) as Prisma.InputJsonValue }
@@ -107,7 +110,9 @@ export async function POST(request: Request) {
       });
     });
 
-    const payload: BotUpdateResponse = { bot: await toBotDetail(bot) };
+    const payload: BotUpdateResponse = {
+      bot: await toBotDetail(bot, authResult.user_id),
+    };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("bot_update_failed", error);

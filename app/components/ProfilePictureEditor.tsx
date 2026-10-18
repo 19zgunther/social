@@ -2,6 +2,7 @@
 
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProfileImageRemoveResponse, ProfileImageSetResponse } from "@/app/types/interfaces";
+import { AddImageIcon, CloseIcon, DeleteIcon } from "@/app/components/Icons";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 
 type ProfilePictureEditorProps = {
@@ -255,8 +256,9 @@ export default function ProfilePictureEditor({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
           >
+            <CloseIcon className="h-3.5 w-3.5" />
             Close
           </button>
         </div>
@@ -274,8 +276,9 @@ export default function ProfilePictureEditor({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full h-20 rounded-lg border border-border bg-bg px-3 py-3 text-sm text-muted hover:text-foreground"
+              className="flex h-20 w-full flex-col items-center justify-center gap-1 rounded-lg border border-border bg-bg px-3 py-3 text-sm text-muted hover:text-foreground"
             >
+              <AddImageIcon className="h-6 w-6" />
               Select image
             </button>
             <button
@@ -284,8 +287,9 @@ export default function ProfilePictureEditor({
                 void onRemoveProfilePicture();
               }}
               disabled={isSaving}
-              className="w-full h-20 rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted hover:text-foreground disabled:opacity-50"
+              className="flex h-20 w-full flex-col items-center justify-center gap-1 rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted hover:text-foreground disabled:opacity-50"
             >
+              <DeleteIcon className="h-5 w-5" />
               {isSaving ? "Removing..." : "Remove Profile Picture"}
             </button>
           </div>
