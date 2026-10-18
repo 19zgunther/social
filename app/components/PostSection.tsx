@@ -2,7 +2,7 @@
 
 import { memo, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CongratsBalloonOverlay from "@/app/components/CongratsBalloonOverlay";
-import { LikeIcon, ChevronDownIcon, MoreIcon, EditIcon, DeleteIcon } from "@/app/components/Icons";
+import { LikeIcon, ChevronDownIcon, MoreIcon, EditIcon, DeleteIcon, SendIcon } from "@/app/components/Icons";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import CachedVideo from "@/app/components/utils/CachedVideo";
@@ -826,8 +826,9 @@ function PostSectionComponent({
               onClick={() => { void onSubmitComment(path); }}
               disabled={isSubmittingComment || replyDraft.trim().length === 0}
               className="rounded-lg border border-border px-2 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
+              aria-label="Send"
             >
-              SendIcon
+              <SendIcon className="h-4 w-4" />
             </button>
           </div>
         ) : null}
@@ -1181,8 +1182,9 @@ function PostSectionComponent({
                 onClick={() => { void onSubmitComment([]); }}
                 disabled={isSubmittingComment || rootCommentDraft.trim().length === 0}
                 className="rounded-lg border border-border px-2 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
+                aria-label="Send"
               >
-                SendIcon
+                <SendIcon className="h-4 w-4" />
               </button>
             </div>
 
