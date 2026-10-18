@@ -857,19 +857,17 @@ function PostSectionComponent({
             imageAccessGrant={post.author_profile_image_access_grant ?? null}
             imageStorageUserId={post.created_by}
             imageId={post.author_profile_image_id ?? null}
+            onClick={() => onViewUserProfile?.(post.created_by)}
           />
           <div className="min-w-0 flex-1">
-            {onViewUserProfile ? (
-              <button
-                type="button"
-                onClick={() => onViewUserProfile(post.created_by)}
-                className="text-sm font-semibold text-foreground hover:underline"
-              >
-                {post.username}
-              </button>
-            ) : (
-              <p className="text-sm font-semibold text-foreground">{post.username}</p>
-            )}
+            <button
+              type="button"
+              onClick={() => onViewUserProfile?.(post.created_by)}
+              className="text-sm font-semibold text-foreground hover:underline"
+            >
+              {post.username}
+            </button>
+            
             {post.title ? (
               <p className="truncate text-[11px] text-accent">{post.title}</p>
             ) : null}
@@ -897,6 +895,7 @@ function PostSectionComponent({
           </div>
         </div>
       </header>
+      
       {mediaSlides.length > 0 ? (
         <div ref={imageAreaRef} className="relative aspect-square w-full overflow-hidden rounded-xl">
           {balloonSessionKey !== null ? (

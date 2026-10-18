@@ -56,6 +56,7 @@ type UserProfileImageProps = {
   /** Defaults to `userId` when resolving main-bucket profile images. */
   imageStorageUserId?: string | null;
   className?: string;
+  onClick?: () => void;
 };
 
 export default function UserProfileImage({
@@ -67,6 +68,7 @@ export default function UserProfileImage({
   imageAccessGrant,
   imageStorageUserId,
   className,
+  onClick
 }: UserProfileImageProps) {
   const sessionCtx = useContext(UserSessionSyncContext);
   const nowMs = sessionCtx?.nowMs ?? Date.now();
@@ -89,6 +91,7 @@ export default function UserProfileImage({
     <div
       className={`relative shrink-0 rounded-full bg-surface ${showRing ? "" : "border border-border"} ${className ?? ""}`}
       style={{ width: sizePx, height: sizePx }}
+      onClick={onClick}
     >
       {showPhoto ? (
         <CachedImage

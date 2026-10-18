@@ -26,7 +26,7 @@ export type SharedPostRowForSerialize = {
   shared_posts_contributors: Array<{
     user_id: string;
     invited_at: Date;
-    users: {
+    users_shared_posts_contributors_user_idTousers: {
       username: string;
       email: string | null;
       profile_image_id: string | null;
@@ -277,19 +277,22 @@ export const serializeSharedPostListItem = ({
   const isLikedByViewer = Boolean(likes[viewerUserId]);
 
   const contributors: SharedPostContributorItem[] | undefined = includeContributors
-    ? row.shared_posts_contributors.map((contributor) => ({
-        user_id: contributor.user_id,
-        username: contributor.users.username,
-        email: contributor.users.email,
-        invited_at: contributor.invited_at.toISOString(),
-        has_contributed: contributorHasUploaded(dataObject, contributor.user_id),
-        profile_image_id: contributor.users.profile_image_id,
-        profile_image_access_grant: tryMintGrant(
-          contributor.users.profile_image_id,
-          contributor.user_id,
-          viewerUserId,
-        ),
-      }))
+    ? row.shared_posts_contributors.map((contributor) => {
+        const contributorUser = contributor.users_shared_posts_contributors_user_idTousers;
+        return {
+          user_id: contributor.user_id,
+          username: contributorUser.username,
+          email: contributorUser.email,
+          invited_at: contributor.invited_at.toISOString(),
+          has_contributed: contributorHasUploaded(dataObject, contributor.user_id),
+          profile_image_id: contributorUser.profile_image_id,
+          profile_image_access_grant: tryMintGrant(
+            contributorUser.profile_image_id,
+            contributor.user_id,
+            viewerUserId,
+          ),
+        };
+      })
     : undefined;
 
   const othersContributedCount = row.shared_posts_contributors.filter(
@@ -365,7 +368,7 @@ export const sharedPostSelectForSerialize = {
     select: {
       user_id: true,
       invited_at: true,
-      users: {
+      users_shared_posts_contributors_user_idTousers: {
         select: {
           username: true,
           email: true,
