@@ -284,17 +284,16 @@ export default function TierListBlock({
                 {cells.length === 0 ? (
                   <p className="text-xs text-muted">No options yet</p>
                 ) : (
-                  <div className="space-y-1.5">
+                  <div className="flex flex-wrap gap-1.5">
                     {cells.map((cell) => (
                       <div
                         key={`${tier.id}-${cell.optionId}`}
-                        className="relative overflow-hidden rounded-md border border-border px-2 py-1.5"
+                        className="max-w-full overflow-hidden rounded-md border border-border px-2 py-1"
+                        style={{
+                          backgroundImage: `linear-gradient(to right, color-mix(in srgb, var(--accent) 45%, transparent) ${cell.percentage}%, color-mix(in srgb, var(--surface) 80%, transparent) ${cell.percentage}%)`,
+                        }}
                       >
-                        <div
-                          className="absolute inset-y-0 left-0 bg-accent/20"
-                          style={{ width: `${cell.percentage}%` }}
-                        />
-                        <div className="relative flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-1.5 text-xs">
                           <span className="min-w-0 break-words text-foreground">
                             {optionTextById.get(cell.optionId) ?? cell.optionId}
                           </span>
