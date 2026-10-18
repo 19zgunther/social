@@ -74,6 +74,46 @@ export type PollViewerState = {
   total_voters: number | null;
 };
 
+export type TierListTier = {
+  id: string;
+  name: string;
+};
+
+export type TierListOption = {
+  id: string;
+  text: string;
+};
+
+/** Stored in posts.data.tier_list (server-side). */
+export type TierListData = {
+  tiers: TierListTier[];
+  options: TierListOption[];
+  /** userId → optionId → tierId */
+  submissions: Record<string, Record<string, string>>;
+};
+
+/** Create-time tier list config (no submissions / ids). */
+export type TierListCreateInput = {
+  tiers: Array<{ name: string }>;
+  options: Array<{ text: string }>;
+};
+
+export type TierListResultCell = {
+  tier_id: string;
+  option_id: string;
+  percentage: number;
+};
+
+/** Viewer-facing tier list returned in PostItem.data.tier_list. */
+export type TierListViewerState = {
+  tiers: TierListTier[];
+  options: TierListOption[];
+  has_submitted: boolean;
+  viewer_assignment: Record<string, string> | null;
+  results: TierListResultCell[] | null;
+  total_submitters: number | null;
+};
+
 export type PostMediaKind = "image" | "video";
 
 export type PostMediaItem = {
@@ -94,6 +134,8 @@ export type PostData = {
   other_image_ids?: string[];
   /** Storage uses PollData; API responses replace with PollViewerState. */
   poll?: PollData | PollViewerState;
+  /** Storage uses TierListData; API responses replace with TierListViewerState. */
+  tier_list?: TierListData | TierListViewerState;
 };
 
 export type FeedPostKind = "post" | "shared_event";
@@ -435,6 +477,29 @@ export type FeedPostPollVotersOption = {
 export type FeedPostPollVotersResponse = {
   options: FeedPostPollVotersOption[];
 };
+
+export type FeedPostTierListSubmitRequest = {
+  post_id?: string;
+  assignment?: Record<string, string>;
+};
+
+export type FeedPostTierListSubmissionsRequest = {
+  post_id?: string;
+};
+
+export type FeedPostTierListSubmissionUser = {
+  user_id: string;
+  username: string;
+  /** optionId → tierId */
+  assignment: Record<string, string>;
+};
+
+export type FeedPostTierListSubmissionsResponse = {
+  tiers: TierListTier[];
+  options: TierListOption[];
+  submissions: FeedPostTierListSubmissionUser[];
+};
+
 export type PostEditRequest = {
   post_id?: string;
   text?: string;
