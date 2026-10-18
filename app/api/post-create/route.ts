@@ -13,7 +13,18 @@ import {
   sanitizePostDataForViewer,
   validateAndBuildPoll,
 } from "@/app/lib/polls";
-import { PollData, PostCreateRequest, PostCreateResponse, PostData, PostMediaItem } from "@/app/types/interfaces";
+import {
+  parseTierListCreateInput,
+  validateAndBuildTierList,
+} from "@/app/lib/tierLists";
+import {
+  PollData,
+  PostCreateRequest,
+  PostCreateResponse,
+  PostData,
+  PostMediaItem,
+  TierListData,
+} from "@/app/types/interfaces";
 import {
   buildCompatFieldsFromMedia,
   parsePostMediaItems,
@@ -26,6 +37,7 @@ const getPostPushPreviewText = (
   hasImage: boolean,
   hasVideo: boolean,
   hasPoll: boolean,
+  hasTierList: boolean,
 ): string => {
   const sanitizedText = sanitizeNotificationText(postText);
   if (sanitizedText) {
@@ -33,6 +45,9 @@ const getPostPushPreviewText = (
   }
   if (hasPoll) {
     return "Shared a poll";
+  }
+  if (hasTierList) {
+    return "Shared a tier list";
   }
   if (hasVideo && hasImage) {
     return "Shared photos and video";
@@ -107,9 +122,43 @@ export async function POST(request: Request) {
       builtPoll = pollResult.poll;
     }
 
+    let builtTierList: TierListData | null = null;
+    if (rawData.tier_list !== undefined) {
+      const tierListInput = parseTierListCreateInput(rawData.tier_list);
+      if (!tierListInput) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "invalid_tier_list",
+              message: "Tier list configuration is invalid.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      const tierListResult = validateAndBuildTierList(tierListInput);
+      if ("error" in tierListResult) {
+        return NextResponse.json({ error: tierListResult.error }, { status: 400 });
+      }
+      builtTierList = tierListResult.tierList;
+    }
+
+    if (builtPoll && builtTierList) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_request",
+            message: "A post cannot include both a poll and a tier list.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
     const mediaValidation = validatePostMediaForCreate({
       media: parsedMedia,
       hasPoll: Boolean(builtPoll),
+      hasTierList: Boolean(builtTierList),
     });
     if (!mediaValidation.ok) {
       return NextResponse.json(
@@ -131,14 +180,33 @@ export async function POST(request: Request) {
       );
     }
 
+    if (builtTierList && !mediaItems && otherImageIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_tier_list",
+            message: "Tier list posts can include at most one image.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
     const hasMedia = Boolean(mediaItems && mediaItems.length > 0);
-    if (!hasText && !hasProvidedImageId && !hasImageUploadPayload && !builtPoll && !hasMedia) {
+    if (
+      !hasText &&
+      !hasProvidedImageId &&
+      !hasImageUploadPayload &&
+      !builtPoll &&
+      !builtTierList &&
+      !hasMedia
+    ) {
       return NextResponse.json(
         {
           error: {
             code: "invalid_request",
             message:
-              "text and/or image_id or image_base64_data with image_mime_type, or a valid poll, is required.",
+              "text and/or image_id or image_base64_data with image_mime_type, or a valid poll or tier list, is required.",
           },
         },
         { status: 400 },
@@ -193,6 +261,9 @@ export async function POST(request: Request) {
     if (builtPoll) {
       postData.poll = builtPoll;
     }
+    if (builtTierList) {
+      postData.tier_list = builtTierList;
+    }
     const hasPostData = Object.keys(postData).length > 0;
 
     const post = await prisma.$transaction(async (tx) => {
@@ -240,6 +311,7 @@ export async function POST(request: Request) {
         hasImageSlide,
         hasVideo,
         Boolean(builtPoll),
+        Boolean(builtTierList),
       );
       void sendPushToUsers({
         recipientUserIds,

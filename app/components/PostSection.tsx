@@ -21,6 +21,7 @@ import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { linkifyHttpsText } from "@/app/components/utils/linkifyHttpsText";
 import { hasCongratsComment } from "@/app/lib/congratsComment";
 import PollBlock, { getPollViewerState } from "@/app/components/PollBlock";
+import TierListBlock, { getTierListViewerState } from "@/app/components/TierListBlock";
 
 export type PostPreviewMedia = {
   kind: "image" | "video";
@@ -1088,6 +1089,27 @@ function PostSectionComponent({
               poll={poll}
               isPreview={isPreview}
               onPollUpdated={(nextData) => {
+                setPostData(nextData);
+                onPostUpdated?.({
+                  id: post.id,
+                  data: nextData,
+                });
+              }}
+            />
+          );
+        })()}
+
+        {(() => {
+          const tierList = getTierListViewerState(postData);
+          if (!tierList) {
+            return null;
+          }
+          return (
+            <TierListBlock
+              postId={post.id}
+              tierList={tierList}
+              isPreview={isPreview}
+              onTierListUpdated={(nextData) => {
                 setPostData(nextData);
                 onPostUpdated?.({
                   id: post.id,

@@ -5,6 +5,7 @@ import CachedImage from "@/app/components/utils/CachedImage";
 import BackButton from "@/app/components/utils/BackButton";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import { getPollViewerState } from "@/app/components/PollBlock";
+import { getTierListViewerState } from "@/app/components/TierListBlock";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
   CustomEmoji,
@@ -17,6 +18,7 @@ import {
   EmojiItem,
   FeedPostPollVotersOption,
   FeedPostPollVotersResponse,
+  FeedPostTierListSubmissionsResponse,
   PostCommentNode,
   PostItem,
 } from "@/app/types/interfaces";
@@ -184,12 +186,18 @@ export default function PostOptionsPane({
   const [pollVoterOptions, setPollVoterOptions] = useState<FeedPostPollVotersOption[] | null>(null);
   const [isLoadingPollVoters, setIsLoadingPollVoters] = useState(false);
   const [pollVotersError, setPollVotersError] = useState("");
+  const [tierListSubmissions, setTierListSubmissions] =
+    useState<FeedPostTierListSubmissionsResponse | null>(null);
+  const [isLoadingTierListSubmissions, setIsLoadingTierListSubmissions] = useState(false);
+  const [tierListSubmissionsError, setTierListSubmissionsError] = useState("");
 
   const comments = post.data?.comments;
   const imageIds = useMemo(() => buildImageIds(post), [post]);
   const poll = getPollViewerState(post.data);
+  const tierList = getTierListViewerState(post.data);
   const isPollOwner = Boolean(currentUserId && currentUserId === post.created_by);
   const canViewPollVoters = Boolean(poll && (poll.is_closed || isPollOwner));
+  const canViewTierListSubmissions = Boolean(tierList?.has_submitted);
 
   const customEmojiUuids = useMemo(() => collectCustomEmojiUuids(comments), [comments]);
 
@@ -331,6 +339,61 @@ export default function PostOptionsPane({
     };
   }, [canViewPollVoters, post.id]);
 
+  useEffect(() => {
+    if (!canViewTierListSubmissions) {
+      setTierListSubmissions(null);
+      setTierListSubmissionsError("");
+      setIsLoadingTierListSubmissions(false);
+      return;
+    }
+
+    let cancelled = false;
+    const loadTierListSubmissions = async () => {
+      setIsLoadingTierListSubmissions(true);
+      setTierListSubmissionsError("");
+      setTierListSubmissions(null);
+      try {
+        const response = await fetch("/api/feed-post-tier-list-submissions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ post_id: post.id }),
+        });
+        if (cancelled) {
+          return;
+        }
+        if (!response.ok) {
+          let message = "Could not load tier lists.";
+          try {
+            const body = (await response.json()) as ApiError;
+            if (body.error?.message) {
+              message = body.error.message;
+            }
+          } catch {
+            // Keep default message.
+          }
+          setTierListSubmissionsError(message);
+          return;
+        }
+        const payload = (await response.json()) as FeedPostTierListSubmissionsResponse;
+        if (!cancelled) {
+          setTierListSubmissions(payload);
+        }
+      } catch {
+        if (!cancelled) {
+          setTierListSubmissionsError("Could not load tier lists.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingTierListSubmissions(false);
+        }
+      }
+    };
+    void loadTierListSubmissions();
+    return () => {
+      cancelled = true;
+    };
+  }, [canViewTierListSubmissions, post.id]);
+
   const { postReactions, commentReactionGroups } = useMemo(
     () => collectReactions(comments),
     [comments],
@@ -339,7 +402,8 @@ export default function PostOptionsPane({
 
   const hasImages = imageIds.length > 0;
   const hasPollVotesSection = canViewPollVoters;
-  const hasContent = hasImages || hasReactions || hasPollVotesSection;
+  const hasTierListSection = canViewTierListSubmissions;
+  const hasContent = hasImages || hasReactions || hasPollVotesSection || hasTierListSection;
 
   const onDownloadImage = useCallback(async (imageId: string, index: number) => {
     if (downloadingImageId) {
@@ -441,7 +505,7 @@ export default function PostOptionsPane({
         ) : null}
 
         {hasPollVotesSection ? (
-          <section className={hasReactions ? "mb-4" : undefined}>
+          <section className={hasReactions || hasTierListSection ? "mb-4" : undefined}>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Poll votes</h2>
             {isLoadingPollVoters ? (
               <p className="text-sm text-muted">Loading voters...</p>
@@ -487,6 +551,71 @@ export default function PostOptionsPane({
                         ))}
                       </ul>
                     )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {hasTierListSection ? (
+          <section className={hasReactions ? "mb-4" : undefined}>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              Tier lists
+            </h2>
+            {isLoadingTierListSubmissions ? (
+              <p className="text-sm text-muted">Loading tier lists...</p>
+            ) : null}
+            {tierListSubmissionsError ? (
+              <p className="text-sm text-muted">{tierListSubmissionsError}</p>
+            ) : null}
+            {!isLoadingTierListSubmissions &&
+            !tierListSubmissionsError &&
+            tierListSubmissions ? (
+              <div className="flex flex-col gap-4">
+                {tierListSubmissions.submissions.map((submission) => (
+                  <div key={submission.user_id} className="rounded-lg border border-border p-3">
+                    <div className="mb-2 flex min-w-0 items-center gap-3">
+                      <UserProfileImage
+                        userId={submission.user_id}
+                        sizePx={32}
+                        alt={`${submission.username} profile`}
+                      />
+                      {onViewUserProfile ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onOpenUserProfile(submission.user_id);
+                          }}
+                          className="min-w-0 truncate text-sm font-medium text-foreground underline-offset-2 hover:underline"
+                        >
+                          {submission.username}
+                        </button>
+                      ) : (
+                        <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                          {submission.username}
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-2 pl-1">
+                      {tierListSubmissions.tiers.map((tier) => {
+                        const placedOptions = tierListSubmissions.options.filter(
+                          (option) => submission.assignment[option.id] === tier.id,
+                        );
+                        return (
+                          <div key={`${submission.user_id}-${tier.id}`}>
+                            <p className="text-xs font-semibold text-muted">{tier.name}</p>
+                            {placedOptions.length === 0 ? (
+                              <p className="text-xs text-muted">—</p>
+                            ) : (
+                              <p className="text-sm text-foreground">
+                                {placedOptions.map((option) => option.text).join(", ")}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ))}
               </div>

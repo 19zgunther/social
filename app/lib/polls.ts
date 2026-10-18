@@ -9,6 +9,7 @@ import {
   PollViewerState,
   PostData,
 } from "@/app/types/interfaces";
+import { parseTierListData, sanitizeTierListForViewer } from "@/app/lib/tierLists";
 
 const POLL_DURATION_HOURS: ReadonlySet<number> = new Set([12, 24, 48, 168]);
 const MIN_OPTIONS = 2;
@@ -293,14 +294,27 @@ export const sanitizePostDataForViewer = ({
     if (dataObject.poll !== undefined) {
       delete dataObject.poll;
     }
-    return dataObject;
+  } else {
+    dataObject.poll = sanitizePollForViewer({
+      poll: storedPoll,
+      viewerUserId,
+      authorUserId,
+      now,
+    });
   }
-  dataObject.poll = sanitizePollForViewer({
-    poll: storedPoll,
-    viewerUserId,
-    authorUserId,
-    now,
-  });
+
+  const storedTierList = parseTierListData(dataObject.tier_list);
+  if (!storedTierList) {
+    if (dataObject.tier_list !== undefined) {
+      delete dataObject.tier_list;
+    }
+  } else {
+    dataObject.tier_list = sanitizeTierListForViewer({
+      tierList: storedTierList,
+      viewerUserId,
+    });
+  }
+
   return dataObject;
 };
 

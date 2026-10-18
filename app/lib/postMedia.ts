@@ -123,9 +123,11 @@ export const collectPostMediaObjectIds = (input: {
 export const validatePostMediaForCreate = ({
   media,
   hasPoll,
+  hasTierList = false,
 }: {
   media: PostMediaItem[] | null;
   hasPoll: boolean;
+  hasTierList?: boolean;
 }): { ok: true; media: PostMediaItem[] | null } | { ok: false; code: string; message: string } => {
   if (!media || media.length === 0) {
     return { ok: true, media: null };
@@ -144,6 +146,15 @@ export const validatePostMediaForCreate = ({
       message: media.some((item) => item.kind === "video")
         ? "Poll posts cannot include video."
         : "Poll posts can include at most one image.",
+    };
+  }
+  if (hasTierList && (media.length > 1 || media.some((item) => item.kind === "video"))) {
+    return {
+      ok: false,
+      code: "invalid_tier_list",
+      message: media.some((item) => item.kind === "video")
+        ? "Tier list posts cannot include video."
+        : "Tier list posts can include at most one image.",
     };
   }
   return { ok: true, media };

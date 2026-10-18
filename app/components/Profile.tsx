@@ -10,6 +10,7 @@ import {
   SettingsIcon,
   DeleteIcon,
   PollIcon,
+  TierListIcon,
 } from "@/app/components/Icons";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
@@ -21,6 +22,7 @@ import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 import EmojiEditorTab from "@/app/components/EmojiEditorTab";
 import PostGroupsTab from "@/app/components/PostGroupsTab";
 import { getPollViewerState } from "@/app/components/PollBlock";
+import { getTierListViewerState } from "@/app/components/TierListBlock";
 import {
   AcceptedFriend,
   ApiError,
@@ -226,6 +228,7 @@ function ProfilePostsSection({
           const hasPostImageSource = Boolean(post.image_id && post.image_access_grant);
           const trimmedPostText = post.text.trim();
           const poll = getPollViewerState(post.data);
+          const tierList = getTierListViewerState(post.data);
           const firstMedia = post.data?.media?.[0];
           const isVideoFirst = firstMedia?.kind === "video";
           return (
@@ -266,6 +269,20 @@ function ProfilePostsSection({
                     }}
                   >
                     {trimmedPostText || poll.options[0]?.text || "Poll"}
+                  </p>
+                </div>
+              ) : tierList ? (
+                <div className="flex h-full w-full flex-col items-start justify-start gap-1 overflow-hidden bg-black p-1.5">
+                  <TierListIcon className="h-4 w-4 shrink-0 text-accent" />
+                  <p
+                    className="w-full overflow-hidden text-left text-[9px] leading-tight text-foreground/80 break-words"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 5,
+                      WebkitBoxOrient: "vertical",
+                    }}
+                  >
+                    {trimmedPostText || tierList.options[0]?.text || "Tier list"}
                   </p>
                 </div>
               ) : (

@@ -24,6 +24,7 @@ import {
   Heart,
   Image,
   ImagePlus,
+  LayoutList,
   ListChecks,
   LogOut,
   MessageCirclePlus,
@@ -87,6 +88,8 @@ export const UserPlaceholderIcon = CircleUserRound;
 export const MessageIcon = MessageSquare;
 /** Poll content indicator */
 export const PollIcon = ListChecks;
+/** Tier list content indicator */
+export const TierListIcon = LayoutList;
 /** Play media */
 export const PlayIcon = Play;
 /** Settings / gear */

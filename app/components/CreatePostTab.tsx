@@ -31,6 +31,7 @@ import {
   PostGroupsGetResponse,
   PostItem,
   PostMediaItem,
+  TierListViewerState,
 } from "@/app/types/interfaces";
 import { MAX_POST_MEDIA_ITEMS } from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
@@ -47,7 +48,11 @@ type CreatePostTabProps = {
   onPosted: () => void;
 };
 
-type CreatePostKind = "post" | "poll";
+type CreatePostKind = "post" | "poll" | "tier_list";
+
+const DEFAULT_TIER_NAMES = ["S", "A", "B", "C", "D"];
+const MAX_TIER_LIST_TIERS = 8;
+const MAX_TIER_LIST_OPTIONS = 16;
 
 type AudienceSelection =
   | { mode: "permanent" }
@@ -173,6 +178,43 @@ const buildPreviewPollState = ({
     is_closed: false,
     results: null,
     total_voters: null,
+  };
+};
+
+const buildPreviewTierListState = ({
+  tierNames,
+  optionTexts,
+}: {
+  tierNames: string[];
+  optionTexts: string[];
+}): TierListViewerState => {
+  const tiers = tierNames
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0)
+    .map((name, index) => ({ id: `preview-tier-${index}`, name }));
+  const options = optionTexts
+    .map((text) => text.trim())
+    .filter((text) => text.length > 0)
+    .map((text, index) => ({ id: `preview-tier-option-${index}`, text }));
+  return {
+    tiers:
+      tiers.length >= 2
+        ? tiers
+        : [
+            { id: "preview-tier-0", name: tiers[0]?.name || "S" },
+            { id: "preview-tier-1", name: tiers[1]?.name || "A" },
+          ],
+    options:
+      options.length >= 2
+        ? options
+        : [
+            { id: "preview-tier-option-0", text: options[0]?.text || "Option 1" },
+            { id: "preview-tier-option-1", text: options[1]?.text || "Option 2" },
+          ],
+    has_submitted: false,
+    viewer_assignment: null,
+    results: null,
+    total_submitters: null,
   };
 };
 
@@ -352,6 +394,8 @@ export default function CreatePostTab({
   const [pollSelectionMode, setPollSelectionMode] = useState<PollSelectionMode>("single");
   const [pollAllowVoteChanges, setPollAllowVoteChanges] = useState(false);
   const [pollDurationHours, setPollDurationHours] = useState<PollDurationHours>(24);
+  const [tierNames, setTierNames] = useState<string[]>([...DEFAULT_TIER_NAMES]);
+  const [tierListOptions, setTierListOptions] = useState<string[]>(["", ""]);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const cropDragStartRef = useRef<{ x: number; y: number; startOffsetX: number; startOffsetY: number } | null>(null);
   const pinchStartRef = useRef<{ distance: number; zoom: number; offsetX: number; offsetY: number } | null>(null);
@@ -563,14 +607,30 @@ export default function CreatePostTab({
     () => pollOptions.map((option) => option.trim()).filter((option) => option.length > 0),
     [pollOptions],
   );
+  const filledTierNames = useMemo(
+    () => tierNames.map((name) => name.trim()).filter((name) => name.length > 0),
+    [tierNames],
+  );
+  const filledTierListOptions = useMemo(
+    () => tierListOptions.map((option) => option.trim()).filter((option) => option.length > 0),
+    [tierListOptions],
+  );
   const hasValidPoll = postKind === "poll" && filledPollOptions.length >= 2;
+  const hasValidTierList =
+    postKind === "tier_list" && filledTierNames.length >= 2 && filledTierListOptions.length >= 2;
   const hasPreviewContent =
-    comment.trim().length > 0 || mediaItems.length > 0 || (postKind === "poll" && filledPollOptions.length > 0);
+    comment.trim().length > 0 ||
+    mediaItems.length > 0 ||
+    (postKind === "poll" && filledPollOptions.length > 0) ||
+    (postKind === "tier_list" &&
+      (filledTierNames.length > 0 || filledTierListOptions.length > 0));
 
   const canSubmit =
     postKind === "poll"
       ? hasValidPoll && !isPosting
-      : (mediaItems.length > 0 || comment.trim().length > 0) && !isPosting;
+      : postKind === "tier_list"
+        ? hasValidTierList && !isPosting
+        : (mediaItems.length > 0 || comment.trim().length > 0) && !isPosting;
 
   const previewPost = useMemo((): PostItem => {
     const previewMedia: PostMediaItem[] = mediaItems.map((item, index) =>
@@ -587,6 +647,13 @@ export default function CreatePostTab({
             durationHours: pollDurationHours,
           })
         : undefined;
+    const tierList =
+      postKind === "tier_list"
+        ? buildPreviewTierListState({
+            tierNames,
+            optionTexts: tierListOptions,
+          })
+        : undefined;
     return {
       id: "create-post-preview",
       created_at: new Date().toISOString(),
@@ -597,6 +664,7 @@ export default function CreatePostTab({
       data: {
         ...(previewMedia.length > 0 ? { media: previewMedia } : {}),
         ...(poll ? { poll } : {}),
+        ...(tierList ? { tier_list: tierList } : {}),
       },
       like_count: 0,
       is_liked_by_viewer: false,
@@ -616,6 +684,8 @@ export default function CreatePostTab({
     postKind,
     profileImageId,
     profileImageUrl,
+    tierListOptions,
+    tierNames,
     username,
   ]);
 
@@ -653,14 +723,15 @@ export default function CreatePostTab({
 
     setStatusMessage("");
     try {
-      if (postKind === "poll") {
+      if (postKind === "poll" || postKind === "tier_list") {
+        const kindLabel = postKind === "poll" ? "Poll" : "Tier list";
         const imageFiles = fileList.filter((file) => file.type.startsWith("image/"));
         if (imageFiles.length === 0) {
-          setStatusMessage("Poll posts can only include a photo.");
+          setStatusMessage(`${kindLabel} posts can only include a photo.`);
           return;
         }
         if (mediaItems.length + imageFiles.length > 1) {
-          setStatusMessage("Poll posts can include at most one photo.");
+          setStatusMessage(`${kindLabel} posts can include at most one photo.`);
           return;
         }
       }
@@ -690,6 +761,9 @@ export default function CreatePostTab({
         }
         if (postKind === "poll") {
           throw new Error("Poll posts can only include a photo.");
+        }
+        if (postKind === "tier_list") {
+          throw new Error("Tier list posts can only include a photo.");
         }
         const preparedVideo = await prepareVideoForUpload(file);
         prepared.push({
@@ -884,13 +958,33 @@ export default function CreatePostTab({
       return;
     }
 
+    if (postKind === "tier_list" && filledTierNames.length < 2) {
+      setStatusMessage("Add at least 2 tiers.");
+      return;
+    }
+
+    if (postKind === "tier_list" && filledTierListOptions.length < 2) {
+      setStatusMessage("Add at least 2 options.");
+      return;
+    }
+
     if (postKind === "poll" && mediaItems.some((item) => item.kind === "video")) {
       setStatusMessage("Poll posts cannot include video.");
       return;
     }
 
+    if (postKind === "tier_list" && mediaItems.some((item) => item.kind === "video")) {
+      setStatusMessage("Tier list posts cannot include video.");
+      return;
+    }
+
     if (postKind === "poll" && mediaItems.length > 1) {
       setStatusMessage("Poll posts can include at most one photo.");
+      return;
+    }
+
+    if (postKind === "tier_list" && mediaItems.length > 1) {
+      setStatusMessage("Tier list posts can include at most one photo.");
       return;
     }
 
@@ -983,6 +1077,14 @@ export default function CreatePostTab({
               },
             }
           : {}),
+        ...(postKind === "tier_list"
+          ? {
+              tier_list: {
+                tiers: filledTierNames.map((name) => ({ name })),
+                options: filledTierListOptions.map((text) => ({ text })),
+              },
+            }
+          : {}),
       };
       const hasDataPayload = Object.keys(dataPayload).length > 0;
 
@@ -1016,6 +1118,8 @@ export default function CreatePostTab({
       setPollSelectionMode("single");
       setPollAllowVoteChanges(false);
       setPollDurationHours(24);
+      setTierNames([...DEFAULT_TIER_NAMES]);
+      setTierListOptions(["", ""]);
       setPostKind("post");
 
       const elapsed = Date.now() - startedAt;
@@ -1074,6 +1178,7 @@ export default function CreatePostTab({
           {([
             { kind: "post", label: "Post" },
             { kind: "poll", label: "Poll" },
+            { kind: "tier_list", label: "Tiers" },
           ] as const).map((entry) => (
             <button
               key={entry.kind}
@@ -1092,7 +1197,8 @@ export default function CreatePostTab({
 
         <div className="mb-3">
           <label htmlFor="post-audience" className="mb-1 block text-xs font-semibold text-muted">
-            Who can see this {postKind === "poll" ? "poll" : "post"}?
+            Who can see this{" "}
+            {postKind === "poll" ? "poll" : postKind === "tier_list" ? "tier list" : "post"}?
           </label>
           <div className="relative">
             <select
@@ -1364,10 +1470,116 @@ export default function CreatePostTab({
             ref={textInputRef}
             value={comment}
             onChange={(event) => setComment(event.target.value)}
-            placeholder={postKind === "poll" ? "Ask a question..." : "Write a comment..."}
+            placeholder={
+              postKind === "poll" || postKind === "tier_list"
+                ? "Ask a question..."
+                : "Write a comment..."
+            }
             className="min-h-[20vh] max-h-[20vh] w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
           />
         </div>
+
+        {postKind === "tier_list" ? (
+          <div className="mt-4 space-y-4">
+            <div>
+              <p className="mb-2 text-xs font-semibold text-muted">Tiers (2–{MAX_TIER_LIST_TIERS})</p>
+              <div className="space-y-2">
+                {tierNames.map((tierName, index) => (
+                  <div key={`tier-name-${index}`} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={tierName}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setTierNames((previous) =>
+                          previous.map((entry, entryIndex) =>
+                            entryIndex === index ? nextValue : entry,
+                          ),
+                        );
+                      }}
+                      placeholder={`Tier ${index + 1}`}
+                      maxLength={200}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+                    />
+                    {tierNames.length > 2 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setTierNames((previous) =>
+                            previous.filter((_, entryIndex) => entryIndex !== index),
+                          )
+                        }
+                        className="rounded-lg border border-border px-2 py-2 text-muted hover:text-foreground"
+                        aria-label={`Remove tier ${index + 1}`}
+                      >
+                        <CloseIcon className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              {tierNames.length < MAX_TIER_LIST_TIERS ? (
+                <button
+                  type="button"
+                  onClick={() => setTierNames((previous) => [...previous, ""])}
+                  className="mt-2 text-sm font-semibold text-accent hover:brightness-110"
+                >
+                  + Add tier
+                </button>
+              ) : null}
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold text-muted">
+                Options (2–{MAX_TIER_LIST_OPTIONS})
+              </p>
+              <div className="space-y-2">
+                {tierListOptions.map((option, index) => (
+                  <div key={`tier-option-${index}`} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={option}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setTierListOptions((previous) =>
+                          previous.map((entry, entryIndex) =>
+                            entryIndex === index ? nextValue : entry,
+                          ),
+                        );
+                      }}
+                      placeholder={`Option ${index + 1}`}
+                      maxLength={200}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+                    />
+                    {tierListOptions.length > 2 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setTierListOptions((previous) =>
+                            previous.filter((_, entryIndex) => entryIndex !== index),
+                          )
+                        }
+                        className="rounded-lg border border-border px-2 py-2 text-muted hover:text-foreground"
+                        aria-label={`Remove option ${index + 1}`}
+                      >
+                        <CloseIcon className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              {tierListOptions.length < MAX_TIER_LIST_OPTIONS ? (
+                <button
+                  type="button"
+                  onClick={() => setTierListOptions((previous) => [...previous, ""])}
+                  className="mt-2 text-sm font-semibold text-accent hover:brightness-110"
+                >
+                  + Add option
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         {postKind === "poll" ? (
           <div className="mt-4 space-y-4">
