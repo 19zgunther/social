@@ -708,10 +708,6 @@ export default function SharedEventPostsTab({
                             userId={friend.user_id}
                             sizePx={36}
                             alt={`${friend.username} profile`}
-                            signedUrl={friend.profile_image_url}
-                            imageAccessGrant={friend.profile_image_access_grant}
-                            imageStorageUserId={friend.user_id}
-                            imageId={friend.profile_image_id}
                           />
                           <span className="min-w-0 flex-1 truncate text-sm text-foreground">
                             {friend.username}

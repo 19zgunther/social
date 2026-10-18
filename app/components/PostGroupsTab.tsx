@@ -564,10 +564,6 @@ export default function PostGroupsTab({
                     userId={friend.user_id}
                     sizePx={50}
                     alt={`${friend.username} profile`}
-                    signedUrl={friend.profile_image_url}
-                    imageAccessGrant={friend.profile_image_access_grant}
-                    imageStorageUserId={friend.user_id}
-                    imageId={friend.profile_image_id}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{friend.username}</p>
@@ -618,10 +614,6 @@ export default function PostGroupsTab({
                     userId={friend.user_id}
                     sizePx={50}
                     alt={`${friend.username} profile`}
-                    signedUrl={friend.profile_image_url}
-                    imageAccessGrant={friend.profile_image_access_grant}
-                    imageStorageUserId={friend.user_id}
-                    imageId={friend.profile_image_id}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{friend.username}</p>

@@ -146,8 +146,6 @@ const rsvpBtnSelected: Record<ThreadEventRsvpStatus, string> = {
 type RosterEntry = {
   userId: string;
   username: string;
-  profile_image_url: string | null;
-  profile_image_id: string | null;
 };
 
 function rosterEntriesForStatus(
@@ -164,8 +162,6 @@ function rosterEntriesForStatus(
       return {
         userId,
         username: m?.username ?? "Unknown member",
-        profile_image_url: m?.profile_image_url ?? null,
-        profile_image_id: m?.profile_image_id ?? null,
       };
     })
     .sort((a, b) => a.username.localeCompare(b.username, undefined, { sensitivity: "base" }));
@@ -311,9 +307,6 @@ export default function ThreadEventPage({
       id: user.id,
       username: user.username,
       email: user.email,
-      profile_image_id: user.profile_image_id,
-      profile_image_url: user.profile_image_url,
-      profile_image_access_grant: user.profile_image_access_grant ?? null,
     }));
   }, []);
 
@@ -879,8 +872,6 @@ export default function ThreadEventPage({
                         userId={entry.userId}
                         sizePx={36}
                         alt={entry.username}
-                        signedUrl={entry.profile_image_url}
-                        imageId={entry.profile_image_id}
                       />
                       <span className={`min-w-0 flex-1 truncate ${readableText}`}>{entry.username}</span>
                     </li>
@@ -903,8 +894,6 @@ export default function ThreadEventPage({
                         userId={entry.userId}
                         sizePx={36}
                         alt={entry.username}
-                        signedUrl={entry.profile_image_url}
-                        imageId={entry.profile_image_id}
                       />
                       <span className={`min-w-0 flex-1 truncate ${readableText}`}>{entry.username}</span>
                     </li>
@@ -927,8 +916,6 @@ export default function ThreadEventPage({
                         userId={entry.userId}
                         sizePx={36}
                         alt={entry.username}
-                        signedUrl={entry.profile_image_url}
-                        imageId={entry.profile_image_id}
                       />
                       <span className={`min-w-0 flex-1 truncate ${readableText}`}>{entry.username}</span>
                     </li>

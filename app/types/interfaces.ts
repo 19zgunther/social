@@ -244,9 +244,6 @@ export type ThreadMember = {
   username: string;
   email: string | null;
   is_owner: boolean;
-  profile_image_id: string | null;
-  profile_image_url: string | null;
-  profile_image_access_grant?: string | null;
   friendship_status: ThreadMemberFriendshipStatus;
 };
 
@@ -261,9 +258,6 @@ export type FriendSearchResult = {
   username: string;
   email: string | null;
   relation: FriendRelation | null;
-  profile_image_id: string | null;
-  profile_image_url: string | null;
-  profile_image_access_grant?: string | null;
 };
 
 export type IncomingFriendRequest = {
@@ -272,9 +266,6 @@ export type IncomingFriendRequest = {
   requested_at: string;
   username: string;
   email: string | null;
-  profile_image_id: string | null;
-  profile_image_url: string | null;
-  profile_image_access_grant?: string | null;
 };
 
 export type OutgoingFriendRequest = {
@@ -285,9 +276,6 @@ export type OutgoingFriendRequest = {
   accepted_at: string | null;
   username: string;
   email: string | null;
-  profile_image_id: string | null;
-  profile_image_url: string | null;
-  profile_image_access_grant?: string | null;
 };
 
 export type AcceptedFriend = {
@@ -296,9 +284,6 @@ export type AcceptedFriend = {
   username: string;
   email: string | null;
   accepted_at: string | null;
-  profile_image_id: string | null;
-  profile_image_url: string | null;
-  profile_image_access_grant?: string | null;
 };
 
 export type SyncEvent = {
@@ -442,6 +427,16 @@ export type ProfilePostsListResponse = {
   posts: PostItem[];
   has_more: boolean;
   next_cursor_post_id: string | null;
+};
+
+export type UserProfileImageEntry = {
+  profile_image_id: string | null;
+  profile_image_access_grant: string | null;
+};
+
+export type UserProfileImagesRequest = { user_ids?: string[] };
+export type UserProfileImagesResponse = {
+  profiles: Record<string, UserProfileImageEntry>;
 };
 
 export type PostAudienceMode = "permanent" | "all" | "group";

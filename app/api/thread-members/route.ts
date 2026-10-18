@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
-import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import { threadMemberFriendshipStatusesForMany } from "@/app/lib/threadMemberFriendship";
 import { ThreadMembersRequest, ThreadMembersResponse } from "@/app/types/interfaces";
@@ -57,35 +56,17 @@ export async function POST(request: Request) {
           select: {
             username: true,
             email: true,
-            profile_image_id: true,
           },
         },
       },
     });
 
-    const membersPayload = members.map((member) => {
-      let profile_image_access_grant: string | null = null;
-      if (member.users.profile_image_id) {
-        try {
-          profile_image_access_grant = createMainBucketImageAccessGrant({
-            imageId: member.users.profile_image_id,
-            storageUserId: member.user_id,
-            viewerUserId: authResult.user_id,
-          });
-        } catch (error) {
-          console.error("thread_member_profile_image_grant_failed", member.user_id, error);
-        }
-      }
-      return {
-        user_id: member.user_id,
-        username: member.users.username,
-        email: member.users.email,
-        is_owner: member.user_id === thread.owner,
-        profile_image_id: member.users.profile_image_id,
-        profile_image_url: null as string | null,
-        profile_image_access_grant,
-      };
-    });
+    const membersPayload = members.map((member) => ({
+      user_id: member.user_id,
+      username: member.users.username,
+      email: member.users.email,
+      is_owner: member.user_id === thread.owner,
+    }));
 
     const friendshipByUserId = await threadMemberFriendshipStatusesForMany(
       authResult.user_id,

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
-import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import { FriendRequestsListResponse } from "@/app/types/interfaces";
 
@@ -26,7 +25,6 @@ export async function POST(request: Request) {
           select: {
             username: true,
             email: true,
-            profile_image_id: true,
           },
         },
       },
@@ -47,7 +45,6 @@ export async function POST(request: Request) {
           select: {
             username: true,
             email: true,
-            profile_image_id: true,
           },
         },
       },
@@ -69,7 +66,6 @@ export async function POST(request: Request) {
             id: true,
             username: true,
             email: true,
-            profile_image_id: true,
           },
         },
         users_friends_other_userTousers: {
@@ -77,7 +73,6 @@ export async function POST(request: Request) {
             id: true,
             username: true,
             email: true,
-            profile_image_id: true,
           },
         },
       },
@@ -90,23 +85,6 @@ export async function POST(request: Request) {
         requested_at: row.requested_at.toISOString(),
         username: row.users_friends_requesting_userTousers.username,
         email: row.users_friends_requesting_userTousers.email,
-        profile_image_id: row.users_friends_requesting_userTousers.profile_image_id,
-        profile_image_url: null,
-        profile_image_access_grant: (() => {
-          const pid = row.users_friends_requesting_userTousers.profile_image_id;
-          if (!pid) {
-            return null;
-          }
-          try {
-            return createMainBucketImageAccessGrant({
-              imageId: pid,
-              storageUserId: row.requesting_user,
-              viewerUserId: authResult.user_id,
-            });
-          } catch {
-            return null;
-          }
-        })(),
       })),
       outgoing_requests: outgoing.map((row) => ({
         id: row.id,
@@ -116,23 +94,6 @@ export async function POST(request: Request) {
         accepted_at: row.accepted_at?.toISOString() ?? null,
         username: row.users_friends_other_userTousers.username,
         email: row.users_friends_other_userTousers.email,
-        profile_image_id: row.users_friends_other_userTousers.profile_image_id,
-        profile_image_url: null,
-        profile_image_access_grant: (() => {
-          const pid = row.users_friends_other_userTousers.profile_image_id;
-          if (!pid) {
-            return null;
-          }
-          try {
-            return createMainBucketImageAccessGrant({
-              imageId: pid,
-              storageUserId: row.other_user,
-              viewerUserId: authResult.user_id,
-            });
-          } catch {
-            return null;
-          }
-        })(),
       })),
       accepted_friends: acceptedRows.map((row) => {
         const other =
@@ -145,22 +106,6 @@ export async function POST(request: Request) {
           username: other.username,
           email: other.email,
           accepted_at: row.accepted_at?.toISOString() ?? null,
-          profile_image_id: other.profile_image_id,
-          profile_image_url: null,
-          profile_image_access_grant: (() => {
-            if (!other.profile_image_id) {
-              return null;
-            }
-            try {
-              return createMainBucketImageAccessGrant({
-                imageId: other.profile_image_id,
-                storageUserId: other.id,
-                viewerUserId: authResult.user_id,
-              });
-            } catch {
-              return null;
-            }
-          })(),
         };
       }),
     };

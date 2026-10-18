@@ -485,9 +485,6 @@ function Profile({
           email: user.email,
           hint,
           friendshipStatus,
-          profile_image_id: user.profile_image_id,
-          profile_image_url: user.profile_image_url,
-          profile_image_access_grant: user.profile_image_access_grant ?? null,
         };
       });
     },
@@ -775,10 +772,6 @@ function Profile({
                           userId={requestRow.requesting_user_id}
                           sizePx={50}
                           alt={`${requestRow.username} profile`}
-                          signedUrl={requestRow.profile_image_url}
-                          imageAccessGrant={requestRow.profile_image_access_grant}
-                          imageStorageUserId={requestRow.requesting_user_id}
-                          imageId={requestRow.profile_image_id}
                         />
                         <div className="flex-1 min-w-0 text-left">
                           <p className="text-sm font-medium text-foreground truncate">{requestRow.username}</p>
@@ -827,10 +820,6 @@ function Profile({
                       userId={friend.user_id}
                       sizePx={50}
                       alt={`${friend.username} profile`}
-                      signedUrl={friend.profile_image_url}
-                      imageAccessGrant={friend.profile_image_access_grant}
-                      imageStorageUserId={friend.user_id}
-                      imageId={friend.profile_image_id}
                     />
                     <div className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-medium text-foreground truncate">{friend.username}</p>
@@ -858,10 +847,6 @@ function Profile({
                       userId={row.other_user_id}
                       sizePx={50}
                       alt={`${row.username} profile`}
-                      signedUrl={row.profile_image_url}
-                      imageAccessGrant={row.profile_image_access_grant}
-                      imageStorageUserId={row.other_user_id}
-                      imageId={row.profile_image_id}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{row.username}</p>

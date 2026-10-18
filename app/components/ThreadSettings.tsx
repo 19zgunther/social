@@ -133,9 +133,6 @@ export default function ThreadSettings({
       id: user.id,
       username: user.username,
       email: user.email,
-      profile_image_id: user.profile_image_id,
-      profile_image_url: user.profile_image_url,
-      profile_image_access_grant: user.profile_image_access_grant ?? null,
     }));
   };
 
@@ -475,10 +472,6 @@ export default function ThreadSettings({
                       userId={member.user_id}
                       sizePx={40}
                       alt={`${member.username} profile`}
-                      signedUrl={member.profile_image_url}
-                      imageAccessGrant={member.profile_image_access_grant}
-                      imageStorageUserId={member.user_id}
-                      imageId={member.profile_image_id}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-foreground">

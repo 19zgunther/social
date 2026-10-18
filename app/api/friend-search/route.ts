@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
-import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import { FriendSearchRequest, FriendSearchResponse } from "@/app/types/interfaces";
 
@@ -35,7 +34,6 @@ export async function POST(request: Request) {
         id: true,
         username: true,
         email: true,
-        profile_image_id: true,
       },
     });
 
@@ -90,18 +88,6 @@ export async function POST(request: Request) {
     const payload: FriendSearchResponse = {
       users: users.map((user) => {
         const relation = relationByOtherUserId.get(user.id);
-        let profile_image_access_grant: string | null = null;
-        if (user.profile_image_id) {
-          try {
-            profile_image_access_grant = createMainBucketImageAccessGrant({
-              imageId: user.profile_image_id,
-              storageUserId: user.id,
-              viewerUserId: authResult.user_id,
-            });
-          } catch (error) {
-            console.error("friend_search_profile_image_grant_failed", user.id, error);
-          }
-        }
         return {
           id: user.id,
           username: user.username,
@@ -113,9 +99,6 @@ export async function POST(request: Request) {
                 accepted: relation.accepted,
               }
             : null,
-          profile_image_id: user.profile_image_id,
-          profile_image_url: null,
-          profile_image_access_grant,
         };
       }),
     };

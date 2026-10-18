@@ -743,6 +743,12 @@ function PostSectionComponent({
           <div className="text-sm italic text-muted">Comment Deleted</div>
         ) : (
           <div className="text-sm text-muted flex items-start gap-2">
+            <UserProfileImage
+              userId={comment.user_id}
+              sizePx={24}
+              alt={`${comment.username || comment.user_id} profile`}
+              onClick={() => onViewUserProfile?.(comment.user_id)}
+            />
             <span className="shrink-0 font-semibold text-foreground/90">{comment.username || comment.user_id}</span>
             <span className="min-w-0 flex-1 break-words">{linkifyHttpsText(comment.text)}</span>
             {canDeleteComment ? (
@@ -895,7 +901,7 @@ function PostSectionComponent({
           </div>
         </div>
       </header>
-      
+
       {mediaSlides.length > 0 ? (
         <div ref={imageAreaRef} className="relative aspect-square w-full overflow-hidden rounded-xl">
           {balloonSessionKey !== null ? (
@@ -1191,7 +1197,7 @@ function PostSectionComponent({
             {rootTextCommentEntries.length === 0 ? (
               <p className="text-xs text-muted"></p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 ml-2">
                 {rootTextCommentEntries.map(([commentTimestamp, comment]) =>
                   renderCommentTree(commentTimestamp, comment, [], 0),
                 )}

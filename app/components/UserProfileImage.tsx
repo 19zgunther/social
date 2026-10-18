@@ -1,9 +1,15 @@
 "use client";
 
-import { useContext, useMemo } from "react";
+import { useContext, useEffect, useMemo, useSyncExternalStore } from "react";
 import { UserPlaceholderIcon } from "@/app/components/Icons";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { UserSessionSyncContext } from "@/app/components/UserSessionSyncContext";
+import {
+  ensureUserProfileImages,
+  getUserProfileImageCacheEntry,
+  primeUserProfileImageCache,
+  subscribeUserProfileImageCache,
+} from "@/app/lib/userProfileImageCache";
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -76,15 +82,42 @@ export default function UserProfileImage({
   const { ringFrac, color, underColor } = useMemo(() => presenceRingFraction(lastMs, nowMs), [lastMs, nowMs]);
   const showRing = ringFrac > 0;
 
+  const hasExplicitGrant = Boolean(imageId && imageAccessGrant);
+
+  const cachedEntry = useSyncExternalStore(
+    subscribeUserProfileImageCache,
+    () => getUserProfileImageCacheEntry(userId),
+    () => undefined,
+  );
+
+  useEffect(() => {
+    if (hasExplicitGrant) {
+      primeUserProfileImageCache(userId, {
+        profile_image_id: imageId ?? null,
+        profile_image_access_grant: imageAccessGrant ?? null,
+      });
+      return;
+    }
+    if (!signedUrl) {
+      ensureUserProfileImages([userId]);
+    }
+  }, [userId, hasExplicitGrant, imageId, imageAccessGrant, signedUrl]);
+
   const vb = 100;
   const stroke = 5;
   const r = vb / 2 - stroke / 2;
   const circumference = 2 * Math.PI * r;
   const dashLen = ringFrac * circumference;
 
+  const resolvedImageId = hasExplicitGrant
+    ? (imageId ?? null)
+    : (cachedEntry?.profile_image_id ?? null);
+  const resolvedGrant = hasExplicitGrant
+    ? (imageAccessGrant ?? null)
+    : (cachedEntry?.profile_image_access_grant ?? null);
   const storageForGrant = imageStorageUserId ?? userId;
   const showPhoto = Boolean(
-    signedUrl || (imageAccessGrant && imageId && storageForGrant),
+    signedUrl || (resolvedGrant && resolvedImageId && storageForGrant),
   );
 
   return (
@@ -96,9 +129,9 @@ export default function UserProfileImage({
       {showPhoto ? (
         <CachedImage
           {...(signedUrl ? { signedUrl } : {})}
-          imageId={imageId ?? null}
-          imageAccessGrant={imageAccessGrant ?? null}
-          imageStorageUserId={imageAccessGrant ? storageForGrant : null}
+          imageId={resolvedImageId}
+          imageAccessGrant={resolvedGrant}
+          imageStorageUserId={resolvedGrant ? storageForGrant : null}
           alt={alt}
           className="h-full w-full rounded-full object-cover"
         />
