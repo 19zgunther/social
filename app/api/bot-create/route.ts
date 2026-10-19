@@ -33,6 +33,17 @@ export async function POST(request: Request) {
       );
     }
 
+    if (
+      body.is_private !== undefined &&
+      body.is_private !== null &&
+      typeof body.is_private !== "boolean"
+    ) {
+      return NextResponse.json(
+        { error: { code: "invalid_is_private", message: "is_private must be true, false, or null." } },
+        { status: 400 },
+      );
+    }
+
     const botCount = await prisma.bots.count({
       where: { owner_id: authResult.user_id },
     });
@@ -76,6 +87,7 @@ export async function POST(request: Request) {
           user_id: botUser.id,
           owner_id: authResult.user_id,
           system_prompt: DEFAULT_BOT_SYSTEM_PROMPT,
+          is_private: body.is_private ?? null,
           wake_period: "24h",
           rss_feeds: [] as Prisma.InputJsonValue,
           created_at: now,

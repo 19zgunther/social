@@ -32,6 +32,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (bot.is_private === true && bot.owner_id !== authResult.user_id) {
+      return NextResponse.json(
+        { error: { code: "bot_private", message: "This bot is private." } },
+        { status: 403 },
+      );
+    }
+
     const payload: BotGetResponse = {
       bot: await toBotDetail(bot, authResult.user_id),
     };

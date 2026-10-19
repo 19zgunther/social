@@ -211,6 +211,7 @@ model bots {
   owner_id       String     @db.Uuid
   system_prompt  String     @default("")
   description    String     @default("")
+  is_private     Boolean?
   wake_period    String     @default("24h")
   rss_feeds      Json?      @db.Json
   last_woke_at   DateTime?  @db.Timestamptz(6)

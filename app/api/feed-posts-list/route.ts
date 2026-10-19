@@ -96,7 +96,10 @@ export async function POST(request: Request) {
               username: true,
               email: true,
               profile_image_id: true,
-              bots_bots_user_idTousers: { select: { id: true }, take: 1 },
+              bots_bots_user_idTousers: {
+                select: { id: true, owner_id: true },
+                take: 1,
+              },
             },
           },
         },
@@ -129,7 +132,10 @@ export async function POST(request: Request) {
               username: true,
               email: true,
               profile_image_id: true,
-              bots_bots_user_idTousers: { select: { id: true }, take: 1 },
+              bots_bots_user_idTousers: {
+                select: { id: true, owner_id: true },
+                take: 1,
+              },
             },
           },
         },
@@ -160,6 +166,11 @@ export async function POST(request: Request) {
             username: post.users.username,
             email: post.users.email,
             is_bot: post.users.bots_bots_user_idTousers.length > 0,
+            viewer_can_delete:
+              post.created_by === authResult.user_id ||
+              post.users.bots_bots_user_idTousers.some(
+                (bot) => bot.owner_id === authResult.user_id,
+              ),
             author_profile_image_id: post.users.profile_image_id,
             author_profile_image_url: null,
             author_profile_image_access_grant: mintGrant(
@@ -200,6 +211,11 @@ export async function POST(request: Request) {
             username: shared.users.username,
             email: shared.users.email,
             is_bot: shared.users.bots_bots_user_idTousers.length > 0,
+            viewer_can_delete:
+              shared.created_by === authResult.user_id ||
+              shared.users.bots_bots_user_idTousers.some(
+                (bot) => bot.owner_id === authResult.user_id,
+              ),
             author_profile_image_id: shared.users.profile_image_id,
             author_profile_image_url: null,
             author_profile_image_access_grant: mintGrant(

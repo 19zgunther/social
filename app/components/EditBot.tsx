@@ -79,6 +79,7 @@ function stringifyContent(content: unknown): string {
 function botDraftJson(input: {
   username: string;
   description: string;
+  isPrivate: boolean;
   systemPrompt: string;
   wakePeriod: BotWakePeriod;
   rssFeeds: string[];
@@ -86,6 +87,7 @@ function botDraftJson(input: {
   return JSON.stringify({
     username: input.username.trim(),
     description: input.description.trim(),
+    is_private: input.isPrivate,
     system_prompt: input.systemPrompt,
     wake_period: input.wakePeriod,
     rss_feeds: input.rssFeeds.map((feed) => feed.trim()).filter((feed) => feed.length > 0),
@@ -101,6 +103,7 @@ export default function EditBot({
   const [bot, setBot] = useState<BotDetail | null>(null);
   const [username, setUsername] = useState("");
   const [description, setDescription] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [wakePeriod, setWakePeriod] = useState<BotWakePeriod>("24h");
   const [rssFeeds, setRssFeeds] = useState<string[]>([""]);
@@ -119,6 +122,7 @@ export default function EditBot({
   const currentDraftJson = botDraftJson({
     username,
     description,
+    isPrivate,
     systemPrompt,
     wakePeriod,
     rssFeeds,
@@ -157,6 +161,7 @@ export default function EditBot({
     setBot(payload.bot);
     setUsername(payload.bot.username);
     setDescription(payload.bot.description);
+    setIsPrivate(payload.bot.is_private === true);
     setSystemPrompt(payload.bot.system_prompt);
     setWakePeriod(payload.bot.wake_period);
     const nextFeeds = payload.bot.rss_feeds.length > 0 ? payload.bot.rss_feeds : [""];
@@ -165,6 +170,7 @@ export default function EditBot({
       botDraftJson({
         username: payload.bot.username,
         description: payload.bot.description,
+        isPrivate: payload.bot.is_private === true,
         systemPrompt: payload.bot.system_prompt,
         wakePeriod: payload.bot.wake_period,
         rssFeeds: nextFeeds,
@@ -229,6 +235,7 @@ export default function EditBot({
           bot_id: botId,
           username: username.trim(),
           description: description.trim(),
+          is_private: isPrivate,
           system_prompt: systemPrompt,
           wake_period: wakePeriod,
           rss_feeds: cleanedFeeds,
@@ -242,6 +249,7 @@ export default function EditBot({
       setBot(payload.bot);
       setUsername(payload.bot.username);
       setDescription(payload.bot.description);
+      setIsPrivate(payload.bot.is_private === true);
       setSystemPrompt(payload.bot.system_prompt);
       setWakePeriod(payload.bot.wake_period);
       const nextFeeds = payload.bot.rss_feeds.length > 0 ? payload.bot.rss_feeds : [""];
@@ -250,6 +258,7 @@ export default function EditBot({
         botDraftJson({
           username: payload.bot.username,
           description: payload.bot.description,
+          isPrivate: payload.bot.is_private === true,
           systemPrompt: payload.bot.system_prompt,
           wakePeriod: payload.bot.wake_period,
           rssFeeds: nextFeeds,
@@ -429,6 +438,44 @@ export default function EditBot({
                 className="w-full rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent read-only:opacity-80"
               />
             </label>
+
+            <fieldset className="space-y-2">
+              <legend className="text-xs text-muted">Privacy</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    { value: false, label: "Public" },
+                    { value: true, label: "Private" },
+                  ] as const
+                ).map((option) => {
+                  const selected = isPrivate === option.value;
+                  return (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => {
+                        if (canEdit) {
+                          setIsPrivate(option.value);
+                        }
+                      }}
+                      disabled={!canEdit}
+                      className={`rounded-lg border px-3 py-3 text-left text-sm transition disabled:cursor-default ${
+                        selected
+                          ? "border-accent bg-accent/15 text-foreground"
+                          : "border-border bg-surface text-foreground hover:bg-border/30 disabled:hover:bg-surface"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted">
+                {isPrivate
+                  ? "Only you can follow this bot."
+                  : "Anyone can follow this bot — requests are approved automatically."}
+              </p>
+            </fieldset>
 
             <fieldset className="space-y-2">
               <legend className="text-xs text-muted">Wake period</legend>

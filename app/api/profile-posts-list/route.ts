@@ -56,7 +56,10 @@ export async function POST(request: Request) {
             username: true,
             email: true,
             profile_image_id: true,
-            bots_bots_user_idTousers: { select: { id: true }, take: 1 },
+            bots_bots_user_idTousers: {
+              select: { id: true, owner_id: true },
+              take: 1,
+            },
           },
         },
       },
@@ -127,6 +130,7 @@ export async function POST(request: Request) {
         username: post.users.username,
         email: post.users.email,
         is_bot: post.users.bots_bots_user_idTousers.length > 0,
+        viewer_can_delete: true,
         author_profile_image_id: post.users.profile_image_id,
         author_profile_image_url: null,
         author_profile_image_access_grant:

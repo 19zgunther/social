@@ -931,6 +931,7 @@ function ProfileOtherUser({
   const [isSendingRequest, setIsSendingRequest] = useState(false);
   const [isOpeningDirectThread, setIsOpeningDirectThread] = useState(false);
   const [isBotSettingsOpen, setIsBotSettingsOpen] = useState(false);
+  const [confirmedDeletePost, setConfirmedDeletePost] = useState(false);
 
   const [removeFriendConfirmed, setRemoveFriendConfirmed] = useState(false);
   const [isRemovingFriend, setIsRemovingFriend] = useState(false);
@@ -970,8 +971,10 @@ function ProfileOtherUser({
   useEffect(() => {
     setRemoveFriendConfirmed(false);
     setIsBotSettingsOpen(false);
+    setConfirmedDeletePost(false);
   }, [userId, isActive, currentUserId]);
   useEffect(() => { setShowSelectedPostOptions(false); }, [selectedPostId]);
+  useEffect(() => { setConfirmedDeletePost(false); }, [selectedPostId]);
 
   const selectedPost = selectedPostId && profileData
     ? profileData.posts.find((post) => post.id === selectedPostId) ?? null
@@ -1036,6 +1039,41 @@ function ProfileOtherUser({
     void loadProfile();
   };
 
+  const onDeleteSelectedPost = async () => {
+    if (!selectedPost || !selectedPost.viewer_can_delete) {
+      return;
+    }
+    if (!confirmedDeletePost) {
+      setConfirmedDeletePost(true);
+      return;
+    }
+    setConfirmedDeletePost(false);
+    setStatusMessage("");
+    try {
+      const response = await postWithAuth("/api/post-delete", {
+        post_id: selectedPost.id,
+      });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+
+      setProfileData((previous) => {
+        if (!previous) {
+          return previous;
+        }
+        return {
+          ...previous,
+          posts: previous.posts.filter((post) => post.id !== selectedPost.id),
+        };
+      });
+      setSelectedPostId(null);
+      setStatusMessage("Post deleted.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to delete post.");
+    }
+  };
+
   const onOpenMessage = async () => {
     setIsOpeningDirectThread(true);
     setStatusMessage("");
@@ -1072,8 +1110,9 @@ function ProfileOtherUser({
         return;
       }
 
+      const wasPublicBot = Boolean(profileData.bot) && !profileData.bot?.is_private;
       await loadProfile();
-      setStatusMessage("Friend request sent.");
+      setStatusMessage(wasPublicBot ? "Following this bot." : "Friend request sent.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to send friend request.");
     } finally {
@@ -1108,6 +1147,18 @@ function ProfileOtherUser({
       >
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <BackButton onBack={() => setSelectedPostId(null)} />
+          {selectedPost.viewer_can_delete ? (
+            <button
+              type="button"
+              onClick={() => {
+                void onDeleteSelectedPost();
+              }}
+              className="rounded-full flex gap-2 px-3 py-1 text-xs hover:text-foreground"
+              style={{ color: confirmedDeletePost ? "red" : undefined }}
+            >
+              <DeleteIcon className="h-4 w-4" /> {confirmedDeletePost && "Confirm Delete"}
+            </button>
+          ) : null}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
           <PostSection
@@ -1189,7 +1240,7 @@ function ProfileOtherUser({
         setIsProfilePictureEditorOpen={() => { }}
         trailingAction={
           <div className="flex shrink-0 items-center gap-2">
-            {botInfo ? (
+            {botInfo && (!botInfo.is_private || botInfo.is_owner) ? (
               <button
                 type="button"
                 onClick={() => setIsBotSettingsOpen(true)}
@@ -1266,7 +1317,11 @@ function ProfileOtherUser({
 
       {!isFriends ? (
         <div className="border-b border-border px-4 py-6 flex flex-col items-center justify-center gap-3">
-          {canSendRequest ? (
+          {botInfo?.is_private && !botInfo.is_owner ? (
+            <p className="text-sm text-muted text-center">
+              This bot is private. Only its creator can follow it.
+            </p>
+          ) : canSendRequest ? (
             <>
               <p className="text-sm text-muted text-center">
                 Send a friend request to view {profileData.user.username}'s posts.

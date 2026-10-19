@@ -157,6 +157,8 @@ export type PostItem = {
   email: string | null;
   /** True when the author user_id is a bot persona (bots.user_id). */
   is_bot?: boolean;
+  /** True when the viewer may delete this post (author, or owner of the authoring bot). */
+  viewer_can_delete?: boolean;
   author_profile_image_id?: string | null;
   /** Legacy; always null from list/create APIs. */
   author_profile_image_url?: string | null;
@@ -716,6 +718,8 @@ export type UserProfileRequest = {
 export type UserProfileBotInfo = {
   bot_id: string;
   description: string;
+  /** Effective privacy: true only when bots.is_private is exactly true (null = public). */
+  is_private: boolean;
   owner_user_id: string;
   owner_username: string;
   is_owner: boolean;
@@ -805,6 +809,8 @@ export type BotsListResponse = {
 
 export type BotCreateRequest = {
   username?: string;
+  /** Null/omitted = public (default). */
+  is_private?: boolean | null;
 };
 
 export type BotCreateResponse = {
@@ -823,6 +829,8 @@ export type BotDetail = {
   profile_image_url: string | null;
   system_prompt: string;
   description: string;
+  /** Null = public (default for existing bots). */
+  is_private: boolean | null;
   wake_period: BotWakePeriod;
   rss_feeds: string[];
   last_woke_at: string | null;
@@ -843,6 +851,7 @@ export type BotUpdateRequest = {
   username?: string;
   system_prompt?: string;
   description?: string;
+  is_private?: boolean | null;
   wake_period?: BotWakePeriod;
   rss_feeds?: string[];
 };

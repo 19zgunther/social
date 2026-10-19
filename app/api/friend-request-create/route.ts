@@ -44,6 +44,26 @@ export async function POST(request: Request) {
       );
     }
 
+    const targetBot = await prisma.bots.findFirst({
+      where: { user_id: otherUserId },
+      select: { is_private: true, owner_id: true },
+    });
+    const isPublicBot = Boolean(targetBot) && targetBot?.is_private !== true;
+    if (
+      targetBot?.is_private === true &&
+      targetBot.owner_id !== authResult.user_id
+    ) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "bot_private",
+            message: "This bot is private and cannot be followed.",
+          },
+        },
+        { status: 403 },
+      );
+    }
+
     const existingRow = await prisma.friends.findFirst({
       where: {
         OR: [
@@ -75,13 +95,15 @@ export async function POST(request: Request) {
       );
     }
 
+    const nowDate = new Date();
     const friend = await prisma.friends.create({
       data: {
         requesting_user: authResult.user_id,
         other_user: otherUserId,
-        requested_at: new Date(),
-        accepted: null,
-        accepted_at: null,
+        requested_at: nowDate,
+        // Public bots auto-approve follow requests.
+        accepted: isPublicBot ? true : null,
+        accepted_at: isPublicBot ? nowDate : null,
       },
       select: {
         id: true,

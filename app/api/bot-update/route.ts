@@ -70,6 +70,22 @@ export async function POST(request: Request) {
       }
     }
 
+    if (
+      body.is_private !== undefined &&
+      body.is_private !== null &&
+      typeof body.is_private !== "boolean"
+    ) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_is_private",
+            message: "is_private must be true, false, or null.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
     if (body.wake_period !== undefined && !isBotWakePeriod(body.wake_period)) {
       return NextResponse.json(
         {
@@ -100,6 +116,7 @@ export async function POST(request: Request) {
           ...(body.description !== undefined
             ? { description: body.description.trim() }
             : {}),
+          ...(body.is_private !== undefined ? { is_private: body.is_private } : {}),
           ...(body.wake_period !== undefined ? { wake_period: body.wake_period } : {}),
           ...(body.rss_feeds !== undefined
             ? { rss_feeds: parseRssFeedsJson(body.rss_feeds) as Prisma.InputJsonValue }

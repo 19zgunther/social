@@ -26,6 +26,7 @@ export type BotRowWithUser = {
   owner_id: string;
   system_prompt: string;
   description: string;
+  is_private: boolean | null;
   wake_period: string;
   rss_feeds: unknown;
   last_woke_at: Date | null;
@@ -67,6 +68,7 @@ export async function toBotDetail(
     profile_image_url: profileImageUrl,
     system_prompt: bot.system_prompt,
     description: bot.description,
+    is_private: bot.is_private,
     wake_period: wakePeriod,
     rss_feeds: parseRssFeedsJson(bot.rss_feeds),
     last_woke_at: bot.last_woke_at?.toISOString() ?? null,
@@ -84,6 +86,7 @@ export const BOT_WITH_USER_SELECT = {
   owner_id: true,
   system_prompt: true,
   description: true,
+  is_private: true,
   wake_period: true,
   rss_feeds: true,
   last_woke_at: true,

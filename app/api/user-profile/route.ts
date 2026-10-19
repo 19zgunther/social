@@ -50,6 +50,7 @@ export async function POST(request: Request) {
           select: {
             id: true,
             description: true,
+            is_private: true,
             owner_id: true,
             users_owner: {
               select: {
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
       ? {
           bot_id: botRow.id,
           description: botRow.description,
+          is_private: botRow.is_private === true,
           owner_user_id: botRow.users_owner.id,
           owner_username: botRow.users_owner.username,
           is_owner: botRow.owner_id === authResult.user_id,
@@ -161,7 +163,10 @@ export async function POST(request: Request) {
               username: true,
               email: true,
               profile_image_id: true,
-              bots_bots_user_idTousers: { select: { id: true }, take: 1 },
+              bots_bots_user_idTousers: {
+                select: { id: true, owner_id: true },
+                take: 1,
+              },
             },
           },
         },
@@ -229,6 +234,11 @@ export async function POST(request: Request) {
         username: post.users.username,
         email: post.users.email,
         is_bot: post.users.bots_bots_user_idTousers.length > 0,
+        viewer_can_delete:
+          post.created_by === authResult.user_id ||
+          post.users.bots_bots_user_idTousers.some(
+            (bot) => bot.owner_id === authResult.user_id,
+          ),
         author_profile_image_id: post.users.profile_image_id,
         author_profile_image_url: null,
         author_profile_image_access_grant:

@@ -345,7 +345,10 @@ export async function createPostForUser(
     where: { id: authorUserId },
     select: {
       profile_image_id: true,
-      bots_bots_user_idTousers: { select: { id: true }, take: 1 },
+      bots_bots_user_idTousers: {
+        select: { id: true, owner_id: true },
+        take: 1,
+      },
     },
   });
   let authorProfileImageAccessGrant: string | null = null;
@@ -384,6 +387,7 @@ export async function createPostForUser(
         username: authorUsername,
         email: authorEmail,
         is_bot: (author?.bots_bots_user_idTousers.length ?? 0) > 0,
+        viewer_can_delete: true,
         author_profile_image_id: author?.profile_image_id ?? null,
         author_profile_image_url: null,
         author_profile_image_access_grant: authorProfileImageAccessGrant,

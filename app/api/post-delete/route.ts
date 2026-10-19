@@ -39,9 +39,27 @@ export async function POST(request: Request) {
       );
     }
 
-    if (post.created_by !== authResult.user_id) {
+    const isAuthor = post.created_by === authResult.user_id;
+    let ownsAuthorBot = false;
+    if (!isAuthor) {
+      const ownedBot = await prisma.bots.findFirst({
+        where: {
+          user_id: post.created_by,
+          owner_id: authResult.user_id,
+        },
+        select: { id: true },
+      });
+      ownsAuthorBot = Boolean(ownedBot);
+    }
+
+    if (!isAuthor && !ownsAuthorBot) {
       return NextResponse.json(
-        { error: { code: "not_allowed", message: "You can only delete your own posts." } },
+        {
+          error: {
+            code: "not_allowed",
+            message: "You can only delete your own posts (or posts from bots you own).",
+          },
+        },
         { status: 403 },
       );
     }
