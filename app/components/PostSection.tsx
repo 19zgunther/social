@@ -178,10 +178,12 @@ function PostSectionComponent({
     imageAccessGrant: string | null;
     imageStorageUserId: string;
     alt: string;
+    index: number;
   } | null>(null);
   const [isPostDateExpanded, setIsPostDateExpanded] = useState(false);
   const [balloonSessionKey, setBalloonSessionKey] = useState<number | null>(null);
   const balloonSessionCounterRef = useRef(0);
+  const carouselRef = useRef<HTMLDivElement>(null);
   const imageAreaRef = useRef<HTMLDivElement>(null);
   const isImageAreaCenteredRef = useRef(false);
   const prevHasCongratsRef = useRef(false);
@@ -251,6 +253,13 @@ function PostSectionComponent({
     return collectPostMediaObjectIds({ imageId: post.image_id, data: postData });
   }, [post.image_id, postData, resolvedPreviewMedia]);
   const hasMultipleImages = mediaSlides.length > 1;
+  const imageSlides = useMemo(
+    () =>
+      mediaSlides
+        .map((slide, mediaIndex) => ({ slide, mediaIndex }))
+        .filter((entry) => entry.slide.kind === "image"),
+    [mediaSlides],
+  );
   const hasCongrats = useMemo(
     () => hasCongratsComment(postData.comments),
     [postData.comments],
@@ -366,6 +375,15 @@ function PostSectionComponent({
   const sharedPostId = post.shared_post_id ?? (isSharedEvent ? post.id : null);
   const storageUserIdForSlide = (ownerUserId?: string): string =>
     ownerUserId ?? post.created_by;
+  const viewerImages = imageSlides.map(({ slide }) => ({
+    imageId: slide.mediaId,
+    signedUrl: slide.previewUrl ?? null,
+    imageAccessGrant: imageGrantById[slide.mediaId] ?? null,
+    imageStorageUserId: storageUserIdForSlide(
+      "ownerUserId" in slide ? slide.ownerUserId : undefined,
+    ),
+    alt: "Post attachment",
+  }));
 
   const loadAdditionalImages = async () => {
     if (resolvedPreviewMedia || hasLoadedAdditionalImages || isLoadingAdditionalImages) {
@@ -926,6 +944,7 @@ function PostSectionComponent({
             />
           ) : null}
           <div
+            ref={carouselRef}
             className="flex w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth"
             onScroll={onCarouselScroll}
             onTouchStart={() => {
@@ -995,11 +1014,16 @@ function PostSectionComponent({
                       className="block w-full cursor-zoom-in border-0 bg-transparent p-0"
                       onClick={(event) => {
                         event.stopPropagation();
+                        void loadAdditionalImages();
                         setImageViewer({
                           imageId: slide.mediaId,
                           imageAccessGrant: grant,
                           imageStorageUserId: slideStorageUserId,
                           alt: "Post attachment",
+                          index: Math.max(
+                            0,
+                            imageSlides.findIndex((entry) => entry.slide.mediaId === slide.mediaId),
+                          ),
                         });
                       }}
                     >
@@ -1222,13 +1246,26 @@ function PostSectionComponent({
       </div>
 
       <ImageViewerModal
-        key={imageViewer ? imageViewer.imageId : "post-image-viewer-closed"}
+        key={imageViewer ? `post-image-viewer-${post.id}` : "post-image-viewer-closed"}
         open={imageViewer !== null}
         onClose={() => setImageViewer(null)}
         imageId={imageViewer?.imageId ?? null}
         imageAccessGrant={imageViewer?.imageAccessGrant ?? null}
         imageStorageUserId={imageViewer?.imageStorageUserId ?? null}
         alt={imageViewer?.alt}
+        images={viewerImages}
+        initialIndex={imageViewer?.index ?? 0}
+        onIndexChange={(viewerIndex) => {
+          const mediaIndex = imageSlides[viewerIndex]?.mediaIndex;
+          if (mediaIndex === undefined) {
+            return;
+          }
+          setActiveImageIndex(mediaIndex);
+          const carousel = carouselRef.current;
+          if (carousel) {
+            carousel.scrollTo({ left: mediaIndex * carousel.clientWidth });
+          }
+        }}
       />
 
       {reactionFlyOverlay}

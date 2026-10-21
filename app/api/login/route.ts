@@ -5,9 +5,6 @@ import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils
 import { parseThemeInfo } from "@/app/lib/theme";
 import { LoginRequest, LoginResponse, ThemeInfo } from "@/app/types/interfaces";
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 type LoginUser = {
   id: string;
   username: string;
@@ -99,15 +96,14 @@ export async function POST(request: Request) {
     if (user.password_hash && (await verifyPassword(password, user.password_hash))) {
       authenticated = true;
     } else {
-      const tempId = password.trim();
-      if (UUID_RE.test(tempId)) {
+      const code = password.trim().toUpperCase();
+      const rows = await prisma.temp_passwords.findMany({
+        where: { user_id: user.id, was_used: false, expires_at: { gt: new Date() } },
+      });
+      const match = rows.find((row) => row.id.slice(-8).toUpperCase() === code);
+      if (match) {
         const consumed = await prisma.temp_passwords.updateMany({
-          where: {
-            id: tempId,
-            user_id: user.id,
-            was_used: false,
-            expires_at: { gt: new Date() },
-          },
+          where: { id: match.id, was_used: false },
           data: { was_used: true },
         });
         authenticated = consumed.count === 1;

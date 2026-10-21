@@ -55,7 +55,8 @@ export async function POST(request: Request) {
         },
       });
 
-      const loginUrl = `${origin}/?temp_password=${encodeURIComponent(row.id)}`;
+      const tempCode = row.id.slice(-8).toUpperCase();
+      const loginUrl = `${origin}/?temp_password=${encodeURIComponent(tempCode)}`;
       const from = process.env.RESEND_FROM ?? "Zocial <youforgotyourpassword@i-am-eng.com>";
 
       const resend = new Resend(apiKey);
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
           html: `
 <p>Hi ${escapeHtml(user.username)},</p>
 <p>Use this one-time code as your password when you sign in. It expires in 30 minutes and can only be used once.</p>
-<p style="font-size:14px;font-family:ui-monospace,monospace;word-break:break-all">${escapeHtml(row.id)}</p>
+<p style="font-size:14px;font-family:ui-monospace,monospace">${escapeHtml(tempCode)}</p>
 <p><a href="${loginUrl}">Open the app and sign in</a></p>
 <p>If you did not request this, you can ignore this email.</p>
 `.trim(),
