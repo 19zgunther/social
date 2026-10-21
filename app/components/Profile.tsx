@@ -20,7 +20,7 @@ import { PostSection } from "@/app/components/PostSection";
 import PostOptionsPane from "@/app/components/PostOptionsPane";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
-import EditBot from "@/app/components/EditBot";
+import EditBot from "@/app/components/bots/EditBot";
 import EmojiEditorTab from "@/app/components/EmojiEditorTab";
 import PostGroupsTab from "@/app/components/PostGroupsTab";
 import { getPollViewerState } from "@/app/components/PollBlock";

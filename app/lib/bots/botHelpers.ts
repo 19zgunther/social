@@ -10,6 +10,106 @@ export function isBotWakePeriod(value: string): value is BotWakePeriod {
   return value === "24h" || value === "1w";
 }
 
+export const DEFAULT_WAKE_TIME = "13:00";
+export const DEFAULT_WAKE_WEEKDAY = 1;
+export const DEFAULT_WAKE_TIMEZONE = "UTC";
+
+const WAKE_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export function isBotWakeTime(value: unknown): value is string {
+  return typeof value === "string" && WAKE_TIME_RE.test(value);
+}
+
+export function isBotWakeWeekday(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 6;
+}
+
+export function isBotWakeTimezone(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0) {
+    return false;
+  }
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Civil day number (days since epoch, in `timeZone`) + minutes since local midnight. */
+function localDayAndMinutes(date: Date, timeZone: string): { day: number; minutes: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  let year = 0;
+  let month = 0;
+  let dayOfMonth = 0;
+  let hour = 0;
+  let minute = 0;
+  for (const part of parts) {
+    if (part.type === "year") year = Number(part.value);
+    else if (part.type === "month") month = Number(part.value);
+    else if (part.type === "day") dayOfMonth = Number(part.value);
+    else if (part.type === "hour") hour = Number(part.value);
+    else if (part.type === "minute") minute = Number(part.value);
+  }
+  return {
+    day: Math.floor(Date.UTC(year, month - 1, dayOfMonth) / DAY_MS),
+    minutes: hour * 60 + minute,
+  };
+}
+
+export type BotWakeSchedule = {
+  wake_period: string;
+  wake_time: string;
+  wake_weekday: number;
+  wake_timezone: string;
+  last_woke_at: Date | null;
+};
+
+/**
+ * A bot is due when its most recent scheduled local occurrence (daily at
+ * `wake_time`, or weekly on `wake_weekday` at `wake_time`, in
+ * `wake_timezone`) has passed and it hasn't woken on that local day yet.
+ * Missed occurrences are caught up once at the next check.
+ */
+export function isBotDueAt(now: Date, schedule: BotWakeSchedule): boolean {
+  const timeZone = isBotWakeTimezone(schedule.wake_timezone)
+    ? schedule.wake_timezone
+    : DEFAULT_WAKE_TIMEZONE;
+  const wakeMinutes = isBotWakeTime(schedule.wake_time)
+    ? Number(schedule.wake_time.slice(0, 2)) * 60 + Number(schedule.wake_time.slice(3, 5))
+    : 13 * 60;
+  const wakeWeekday = isBotWakeWeekday(schedule.wake_weekday)
+    ? schedule.wake_weekday
+    : DEFAULT_WAKE_WEEKDAY;
+
+  const nowLocal = localDayAndMinutes(now, timeZone);
+  let scheduledDay = nowLocal.day;
+  if (schedule.wake_period === "1w") {
+    const todayWeekday = new Date(nowLocal.day * DAY_MS).getUTCDay();
+    scheduledDay -= (todayWeekday - wakeWeekday + 7) % 7;
+    if (scheduledDay === nowLocal.day && nowLocal.minutes < wakeMinutes) {
+      scheduledDay -= 7;
+    }
+  } else if (nowLocal.minutes < wakeMinutes) {
+    scheduledDay -= 1;
+  }
+
+  if (!schedule.last_woke_at) {
+    return true;
+  }
+  return localDayAndMinutes(schedule.last_woke_at, timeZone).day < scheduledDay;
+}
+
 export function parseRssFeedsJson(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -28,6 +128,9 @@ export type BotRowWithUser = {
   description: string;
   is_private: boolean | null;
   wake_period: string;
+  wake_time: string;
+  wake_weekday: number;
+  wake_timezone: string;
   rss_feeds: unknown;
   last_woke_at: Date | null;
   created_at: Date;
@@ -70,6 +173,9 @@ export async function toBotDetail(
     description: bot.description,
     is_private: bot.is_private,
     wake_period: wakePeriod,
+    wake_time: isBotWakeTime(bot.wake_time) ? bot.wake_time : DEFAULT_WAKE_TIME,
+    wake_weekday: isBotWakeWeekday(bot.wake_weekday) ? bot.wake_weekday : DEFAULT_WAKE_WEEKDAY,
+    wake_timezone: isBotWakeTimezone(bot.wake_timezone) ? bot.wake_timezone : DEFAULT_WAKE_TIMEZONE,
     rss_feeds: parseRssFeedsJson(bot.rss_feeds),
     last_woke_at: bot.last_woke_at?.toISOString() ?? null,
     created_at: bot.created_at.toISOString(),
@@ -88,6 +194,9 @@ export const BOT_WITH_USER_SELECT = {
   description: true,
   is_private: true,
   wake_period: true,
+  wake_time: true,
+  wake_weekday: true,
+  wake_timezone: true,
   rss_feeds: true,
   last_woke_at: true,
   created_at: true,

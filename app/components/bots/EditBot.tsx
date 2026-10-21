@@ -2,13 +2,12 @@
 
 import { useEffect, useState, type MutableRefObject } from "react";
 import {
-  AddIcon,
   ChevronRightIcon,
-  DeleteIcon,
   RefreshIcon,
   RssIcon,
   UserPlaceholderIcon,
 } from "@/app/components/Icons";
+import BotRssEdit from "@/app/components/bots/BotRssEdit";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 import BackButton from "@/app/components/utils/BackButton";
 import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
@@ -76,12 +75,25 @@ function stringifyContent(content: unknown): string {
   }
 }
 
+const WEEKDAY_LABELS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
 function botDraftJson(input: {
   username: string;
   description: string;
   isPrivate: boolean;
   systemPrompt: string;
   wakePeriod: BotWakePeriod;
+  wakeTime: string;
+  wakeWeekday: number;
+  wakeTimezone: string;
   rssFeeds: string[];
 }): string {
   return JSON.stringify({
@@ -90,6 +102,9 @@ function botDraftJson(input: {
     is_private: input.isPrivate,
     system_prompt: input.systemPrompt,
     wake_period: input.wakePeriod,
+    wake_time: input.wakeTime,
+    wake_weekday: input.wakeWeekday,
+    wake_timezone: input.wakeTimezone,
     rss_feeds: input.rssFeeds.map((feed) => feed.trim()).filter((feed) => feed.length > 0),
   });
 }
@@ -106,6 +121,9 @@ export default function EditBot({
   const [isPrivate, setIsPrivate] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [wakePeriod, setWakePeriod] = useState<BotWakePeriod>("24h");
+  const [wakeTime, setWakeTime] = useState("13:00");
+  const [wakeWeekday, setWakeWeekday] = useState(1);
+  const [wakeTimezone, setWakeTimezone] = useState("UTC");
   const [rssFeeds, setRssFeeds] = useState<string[]>([""]);
   const [logs, setLogs] = useState<BotLogListItem[]>([]);
   const [selectedLog, setSelectedLog] = useState<BotLogDetail | null>(null);
@@ -125,6 +143,9 @@ export default function EditBot({
     isPrivate,
     systemPrompt,
     wakePeriod,
+    wakeTime,
+    wakeWeekday,
+    wakeTimezone,
     rssFeeds,
   });
   const hasUnsavedEdits =
@@ -164,7 +185,10 @@ export default function EditBot({
     setIsPrivate(payload.bot.is_private === true);
     setSystemPrompt(payload.bot.system_prompt);
     setWakePeriod(payload.bot.wake_period);
-    const nextFeeds = payload.bot.rss_feeds.length > 0 ? payload.bot.rss_feeds : [""];
+    setWakeTime(payload.bot.wake_time);
+    setWakeWeekday(payload.bot.wake_weekday);
+    setWakeTimezone(payload.bot.wake_timezone);
+    const nextFeeds = [...payload.bot.rss_feeds, ""];
     setRssFeeds(nextFeeds);
     setSavedDraftJson(
       botDraftJson({
@@ -173,6 +197,9 @@ export default function EditBot({
         isPrivate: payload.bot.is_private === true,
         systemPrompt: payload.bot.system_prompt,
         wakePeriod: payload.bot.wake_period,
+        wakeTime: payload.bot.wake_time,
+        wakeWeekday: payload.bot.wake_weekday,
+        wakeTimezone: payload.bot.wake_timezone,
         rssFeeds: nextFeeds,
       }),
     );
@@ -238,6 +265,9 @@ export default function EditBot({
           is_private: isPrivate,
           system_prompt: systemPrompt,
           wake_period: wakePeriod,
+          wake_time: wakeTime,
+          wake_weekday: wakeWeekday,
+          wake_timezone: wakeTimezone,
           rss_feeds: cleanedFeeds,
         }),
       });
@@ -252,7 +282,10 @@ export default function EditBot({
       setIsPrivate(payload.bot.is_private === true);
       setSystemPrompt(payload.bot.system_prompt);
       setWakePeriod(payload.bot.wake_period);
-      const nextFeeds = payload.bot.rss_feeds.length > 0 ? payload.bot.rss_feeds : [""];
+      setWakeTime(payload.bot.wake_time);
+      setWakeWeekday(payload.bot.wake_weekday);
+      setWakeTimezone(payload.bot.wake_timezone);
+      const nextFeeds = [...payload.bot.rss_feeds, ""];
       setRssFeeds(nextFeeds);
       setSavedDraftJson(
         botDraftJson({
@@ -261,6 +294,9 @@ export default function EditBot({
           isPrivate: payload.bot.is_private === true,
           systemPrompt: payload.bot.system_prompt,
           wakePeriod: payload.bot.wake_period,
+          wakeTime: payload.bot.wake_time,
+          wakeWeekday: payload.bot.wake_weekday,
+          wakeTimezone: payload.bot.wake_timezone,
           rssFeeds: nextFeeds,
         }),
       );
@@ -335,10 +371,8 @@ export default function EditBot({
       ? "Wake log"
       : view === "rss"
         ? "RSS feeds"
-        : bot
-          ? canEdit
-            ? `@${bot.username}`
-            : `@${bot.username} (view)`
+        : canEdit
+          ? "Edit bot"
           : "Bot";
 
   const transcriptMessages: TranscriptMessage[] = Array.isArray(selectedLog?.messages)
@@ -370,65 +404,70 @@ export default function EditBot({
               </p>
             ) : null}
 
-            <div className="flex items-center gap-3">
-              {canEdit ? (
-                <button
-                  type="button"
-                  onClick={() => setIsPictureEditorOpen(true)}
-                  className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-border bg-surface"
-                  aria-label="Edit bot profile picture"
-                >
-                  {bot.profile_image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={bot.profile_image_url}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center text-muted">
-                      <UserPlaceholderIcon className="h-8 w-8" />
-                    </span>
-                  )}
-                </button>
-              ) : (
-                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-border bg-surface">
-                  {bot.profile_image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={bot.profile_image_url}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center text-muted">
-                      <UserPlaceholderIcon className="h-8 w-8" />
-                    </span>
-                  )}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">Profile image</p>
-                <p className="text-xs text-muted">{canEdit ? "Tap to change" : "Read only"}</p>
+            <div className="flex items-start gap-3">
+              <div className="flex shrink-0 flex-col items-center gap-1">
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsPictureEditorOpen(true)}
+                    className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-border bg-surface"
+                    aria-label="Edit bot profile picture"
+                  >
+                    {bot.profile_image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={bot.profile_image_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-muted">
+                        <UserPlaceholderIcon className="h-8 w-8" />
+                      </span>
+                    )}
+                  </button>
+                ) : (
+                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border border-border bg-surface">
+                    {bot.profile_image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={bot.profile_image_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-muted">
+                        <UserPlaceholderIcon className="h-8 w-8" />
+                      </span>
+                    )}
+                  </div>
+                )}
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsPictureEditorOpen(true)}
+                    className="whitespace-nowrap text-xs text-muted"
+                  >
+                    Tap to change
+                  </button>
+                ) : null}
+              </div>
+              <div className="flex h-20 min-w-0 flex-1 items-center">
+                <input
+                  type="text"
+                  aria-label="Username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  readOnly={!canEdit}
+                  className="h-11 w-full min-w-0 rounded-2xl border border-border bg-bg px-4 text-base leading-none text-foreground outline-none focus:border-accent read-only:opacity-80"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
               </div>
             </div>
 
             <label className="block space-y-1">
-              <span className="text-xs text-muted">Username</span>
-              <input
-                type="text"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                readOnly={!canEdit}
-                className="w-full rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent read-only:opacity-80"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-            </label>
-
-            <label className="block space-y-1">
-              <span className="text-xs text-muted">Description</span>
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
@@ -439,13 +478,21 @@ export default function EditBot({
               />
             </label>
 
-            <fieldset className="space-y-2">
-              <legend className="text-xs text-muted">Privacy</legend>
-              <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-14 shrink-0 text-xs leading-tight text-muted">Privacy</span>
+              <div className="flex h-8 flex-1 items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
                 {(
                   [
-                    { value: false, label: "Public" },
-                    { value: true, label: "Private" },
+                    {
+                      value: false,
+                      label: "Public",
+                      title: "Anyone can follow this bot — requests are approved automatically.",
+                    },
+                    {
+                      value: true,
+                      label: "Private",
+                      title: "Only you can follow this bot.",
+                    },
                   ] as const
                 ).map((option) => {
                   const selected = isPrivate === option.value;
@@ -453,16 +500,18 @@ export default function EditBot({
                     <button
                       key={option.label}
                       type="button"
+                      aria-pressed={selected}
+                      title={option.title}
                       onClick={() => {
                         if (canEdit) {
                           setIsPrivate(option.value);
                         }
                       }}
                       disabled={!canEdit}
-                      className={`rounded-lg border px-3 py-3 text-left text-sm transition disabled:cursor-default ${
+                      className={`h-full flex-1 rounded-md px-2 text-xs transition disabled:cursor-default ${
                         selected
-                          ? "border-accent bg-accent/15 text-foreground"
-                          : "border-border bg-surface text-foreground hover:bg-border/30 disabled:hover:bg-surface"
+                          ? "bg-accent/15 text-foreground"
+                          : "text-muted hover:text-foreground disabled:hover:text-muted"
                       }`}
                     >
                       {option.label}
@@ -470,66 +519,81 @@ export default function EditBot({
                   );
                 })}
               </div>
-              <p className="text-xs text-muted">
-                {isPrivate
-                  ? "Only you can follow this bot."
-                  : "Anyone can follow this bot — requests are approved automatically."}
-              </p>
-            </fieldset>
+            </div>
 
-            <fieldset className="space-y-2">
-              <legend className="text-xs text-muted">Wake period</legend>
-              <div className="grid grid-cols-2 gap-2">
-                {(
-                  [
-                    { value: "24h", label: "24 hours" },
-                    { value: "1w", label: "1 week" },
-                  ] as const
-                ).map((option) => {
-                  const selected = wakePeriod === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        if (canEdit) {
-                          setWakePeriod(option.value);
-                        }
-                      }}
-                      disabled={!canEdit}
-                      className={`rounded-lg border px-3 py-3 text-left text-sm transition disabled:cursor-default ${
-                        selected
-                          ? "border-accent bg-accent/15 text-foreground"
-                          : "border-border bg-surface text-foreground hover:bg-border/30 disabled:hover:bg-surface"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-              {canEdit ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    void onWakeNow();
-                  }}
-                  disabled={isSaving || isWaking}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-foreground disabled:opacity-60"
-                >
-                  <RefreshIcon className={`h-4 w-4 ${isWaking ? "animate-spin" : ""}`} />
-                  {isWaking ? "Waking…" : "Wake now"}
-                </button>
-              ) : null}
-              <p className="text-xs text-muted">
-                {canEdit
-                  ? "Stored for future auto-wake. Use Wake now to run immediately."
-                  : "Wake schedule for this bot."}
-                {bot.last_woke_at
+            <div
+              className="flex items-center gap-2"
+              title={`Runs within the scheduled hour in ${wakeTimezone}.${
+                bot.last_woke_at
                   ? ` Last woke ${formatDate(bot.last_woke_at)}.`
-                  : " Never woken yet."}
-              </p>
-            </fieldset>
+                  : " Never woken yet."
+              }`}
+            >
+              <span className="w-14 shrink-0 text-xs leading-tight text-muted">Schedule</span>
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <div className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
+                  {(
+                    [
+                      { value: "24h", label: "Daily" },
+                      { value: "1w", label: "Weekly" },
+                    ] as const
+                  ).map((option) => {
+                    const selected = wakePeriod === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => {
+                          if (canEdit) {
+                            setWakePeriod(option.value);
+                          }
+                        }}
+                        disabled={!canEdit}
+                        className={`h-full rounded-md px-1.5 text-xs transition disabled:cursor-default ${
+                          selected
+                            ? "bg-accent/15 text-foreground"
+                            : "text-muted hover:text-foreground disabled:hover:text-muted"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {wakePeriod === "1w" ? (
+                  <select
+                    aria-label="Wake day"
+                    value={wakeWeekday}
+                    onChange={(event) => setWakeWeekday(Number(event.target.value))}
+                    disabled={!canEdit}
+                    className="h-8 w-[3.25rem] shrink-0 rounded-lg border border-border bg-bg px-1.5 text-xs text-foreground outline-none focus:border-accent disabled:opacity-80"
+                  >
+                    {WEEKDAY_LABELS.map((label, weekday) => (
+                      <option key={label} value={weekday}>
+                        {label.slice(0, 3)}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                <select
+                  aria-label="Wake time"
+                  value={wakeTime}
+                  onChange={(event) => setWakeTime(event.target.value)}
+                  disabled={!canEdit}
+                  className="h-8 w-0 min-w-0 flex-1 rounded-lg border border-border bg-bg px-1.5 text-xs text-foreground outline-none focus:border-accent disabled:opacity-80"
+                >
+                  {Array.from({ length: 24 }, (_, hour) => {
+                    const value = `${String(hour).padStart(2, "0")}:00`;
+                    return (
+                      <option key={value} value={value}>
+                        {`${((hour + 11) % 12) + 1}:00 ${hour >= 12 ? "PM" : "AM"}`}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            </div>
 
             <label className="block space-y-1">
               <span className="text-xs text-muted">System prompt</span>
@@ -568,7 +632,20 @@ export default function EditBot({
 
             {canEdit ? (
               <div className="space-y-2 pt-2">
-                <h2 className="text-sm font-semibold text-foreground">Wake logs</h2>
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-foreground">Wake logs</h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void onWakeNow();
+                    }}
+                    disabled={isSaving || isWaking}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-xs font-medium text-foreground disabled:opacity-60"
+                  >
+                    <RefreshIcon className={`h-3.5 w-3.5 ${isWaking ? "animate-spin" : ""}`} />
+                    {isWaking ? "Waking…" : "Wake now"}
+                  </button>
+                </div>
                 {logs.length === 0 ? (
                   <p className="text-xs text-muted">No wake sessions yet.</p>
                 ) : (
@@ -599,64 +676,11 @@ export default function EditBot({
         ) : null}
 
         {!isLoading && view === "rss" ? (
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted">
-                Feed URLs this bot can fetch when woken.
-              </p>
-              {canEdit ? (
-                <button
-                  type="button"
-                  onClick={() => setRssFeeds((previous) => [...previous, ""])}
-                  className="inline-flex items-center gap-1 text-xs text-accent"
-                >
-                  <AddIcon className="h-3.5 w-3.5" />
-                  Add
-                </button>
-              ) : null}
-            </div>
-            {!canEdit && configuredFeedCount === 0 ? (
-              <p className="text-xs text-muted">No feeds configured.</p>
-            ) : (
-              rssFeeds.map((feed, index) => (
-                <div key={`rss-${index}`} className="flex items-center gap-2">
-                  <input
-                    type="url"
-                    value={feed}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setRssFeeds((previous) =>
-                        previous.map((entry, entryIndex) =>
-                          entryIndex === index ? value : entry,
-                        ),
-                      );
-                    }}
-                    readOnly={!canEdit}
-                    placeholder="https://example.com/feed.xml"
-                    className="min-w-0 flex-1 rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent read-only:opacity-80"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRssFeeds((previous) => {
-                          const next = previous.filter((_, entryIndex) => entryIndex !== index);
-                          return next.length > 0 ? next : [""];
-                        });
-                      }}
-                      className="rounded-lg border border-border bg-surface p-2 text-muted hover:bg-border/30"
-                      aria-label="Remove feed"
-                    >
-                      <DeleteIcon className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-              ))
-            )}
-          </section>
+          <BotRssEdit
+            rssFeeds={rssFeeds}
+            canEdit={canEdit}
+            onRssFeedsChange={setRssFeeds}
+          />
         ) : null}
 
         {!isLoading && view === "log" && selectedLog ? (

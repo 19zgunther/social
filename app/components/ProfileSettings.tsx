@@ -15,7 +15,7 @@ import {
 import { useState, useEffect, useRef, type MutableRefObject } from "react";
 import BackButton from "@/app/components/utils/BackButton";
 import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
-import EditBot from "@/app/components/EditBot";
+import EditBot from "@/app/components/bots/EditBot";
 import { clearAllCachedCustomEmojis, getCustomEmojiCacheStats, type CustomEmojiCacheStats } from "@/app/lib/customEmojiCache";
 import { clearAllCachedImages, getImageCacheStats, type ImageCacheStats } from "@/app/lib/imageCache";
 import { ensurePushSubscription, isInstalledPwa, PUSH_PROMPT_DISMISSED_KEY } from "@/app/lib/pushClient";
@@ -42,6 +42,16 @@ import { globalDebugData } from "./utils/globalDebugData";
 
 /** Keep in sync with MAX_BOTS_PER_USER in botHelpers. */
 const MAX_BOTS_PER_USER = 3;
+
+const WEEKDAY_LABELS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
 type SettingsView =
   | "root"
@@ -561,7 +571,14 @@ export default function ProfileSettings({
                   <span className="min-w-0">
                     <span className="block font-medium truncate">@{bot.username}</span>
                     <span className="block text-xs text-muted">
-                      Wake {bot.wake_period === "1w" ? "weekly" : "daily"}
+                      Wake{" "}
+                      {bot.wake_period === "1w"
+                        ? `${WEEKDAY_LABELS[bot.wake_weekday] ?? "weekly"}s`
+                        : "daily"}{" "}
+                      at{" "}
+                      {`${((Number(bot.wake_time.slice(0, 2)) + 11) % 12) + 1}:00 ${
+                        Number(bot.wake_time.slice(0, 2)) >= 12 ? "PM" : "AM"
+                      }`}
                       {bot.last_woke_at
                         ? ` · last ${new Date(bot.last_woke_at).toLocaleDateString()}`
                         : " · never woken"}

@@ -800,6 +800,12 @@ export type BotListItem = {
   profile_image_id: string | null;
   profile_image_url: string | null;
   wake_period: BotWakePeriod;
+  /** Local wall-clock "HH:MM" in `wake_timezone`. */
+  wake_time: string;
+  /** 0 = Sunday … 6 = Saturday; only used when `wake_period` is "1w". */
+  wake_weekday: number;
+  /** IANA timezone name, e.g. "America/New_York". */
+  wake_timezone: string;
   last_woke_at: string | null;
 };
 
@@ -832,6 +838,12 @@ export type BotDetail = {
   /** Null = public (default for existing bots). */
   is_private: boolean | null;
   wake_period: BotWakePeriod;
+  /** Local wall-clock "HH:MM" in `wake_timezone`. */
+  wake_time: string;
+  /** 0 = Sunday … 6 = Saturday; only used when `wake_period` is "1w". */
+  wake_weekday: number;
+  /** IANA timezone name, e.g. "America/New_York". */
+  wake_timezone: string;
   rss_feeds: string[];
   last_woke_at: string | null;
   created_at: string;
@@ -853,6 +865,9 @@ export type BotUpdateRequest = {
   description?: string;
   is_private?: boolean | null;
   wake_period?: BotWakePeriod;
+  wake_time?: string;
+  wake_weekday?: number;
+  wake_timezone?: string;
   rss_feeds?: string[];
 };
 

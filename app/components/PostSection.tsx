@@ -871,9 +871,7 @@ function PostSectionComponent({
 
   return (
     <article
-      className={`w-full border-t border-border post-rgb-top-border mb-10 rounded-t-2xl ${
-        post.is_bot ? "bg-surface/50 border-l-2 border-l-accent/40" : "bg-bg"
-      } ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}
+      className={`w-full border-t border-border post-rgb-top-border mb-10 rounded-t-2xl bg-bg ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}
     >
       <header className="px-2 py-2">
         <div className="flex items-center gap-2">

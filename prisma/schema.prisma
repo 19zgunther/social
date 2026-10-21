@@ -213,6 +213,12 @@ model bots {
   description    String     @default("")
   is_private     Boolean?
   wake_period    String     @default("24h")
+  /// Local wall-clock "HH:MM" in wake_timezone (hourly cron in practice uses :00).
+  wake_time      String     @default("13:00")
+  /// 0 = Sunday … 6 = Saturday; only used when wake_period is "1w".
+  wake_weekday   Int        @default(1)
+  /// IANA timezone name, e.g. "America/New_York".
+  wake_timezone  String     @default("UTC")
   rss_feeds      Json?      @db.Json
   last_woke_at   DateTime?  @db.Timestamptz(6)
   created_at     DateTime   @default(now()) @db.Timestamptz(6)

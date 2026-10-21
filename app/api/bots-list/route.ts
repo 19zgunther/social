@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
-import { isBotWakePeriod } from "@/app/lib/bots/botHelpers";
+import {
+  DEFAULT_WAKE_TIME,
+  DEFAULT_WAKE_TIMEZONE,
+  DEFAULT_WAKE_WEEKDAY,
+  isBotWakePeriod,
+  isBotWakeTime,
+  isBotWakeTimezone,
+  isBotWakeWeekday,
+} from "@/app/lib/bots/botHelpers";
 import { prisma } from "@/app/lib/prisma";
 import { BotListItem, BotsListResponse } from "@/app/types/interfaces";
 
@@ -19,6 +27,9 @@ export async function POST(request: Request) {
         id: true,
         user_id: true,
         wake_period: true,
+        wake_time: true,
+        wake_weekday: true,
+        wake_timezone: true,
         last_woke_at: true,
         users_bot: {
           select: {
@@ -49,6 +60,9 @@ export async function POST(request: Request) {
         profile_image_id: bot.users_bot.profile_image_id,
         profile_image_url: profileImageUrl,
         wake_period: isBotWakePeriod(bot.wake_period) ? bot.wake_period : "24h",
+        wake_time: isBotWakeTime(bot.wake_time) ? bot.wake_time : DEFAULT_WAKE_TIME,
+        wake_weekday: isBotWakeWeekday(bot.wake_weekday) ? bot.wake_weekday : DEFAULT_WAKE_WEEKDAY,
+        wake_timezone: isBotWakeTimezone(bot.wake_timezone) ? bot.wake_timezone : DEFAULT_WAKE_TIMEZONE,
         last_woke_at: bot.last_woke_at?.toISOString() ?? null,
       });
     }

@@ -4,6 +4,9 @@ import { authCheck } from "@/app/api/auth_utils";
 import {
   BOT_WITH_USER_SELECT,
   isBotWakePeriod,
+  isBotWakeTime,
+  isBotWakeTimezone,
+  isBotWakeWeekday,
   parseRssFeedsJson,
   toBotDetail,
 } from "@/app/lib/bots/botHelpers";
@@ -98,6 +101,42 @@ export async function POST(request: Request) {
       );
     }
 
+    if (body.wake_time !== undefined && !isBotWakeTime(body.wake_time)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_wake_time",
+            message: "wake_time must be a 24-hour HH:MM time.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (body.wake_weekday !== undefined && !isBotWakeWeekday(body.wake_weekday)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_wake_weekday",
+            message: "wake_weekday must be an integer 0 (Sunday) to 6 (Saturday).",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    if (body.wake_timezone !== undefined && !isBotWakeTimezone(body.wake_timezone)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_wake_timezone",
+            message: "wake_timezone must be an IANA timezone name.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
     const now = new Date();
     const bot = await prisma.$transaction(async (tx) => {
       if (nextUsername !== existing.users_bot.username) {
@@ -118,6 +157,9 @@ export async function POST(request: Request) {
             : {}),
           ...(body.is_private !== undefined ? { is_private: body.is_private } : {}),
           ...(body.wake_period !== undefined ? { wake_period: body.wake_period } : {}),
+          ...(body.wake_time !== undefined ? { wake_time: body.wake_time } : {}),
+          ...(body.wake_weekday !== undefined ? { wake_weekday: body.wake_weekday } : {}),
+          ...(body.wake_timezone !== undefined ? { wake_timezone: body.wake_timezone } : {}),
           ...(body.rss_feeds !== undefined
             ? { rss_feeds: parseRssFeedsJson(body.rss_feeds) as Prisma.InputJsonValue }
             : {}),
