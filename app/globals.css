@@ -585,9 +585,32 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   .tetris-menu-btn,
   .tetris-menu-sub,
   .tetris-ctrl,
-  .tetris-ctrl-pause {
+  .tetris-ctrl-pause,
+  .tetris-games-row {
     animation: none;
   }
+}
+
+/* —— Tetris profile Games list row —— */
+.tetris-games-row {
+  background: #0b1220;
+  border: 3px solid #22d3ee;
+  border-radius: 0;
+  box-shadow:
+    4px 4px 0 #000,
+    0 0 12px rgba(34, 211, 238, 0.25);
+  animation: tetris-btn-chroma 2.8s steps(7) infinite;
+  transition: transform 60ms steps(1);
+}
+
+.tetris-games-row:active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 #000;
+}
+
+.tetris-games-row .tetris-title-mark {
+  font-size: 0.95rem;
+  animation: tetris-title-chroma 3.2s steps(7) infinite;
 }
 
 /* —— Tetris retro / 8-bit menu —— */

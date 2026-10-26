@@ -1,94 +1,52 @@
-export type TetrisHighScore = {
-  score: number;
-  level: number;
-  lines: number;
-  at: string;
-};
+import type {
+  GameScoreScope,
+  GameScoreSubmitResponse,
+  GameScoresLeaderboardResponse,
+} from "@/app/types/interfaces";
 
-export const TETRIS_HIGH_SCORES_KEY = "social_tetris_high_scores";
-export const TETRIS_HIGH_SCORES_MAX = 10;
+export const TETRIS_GAME = "tetris";
+export const TETRIS_LEVEL = "global";
 
-export function readTetrisHighScores(): TetrisHighScore[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(TETRIS_HIGH_SCORES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((row): row is TetrisHighScore => {
-        if (!row || typeof row !== "object") return false;
-        const r = row as Record<string, unknown>;
-        return (
-          typeof r.score === "number" &&
-          typeof r.level === "number" &&
-          typeof r.lines === "number" &&
-          typeof r.at === "string"
-        );
-      })
-      .sort((a, b) => b.score - a.score || b.at.localeCompare(a.at))
-      .slice(0, TETRIS_HIGH_SCORES_MAX);
-  } catch {
-    return [];
-  }
-}
+const LEGACY_LOCAL_KEY = "social_tetris_high_scores";
 
-export function writeTetrisHighScores(scores: TetrisHighScore[]): void {
+/** Drop old local-only high scores once; DB is the source of truth now. */
+export function clearLegacyLocalTetrisScores(): void {
   if (typeof window === "undefined") return;
   try {
-    const sorted = [...scores]
-      .sort((a, b) => b.score - a.score || b.at.localeCompare(a.at))
-      .slice(0, TETRIS_HIGH_SCORES_MAX);
-    window.localStorage.setItem(TETRIS_HIGH_SCORES_KEY, JSON.stringify(sorted));
-  } catch {
-    // ignore quota / private mode
-  }
-}
-
-export function clearTetrisHighScores(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(TETRIS_HIGH_SCORES_KEY);
+    window.localStorage.removeItem(LEGACY_LOCAL_KEY);
   } catch {
     // ignore
   }
 }
 
-/** Returns the new list and whether the run was inserted. */
-export function tryAddTetrisHighScore(entry: Omit<TetrisHighScore, "at"> & { at?: string }): {
-  scores: TetrisHighScore[];
-  madeList: boolean;
-  rank: number | null;
-} {
-  const nextEntry: TetrisHighScore = {
-    score: entry.score,
-    level: entry.level,
-    lines: entry.lines,
-    at: entry.at ?? new Date().toISOString(),
-  };
-  const existing = readTetrisHighScores();
-  const qualifies =
-    existing.length < TETRIS_HIGH_SCORES_MAX ||
-    nextEntry.score > (existing[existing.length - 1]?.score ?? 0);
-
-  if (!qualifies && existing.length >= TETRIS_HIGH_SCORES_MAX) {
-    return { scores: existing, madeList: false, rank: null };
+export async function submitTetrisScore(score: number): Promise<GameScoreSubmitResponse | null> {
+  if (!Number.isInteger(score) || score < 0) return null;
+  try {
+    const response = await fetch("/api/game-score-submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game: TETRIS_GAME, level: TETRIS_LEVEL, score }),
+      keepalive: true,
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as GameScoreSubmitResponse;
+  } catch {
+    return null;
   }
+}
 
-  const merged = [...existing, nextEntry]
-    .sort((a, b) => b.score - a.score || b.at.localeCompare(a.at))
-    .slice(0, TETRIS_HIGH_SCORES_MAX);
-  writeTetrisHighScores(merged);
-  const rank = merged.findIndex(
-    (row) =>
-      row.score === nextEntry.score &&
-      row.level === nextEntry.level &&
-      row.lines === nextEntry.lines &&
-      row.at === nextEntry.at,
-  );
-  return {
-    scores: merged,
-    madeList: rank >= 0,
-    rank: rank >= 0 ? rank + 1 : null,
-  };
+export async function fetchTetrisLeaderboard(
+  scope: GameScoreScope,
+): Promise<GameScoresLeaderboardResponse | null> {
+  try {
+    const response = await fetch("/api/game-scores-leaderboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game: TETRIS_GAME, level: TETRIS_LEVEL, scope }),
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as GameScoresLeaderboardResponse;
+  } catch {
+    return null;
+  }
 }

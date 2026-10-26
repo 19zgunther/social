@@ -932,3 +932,54 @@ export type BotLogDetail = BotLogListItem & {
 export type BotLogGetResponse = {
   log: BotLogDetail;
 };
+
+/** Leaderboard partition within a game (e.g. tetris uses "global"). */
+export type GameScoreScope = "all" | "friends";
+
+export type GameScoreSubmitRequest = {
+  game?: string;
+  level?: string;
+  score?: number;
+};
+
+export type GameScoreSubmitResponse = {
+  id: string;
+  game: string;
+  level: string;
+  score: number;
+  created_at: string;
+  /** 1-based rank of this run among all scores for the game/level. */
+  run_rank: number;
+  /** Your best score for this game/level. */
+  personal_best: number;
+  /** 1-based rank of your personal best among users' bests (all players). */
+  personal_best_rank: number;
+};
+
+export type GameScoresLeaderboardRequest = {
+  game?: string;
+  level?: string;
+  /** all-time everyone vs accepted friends (+ self). Default "all". */
+  scope?: GameScoreScope;
+};
+
+export type GameScoreLeaderboardEntry = {
+  user_id: string;
+  username: string;
+  score: number;
+  created_at: string;
+};
+
+export type GameScoresLeaderboardResponse = {
+  game: string;
+  level: string;
+  scope: GameScoreScope;
+  top: GameScoreLeaderboardEntry[];
+  me: {
+    user_id: string;
+    username: string;
+    personal_best: number | null;
+    /** 1-based rank among personal bests in this scope; null if no scores. */
+    rank: number | null;
+  };
+};

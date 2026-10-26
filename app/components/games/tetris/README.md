@@ -22,8 +22,8 @@ Active gameplay: gravity drops the current piece, player moves/rotates/holds/dro
 Entered via Pause (on-screen) or `P` / `Esc`.
 
 - **Resume** — continue
-- **Restart** — confirm and start a fresh game
-- **Quit** — return to title
+- **Restart** — confirm, save score if qualifying, then start a fresh game
+- **Quit** — save score if qualifying, then return to title
 
 ### Game Over
 
@@ -94,7 +94,8 @@ While the game is open, the overlay uses `DONT_SWIPE_TABS_CLASSNAME` so app tab 
   - Single / Double / Triple / Tetris: `100 / 300 / 500 / 800` × level
   - Soft drop: +1 per cell
   - Hard drop: +2 per cell
-- **Level / speed:** start at level 1. Level up every **10 lines**. Gravity interval decreases each level and caps at a maximum speed so late game stays playable on mobile.
+- **Speed:** each cleared line makes gravity **2% faster** (interval × 0.98), with a minimum floor so late game stays playable.
+- **Level:** every **10 lines** for HUD / score multiplier only (not what drives speed).
 
 ## Visuals
 
@@ -105,17 +106,15 @@ While the game is open, the overlay uses `DONT_SWIPE_TABS_CLASSNAME` so app tab 
 - No external image/audio assets required for v1.
 - No sound/music in v1.
 
-## High scores (local only)
+## High scores (DB)
 
-- **Storage key:** `social_tetris_high_scores`
-- **Shape:** array of `{ score, level, lines, at }` (ISO timestamp), max **10**, sorted by score descending
-- Written on game over when the run qualifies
-- Cleared from the High Scores screen
-- **Future:** persist to DB / shared leaderboards; keep this local path as offline fallback
+- Every completed run is written to `game_scores` (`game=tetris`, `level=global`)
+- High Scores screen: your personal best + rank, and top 3 users (toggle **All Time** vs **Friends**)
+- Quit / restart / game over / unmount mid-run all submit the current score once
 
 ## Technical notes
 
 - Engine (`tetrisEngine.ts`) is pure state/logic — no DOM.
 - Renderer (`tetrisRender.ts`) draws the board + HUD onto `CanvasRenderingContext2D`.
 - React shell (`TetrisGame.tsx`) owns the game loop (`requestAnimationFrame`), input, menus, and fullscreen lifecycle.
-- Scores helper (`tetrisScores.ts`) wraps `localStorage` with try/catch and SSR guards.
+- Scores go through `/api/game-score-submit` and `/api/game-scores-leaderboard` (`tetrisScores.ts` client helpers).

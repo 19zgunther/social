@@ -3,7 +3,12 @@ export const BOARD_ROWS = 20;
 export const HIDDEN_ROWS = 2;
 export const TOTAL_ROWS = BOARD_ROWS + HIDDEN_ROWS;
 export const NEXT_COUNT = 3;
+/** Lines cleared per level-up (score multiplier / HUD only — gravity is per-line). */
 export const LINES_PER_LEVEL = 10;
+const BASE_GRAVITY_MS = 720;
+const MIN_GRAVITY_MS = 45;
+/** Each cleared line multiplies gravity interval by this (2% faster). */
+const GRAVITY_PER_LINE = 0.98;
 export const LOCK_DELAY_MS = 500;
 export const MAX_LOCK_RESETS = 15;
 
@@ -139,10 +144,10 @@ function spawnPiece(type: PieceType): ActivePiece {
   };
 }
 
-function gravityMsForLevel(level: number): number {
-  const clamped = Math.max(1, Math.min(level, 20));
-  // Level 1 ~800ms, approaches ~80ms by level 15+
-  return Math.max(80, 800 - (clamped - 1) * 50);
+/** Gravity interval (ms): 2% faster for every line cleared, floored for playability. */
+function gravityMsForLines(lines: number): number {
+  const n = Math.max(0, lines);
+  return Math.max(MIN_GRAVITY_MS, BASE_GRAVITY_MS * Math.pow(GRAVITY_PER_LINE, n));
 }
 
 export function getPieceColor(type: PieceType): string {
@@ -432,8 +437,8 @@ export class TetrisEngine {
     if (!this.active) return false;
 
     const gravity = softDropping
-      ? Math.min(gravityMsForLevel(this.level), 50)
-      : gravityMsForLevel(this.level);
+      ? Math.min(gravityMsForLines(this.lines), 50)
+      : gravityMsForLines(this.lines);
 
     this.gravityAccumulator += dtMs;
     while (this.gravityAccumulator >= gravity && this.phase === "playing" && this.active) {

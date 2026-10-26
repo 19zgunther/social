@@ -2,13 +2,13 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { CloseIcon } from "@/app/components/Icons";
+import type { GameScoreScope, GameScoresLeaderboardResponse } from "@/app/types/interfaces";
 import { TetrisEngine, type TetrisSnapshot } from "./tetrisEngine";
 import { computeTetrisLayout, renderTetris } from "./tetrisRender";
 import {
-  clearTetrisHighScores,
-  readTetrisHighScores,
-  tryAddTetrisHighScore,
-  type TetrisHighScore,
+  clearLegacyLocalTetrisScores,
+  fetchTetrisLeaderboard,
+  submitTetrisScore,
 } from "./tetrisScores";
 import TetrisBackdrop from "./TetrisBackdrop";
 
@@ -16,6 +16,15 @@ type MenuScreen = "title" | "playing" | "paused" | "gameover" | "highscores" | "
 
 type TetrisGameProps = {
   onExit: () => void;
+};
+
+type GameOverInfo = {
+  score: number;
+  level: number;
+  lines: number;
+  runRank: number | null;
+  personalBest: number | null;
+  personalBestRank: number | null;
 };
 
 export default function TetrisGame({ onExit }: TetrisGameProps) {
@@ -28,6 +37,7 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   const softDropNeedsReleaseRef = useRef(false);
   const touchLeftRef = useRef(false);
   const touchRightRef = useRef(false);
+  const runRecordedRef = useRef(false);
   const lastTsRef = useRef<number | null>(null);
   const dasRef = useRef<{ key: string | null; charged: boolean; acc: number }>({
     key: null,
@@ -36,15 +46,10 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   });
   const screenRef = useRef<MenuScreen>("title");
   const [screen, setScreen] = useState<MenuScreen>("title");
-  const [scores, setScores] = useState<TetrisHighScore[]>([]);
-  const [gameOverInfo, setGameOverInfo] = useState<{
-    score: number;
-    level: number;
-    lines: number;
-    madeList: boolean;
-    rank: number | null;
-  } | null>(null);
-  const [confirmClear, setConfirmClear] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<GameScoresLeaderboardResponse | null>(null);
+  const [leaderboardScope, setLeaderboardScope] = useState<GameScoreScope>("all");
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [gameOverInfo, setGameOverInfo] = useState<GameOverInfo | null>(null);
   const [confirmRestart, setConfirmRestart] = useState(false);
 
   const setMenuScreen = (next: MenuScreen) => {
@@ -74,6 +79,50 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     renderTetris(ctx, layout, snapRef.current, { dimmed });
   });
 
+  /** Persist the current run once (quit / restart / game over / unmount). */
+  const recordCurrentRun = useEffectEvent(async (): Promise<GameOverInfo | null> => {
+    const engine = engineRef.current;
+    if (!engine || engine.score <= 0 || runRecordedRef.current) {
+      if (!engine) return null;
+      return {
+        score: engine.score,
+        level: engine.level,
+        lines: engine.lines,
+        runRank: null,
+        personalBest: null,
+        personalBestRank: null,
+      };
+    }
+    runRecordedRef.current = true;
+    const snapshot = {
+      score: engine.score,
+      level: engine.level,
+      lines: engine.lines,
+    };
+    const result = await submitTetrisScore(snapshot.score);
+    if (!result) {
+      return {
+        ...snapshot,
+        runRank: null,
+        personalBest: null,
+        personalBestRank: null,
+      };
+    }
+    return {
+      ...snapshot,
+      runRank: result.run_rank,
+      personalBest: result.personal_best,
+      personalBestRank: result.personal_best_rank,
+    };
+  });
+
+  const loadLeaderboard = useEffectEvent(async (scope: GameScoreScope) => {
+    setLeaderboardLoading(true);
+    const board = await fetchTetrisLeaderboard(scope);
+    setLeaderboard(board);
+    setLeaderboardLoading(false);
+  });
+
   const startGame = useEffectEvent(() => {
     const engine = new TetrisEngine();
     engine.startNewGame();
@@ -83,6 +132,7 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     softDropNeedsReleaseRef.current = false;
     touchLeftRef.current = false;
     touchRightRef.current = false;
+    runRecordedRef.current = false;
     keysRef.current.clear();
     dasRef.current = { key: null, charged: false, acc: 0 };
     lastTsRef.current = null;
@@ -93,26 +143,55 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   });
 
   const handleGameOver = useEffectEvent(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    const result = tryAddTetrisHighScore({
-      score: engine.score,
-      level: engine.level,
-      lines: engine.lines,
-    });
-    setScores(result.scores);
-    setGameOverInfo({
-      score: engine.score,
-      level: engine.level,
-      lines: engine.lines,
-      madeList: result.madeList,
-      rank: result.rank,
-    });
-    setMenuScreen("gameover");
+    void (async () => {
+      const recorded = await recordCurrentRun();
+      const engine = engineRef.current;
+      setGameOverInfo(
+        recorded ?? {
+          score: engine?.score ?? 0,
+          level: engine?.level ?? 1,
+          lines: engine?.lines ?? 0,
+          runRank: null,
+          personalBest: null,
+          personalBestRank: null,
+        },
+      );
+      setMenuScreen("gameover");
+    })();
+  });
+
+  const quitToTitle = useEffectEvent(() => {
+    void recordCurrentRun();
+    setConfirmRestart(false);
+    setMenuScreen("title");
+  });
+
+  const restartAfterSaving = useEffectEvent(() => {
+    void (async () => {
+      await recordCurrentRun();
+      startGame();
+    })();
   });
 
   useEffect(() => {
-    setScores(readTetrisHighScores());
+    clearLegacyLocalTetrisScores();
+  }, []);
+
+  // If the fullscreen shell unmounts mid-run (e.g. leave Games tab), still save.
+  useEffect(() => {
+    return () => {
+      const engine = engineRef.current;
+      const scr = screenRef.current;
+      if (
+        !runRecordedRef.current &&
+        engine &&
+        engine.score > 0 &&
+        (scr === "playing" || scr === "paused")
+      ) {
+        runRecordedRef.current = true;
+        void submitTetrisScore(engine.score);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -312,9 +391,13 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   const openHighScores = () => {
     highScoresBackRef.current =
       screenRef.current === "gameover" ? "gameover" : "title";
-    setScores(readTetrisHighScores());
-    setConfirmClear(false);
     setMenuScreen("highscores");
+    void loadLeaderboard(leaderboardScope);
+  };
+
+  const setLeaderboardScopeAndLoad = (scope: GameScoreScope) => {
+    setLeaderboardScope(scope);
+    void loadLeaderboard(scope);
   };
 
   const formatDate = (iso: string) => {
@@ -389,8 +472,8 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
           </p>
           {confirmRestart ? (
             <div className="tetris-menu-btns flex w-full flex-col items-center gap-3">
-              <p className="tetris-menu-sub text-center">Restart and lose this run?</p>
-              <button type="button" className="tetris-menu-btn" onClick={startGame}>
+              <p className="tetris-menu-sub text-center">Restart? Score will be saved.</p>
+              <button type="button" className="tetris-menu-btn" onClick={restartAfterSaving}>
                 Confirm
               </button>
               <button
@@ -417,11 +500,7 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
               >
                 Restart
               </button>
-              <button
-                type="button"
-                className="tetris-menu-btn"
-                onClick={() => setMenuScreen("title")}
-              >
+              <button type="button" className="tetris-menu-btn" onClick={quitToTitle}>
                 Quit
               </button>
             </div>
@@ -440,9 +519,17 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
           <p className="tetris-menu-sub">
             LVL {gameOverInfo.level} · LINES {gameOverInfo.lines}
           </p>
-          {gameOverInfo.madeList ? (
+          {gameOverInfo.runRank != null ? (
             <p className="tetris-pixel-font text-[0.7rem] text-emerald-400">
-              NEW HIGH SCORE{gameOverInfo.rank ? ` #${gameOverInfo.rank}` : ""}
+              RUN RANK #{gameOverInfo.runRank}
+            </p>
+          ) : null}
+          {gameOverInfo.personalBest != null ? (
+            <p className="tetris-menu-sub">
+              BEST {gameOverInfo.personalBest}
+              {gameOverInfo.personalBestRank != null
+                ? ` · #${gameOverInfo.personalBestRank}`
+                : ""}
             </p>
           ) : null}
           <div className="tetris-menu-btns mt-2 flex w-full flex-col items-center gap-3">
@@ -468,67 +555,81 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
           <p className="tetris-title-mark mb-3 text-center" style={{ fontSize: "1.25rem" }}>
             High Scores
           </p>
-          <div className="mx-auto w-full max-w-sm flex-1 overflow-y-auto border-3 border-cyan-400/50 bg-black/60 [border-style:solid] [border-width:3px]">
-            {scores.length === 0 ? (
-              <p className="tetris-menu-sub p-4 text-center">No scores yet.</p>
+          <div className="mx-auto mb-3 flex w-full max-w-sm gap-2">
+            <button
+              type="button"
+              className={`tetris-menu-btn !max-w-none !px-2 !py-2 !text-[0.55rem] ${
+                leaderboardScope === "all" ? "" : "!opacity-50"
+              }`}
+              onClick={() => setLeaderboardScopeAndLoad("all")}
+            >
+              All Time
+            </button>
+            <button
+              type="button"
+              className={`tetris-menu-btn !max-w-none !px-2 !py-2 !text-[0.55rem] ${
+                leaderboardScope === "friends" ? "" : "!opacity-50"
+              }`}
+              onClick={() => setLeaderboardScopeAndLoad("friends")}
+            >
+              Friends
+            </button>
+          </div>
+          <div className="mx-auto w-full max-w-sm flex-1 overflow-y-auto border-[3px] border-cyan-400/50 bg-black/60">
+            {leaderboardLoading ? (
+              <p className="tetris-menu-sub p-4 text-center">Loading...</p>
+            ) : !leaderboard ? (
+              <p className="tetris-menu-sub p-4 text-center">Could not load scores.</p>
             ) : (
-              <ul className="divide-y divide-white/10">
-                {scores.map((row, i) => (
-                  <li key={`${row.at}-${row.score}-${i}`} className="flex items-center gap-3 px-3 py-2.5">
-                    <span className="tetris-pixel-font w-7 text-[0.7rem] text-slate-400">{i + 1}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="tetris-pixel-font text-[0.8rem] text-white">{row.score}</p>
-                      <p className="tetris-pixel-font mt-1 text-[0.58rem] text-slate-400">
-                        L{row.level} · {row.lines}LN · {formatDate(row.at)}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="divide-y divide-white/10">
+                <div className="px-3 py-3">
+                  <p className="tetris-pixel-font text-[0.55rem] text-cyan-300">YOU</p>
+                  {leaderboard.me.personal_best == null ? (
+                    <p className="tetris-menu-sub mt-1">No scores yet.</p>
+                  ) : (
+                    <p className="tetris-pixel-font mt-1 text-[0.75rem] text-white">
+                      #{leaderboard.me.rank} · {leaderboard.me.personal_best}
+                      <span className="ml-2 text-slate-400">@{leaderboard.me.username}</span>
+                    </p>
+                  )}
+                </div>
+                <div className="px-3 py-3">
+                  <p className="tetris-pixel-font mb-2 text-[0.55rem] text-cyan-300">
+                    TOP 3 · {leaderboardScope === "friends" ? "FRIENDS" : "ALL"}
+                  </p>
+                  {leaderboard.top.length === 0 ? (
+                    <p className="tetris-menu-sub">No scores yet.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {leaderboard.top.map((row, i) => (
+                        <li key={`${row.user_id}-${row.score}-${row.created_at}`} className="flex items-center gap-3">
+                          <span className="tetris-pixel-font w-7 text-[0.7rem] text-slate-400">
+                            {i + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="tetris-pixel-font truncate text-[0.7rem] text-white">
+                              {row.username}
+                            </p>
+                            <p className="tetris-pixel-font mt-0.5 text-[0.55rem] text-slate-400">
+                              {row.score} · {formatDate(row.created_at)}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
             )}
           </div>
           <div className="tetris-menu-btns mx-auto mt-3 flex w-full max-w-sm flex-col items-center gap-2">
-            {confirmClear ? (
-              <>
-                <p className="tetris-menu-sub text-center">Clear all local scores?</p>
-                <button
-                  type="button"
-                  className="tetris-menu-btn"
-                  onClick={() => {
-                    clearTetrisHighScores();
-                    setScores([]);
-                    setConfirmClear(false);
-                  }}
-                >
-                  Confirm Clear
-                </button>
-                <button
-                  type="button"
-                  className="tetris-menu-btn"
-                  onClick={() => setConfirmClear(false)}
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="tetris-menu-btn"
-                  onClick={() => setConfirmClear(true)}
-                  disabled={scores.length === 0}
-                >
-                  Clear Scores
-                </button>
-                <button
-                  type="button"
-                  className="tetris-menu-btn"
-                  onClick={() => setMenuScreen(highScoresBackRef.current)}
-                >
-                  Back
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              className="tetris-menu-btn"
+              onClick={() => setMenuScreen(highScoresBackRef.current)}
+            >
+              Back
+            </button>
           </div>
         </div>
       ) : null}
