@@ -3,6 +3,7 @@
 import { useEffect, useState, type MutableRefObject } from "react";
 import {
   ChevronRightIcon,
+  DeleteIcon,
   RefreshIcon,
   RssIcon,
   UserPlaceholderIcon,
@@ -131,6 +132,8 @@ export default function EditBot({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isWaking, setIsWaking] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [isLoadingLog, setIsLoadingLog] = useState(false);
   const [isPictureEditorOpen, setIsPictureEditorOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -224,6 +227,7 @@ export default function EditBot({
     async function load() {
       setIsLoading(true);
       setStatusMessage("");
+      setConfirmDelete(false);
       try {
         const loaded = await loadBot();
         if (loaded.is_owner) {
@@ -342,6 +346,36 @@ export default function EditBot({
     }
   };
 
+  const onDelete = async () => {
+    if (!canEdit || isDeleting || isSaving || isWaking) {
+      return;
+    }
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setIsDeleting(true);
+    setStatusMessage("");
+    try {
+      const response = await fetch("/api/bot-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bot_id: botId }),
+      });
+      if (!response.ok) {
+        setStatusMessage(await readErrorMessage(response));
+        setConfirmDelete(false);
+        return;
+      }
+      onBack();
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to delete bot.");
+      setConfirmDelete(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const openLog = async (logId: string) => {
     setIsLoadingLog(true);
     setStatusMessage("");
@@ -452,7 +486,7 @@ export default function EditBot({
                   </button>
                 ) : null}
               </div>
-              <div className="flex h-20 min-w-0 flex-1 items-center">
+              <div className="flex h-20 min-w-0 flex-1 items-center gap-2">
                 <input
                   type="text"
                   aria-label="Username"
@@ -464,8 +498,59 @@ export default function EditBot({
                   autoCorrect="off"
                   spellCheck={false}
                 />
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void onDelete();
+                    }}
+                    disabled={isDeleting || isSaving || isWaking}
+                    className={`inline-flex h-11 shrink-0 items-center justify-center rounded-2xl border px-3 text-xs font-semibold transition disabled:opacity-60 ${
+                      confirmDelete
+                        ? "border-danger bg-danger/15 text-danger"
+                        : "border-border text-muted hover:text-foreground"
+                    }`}
+                    aria-label={
+                      isDeleting
+                        ? "Deleting bot"
+                        : confirmDelete
+                          ? "Confirm delete bot"
+                          : "Delete bot"
+                    }
+                    title={
+                      isDeleting
+                        ? "Deleting…"
+                        : confirmDelete
+                          ? "Tap again to confirm — cannot be undone"
+                          : "Delete bot"
+                    }
+                  >
+                    {isDeleting ? (
+                      "…"
+                    ) : confirmDelete ? (
+                      "Delete?"
+                    ) : (
+                      <DeleteIcon className="h-5 w-5" aria-hidden />
+                    )}
+                  </button>
+                ) : null}
               </div>
             </div>
+
+            {canEdit && confirmDelete && !isDeleting ? (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-danger/40 bg-surface px-3 py-2">
+                <p className="min-w-0 text-xs text-muted">
+                  Tap delete again to permanently remove this bot and its posts.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="shrink-0 rounded-lg border border-border px-3 py-1 text-xs font-medium text-muted transition hover:text-foreground"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : null}
 
             <label className="block space-y-1">
               <textarea

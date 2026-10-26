@@ -875,6 +875,15 @@ export type BotUpdateResponse = {
   bot: BotDetail;
 };
 
+export type BotDeleteRequest = {
+  bot_id?: string;
+};
+
+export type BotDeleteResponse = {
+  ok: true;
+  bot_id: string;
+};
+
 export type BotProfileImageSetRequest = {
   bot_id?: string;
   image_base64_data?: string;
