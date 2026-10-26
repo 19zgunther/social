@@ -47,9 +47,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Runs hourly (see vercel.json). Each bot wakes once its configured
-    // local time (and weekday, for weekly bots) has passed in its own
-    // timezone and it hasn't already woken that local day.
+    // Runs daily at 13:00 UTC (see vercel.json; Hobby allows one run/day).
+    // Each bot wakes once its configured local time (and weekday, for weekly
+    // bots) has passed in its own timezone and it hasn't already woken that
+    // local day. Missed windows catch up on the next daily tick.
     const now = new Date();
     const bots = await prisma.bots.findMany({
       select: {
