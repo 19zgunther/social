@@ -9,6 +9,7 @@ import {
 import { useMemo } from "react";
 import { Mode, MOBILE_FRAME_STYLE, APP_VIEWPORT_STYLE } from "@/app/components/utils";
 import { DEFAULT_THEME, persistAndApplyTheme } from "@/app/lib/theme";
+import TetrisBackdrop from "@/app/components/games/tetris/TetrisBackdrop";
 
 
 export default function SignUpPage({
@@ -143,10 +144,11 @@ export default function SignUpPage({
     const pageTitle = useMemo(() => (mode === "login" ? "Log in" : "Create account"), [mode]);
 
     return (
-        <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0">
+        <main style={APP_VIEWPORT_STYLE} className="relative flex w-screen justify-center overflow-hidden bg-bg p-0">
+            <TetrisBackdrop opacity={0.55} />
             <section
                 style={MOBILE_FRAME_STYLE}
-                className="flex h-full flex-col justify-center border border-border bg-surface px-6 shadow-lg shadow-black/20"
+                className="relative z-10 flex h-full flex-col justify-center border border-border bg-surface/85 px-6 shadow-lg shadow-black/20 backdrop-blur-md"
             >
                 <h1 className="text-lg font-semibold text-foreground"
                     onClick={handlePageTitleClick}    

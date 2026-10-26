@@ -23,6 +23,7 @@ import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 import EditBot from "@/app/components/bots/EditBot";
 import EmojiEditorTab from "@/app/components/EmojiEditorTab";
 import PostGroupsTab from "@/app/components/PostGroupsTab";
+import GamesTab from "@/app/components/games/GamesTab";
 import { getPollViewerState } from "@/app/components/PollBlock";
 import { getTierListViewerState } from "@/app/components/TierListBlock";
 import {
@@ -60,6 +61,7 @@ const PROFILE_SUB_TABS = [
   { id: "friends", label: "Friends" },
   { id: "groups", label: "Groups" },
   { id: "emojis", label: "Emojis" },
+  { id: "games", label: "Games" },
 ] as const;
 
 type ProfileSubTab = (typeof PROFILE_SUB_TABS)[number]["id"];
@@ -711,8 +713,11 @@ function Profile({
         >
           <div
             aria-hidden
-            className="absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/4)] rounded-full bg-accent transition-transform duration-200 ease-out"
-            style={{ transform: `translateX(${Math.max(activeSubTabIndex, 0) * 100}%)` }}
+            className="absolute inset-y-1 left-1 rounded-full bg-accent transition-transform duration-200 ease-out"
+            style={{
+              width: `calc((100% - 0.5rem) / ${PROFILE_SUB_TABS.length})`,
+              transform: `translateX(${Math.max(activeSubTabIndex, 0) * 100}%)`,
+            }}
           />
           {PROFILE_SUB_TABS.map((tab) => {
             const isActive = activeSubTab === tab.id;
@@ -887,6 +892,8 @@ function Profile({
         />
       ) : activeSubTab === "emojis" ? (
         <EmojiEditorTab isActive={activeSubTab === "emojis"} />
+      ) : activeSubTab === "games" ? (
+        <GamesTab isActive={activeSubTab === "games"} />
       ) : (
         <ProfilePostsSection
           posts={posts}

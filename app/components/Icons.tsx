@@ -20,6 +20,7 @@ import {
   Crop,
   Droplets,
   Eraser,
+  Gamepad2,
   Hand,
   HardDrive,
   Heart,
@@ -94,6 +95,8 @@ export const PollIcon = ListChecks;
 export const TierListIcon = LayoutList;
 /** Play media */
 export const PlayIcon = Play;
+/** Games / gamepad */
+export const GamepadIcon = Gamepad2;
 /** Settings / gear */
 export const SettingsIcon = Settings;
 /** Push notifications */
