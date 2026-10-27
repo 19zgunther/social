@@ -983,3 +983,13 @@ export type GameScoresLeaderboardResponse = {
     rank: number | null;
   };
 };
+
+export type GameScoresPlayedRequest = {
+  game?: string;
+};
+
+export type GameScoresPlayedResponse = {
+  game: string;
+  /** Distinct level ids the user has finished (has at least one score row). */
+  levels: string[];
+};

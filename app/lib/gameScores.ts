@@ -5,6 +5,7 @@ import type { GameScoreLeaderboardEntry, GameScoreScope } from "@/app/types/inte
 
 export const TETRIS_GAME_ID = "tetris";
 export const TETRIS_LEVEL_ID = "global";
+export const WORK_GOLF_GAME_ID = "work-golf";
 
 const MAX_SCORE = 100_000_000;
 
@@ -122,6 +123,20 @@ export async function insertGameScore(args: {
     personal_best: personalBest,
     personal_best_rank: personalBestRank > 0 ? personalBestRank : 1,
   };
+}
+
+/** Distinct level ids this user has at least one score for (finished rounds). */
+export async function loadPlayedLevels(args: {
+  userId: string;
+  game: string;
+}): Promise<string[]> {
+  const rows = await prisma.game_scores.findMany({
+    where: { user_id: args.userId, game: args.game },
+    distinct: ["level"],
+    select: { level: true },
+    orderBy: { level: "asc" },
+  });
+  return rows.map((r) => r.level);
 }
 
 export async function loadGameLeaderboard(args: {
