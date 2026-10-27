@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Press_Start_2P } from "next/font/google";
+import { Fredoka, Geist, Geist_Mono, Press_Start_2P } from "next/font/google";
 import { THEME_BOOT_SCRIPT } from "@/app/lib/theme";
 import "./globals.css";
 
@@ -17,6 +17,12 @@ const logoPressStart = Press_Start_2P({
   variable: "--font-logo-press-start",
   subsets: ["latin"],
   weight: "400",
+});
+
+const workGolfFredoka = Fredoka({
+  variable: "--font-workgolf",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -53,7 +59,7 @@ export default function RootLayout({
       </head>
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} ${logoPressStart.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${logoPressStart.variable} ${workGolfFredoka.variable} antialiased`}
       >
         {children}
       </body>

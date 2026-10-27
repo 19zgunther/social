@@ -78,6 +78,7 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
   const [leaderboardScope, setLeaderboardScope] = useState<GameScoreScope>("all");
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardLevel, setLeaderboardLevel] = useState(1);
+  const [displayedScore, setDisplayedScore] = useState(0);
 
   const setMenuScreen = (next: MenuScreen) => {
     screenRef.current = next;
@@ -139,6 +140,26 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
   useEffect(() => {
     void refreshPlayed();
   }, []);
+
+  useEffect(() => {
+    if (screen !== "complete" || !completeInfo) {
+      setDisplayedScore(0);
+      return;
+    }
+    const target = completeInfo.score;
+    const durationMs = 4000;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      // ease-out so it lands softly on the final score
+      const eased = 1 - (1 - t) ** 3;
+      setDisplayedScore(Math.round(target * eased));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [screen, completeInfo]);
 
   useEffect(() => {
     const el = mountRef.current;
@@ -501,87 +522,100 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
       ) : null}
 
       {screen === "complete" && completeInfo ? (
-        <div className="relative z-20 flex flex-1 flex-col items-center justify-center gap-2 bg-black/50 px-6">
-          <p className="workgolf-title" style={{ fontSize: "1.4rem" }}>
-            Round Done
-          </p>
-          <p className="text-[1.1rem] font-semibold text-white">Score {completeInfo.score}</p>
-          <p className="workgolf-sub">
-            Level {completeInfo.levelNumber} · {completeInfo.strokesTotal} strokes
-          </p>
-          <p className="workgolf-sub text-[0.65rem]">
-            Cups: {completeInfo.holeScores.join(" · ")}
-          </p>
-          {completeInfo.runRank != null ? (
-            <p className="text-[0.75rem] font-medium text-emerald-300">
-              Run rank #{completeInfo.runRank}
+        <div className="workgolf-complete relative z-20 flex flex-1 flex-col items-center justify-center px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(3rem,env(safe-area-inset-top))]">
+          <div className="workgolf-complete-card w-full max-w-sm">
+            <p className="workgolf-title workgolf-complete-item workgolf-complete-d1 text-center">
+              Round Done!
             </p>
-          ) : null}
-          {completeInfo.personalBest != null ? (
-            <p className="workgolf-sub">
-              Best {completeInfo.personalBest}
-              {completeInfo.personalBestRank != null
-                ? ` · #${completeInfo.personalBestRank}`
-                : ""}
+            <p className="workgolf-complete-score workgolf-complete-item workgolf-complete-d2">
+              <span className="workgolf-complete-score-label">Score</span>
+              <span className="workgolf-complete-score-value">{displayedScore}</span>
             </p>
-          ) : null}
+            <p className="workgolf-sub workgolf-complete-item workgolf-complete-d3 text-center">
+              Level {completeInfo.levelNumber} · {completeInfo.strokesTotal} strokes
+            </p>
+            <p className="workgolf-complete-cups workgolf-complete-item workgolf-complete-d4">
+              {completeInfo.holeScores.map((s, i) => (
+                <span key={i} className="workgolf-complete-cup">
+                  {s}
+                </span>
+              ))}
+            </p>
+            {completeInfo.runRank != null ? (
+              <p className="workgolf-complete-rank workgolf-complete-item workgolf-complete-d5">
+                Run rank #{completeInfo.runRank}
+              </p>
+            ) : null}
+            {completeInfo.personalBest != null ? (
+              <p className="workgolf-sub workgolf-complete-item workgolf-complete-d6 text-center">
+                Best {completeInfo.personalBest}
+                {completeInfo.personalBestRank != null
+                  ? ` · #${completeInfo.personalBestRank}`
+                  : ""}
+              </p>
+            ) : null}
 
-          <div className="mt-2 max-h-40 w-full max-w-sm overflow-y-auto rounded-xl border border-white/15 bg-black/40 px-3 py-2">
-            {leaderboardLoading ? (
-              <p className="workgolf-sub text-center">Loading board...</p>
-            ) : leaderboard ? (
-              <ul className="space-y-1.5">
-                {leaderboard.top.map((row, i) => (
-                  <li
-                    key={`${row.user_id}-${row.created_at}`}
-                    className="flex justify-between text-[0.7rem] text-white"
-                  >
-                    <span>
-                      {i + 1}. {row.username}
-                    </span>
-                    <span className="text-emerald-200">{row.score}</span>
-                  </li>
-                ))}
-                {leaderboard.top.length === 0 ? (
-                  <li className="workgolf-sub text-center">No scores yet.</li>
-                ) : null}
-              </ul>
-            ) : (
-              <p className="workgolf-sub text-center">Could not load scores.</p>
-            )}
-          </div>
+            <div className="workgolf-complete-board workgolf-complete-item workgolf-complete-d7">
+              {leaderboardLoading ? (
+                <p className="workgolf-sub text-center">Loading board...</p>
+              ) : leaderboard ? (
+                <ul className="space-y-1.5">
+                  {leaderboard.top.map((row, i) => (
+                    <li
+                      key={`${row.user_id}-${row.created_at}`}
+                      className="flex justify-between text-[0.8rem] text-white"
+                    >
+                      <span>
+                        {i + 1}. {row.username}
+                      </span>
+                      <span className="font-semibold text-emerald-200">{row.score}</span>
+                    </li>
+                  ))}
+                  {leaderboard.top.length === 0 ? (
+                    <li className="workgolf-sub text-center">No scores yet.</li>
+                  ) : null}
+                </ul>
+              ) : (
+                <p className="workgolf-sub text-center">Could not load scores.</p>
+              )}
+            </div>
 
-          <div className="workgolf-btns mt-2 flex w-full max-w-sm flex-col items-center gap-2">
-            <button
-              type="button"
-              className="workgolf-btn"
-              onClick={() => {
-                const finished = completeInfo.levelNumber;
-                const nextPlayed = playedLevels.includes(finished)
-                  ? playedLevels
-                  : [...playedLevels, finished];
-                startLevel(finished + 1, nextPlayed);
-              }}
-            >
-              Next Level
-            </button>
-            <button
-              type="button"
-              className="workgolf-btn"
-              onClick={() => startLevel(completeInfo.levelNumber)}
-            >
-              Replay
-            </button>
-            <button
-              type="button"
-              className="workgolf-btn"
-              onClick={() => openHighScores("complete", completeInfo.levelNumber)}
-            >
-              Full Leaderboard
-            </button>
-            <button type="button" className="workgolf-btn" onClick={quitToTitle}>
-              Title
-            </button>
+            <div className="workgolf-btns mt-3 flex w-full flex-col items-center gap-2">
+              <button
+                type="button"
+                className="workgolf-btn workgolf-complete-item workgolf-complete-d8"
+                onClick={() => {
+                  const finished = completeInfo.levelNumber;
+                  const nextPlayed = playedLevels.includes(finished)
+                    ? playedLevels
+                    : [...playedLevels, finished];
+                  startLevel(finished + 1, nextPlayed);
+                }}
+              >
+                Next Level
+              </button>
+              <button
+                type="button"
+                className="workgolf-btn workgolf-complete-item workgolf-complete-d9"
+                onClick={() => startLevel(completeInfo.levelNumber)}
+              >
+                Replay
+              </button>
+              <button
+                type="button"
+                className="workgolf-btn workgolf-complete-item workgolf-complete-d10"
+                onClick={() => openHighScores("complete", completeInfo.levelNumber)}
+              >
+                Full Leaderboard
+              </button>
+              <button
+                type="button"
+                className="workgolf-btn workgolf-complete-item workgolf-complete-d11"
+                onClick={quitToTitle}
+              >
+                Title
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

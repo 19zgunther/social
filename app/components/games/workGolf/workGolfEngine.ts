@@ -84,9 +84,9 @@ const SURFACE_VOID = 5;
 const FLAG_COLORS = ["#ef4444", "#eab308", "#22c55e", "#ec4899", "#f97316"];
 
 const FRICTION: Record<SurfaceType, number> = {
-  medium: 2.8,
+  medium: 3.8,
   tall: 18,
-  green: 0.55,
+  green: 1.85,
   sand: 18,
   water: 0,
   void: 0,

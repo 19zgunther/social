@@ -954,8 +954,10 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   --wg-green: #a8d94a;
   --wg-dirt: #c9a36a;
   --wg-ink: #14301a;
+  --wg-font: var(--font-workgolf), var(--font-geist-sans), ui-rounded, system-ui, sans-serif;
   background: #0b1a12;
   color: #f8fafc;
+  font-family: var(--wg-font);
 }
 
 .workgolf-backdrop {
@@ -965,7 +967,7 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
 }
 
 .workgolf-title {
-  font-family: var(--font-geist-sans), ui-rounded, system-ui, sans-serif;
+  font-family: var(--wg-font);
   font-size: 2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -986,7 +988,8 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   border: 2px solid rgba(255, 255, 255, 0.55);
   background: color-mix(in srgb, var(--wg-grass) 88%, black);
   color: #fff;
-  font-size: 0.9rem;
+  font-family: var(--wg-font);
+  font-size: 0.95rem;
   font-weight: 650;
   padding: 0.75rem 1rem;
   box-shadow: 0 3px 0 rgba(20, 48, 26, 0.45);
@@ -1034,9 +1037,144 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
 }
 
 .workgolf-row-title {
-  font-family: var(--font-geist-sans), ui-rounded, system-ui, sans-serif;
+  font-family: var(--wg-font);
   font-weight: 700;
   color: #1f6b2e;
+}
+
+.workgolf-complete {
+  background:
+    linear-gradient(180deg, rgba(8, 24, 16, 0.55) 0%, rgba(8, 24, 16, 0.78) 100%);
+  backdrop-filter: blur(2px);
+}
+
+.workgolf-complete-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 1.5rem;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(94, 200, 232, 0.28), transparent 55%),
+    rgba(12, 28, 18, 0.72);
+  padding: 1.15rem 1rem 1.1rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.workgolf-complete-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0.15rem 0 0.1rem;
+}
+
+.workgolf-complete-score-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.workgolf-complete-score-value {
+  font-family: var(--wg-font);
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 3px 0 rgba(20, 48, 26, 0.4);
+  font-variant-numeric: tabular-nums;
+}
+
+.workgolf-complete-cups {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+}
+
+.workgolf-complete-cup {
+  min-width: 2.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(168, 217, 74, 0.18);
+  padding: 0.2rem 0.45rem;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 650;
+  color: #e8f9b8;
+}
+
+.workgolf-complete-rank {
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #6ee7b7;
+}
+
+.workgolf-complete-board {
+  width: 100%;
+  max-height: 7.5rem;
+  overflow-y: auto;
+  margin-top: 0.35rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.65rem 0.75rem;
+}
+
+.workgolf-complete-item {
+  opacity: 0;
+  transform: translateY(18px);
+  animation: workgolf-complete-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.workgolf-complete-d1 {
+  animation-delay: 0.05s;
+}
+.workgolf-complete-d2 {
+  animation-delay: 0.12s;
+}
+.workgolf-complete-d3 {
+  animation-delay: 0.2s;
+}
+.workgolf-complete-d4 {
+  animation-delay: 0.28s;
+}
+.workgolf-complete-d5 {
+  animation-delay: 0.36s;
+}
+.workgolf-complete-d6 {
+  animation-delay: 0.42s;
+}
+.workgolf-complete-d7 {
+  animation-delay: 0.5s;
+}
+.workgolf-complete-d8 {
+  animation-delay: 0.62s;
+}
+.workgolf-complete-d9 {
+  animation-delay: 0.72s;
+}
+.workgolf-complete-d10 {
+  animation-delay: 0.82s;
+}
+.workgolf-complete-d11 {
+  animation-delay: 0.92s;
+}
+
+@keyframes workgolf-complete-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .workgolf-hud {
