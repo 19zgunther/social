@@ -1,6 +1,6 @@
 # Work Golf
 
-Fullscreen, mobile-first low-poly mini golf for the Profile → Games tab. Built with **Three.js only** (no physics engine, no React Three Fiber). Courses are seeded procedural islands; scores live in the shared `game_scores` table.
+Fullscreen, mobile-first low-poly mini golf for the Profile → Games tab. Built with **Three.js only** (no physics engine, no React Three Fiber). Courses are seeded **irregular islands** (Scotland-ish coasts) with fairway spines over an ocean; scores live in the shared `game_scores` table.
 
 ## Screens / flow
 
@@ -66,15 +66,23 @@ Every shot release counts as one stroke. Landing in water adds one extra stroke 
 | Zoom slider (right)             | Camera distance                             |
 | Pause (II)                      | Pause menu                                  |
 
-## Terrain
+## Terrain / course generation
 
-Continuous shared-vertex triangle grid (no torn cell skirts):
+Continuous shared-vertex triangle grid on a **rugged island** over open ocean:
 
-1. Seed a regular heightfield
-2. Distort with a few octaves of value-noise fBm
-3. Soft island mask slopes into the water plane
-4. Flatten tee, greens, and fairway corridors
-5. Water hazards depress the mesh under the waterline (verts stay welded)
+1. Irregular Scotland-ish outline (lobes / headlands + fjord cuts + coastal warp) with **steep dirt cliffs**
+2. Mild fBm hills on the plateau; fairway spine stays inland of the cliff rim
+3. Seeded **spine** polyline: tee → 5 cups with optional dogleg bends
+4. Tall-grass **rough** band + flattened **fairway** corridor along the spine
+5. Greens + tee pads; cups are **real carved holes** with local mesh refinement
+6. Sand bunkers beside greens / dogleg insides; ponds on bend outsides (no forced carries)
+7. Tree belts flanking the fairway (denser on the inside of doglegs)
+
+A cup only counts when the ball actually drops into the opening (not a large magnetic catch radius).
+
+## Art direction
+
+Low-poly island look: cyan ocean, tan cliff skirts, medium fairway, taller rough, light greens, sand bunkers, low-poly pines, colored pennant flags, hard directional shadows, flat shading.
 
 ## Tech layout
 
@@ -88,7 +96,3 @@ Continuous shared-vertex triangle grid (no torn cell skirts):
 Game id: `work-golf`. Level ids: `"1"`, `"2"`, …  
 
 Unlocks use `POST /api/game-scores-played` (distinct levels for the current user).
-
-## Art direction
-
-Match the reference island look: cyan water void, medium green fairway, lighter greens, sand bunkers, tan cliff skirts, low-poly pine cones, colored pennant flags, hard directional shadows, flat shading.
