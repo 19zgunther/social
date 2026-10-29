@@ -4,6 +4,9 @@ import { runBotWake } from "@/app/lib/bots/botRunner";
 import { prisma } from "@/app/lib/prisma";
 import { BotWakeRequest, BotWakeResponse } from "@/app/types/interfaces";
 
+// Match botRunner MAX_WAKE_DURATION_MS (~5m).
+export const maxDuration = 300;
+
 export async function POST(request: Request) {
   const authResult = authCheck(request);
   if (authResult.error) {

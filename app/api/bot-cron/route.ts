@@ -5,7 +5,7 @@ import { isBotDueAt } from "@/app/lib/bots/botHelpers";
 import { prisma } from "@/app/lib/prisma";
 
 export const dynamic = "force-dynamic";
-// A wake can take up to ~90s (see botRunner); give the whole batch room.
+// A wake can take up to ~5m (see botRunner); give the whole batch room.
 // Vercel caps this at your plan's max function duration.
 export const maxDuration = 300;
 

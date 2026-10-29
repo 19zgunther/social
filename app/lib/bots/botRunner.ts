@@ -14,7 +14,7 @@ const MAX_TOOL_STEPS = 8;
 /** Approximate billed-token budget per wake (sum of OpenAI usage.total_tokens across steps). */
 const MAX_TOKENS_PER_WAKE = 2_000_000;
 /** Hard wall-clock limit so a wake cannot hang indefinitely. */
-const MAX_WAKE_DURATION_MS = 90_000;
+const MAX_WAKE_DURATION_MS = 300_000;
 /** Cap assistant completion size per step. */
 const MAX_COMPLETION_TOKENS = 2_048;
 /** Keep tool payloads from exploding the context window. */
