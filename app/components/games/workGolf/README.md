@@ -22,6 +22,7 @@ Fullscreen, mobile-first low-poly mini golf for the Profile → Games tab. Built
 - Press the ball and drag **down** for power; while aiming, drag sideways to rotate aim (camera-forward)
 - Aim HUD shows rough carry (`~Ny`) plus power %; landing ring + ghost arc preview the shot
 - Long shots open an FPS-style aim bloom (spray cone + landing ellipse); release picks a random angle inside it
+- Sparse floating **Beer Can** pickups: fly the ball through one for ~20s of tighter aim spray and **1.5×** shot distance
 - Interactions lock while the ball is moving
 - Holes are played **in order** along the fairway spine (1 → 5); only the current cup can be sunk
 - Distance label shows only for the current cup; upcoming flags stay visible (dimmed) as landmarks

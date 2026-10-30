@@ -16,6 +16,7 @@ import {
   yawToward,
   type HoleDef,
   type LevelData,
+  type PowerUpDef,
   type RoundSnapshot,
   type Vec3,
   type WorkGolfEngine,
@@ -546,6 +547,42 @@ function makeFlag(hole: HoleDef): THREE.Group {
 }
 
 /** Flat ground arrow pointing +Z; yawed toward the next cup each frame. */
+function makeBeerCan(pu: PowerUpDef): THREE.Group {
+  const g = new THREE.Group();
+  g.position.set(pu.x, pu.y, pu.z);
+  g.userData.powerUpId = pu.id;
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.24, 0.72, 8),
+    new THREE.MeshLambertMaterial({ color: 0xd4a017, flatShading: true }),
+  );
+  body.castShadow = true;
+  g.add(body);
+
+  const label = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.245, 0.245, 0.28, 8),
+    new THREE.MeshLambertMaterial({ color: 0xb91c1c, flatShading: true }),
+  );
+  label.position.y = 0.02;
+  g.add(label);
+
+  const rim = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.2, 0.22, 0.06, 8),
+    new THREE.MeshLambertMaterial({ color: 0xe8e8e8, flatShading: true }),
+  );
+  rim.position.y = 0.38;
+  g.add(rim);
+
+  const tab = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.04, 0.18),
+    new THREE.MeshLambertMaterial({ color: 0xc0c0c0, flatShading: true }),
+  );
+  tab.position.set(0.02, 0.44, 0);
+  g.add(tab);
+
+  return g;
+}
+
 function makeWayArrow(): THREE.Group {
   const g = new THREE.Group();
   const shape = new THREE.Shape();
@@ -735,10 +772,20 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   let terrainMesh: THREE.Mesh | null = null;
   const flagGroups = new Map<number, THREE.Group>();
   const labelSprites = new Map<number, THREE.Sprite>();
+  const powerUpGroups = new Map<number, THREE.Group>();
   const wayArrow = makeWayArrow();
   scene.add(wayArrow);
   let builtLevel = -1;
   let builtTargetHoleId = -1;
+
+  /** Smooth camera follow after water reset (anchor → ball over ~1s). */
+  const WATER_CAM_SLIDE_DUR = 1;
+  let camSlide: {
+    ax: number;
+    ay: number;
+    az: number;
+    t: number;
+  } | null = null;
 
   // --- Cheap grass: instanced cards, distance-culled, alphaTest, no shadows ---
   const grassTex = makeGrassTexture();
@@ -1169,13 +1216,34 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
   }
 
+  function beginWaterCamSlide(x: number, y: number, z: number) {
+    camSlide = { ax: x, ay: y, az: z, t: 0 };
+  }
+
   function handleFx(events: WorkGolfFxEvent[]) {
     for (const ev of events) {
       if (ev.kind === "treeHit") {
         impulseTree(ev.treeIndex, ev.nx, ev.nz, ev.strength);
-      } else {
+      } else if (ev.kind === "splash") {
         spawnSplash(ev.x, ev.y, ev.z, ev.strength);
+        // Start slide from the splash; ball has already reset to last lie
+        beginWaterCamSlide(ev.x, ev.y + 0.4, ev.z);
+      } else if (ev.kind === "powerUp") {
+        const g = powerUpGroups.get(ev.powerUpId);
+        if (g) g.visible = false;
       }
+    }
+  }
+
+  function updatePowerUps(snap: RoundSnapshot, nowMs: number) {
+    const t = nowMs * 0.001;
+    for (const pu of snap.powerUps) {
+      const g = powerUpGroups.get(pu.id);
+      if (!g) continue;
+      g.visible = pu.active;
+      if (!pu.active) continue;
+      g.position.y = pu.y + Math.sin(t * 2.4 + pu.id * 1.7) * 0.12;
+      g.rotation.y = t * 1.1 + pu.id;
     }
   }
 
@@ -1201,11 +1269,13 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
     flagGroups.clear();
     labelSprites.clear();
+    powerUpGroups.clear();
     terrainMesh = null;
   }
 
   function rebuild(level: LevelData, keepConfetti = false) {
     clearWorld(keepConfetti);
+    camSlide = null;
     water.position.y = level.waterY;
     terrainMesh = buildTerrainMesh(level);
     world.add(terrainMesh);
@@ -1215,6 +1285,14 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
       const lean = makeTree(tree);
       world.add(lean);
       treeSwings.push({ lean, leanX: 0, leanZ: 0, velX: 0, velZ: 0, shudder: 0 });
+    }
+
+    for (const pu of level.powerUps) {
+      if (pu.kind !== "beer") continue;
+      const can = makeBeerCan(pu);
+      can.visible = pu.active;
+      world.add(can);
+      powerUpGroups.set(pu.id, can);
     }
 
     const target = currentTargetHole(level.holes);
@@ -1327,7 +1405,7 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     mat.color.set(target.color);
   }
 
-  function updateCamera(snap: RoundSnapshot) {
+  function updateCamera(snap: RoundSnapshot, dt: number) {
     // Shot goes along cameraYaw; view sits ~3° off to the side so the arc is visible
     const aimYaw = snap.cameraYaw;
     const viewYaw = aimYaw + (3 * Math.PI) / 180;
@@ -1337,11 +1415,23 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     const height = 28 - z * 23;
     const lookAhead = 8.5 - z * 6.2;
     const lookUp = 3.4 - z * 2.2;
-    const bx = snap.ball.pos.x;
-    const by = snap.ball.pos.y;
-    const bz = snap.ball.pos.z;
 
-    // Camera behind/beside ball; look along the aim so ball stays bottom-center
+    let bx = snap.ball.pos.x;
+    let by = snap.ball.pos.y;
+    let bz = snap.ball.pos.z;
+
+    // After water hazard: ease the follow point from splash → last lie (~1s)
+    if (camSlide) {
+      camSlide.t += dt;
+      const u = Math.min(1, camSlide.t / WATER_CAM_SLIDE_DUR);
+      const e = 1 - (1 - u) ** 3;
+      bx = camSlide.ax + (snap.ball.pos.x - camSlide.ax) * e;
+      by = camSlide.ay + (snap.ball.pos.y - camSlide.ay) * e;
+      bz = camSlide.az + (snap.ball.pos.z - camSlide.az) * e;
+      if (u >= 1) camSlide = null;
+    }
+
+    // Camera behind/beside follow point; look along the aim so ball stays bottom-center
     camera.position.set(
       bx - Math.sin(viewYaw) * dist,
       by + height,
@@ -1449,8 +1539,9 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
         power: snap.power,
         club: snap.club,
         level: engine.level,
+        speedMult: snap.speedMult,
       };
-      const spread = aimSpreadHalfAngle(snap.power);
+      const spread = aimSpreadHalfAngle(snap.power, snap.spreadMult);
       const ghosts = predictShotGhosts({ ...aimArgs, yaw: snap.cameraYaw });
       const leftGhosts = predictShotGhosts({
         ...aimArgs,
@@ -1516,9 +1607,10 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     waterMat.uniforms.uTime!.value = now * 0.001;
     updateGrass(snap.ball.pos.x, snap.ball.pos.z, now * 0.001);
 
+    updatePowerUps(snap, now);
     updateLabels(snap);
     updateWayArrow(engine.level, snap);
-    updateCamera(snap);
+    updateCamera(snap, dt);
     renderer.render(scene, camera);
   }
 

@@ -24,6 +24,7 @@ import {
 import type { GameScoreScope, GameScoresLeaderboardResponse } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import {
+  BEER_DURATION,
   CLUBS,
   WorkGolfEngine,
   estimateCarryYards,
@@ -102,6 +103,41 @@ function WorkGolfBtn({
       <Icon className="workgolf-btn-icon" aria-hidden />
       <span>{children}</span>
     </button>
+  );
+}
+
+/** Left-side beer buff with a depleting ring timer. */
+function BeerBoostIndicator({ remaining }: { remaining: number }) {
+  const r = 18;
+  const c = 2 * Math.PI * r;
+  const t = Math.max(0, Math.min(1, remaining / BEER_DURATION));
+  const dashOffset = c * (1 - t);
+
+  return (
+    <div
+      className="workgolf-beer-hud pointer-events-none absolute left-2 z-30"
+      style={{ top: "max(14.5rem, calc(env(safe-area-inset-top) + 13.5rem))" }}
+      aria-label={`Beer boost ${Math.ceil(remaining)} seconds remaining`}
+    >
+      <div className="workgolf-beer-hud-inner">
+        <svg className="workgolf-beer-ring" viewBox="0 0 44 44" aria-hidden>
+          <circle className="workgolf-beer-ring-track" cx="22" cy="22" r={r} />
+          <circle
+            className="workgolf-beer-ring-prog"
+            cx="22"
+            cy="22"
+            r={r}
+            strokeDasharray={c}
+            strokeDashoffset={dashOffset}
+          />
+        </svg>
+        <div className="workgolf-beer-can" aria-hidden>
+          <span className="workgolf-beer-can-body" />
+          <span className="workgolf-beer-can-label" />
+          <span className="workgolf-beer-can-top" />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -361,7 +397,12 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
         sc.sync(engine, snap);
 
         hudAccRef.current += dt;
-        if (hudAccRef.current >= 0.1 || snap.status === "complete" || snap.message) {
+        const hudInterval = snap.beerRemaining > 0 ? 0.05 : 0.1;
+        if (
+          hudAccRef.current >= hudInterval ||
+          snap.status === "complete" ||
+          snap.message
+        ) {
           hudAccRef.current = 0;
           setHud(snap);
         }
@@ -479,6 +520,7 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
           yaw: hud.cameraYaw,
           club: hud.club,
           level: aimingEngine.level,
+          speedMult: hud.speedMult,
         })
       : 0;
 
@@ -604,6 +646,7 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
               ) : null}
             </div>
           </div>
+          {hud.beerRemaining > 0 ? <BeerBoostIndicator remaining={hud.beerRemaining} /> : null}
           <button
             type="button"
             aria-label="Pause"

@@ -76,6 +76,19 @@ export type BunkerDef = {
 
 export type TreeDef = { x: number; z: number; y: number; radius: number; height: number };
 
+export type PowerUpKind = "beer";
+
+export type PowerUpDef = {
+  id: number;
+  kind: PowerUpKind;
+  x: number;
+  y: number;
+  z: number;
+  /** Collect radius (ball center within this of the can). */
+  radius: number;
+  active: boolean;
+};
+
 export type LevelData = {
   levelNumber: number;
   seed: number;
@@ -87,6 +100,7 @@ export type LevelData = {
   holes: HoleDef[];
   bunkers: BunkerDef[];
   trees: TreeDef[];
+  powerUps: PowerUpDef[];
   tee: Vec3;
   waterY: number;
 };
@@ -108,7 +122,8 @@ export type WorkGolfFxEvent =
       nz: number;
       strength: number;
     }
-  | { kind: "splash"; x: number; y: number; z: number; strength: number };
+  | { kind: "splash"; x: number; y: number; z: number; strength: number }
+  | { kind: "powerUp"; powerUpId: number; powerKind: PowerUpKind };
 
 export type RoundSnapshot = {
   levelNumber: number;
@@ -120,6 +135,7 @@ export type RoundSnapshot = {
   scoreTotal: number;
   ball: BallState;
   holes: HoleDef[];
+  powerUps: PowerUpDef[];
   aiming: boolean;
   power: number;
   club: ClubId;
@@ -129,6 +145,12 @@ export type RoundSnapshot = {
   lastShotPos: Vec3;
   status: "ready" | "flying" | "holed" | "complete";
   message: string | null;
+  /** Seconds of Beer Can steady-aim remaining (0 = inactive). */
+  beerRemaining: number;
+  /** Multiplier applied to aim spray (1 = normal). */
+  spreadMult: number;
+  /** Multiplier applied to shot speed / carry (1 = normal). */
+  speedMult: number;
 };
 
 const SURFACE_MEDIUM = 0;
@@ -174,9 +196,10 @@ export function computeShotVelocity(
   power: number,
   yaw: number,
   club: ClubId,
+  speedMult = 1,
 ): Vec3 {
   const clubDef = CLUBS[club];
-  const speed = power * MAX_HIT_SPEED * clubDef.speed;
+  const speed = power * MAX_HIT_SPEED * clubDef.speed * Math.max(0.05, speedMult);
   const angle = (clubDef.loftDeg * Math.PI) / 180;
   const forwardX = Math.sin(yaw);
   const forwardZ = Math.cos(yaw);
@@ -189,14 +212,21 @@ export function computeShotVelocity(
   };
 }
 
+/** Beer Can steady-aim duration (seconds). */
+export const BEER_DURATION = 20;
+/** Aim spray scale while Beer is active. */
+export const BEER_SPREAD_MULT = 0.28;
+/** Shot speed / carry scale while Beer is active. */
+export const BEER_SPEED_MULT = 1.5;
+
 /**
  * FPS-style bloom: half-angle (radians) of aim spray at this power.
  * Quiet at soft taps, opens hard toward full power.
  */
-export function aimSpreadHalfAngle(power: number): number {
+export function aimSpreadHalfAngle(power: number, spreadMult = 1): number {
   const u = Math.max(0, Math.min(1, power));
-  // ~0° soft → ~9° at full power
-  return 0.155 * u * u;
+  // ~0° soft → ~9° at full power (before power-up mult)
+  return 0.155 * u * u * Math.max(0.05, spreadMult);
 }
 
 export const SHOT_GHOST_COUNT = 10;
@@ -218,8 +248,9 @@ export function predictShotGhosts(args: {
   yaw: number;
   club: ClubId;
   level: LevelData;
+  speedMult?: number;
 }): Vec3[] {
-  const vel0 = computeShotVelocity(args.power, args.yaw, args.club);
+  const vel0 = computeShotVelocity(args.power, args.yaw, args.club, args.speedMult ?? 1);
   // Match releaseShot lift so preview lines up with the real launch
   const lift = 0.12 + Math.max(0, vel0.y) * 0.01;
   const dt = 1 / 120;
@@ -267,6 +298,7 @@ export function estimateCarryYards(args: {
   yaw: number;
   club: ClubId;
   level: LevelData;
+  speedMult?: number;
 }): number {
   if (args.power < 0.02) return 0;
   const ghosts = predictShotGhosts(args);
@@ -357,10 +389,16 @@ export function shortestYawDelta(from: number, to: number): number {
   return d;
 }
 
-/** Camera yaw pan speed (rad/s) when auto-facing the next cup. */
+/** Nominal camera yaw pan rate (rad/s) — used to size ease-in-out duration. */
 const YAW_PAN_SPEED = 1.45;
 /** If |Δyaw| to the cup is within this, treat it as already on-screen. */
 const HOLE_IN_VIEW_HALF = 0.58;
+
+/** Cubic ease-in-out: slow start, fast mid, soft landing. */
+function easeInOutCubic(u: number): number {
+  const t = Math.max(0, Math.min(1, u));
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
 
 /** Carve only the current target cup (rim funnel → deep cylinder). */
 export function applyCupCarve(
@@ -1245,6 +1283,7 @@ export function generateLevel(levelNumber: number): LevelData {
     holes: [],
     bunkers: [],
     trees: [],
+    powerUps: [],
     tee: { x: 0, y: 1, z: 0 },
     waterY,
   };
@@ -1496,6 +1535,42 @@ export function generateLevel(levelNumber: number): LevelData {
   }
   level.trees = trees;
 
+  // Sparse floating pickups along the course (usually 1, sometimes 0 or 2)
+  const powerUps: PowerUpDef[] = [];
+  const powerRoll = rng();
+  const powerCount = powerRoll < 0.22 ? 0 : powerRoll < 0.82 ? 1 : 2;
+  for (let p = 0; p < powerCount * 40 && powerUps.length < powerCount; p++) {
+    const seg = Math.floor(rng() * (spine.length - 1));
+    const a = spine[seg]!;
+    const b = spine[seg + 1]!;
+    const t = 0.2 + rng() * 0.6;
+    const side = rng() < 0.5 ? -1 : 1;
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const px = -dz / len;
+    const pz = dx / len;
+    const dist = fairwayHalf * 0.35 + rng() * (fairwayHalf * 1.1);
+    const x = a.x + dx * t + side * px * dist;
+    const z = a.z + dz * t + side * pz * dist;
+    if (dist2(x, z, teePt.x, teePt.z) < 20) continue;
+    if (holes.some((o) => dist2(x, z, o.x, o.z) < 14)) continue;
+    if (powerUps.some((u) => dist2(x, z, u.x, u.z) < 18)) continue;
+    const sample = sampleTerrain(level, x, z);
+    if (sample.height <= waterY + 0.35) continue;
+    if (sample.surface === "water" || sample.surface === "sand") continue;
+    powerUps.push({
+      id: powerUps.length,
+      kind: "beer",
+      x,
+      y: sample.height + 1.15 + rng() * 0.55,
+      z,
+      radius: 0.55,
+      active: true,
+    });
+  }
+  level.powerUps = powerUps;
+
   return level;
 }
 
@@ -1538,8 +1613,23 @@ export class WorkGolfEngine {
   private pendingFx: WorkGolfFxEvent[] = [];
   /** Strongest tree impact this tick (index → hit), flushed once per frame. */
   private frameTreeHits = new Map<number, { nx: number; nz: number; s: number }>();
-  /** Smooth camera pan target; null when not auto-rotating. */
-  private yawPanTarget: number | null = null;
+  /** Smooth ease-in-out camera pan; null when not auto-rotating. */
+  private yawPan: {
+    from: number;
+    to: number;
+    t: number;
+    dur: number;
+  } | null = null;
+  /** Beer Can steady-aim timer (seconds). */
+  private beerRemaining = 0;
+
+  get spreadMult(): number {
+    return this.beerRemaining > 0 ? BEER_SPREAD_MULT : 1;
+  }
+
+  get speedMult(): number {
+    return this.beerRemaining > 0 ? BEER_SPEED_MULT : 1;
+  }
 
   constructor(levelNumber: number) {
     this.level = generateLevel(levelNumber);
@@ -1573,32 +1663,40 @@ export class WorkGolfEngine {
     if (this.aiming) return;
     const hole = currentTargetHole(this.level.holes);
     if (!hole) {
-      this.yawPanTarget = null;
+      this.yawPan = null;
       return;
     }
     const desired = yawToward(this.ball.pos.x, this.ball.pos.z, hole.x, hole.z);
     const delta = shortestYawDelta(this.cameraYaw, desired);
     if (!force && Math.abs(delta) <= HOLE_IN_VIEW_HALF) {
-      this.yawPanTarget = null;
+      this.yawPan = null;
       return;
     }
-    this.yawPanTarget = desired;
+    // Longer turns get a bit more time; clamp so small nudges aren't sluggish
+    const dur = Math.min(2.4, Math.max(0.65, Math.abs(delta) / YAW_PAN_SPEED));
+    this.yawPan = {
+      from: this.cameraYaw,
+      to: desired,
+      t: 0,
+      dur,
+    };
   }
 
   private tickYawPan(dt: number) {
-    if (this.yawPanTarget == null || this.aiming) return;
-    const delta = shortestYawDelta(this.cameraYaw, this.yawPanTarget);
-    const step = YAW_PAN_SPEED * dt;
-    if (Math.abs(delta) <= step) {
-      this.cameraYaw = this.yawPanTarget;
-      this.yawPanTarget = null;
-    } else {
-      this.cameraYaw += Math.sign(delta) * step;
+    if (this.yawPan == null || this.aiming) return;
+    this.yawPan.t += dt;
+    const u = Math.min(1, this.yawPan.t / this.yawPan.dur);
+    const e = easeInOutCubic(u);
+    const delta = shortestYawDelta(this.yawPan.from, this.yawPan.to);
+    this.cameraYaw = this.yawPan.from + delta * e;
+    if (u >= 1) {
+      this.cameraYaw = this.yawPan.to;
+      this.yawPan = null;
     }
   }
 
   private cancelYawPan() {
-    this.yawPanTarget = null;
+    this.yawPan = null;
   }
 
   get holesRemaining(): number {
@@ -1629,6 +1727,7 @@ export class WorkGolfEngine {
         moving: this.ball.moving,
       },
       holes: this.level.holes.map((h) => ({ ...h })),
+      powerUps: this.level.powerUps.map((p) => ({ ...p })),
       aiming: this.aiming,
       power: this.power,
       club: this.club,
@@ -1637,6 +1736,9 @@ export class WorkGolfEngine {
       lastShotPos: { ...this.lastShotPos },
       status: this.status,
       message: this.message,
+      beerRemaining: this.beerRemaining,
+      spreadMult: this.spreadMult,
+      speedMult: this.speedMult,
     };
   }
 
@@ -1710,9 +1812,14 @@ export class WorkGolfEngine {
     this.strokesThisHole += 1;
 
     // Random point inside the bloom cone (uniform in angle, like spray)
-    const spread = aimSpreadHalfAngle(power);
+    const spread = aimSpreadHalfAngle(power, this.spreadMult);
     const yawJitter = (Math.random() * 2 - 1) * spread;
-    const vel = computeShotVelocity(power, this.cameraYaw + yawJitter, this.club);
+    const vel = computeShotVelocity(
+      power,
+      this.cameraYaw + yawJitter,
+      this.club,
+      this.speedMult,
+    );
     this.ball.vel = vel;
     // Nudge off the surface so slope contact doesn't cancel the hit immediately
     this.ball.pos.y += 0.12 + Math.max(0, vel.y) * 0.01;
@@ -1846,10 +1953,33 @@ export class WorkGolfEngine {
     }
   }
 
+  private collectPowerUps() {
+    for (const pu of this.level.powerUps) {
+      if (!pu.active) continue;
+      const d = Math.hypot(
+        this.ball.pos.x - pu.x,
+        this.ball.pos.y - pu.y,
+        this.ball.pos.z - pu.z,
+      );
+      if (d > pu.radius + BALL_RADIUS) continue;
+      pu.active = false;
+      this.pendingFx.push({ kind: "powerUp", powerUpId: pu.id, powerKind: pu.kind });
+      if (pu.kind === "beer") {
+        this.beerRemaining = BEER_DURATION;
+        this.message = "Beer! Steady aim · 1.5× power";
+        this.messageT = 1.6;
+      }
+    }
+  }
+
   tick(dt: number) {
     if (this.messageT > 0) {
       this.messageT -= dt;
       if (this.messageT <= 0) this.message = null;
+    }
+
+    if (this.beerRemaining > 0) {
+      this.beerRemaining = Math.max(0, this.beerRemaining - dt);
     }
 
     this.tickYawPan(dt);
@@ -1875,6 +2005,7 @@ export class WorkGolfEngine {
       this.ball.pos.z += this.ball.vel.z * stepDt;
 
       this.collideTrees();
+      this.collectPowerUps();
 
       const sample = sampleTerrain(this.level, this.ball.pos.x, this.ball.pos.z);
       const groundY = sample.height + BALL_RADIUS;
