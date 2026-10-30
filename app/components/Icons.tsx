@@ -20,10 +20,13 @@ import {
   Crop,
   Droplets,
   Eraser,
+  Flag,
   Gamepad2,
+  Globe,
   Hand,
   HardDrive,
   Heart,
+  Home,
   Image,
   ImagePlus,
   LayoutList,
@@ -48,6 +51,7 @@ import {
   Sun,
   Thermometer,
   Trash2,
+  Trophy,
   Undo2,
   Users,
   Video,
@@ -97,6 +101,14 @@ export const TierListIcon = LayoutList;
 export const PlayIcon = Play;
 /** Games / gamepad */
 export const GamepadIcon = Gamepad2;
+/** High scores / achievements */
+export const TrophyIcon = Trophy;
+/** Course / hole flag */
+export const FlagIcon = Flag;
+/** Home / title screen */
+export const HomeIcon = Home;
+/** Everyone / global board */
+export const GlobeIcon = Globe;
 /** Settings / gear */
 export const SettingsIcon = Settings;
 /** Push notifications */

@@ -16,7 +16,7 @@ export const CLUBS: Record<
   ClubId,
   { label: string; loftDeg: number; speed: number }
 > = {
-  driver: { label: "Driver", loftDeg: 30, speed: 1 },
+  driver: { label: "Driver", loftDeg: 30, speed: 0.5 },
   chipper: { label: "Chip", loftDeg: 70, speed: 0.72 },
   putter: { label: "Putt", loftDeg: 5, speed: 0.48 },
 };
@@ -37,6 +37,14 @@ export const CUP_RADIUS = 0.34;
 export const CUP_DEPTH = 0.55;
 /** Soft lip outside the opening. */
 export const CUP_LIP = 0.12;
+
+/**
+ * Height band above water that may look like beach / cliff dirt.
+ * Flat playable land in this band stays turf; only steep skirts read as beach.
+ */
+export const BEACH_BAND = 1.35;
+/** Horizontal normal magnitude — steeper than this in the beach band = cliff skirt. */
+export const BEACH_SLOPE = 0.38;
 
 /** How deep sand bunkers sit below the surrounding turf. */
 export const BUNKER_DEPTH = 0.45;
@@ -90,6 +98,18 @@ export type BallState = {
   moving: boolean;
 };
 
+/** One-frame visual cues consumed by the Three.js scene. */
+export type WorkGolfFxEvent =
+  | {
+      kind: "treeHit";
+      treeIndex: number;
+      /** Outward normal from trunk toward ball (lean direction). */
+      nx: number;
+      nz: number;
+      strength: number;
+    }
+  | { kind: "splash"; x: number; y: number; z: number; strength: number };
+
 export type RoundSnapshot = {
   levelNumber: number;
   strokesTotal: number;
@@ -122,7 +142,8 @@ const FLAG_COLORS = ["#ef4444", "#eab308", "#22c55e", "#ec4899", "#f97316"];
 
 const FRICTION: Record<SurfaceType, number> = {
   medium: 3.8,
-  tall: 18,
+  /** Rough — heavy drag after bounce; short run-out only. */
+  tall: 14,
   green: 1.85,
   sand: 18,
   water: 0,
@@ -130,6 +151,8 @@ const FRICTION: Record<SurfaceType, number> = {
 };
 
 const STOP_SPEED = 0.35;
+/** In tall grass, kill rolls sooner so rough actually holds the ball. */
+const TALL_STOP_SPEED = 1.35;
 const GRAVITY = 28;
 /** Next bounce reaches this fraction of the previous airborne apex height. */
 const BOUNCE_HEIGHT_FRAC = 0.2;
@@ -166,7 +189,24 @@ export function computeShotVelocity(
   };
 }
 
-export const SHOT_GHOST_COUNT = 8;
+/**
+ * FPS-style bloom: half-angle (radians) of aim spray at this power.
+ * Quiet at soft taps, opens hard toward full power.
+ */
+export function aimSpreadHalfAngle(power: number): number {
+  const u = Math.max(0, Math.min(1, power));
+  // ~0° soft → ~9° at full power
+  return 0.155 * u * u;
+}
+
+export const SHOT_GHOST_COUNT = 10;
+/** Ghost samples along each spray edge (±spread). */
+export const SHOT_SPREAD_GHOST_COUNT = 6;
+
+/** World units → display yards (matches hole distance labels). */
+export function worldToYards(dist: number): number {
+  return Math.round(dist * 1.2);
+}
 
 /**
  * Pure ballistic parabola matching shot launch (same vel + gravity) until first ground hit.
@@ -218,6 +258,21 @@ export function predictShotGhosts(args: {
     ghosts.push(points[idx]!);
   }
   return ghosts;
+}
+
+/** Rough carry to first bounce, in display yards (no path wobble). */
+export function estimateCarryYards(args: {
+  origin: Vec3;
+  power: number;
+  yaw: number;
+  club: ClubId;
+  level: LevelData;
+}): number {
+  if (args.power < 0.02) return 0;
+  const ghosts = predictShotGhosts(args);
+  const land = ghosts[ghosts.length - 1];
+  if (!land) return 0;
+  return worldToYards(Math.hypot(land.x - args.origin.x, land.z - args.origin.z));
 }
 
 function surfaceFromCode(code: number): SurfaceType {
@@ -279,39 +334,66 @@ function vertWorld(level: Pick<LevelData, "size" | "cell">, ix: number, iz: numb
   return { x: -half + ix * level.cell, z: -half + iz * level.cell };
 }
 
-/** Carve an active cup into a base height (rim funnel → deep cylinder). */
+/** Next cup to play — holes are ordered by id along the fairway spine. */
+export function currentTargetHole(holes: HoleDef[]): HoleDef | null {
+  let cur: HoleDef | null = null;
+  for (const h of holes) {
+    if (!h.active) continue;
+    if (!cur || h.id < cur.id) cur = h;
+  }
+  return cur;
+}
+
+/** Yaw from (fromX, fromZ) toward (toX, toZ), matching shot / camera convention. */
+export function yawToward(fromX: number, fromZ: number, toX: number, toZ: number): number {
+  return Math.atan2(toX - fromX, toZ - fromZ);
+}
+
+/** Shortest signed delta from one yaw to another in (−π, π]. */
+export function shortestYawDelta(from: number, to: number): number {
+  let d = to - from;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d <= -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+/** Camera yaw pan speed (rad/s) when auto-facing the next cup. */
+const YAW_PAN_SPEED = 1.45;
+/** If |Δyaw| to the cup is within this, treat it as already on-screen. */
+const HOLE_IN_VIEW_HALF = 0.58;
+
+/** Carve only the current target cup (rim funnel → deep cylinder). */
 export function applyCupCarve(
   baseHeight: number,
   x: number,
   z: number,
   holes: HoleDef[],
 ): { height: number; inCup: boolean; hole: HoleDef | null } {
-  let height = baseHeight;
-  let inCup = false;
-  let hit: HoleDef | null = null;
+  const hole = currentTargetHole(holes);
+  if (!hole) return { height: baseHeight, inCup: false, hole: null };
 
-  for (const hole of holes) {
-    if (!hole.active) continue;
-    const d = Math.hypot(x - hole.x, z - hole.z);
-    const lipOuter = CUP_RADIUS + CUP_LIP;
-    if (d >= lipOuter) continue;
+  const d = Math.hypot(x - hole.x, z - hole.z);
+  const lipOuter = CUP_RADIUS + CUP_LIP;
+  if (d >= lipOuter) return { height: baseHeight, inCup: false, hole: null };
 
-    hit = hole;
-    const rim = hole.y;
-    if (d <= CUP_RADIUS) {
-      // Flat-ish cup floor with a tiny center well
-      const t = d / CUP_RADIUS;
-      height = rim - CUP_DEPTH + 0.06 * t * t;
-      inCup = true;
-    } else {
-      // Beveled lip into the opening
-      const u = (d - CUP_RADIUS) / CUP_LIP;
-      const lipDrop = 0.1 * (1 - u) * (1 - u);
-      height = Math.min(height, rim - lipDrop);
-    }
+  const rim = hole.y;
+  if (d <= CUP_RADIUS) {
+    // Flat-ish cup floor with a tiny center well
+    const t = d / CUP_RADIUS;
+    return {
+      height: rim - CUP_DEPTH + 0.06 * t * t,
+      inCup: true,
+      hole,
+    };
   }
-
-  return { height, inCup, hole: hit };
+  // Beveled lip into the opening
+  const u = (d - CUP_RADIUS) / CUP_LIP;
+  const lipDrop = 0.1 * (1 - u) * (1 - u);
+  return {
+    height: Math.min(baseHeight, rim - lipDrop),
+    inCup: false,
+    hole,
+  };
 }
 
 /**
@@ -475,19 +557,41 @@ export function sampleTerrain(
   const ny = 1;
   const len = Math.hypot(nx, ny, nz) || 1;
 
+  const normal = { x: nx / len, y: ny / len, z: nz / len };
+
   let surface = surfaceFromCode(bestS);
   // Physics: whole pit plays as sand; vertex sand color uses onSandFloor only
   if (carved.inBunker) surface = "sand";
   if (height <= level.waterY + 0.05) surface = "water";
+  // Cliff / wet shore that looks like beach must play as sand (not fairway turf)
+  else if (
+    surface !== "green" &&
+    surface !== "sand" &&
+    isBeachSkirt(height, level.waterY, normal)
+  ) {
+    surface = "sand";
+  }
 
   return {
     height,
     surface,
-    normal: { x: nx / len, y: ny / len, z: nz / len },
+    normal,
     inCup: carved.inCup,
     inBunker: carved.inBunker,
     onSandFloor: carved.onSandFloor,
   };
+}
+
+/** True for wet shoreline or steep cliff dirt in the beach height band. */
+export function isBeachSkirt(
+  height: number,
+  waterY: number,
+  normal: Vec3,
+): boolean {
+  if (height <= waterY + 0.05) return false;
+  if (height <= waterY + 0.14) return true;
+  if (height >= waterY + BEACH_BAND) return false;
+  return Math.hypot(normal.x, normal.z) >= BEACH_SLOPE;
 }
 
 /** Bilinear height only (no cup carve) — used for cup normal sampling. */
@@ -1188,7 +1292,8 @@ export function generateLevel(levelNumber: number): LevelData {
   // Average fairway elevation from samples along spine
   let elevSum = 0;
   for (const p of spine) elevSum += sampleTerrain(level, p.x, p.z).height;
-  const fairwayY = Math.max(waterY + 0.55, elevSum / spine.length);
+  // Keep the playable strip above the beach/cliff color band so low islands aren't all dirt
+  const fairwayY = Math.max(waterY + BEACH_BAND + 0.25, elevSum / spine.length);
 
   // Rough band first (tall grass), then fairway overwrites the center
   for (let s = 0; s < spine.length - 1; s++) {
@@ -1430,6 +1535,11 @@ export class WorkGolfEngine {
   /** Cup the ball is currently swirling into (before score pops). */
   private sinkingHole: HoleDef | null = null;
   private sinkSettleT = 0;
+  private pendingFx: WorkGolfFxEvent[] = [];
+  /** Strongest tree impact this tick (index → hit), flushed once per frame. */
+  private frameTreeHits = new Map<number, { nx: number; nz: number; s: number }>();
+  /** Smooth camera pan target; null when not auto-rotating. */
+  private yawPanTarget: number | null = null;
 
   constructor(levelNumber: number) {
     this.level = generateLevel(levelNumber);
@@ -1443,6 +1553,52 @@ export class WorkGolfEngine {
     this.cameraYaw = 0;
     this.cameraZoom = 0.45;
     this.club = "driver";
+    // Tee-off: snap once so the first view is correct
+    const hole = currentTargetHole(this.level.holes);
+    if (hole) {
+      this.cameraYaw = yawToward(this.ball.pos.x, this.ball.pos.z, hole.x, hole.z);
+    }
+  }
+
+  /** Smoothly pan camera toward the next cup (used after holing out). */
+  faceCurrentHole() {
+    this.ensureHoleInView(true);
+  }
+
+  /**
+   * Start a yaw pan toward the current target if needed.
+   * `force` always pans (e.g. after sinking); otherwise only when the cup is off-screen.
+   */
+  ensureHoleInView(force = false) {
+    if (this.aiming) return;
+    const hole = currentTargetHole(this.level.holes);
+    if (!hole) {
+      this.yawPanTarget = null;
+      return;
+    }
+    const desired = yawToward(this.ball.pos.x, this.ball.pos.z, hole.x, hole.z);
+    const delta = shortestYawDelta(this.cameraYaw, desired);
+    if (!force && Math.abs(delta) <= HOLE_IN_VIEW_HALF) {
+      this.yawPanTarget = null;
+      return;
+    }
+    this.yawPanTarget = desired;
+  }
+
+  private tickYawPan(dt: number) {
+    if (this.yawPanTarget == null || this.aiming) return;
+    const delta = shortestYawDelta(this.cameraYaw, this.yawPanTarget);
+    const step = YAW_PAN_SPEED * dt;
+    if (Math.abs(delta) <= step) {
+      this.cameraYaw = this.yawPanTarget;
+      this.yawPanTarget = null;
+    } else {
+      this.cameraYaw += Math.sign(delta) * step;
+    }
+  }
+
+  private cancelYawPan() {
+    this.yawPanTarget = null;
   }
 
   get holesRemaining(): number {
@@ -1485,6 +1641,7 @@ export class WorkGolfEngine {
   }
 
   setYaw(yaw: number) {
+    this.cancelYawPan();
     this.cameraYaw = yaw;
   }
 
@@ -1497,14 +1654,38 @@ export class WorkGolfEngine {
     this.club = club;
   }
 
+  /** Scene should call this once per frame after syncing. */
+  drainFx(): WorkGolfFxEvent[] {
+    if (this.pendingFx.length === 0) return [];
+    const out = this.pendingFx;
+    this.pendingFx = [];
+    return out;
+  }
+
+  private flushTreeHits() {
+    if (this.frameTreeHits.size === 0) return;
+    for (const [treeIndex, hit] of this.frameTreeHits) {
+      this.pendingFx.push({
+        kind: "treeHit",
+        treeIndex,
+        nx: hit.nx,
+        nz: hit.nz,
+        strength: hit.s,
+      });
+    }
+    this.frameTreeHits.clear();
+  }
+
   beginAim() {
     if (this.status !== "ready" || this.ball.moving) return;
+    this.cancelYawPan();
     this.aiming = true;
     this.power = 0;
   }
 
   updateAim(power: number, yawDelta: number) {
     if (!this.aiming) return;
+    this.cancelYawPan();
     this.power = Math.max(0, Math.min(1, power));
     this.cameraYaw += yawDelta;
   }
@@ -1528,7 +1709,10 @@ export class WorkGolfEngine {
     this.strokesTotal += 1;
     this.strokesThisHole += 1;
 
-    const vel = computeShotVelocity(power, this.cameraYaw, this.club);
+    // Random point inside the bloom cone (uniform in angle, like spray)
+    const spread = aimSpreadHalfAngle(power);
+    const yawJitter = (Math.random() * 2 - 1) * spread;
+    const vel = computeShotVelocity(power, this.cameraYaw + yawJitter, this.club);
     this.ball.vel = vel;
     // Nudge off the surface so slope contact doesn't cancel the hit immediately
     this.ball.pos.y += 0.12 + Math.max(0, vel.y) * 0.01;
@@ -1540,6 +1724,14 @@ export class WorkGolfEngine {
   }
 
   private resetFromWater() {
+    const speed = Math.hypot(this.ball.vel.x, this.ball.vel.y, this.ball.vel.z);
+    this.pendingFx.push({
+      kind: "splash",
+      x: this.ball.pos.x,
+      y: this.level.waterY + 0.04,
+      z: this.ball.pos.z,
+      strength: Math.min(1.8, 0.45 + speed / 16),
+    });
     this.strokesTotal += 1;
     this.strokesThisHole += 1;
     this.ball.pos = { ...this.lastShotPos };
@@ -1549,6 +1741,7 @@ export class WorkGolfEngine {
     this.status = "ready";
     this.message = "Water · +1";
     this.messageT = 1.6;
+    this.ensureHoleInView(false);
   }
 
   private beginCupSink(hole: HoleDef) {
@@ -1620,13 +1813,15 @@ export class WorkGolfEngine {
       this.messageT = 3;
     } else {
       this.status = "ready";
-      this.message = `Hole scored · ${scored}`;
+      this.message = `Hole ${hole.id + 1} · ${scored} · next cup ahead`;
       this.messageT = 1.8;
+      this.faceCurrentHole(); // smooth pan toward next cup
     }
   }
 
   private collideTrees() {
-    for (const tree of this.level.trees) {
+    for (let ti = 0; ti < this.level.trees.length; ti++) {
+      const tree = this.level.trees[ti]!;
       const dx = this.ball.pos.x - tree.x;
       const dz = this.ball.pos.z - tree.z;
       const r = tree.radius + BALL_RADIUS;
@@ -1642,6 +1837,11 @@ export class WorkGolfEngine {
       if (vn < 0) {
         this.ball.vel.x -= 1.6 * vn * nx;
         this.ball.vel.z -= 1.6 * vn * nz;
+        const s = Math.min(4.2, -vn * 0.32);
+        if (s > 0.04) {
+          const prev = this.frameTreeHits.get(ti);
+          if (!prev || s > prev.s) this.frameTreeHits.set(ti, { nx, nz, s });
+        }
       }
     }
   }
@@ -1651,6 +1851,8 @@ export class WorkGolfEngine {
       this.messageT -= dt;
       if (this.messageT <= 0) this.message = null;
     }
+
+    this.tickYawPan(dt);
 
     if (this.sinkingHole) {
       this.tickCupSink(dt);
@@ -1680,6 +1882,7 @@ export class WorkGolfEngine {
       // Fell into water
       if (sample.surface === "water" || sample.height <= this.level.waterY + 0.05) {
         if (this.ball.pos.y <= this.level.waterY + BALL_RADIUS + 0.15) {
+          this.flushTreeHits();
           this.resetFromWater();
           return;
         }
@@ -1689,35 +1892,36 @@ export class WorkGolfEngine {
         this.arcApexY = Math.max(this.arcApexY, this.ball.pos.y);
       }
 
-      // Over an open cup: fall in — no bounce / magnetism. Fast balls can lip out.
+      // Over the current cup only: fall in — no bounce / magnetism. Fast balls can lip out.
       if (sample.inCup && this.launchGrace <= 0) {
         this.ball.grounded = false;
         const horizSpeed = Math.hypot(this.ball.vel.x, this.ball.vel.z);
-        for (const hole of this.level.holes) {
-          if (!hole.active) continue;
+        const hole = currentTargetHole(this.level.holes);
+        if (hole) {
           const dx = this.ball.pos.x - hole.x;
           const dz = this.ball.pos.z - hole.z;
           const d = Math.hypot(dx, dz);
-          if (d >= CUP_RADIUS || d < 1e-6) continue;
-
-          // Soft walls only once the ball has slowed enough to drop (not a skim)
-          if (horizSpeed < CUP_CATCH_SPEED * 1.15 && d > CUP_RADIUS - BALL_RADIUS * 0.35) {
-            const nx = dx / d;
-            const nz = dz / d;
-            const push = CUP_RADIUS - BALL_RADIUS * 0.35;
-            this.ball.pos.x = hole.x + nx * push;
-            this.ball.pos.z = hole.z + nz * push;
-            const vn = this.ball.vel.x * nx + this.ball.vel.z * nz;
-            if (vn > 0) {
-              this.ball.vel.x -= vn * nx;
-              this.ball.vel.z -= vn * nz;
+          if (d < CUP_RADIUS && d >= 1e-6) {
+            // Soft walls only once the ball has slowed enough to drop (not a skim)
+            if (horizSpeed < CUP_CATCH_SPEED * 1.15 && d > CUP_RADIUS - BALL_RADIUS * 0.35) {
+              const nx = dx / d;
+              const nz = dz / d;
+              const push = CUP_RADIUS - BALL_RADIUS * 0.35;
+              this.ball.pos.x = hole.x + nx * push;
+              this.ball.pos.z = hole.z + nz * push;
+              const vn = this.ball.vel.x * nx + this.ball.vel.z * nz;
+              if (vn > 0) {
+                this.ball.vel.x -= vn * nx;
+                this.ball.vel.z -= vn * nz;
+              }
             }
-          }
 
-          const dropped = hole.y - this.ball.pos.y;
-          if (dropped >= CUP_CATCH_DROP && horizSpeed < CUP_CATCH_SPEED) {
-            this.beginCupSink(hole);
-            return;
+            const dropped = hole.y - this.ball.pos.y;
+            if (dropped >= CUP_CATCH_DROP && horizSpeed < CUP_CATCH_SPEED) {
+              this.flushTreeHits();
+              this.beginCupSink(hole);
+              return;
+            }
           }
         }
         // Collide with cup floor so we don't fall forever
@@ -1747,11 +1951,12 @@ export class WorkGolfEngine {
           const bounceHeight = fallHeight * BOUNCE_HEIGHT_FRAC;
 
           if (bounceHeight >= MIN_BOUNCE_HEIGHT) {
-            // Always bounce (non-water) — ~20% of previous arc height
+            // Bounce (non-water). Rough eats more forward speed but still hops.
             const bounceSpeed = Math.sqrt(2 * GRAVITY * bounceHeight);
-            tx *= 0.92;
-            ty *= 0.92;
-            tz *= 0.92;
+            const tanKeep = sample.surface === "tall" ? 0.62 : 0.92;
+            tx *= tanKeep;
+            ty *= tanKeep;
+            tz *= tanKeep;
             this.ball.vel.x = tx + n.x * bounceSpeed;
             this.ball.vel.y = ty + n.y * bounceSpeed;
             this.ball.vel.z = tz + n.z * bounceSpeed;
@@ -1759,17 +1964,32 @@ export class WorkGolfEngine {
             this.ball.grounded = false;
             this.arcApexY = groundY;
           } else {
-            // Settled — roll, except tall grass / sand kill short rolls
+            // Settled — sand hard-stops; tall grass drags then stops at higher speed
             this.ball.vel.x = tx;
             this.ball.vel.y = ty;
             this.ball.vel.z = tz;
 
-            if (sample.surface === "tall" || sample.surface === "sand") {
+            if (sample.surface === "sand") {
               this.ball.vel = { x: 0, y: 0, z: 0 };
               this.ball.moving = false;
               this.ball.grounded = true;
               this.status = "ready";
+              this.flushTreeHits();
+              this.ensureHoleInView(false);
               return;
+            }
+
+            if (sample.surface === "tall") {
+              const horiz = Math.hypot(tx, tz);
+              if (horiz < TALL_STOP_SPEED) {
+                this.ball.vel = { x: 0, y: 0, z: 0 };
+                this.ball.moving = false;
+                this.ball.grounded = true;
+                this.status = "ready";
+                this.flushTreeHits();
+                this.ensureHoleInView(false);
+                return;
+              }
             }
 
             const friction = FRICTION[sample.surface];
@@ -1796,8 +2016,11 @@ export class WorkGolfEngine {
         this.ball.vel = { x: 0, y: 0, z: 0 };
         this.ball.moving = false;
         this.status = "ready";
+        this.flushTreeHits();
+        this.ensureHoleInView(false);
         return;
       }
     }
+    this.flushTreeHits();
   }
 }

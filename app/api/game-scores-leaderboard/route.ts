@@ -23,6 +23,10 @@ export async function POST(request: Request) {
     const game = normalizeGameId(body.game);
     const level = normalizeLevelId(body.level);
     const scope: GameScoreScope = body.scope === "friends" ? "friends" : "all";
+    const limit =
+      typeof body.limit === "number" && Number.isFinite(body.limit)
+        ? body.limit
+        : 20;
 
     if (!game || !level) {
       return NextResponse.json(
@@ -53,6 +57,7 @@ export async function POST(request: Request) {
       game,
       level,
       scope,
+      limit,
     });
 
     const payload: GameScoresLeaderboardResponse = {
@@ -60,6 +65,7 @@ export async function POST(request: Request) {
       level,
       scope,
       top: board.top,
+      total: board.total,
       me: board.me,
     };
     return NextResponse.json(payload);

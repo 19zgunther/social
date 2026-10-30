@@ -6,12 +6,20 @@ import {
   CUP_DEPTH,
   CUP_RADIUS,
   SHOT_GHOST_COUNT,
+  SHOT_SPREAD_GHOST_COUNT,
+  aimSpreadHalfAngle,
+  currentTargetHole,
+  isBeachSkirt,
   predictShotGhosts,
   sampleTerrain,
+  worldToYards,
+  yawToward,
   type HoleDef,
   type LevelData,
   type RoundSnapshot,
+  type Vec3,
   type WorkGolfEngine,
+  type WorkGolfFxEvent,
 } from "./workGolfEngine";
 
 const COLORS = {
@@ -25,6 +33,8 @@ const COLORS = {
   dirt: 0xc9a36a,
   trunk: 0x6b4423,
   pine: 0x1f6b2e,
+  pineMid: 0x247834,
+  pineLight: 0x2d8a3e,
   ball: 0xf5f5f0,
 };
 
@@ -275,11 +285,11 @@ function pushTerrainVert(
   } else if (sample.onSandFloor) {
     // Sand only on the recessed floor — rim / walls stay turf-colored
     color.setHex(COLORS.sand);
-  } else if (h <= level.waterY + 0.12) {
+  } else if (isBeachSkirt(h, level.waterY, sample.normal)) {
+    // Steep cliff / wet shore only — flat low fairways stay turf-colored
     color.copy(dirt);
-  } else if (h < level.waterY + 1.35) {
-    // Cliff band above the ocean
-    color.copy(dirt);
+  } else if (sample.surface === "sand") {
+    color.setHex(COLORS.sand);
   } else {
     // Approximate surface color from nearest heightfield cell
     const half = ((level.size - 1) * level.cell) / 2;
@@ -320,8 +330,10 @@ function buildTerrainMesh(level: LevelData): THREE.Mesh {
         color.setHex(0x1a1a1a);
       } else if (carved.onSandFloor) {
         color.setHex(COLORS.sand);
-      } else if (y <= waterY + 0.12 || y < waterY + 1.35) {
+      } else if (isBeachSkirt(y, waterY, carved.normal)) {
         color.copy(dirt);
+      } else if (carved.surface === "sand") {
+        color.setHex(COLORS.sand);
       } else {
         color.setHex(surfaceColor(level.surfaces[i]!));
       }
@@ -411,26 +423,71 @@ function buildTerrainMesh(level: LevelData): THREE.Mesh {
 }
 
 function makeTree(tree: LevelData["trees"][number]): THREE.Group {
-  const g = new THREE.Group();
-  g.position.set(tree.x, tree.y, tree.z);
+  // Outer group leans on hit; inner keeps stable yaw
+  const lean = new THREE.Group();
+  lean.position.set(tree.x, tree.y, tree.z);
 
+  const visual = new THREE.Group();
+  visual.rotation.y = (tree.x * 13.7 + tree.z * 9.1) % (Math.PI * 2);
+  lean.add(visual);
+
+  const h = tree.height;
+  const r = tree.radius;
+  const trunkMat = new THREE.MeshLambertMaterial({
+    color: COLORS.trunk,
+    flatShading: true,
+  });
+  const pineColors = [COLORS.pine, COLORS.pineMid, COLORS.pineLight, COLORS.pine, COLORS.pineMid];
+
+  // Root flare
+  const roots = new THREE.Mesh(
+    new THREE.CylinderGeometry(r * 0.42, r * 0.62, h * 0.07, 5),
+    trunkMat,
+  );
+  roots.position.y = h * 0.035;
+  roots.castShadow = true;
+  visual.add(roots);
+
+  // Trunk up into the first foliage skirt
+  const trunkH = h * 0.38;
   const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12, 0.16, tree.height * 0.28, 5),
-    new THREE.MeshLambertMaterial({ color: COLORS.trunk, flatShading: true }),
+    new THREE.CylinderGeometry(r * 0.16, r * 0.26, trunkH, 5),
+    trunkMat,
   );
-  trunk.position.y = tree.height * 0.14;
+  trunk.position.y = trunkH * 0.5;
   trunk.castShadow = true;
-  g.add(trunk);
+  visual.add(trunk);
 
-  const foliage = new THREE.Mesh(
-    new THREE.ConeGeometry(tree.radius * 1.35, tree.height * 0.85, 6),
-    new THREE.MeshLambertMaterial({ color: COLORS.pine, flatShading: true }),
+  // Stacked low-poly skirts (wide → narrow), overlapping like classic cartoon pines
+  const layers = 5;
+  for (let i = 0; i < layers; i++) {
+    const t = i / (layers - 1);
+    const layerR = r * (1.65 - t * 1.15);
+    const layerH = h * (0.34 - t * 0.08);
+    // Overlap so each skirt sits into the one below
+    const yCenter = h * (0.28 + t * 0.52);
+    const foliage = new THREE.Mesh(
+      new THREE.ConeGeometry(layerR, layerH, 6),
+      new THREE.MeshLambertMaterial({
+        color: pineColors[i]!,
+        flatShading: true,
+      }),
+    );
+    foliage.position.y = yCenter;
+    foliage.castShadow = true;
+    visual.add(foliage);
+  }
+
+  // Brown tip poking through the top cone
+  const tip = new THREE.Mesh(
+    new THREE.CylinderGeometry(r * 0.035, r * 0.07, h * 0.14, 4),
+    trunkMat,
   );
-  foliage.position.y = tree.height * 0.55;
-  foliage.castShadow = true;
-  g.add(foliage);
+  tip.position.y = h * 0.97;
+  tip.castShadow = true;
+  visual.add(tip);
 
-  return g;
+  return lean;
 }
 
 function makeFlag(hole: HoleDef): THREE.Group {
@@ -463,7 +520,7 @@ function makeFlag(hole: HoleDef): THREE.Group {
   flag.position.set(0.04, 1.85, 0);
   g.add(flag);
 
-  // Dark cup liner matching the carved opening (terrain holds the real hole)
+  // Dark cup liner — only visible while this cup is the current target
   const liner = new THREE.Mesh(
     new THREE.CylinderGeometry(CUP_RADIUS * 0.98, CUP_RADIUS * 0.92, CUP_DEPTH, 12, 1, true),
     new THREE.MeshLambertMaterial({
@@ -473,6 +530,7 @@ function makeFlag(hole: HoleDef): THREE.Group {
     }),
   );
   liner.position.y = -CUP_DEPTH * 0.5 + 0.02;
+  liner.name = "cupLiner";
   g.add(liner);
 
   const cupFloor = new THREE.Mesh(
@@ -481,8 +539,38 @@ function makeFlag(hole: HoleDef): THREE.Group {
   );
   cupFloor.rotation.x = -Math.PI / 2;
   cupFloor.position.y = -CUP_DEPTH + 0.04;
+  cupFloor.name = "cupFloor";
   g.add(cupFloor);
 
+  return g;
+}
+
+/** Flat ground arrow pointing +Z; yawed toward the next cup each frame. */
+function makeWayArrow(): THREE.Group {
+  const g = new THREE.Group();
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 1.05);
+  shape.lineTo(0.55, 0.15);
+  shape.lineTo(0.22, 0.15);
+  shape.lineTo(0.22, -0.55);
+  shape.lineTo(-0.22, -0.55);
+  shape.lineTo(-0.22, 0.15);
+  shape.lineTo(-0.55, 0.15);
+  shape.closePath();
+  const mesh = new THREE.Mesh(
+    new THREE.ShapeGeometry(shape),
+    new THREE.MeshLambertMaterial({
+      color: 0xffffff,
+      flatShading: true,
+      transparent: true,
+      opacity: 0.88,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  g.add(mesh);
+  g.visible = false;
   return g;
 }
 
@@ -537,10 +625,44 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   const world = new THREE.Group();
   scene.add(world);
 
-  const ballGeo = new THREE.IcosahedronGeometry(BALL_RADIUS, 0);
+  /** Dimpled sphere — rendering only; physics still uses BALL_RADIUS. */
+  function makeGolfBallGeometry(radius: number): THREE.BufferGeometry {
+    const geo = new THREE.SphereGeometry(radius, 28, 20);
+    const pos = geo.attributes.position!;
+    const v = new THREE.Vector3();
+    const n = new THREE.Vector3();
+    const dimpleDirs: THREE.Vector3[] = [];
+    const dimpleCount = 80;
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < dimpleCount; i++) {
+      const y = 1 - (i / (dimpleCount - 1)) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = golden * i;
+      dimpleDirs.push(new THREE.Vector3(Math.cos(theta) * r, y, Math.sin(theta) * r));
+    }
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      n.copy(v).normalize();
+      let nearest = 2;
+      for (const d of dimpleDirs) {
+        const dist = n.distanceTo(d);
+        if (dist < nearest) nearest = dist;
+      }
+      const influence = Math.max(0, 1 - nearest / 0.2);
+      const sink = influence * influence * radius * 0.055;
+      v.setLength(radius - sink);
+      pos.setXYZ(i, v.x, v.y, v.z);
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  const ballGeo = makeGolfBallGeometry(BALL_RADIUS);
+  const ghostBallGeo = new THREE.SphereGeometry(BALL_RADIUS, 12, 10);
   const ballMat = new THREE.MeshLambertMaterial({
     color: COLORS.ball,
-    flatShading: true,
+    flatShading: false,
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -2,
@@ -550,30 +672,73 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   ballMesh.renderOrder = 2;
   scene.add(ballMesh);
 
-  // Ghost balls along the predicted parabola (50% scale, fade 50% → 0%)
-  const ghostBalls: THREE.Mesh[] = [];
-  for (let i = 0; i < SHOT_GHOST_COUNT; i++) {
+  function makeGhostBall(opacity: number, scale: number): THREE.Mesh {
     const mat = new THREE.MeshLambertMaterial({
       color: COLORS.ball,
-      flatShading: true,
+      flatShading: false,
       transparent: true,
-      opacity: 0.5,
+      opacity,
       depthTest: false,
       depthWrite: false,
     });
-    const ghost = new THREE.Mesh(ballGeo, mat);
-    ghost.scale.setScalar(0.5);
+    const ghost = new THREE.Mesh(ghostBallGeo, mat);
+    ghost.scale.setScalar(scale);
     ghost.visible = false;
     ghost.frustumCulled = false;
     ghost.renderOrder = 10;
     scene.add(ghost);
-    ghostBalls.push(ghost);
+    return ghost;
   }
+
+  // Center aim path + spray-edge paths (FPS bloom cone)
+  const ghostBalls: THREE.Mesh[] = [];
+  for (let i = 0; i < SHOT_GHOST_COUNT; i++) ghostBalls.push(makeGhostBall(0.5, 0.5));
+  const spreadLeftGhosts: THREE.Mesh[] = [];
+  const spreadRightGhosts: THREE.Mesh[] = [];
+  for (let i = 0; i < SHOT_SPREAD_GHOST_COUNT; i++) {
+    spreadLeftGhosts.push(makeGhostBall(0.22, 0.32));
+    spreadRightGhosts.push(makeGhostBall(0.22, 0.32));
+  }
+
+  // Landing bloom ellipse — widens with aim spray
+  const landRingGeo = new THREE.RingGeometry(0.55, 0.85, 28);
+  const landRingMat = new THREE.MeshLambertMaterial({
+    color: 0xf5f5f0,
+    flatShading: true,
+    transparent: true,
+    opacity: 0.55,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const landRing = new THREE.Mesh(landRingGeo, landRingMat);
+  landRing.rotation.x = -Math.PI / 2;
+  landRing.visible = false;
+  landRing.frustumCulled = false;
+  landRing.renderOrder = 9;
+  scene.add(landRing);
+
+  // Ground spray fan between left/right edge landings
+  const sprayFanMat = new THREE.MeshLambertMaterial({
+    color: 0xffffff,
+    flatShading: true,
+    transparent: true,
+    opacity: 0.14,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const sprayFan = new THREE.Mesh(new THREE.BufferGeometry(), sprayFanMat);
+  sprayFan.visible = false;
+  sprayFan.frustumCulled = false;
+  sprayFan.renderOrder = 8;
+  scene.add(sprayFan);
 
   let terrainMesh: THREE.Mesh | null = null;
   const flagGroups = new Map<number, THREE.Group>();
   const labelSprites = new Map<number, THREE.Sprite>();
+  const wayArrow = makeWayArrow();
+  scene.add(wayArrow);
   let builtLevel = -1;
+  let builtTargetHoleId = -1;
 
   // --- Cheap grass: instanced cards, distance-culled, alphaTest, no shadows ---
   const grassTex = makeGrassTexture();
@@ -748,6 +913,39 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   let confettiLastTs = performance.now();
   const confettiGeo = new THREE.PlaneGeometry(0.1, 0.14);
 
+  type TreeSway = {
+    lean: THREE.Group;
+    leanX: number;
+    leanZ: number;
+    velX: number;
+    velZ: number;
+    /** High-freq shiver that decays after a hit. */
+    shudder: number;
+  };
+  const treeSwings: TreeSway[] = [];
+
+  type SplashDrop = {
+    mesh: THREE.Mesh;
+    vx: number;
+    vy: number;
+    vz: number;
+    life: number;
+    waterY: number;
+  };
+  type SplashRing = {
+    mesh: THREE.Mesh;
+    age: number;
+    maxAge: number;
+    startScale: number;
+    endScale: number;
+  };
+  const fxGroup = new THREE.Group();
+  scene.add(fxGroup);
+  const splashDrops: SplashDrop[] = [];
+  const splashRings: SplashRing[] = [];
+  const splashDropGeo = new THREE.IcosahedronGeometry(0.08, 0);
+  const splashRingGeo = new THREE.RingGeometry(0.35, 0.55, 20);
+
   function clearConfetti() {
     while (confettiGroup.children.length) {
       const child = confettiGroup.children[0]!;
@@ -835,8 +1033,156 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
   }
 
-  function clearWorld() {
-    clearConfetti();
+  function clearSplashes() {
+    while (fxGroup.children.length) {
+      const child = fxGroup.children[0]!;
+      fxGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const m of mats) m.dispose();
+      }
+    }
+    splashDrops.length = 0;
+    splashRings.length = 0;
+  }
+
+  function impulseTree(treeIndex: number, nx: number, nz: number, strength: number) {
+    const sway = treeSwings[treeIndex];
+    if (!sway) return;
+    const kick = strength * 2.6;
+    sway.velX += nx * kick;
+    sway.velZ += nz * kick;
+    sway.shudder = Math.min(1.8, sway.shudder + strength * 1.1);
+  }
+
+  function updateTreeSway(dt: number) {
+    const spring = 68;
+    const damp = 4.4;
+    const maxLean = 0.58;
+    const tSec = performance.now() * 0.001;
+    for (const t of treeSwings) {
+      t.velX += (-t.leanX * spring - t.velX * damp) * dt;
+      t.velZ += (-t.leanZ * spring - t.velZ * damp) * dt;
+      t.leanX += t.velX * dt;
+      t.leanZ += t.velZ * dt;
+      if (t.leanX > maxLean) t.leanX = maxLean;
+      else if (t.leanX < -maxLean) t.leanX = -maxLean;
+      if (t.leanZ > maxLean) t.leanZ = maxLean;
+      else if (t.leanZ < -maxLean) t.leanZ = -maxLean;
+      t.shudder *= Math.exp(-5.5 * dt);
+      const shake =
+        Math.sin(tSec * 38 + t.lean.id) * t.shudder * 0.09 +
+        Math.sin(tSec * 61 + 2.1) * t.shudder * 0.05;
+      // Tip away from the hit along XZ, plus a short shudder
+      t.lean.rotation.x = -t.leanZ + shake * 0.65;
+      t.lean.rotation.z = t.leanX + shake;
+    }
+  }
+
+  function spawnSplash(x: number, y: number, z: number, strength: number) {
+    const s = Math.max(0.35, Math.min(1.8, strength));
+    for (let r = 0; r < 2; r++) {
+      const mat = new THREE.MeshLambertMaterial({
+        color: r === 0 ? 0xd8f4ff : 0xffffff,
+        flatShading: true,
+        transparent: true,
+        opacity: 0.7,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(splashRingGeo, mat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(x, y + 0.02 + r * 0.01, z);
+      mesh.scale.setScalar(0.35 + r * 0.15);
+      fxGroup.add(mesh);
+      splashRings.push({
+        mesh,
+        age: 0,
+        maxAge: 0.55 + r * 0.2,
+        startScale: 0.4 + r * 0.2,
+        endScale: (1.8 + s * 1.4) * (1 + r * 0.35),
+      });
+    }
+
+    const drops = 10 + Math.round(s * 8);
+    for (let i = 0; i < drops; i++) {
+      const mat = new THREE.MeshLambertMaterial({
+        color: i % 3 === 0 ? 0xffffff : COLORS.water,
+        flatShading: true,
+        transparent: true,
+        opacity: 0.9,
+      });
+      const mesh = new THREE.Mesh(splashDropGeo, mat);
+      const ang = Math.random() * Math.PI * 2;
+      const out = (0.6 + Math.random() * 2.2) * s;
+      mesh.position.set(
+        x + Math.cos(ang) * 0.08,
+        y + 0.05 + Math.random() * 0.1,
+        z + Math.sin(ang) * 0.08,
+      );
+      mesh.scale.setScalar(0.55 + Math.random() * 0.9);
+      fxGroup.add(mesh);
+      splashDrops.push({
+        mesh,
+        vx: Math.cos(ang) * out,
+        vy: (3.5 + Math.random() * 5.5) * (0.55 + s * 0.35),
+        vz: Math.sin(ang) * out,
+        life: 0.55 + Math.random() * 0.45,
+        waterY: y,
+      });
+    }
+  }
+
+  function updateSplashes(dt: number) {
+    for (let i = splashRings.length - 1; i >= 0; i--) {
+      const ring = splashRings[i]!;
+      ring.age += dt;
+      const u = Math.min(1, ring.age / ring.maxAge);
+      const scale = ring.startScale + (ring.endScale - ring.startScale) * u;
+      ring.mesh.scale.setScalar(scale);
+      const mat = ring.mesh.material as THREE.MeshLambertMaterial;
+      mat.opacity = 0.65 * (1 - u) * (1 - u);
+      if (u >= 1) {
+        fxGroup.remove(ring.mesh);
+        mat.dispose();
+        splashRings.splice(i, 1);
+      }
+    }
+
+    const g = 22;
+    for (let i = splashDrops.length - 1; i >= 0; i--) {
+      const drop = splashDrops[i]!;
+      drop.life -= dt;
+      drop.vy -= g * dt;
+      drop.mesh.position.x += drop.vx * dt;
+      drop.mesh.position.y += drop.vy * dt;
+      drop.mesh.position.z += drop.vz * dt;
+      drop.vx *= Math.exp(-1.2 * dt);
+      drop.vz *= Math.exp(-1.2 * dt);
+      const mat = drop.mesh.material as THREE.MeshLambertMaterial;
+      mat.opacity = Math.max(0, Math.min(0.95, drop.life * 1.6));
+      if (drop.life <= 0 || drop.mesh.position.y <= drop.waterY) {
+        fxGroup.remove(drop.mesh);
+        mat.dispose();
+        splashDrops.splice(i, 1);
+      }
+    }
+  }
+
+  function handleFx(events: WorkGolfFxEvent[]) {
+    for (const ev of events) {
+      if (ev.kind === "treeHit") {
+        impulseTree(ev.treeIndex, ev.nx, ev.nz, ev.strength);
+      } else {
+        spawnSplash(ev.x, ev.y, ev.z, ev.strength);
+      }
+    }
+  }
+
+  function clearWorld(keepConfetti = false) {
+    if (!keepConfetti) clearConfetti();
+    clearSplashes();
+    treeSwings.length = 0;
     while (world.children.length) {
       const child = world.children[0]!;
       world.remove(child);
@@ -858,21 +1204,30 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     terrainMesh = null;
   }
 
-  function rebuild(level: LevelData) {
-    clearWorld();
+  function rebuild(level: LevelData, keepConfetti = false) {
+    clearWorld(keepConfetti);
     water.position.y = level.waterY;
     terrainMesh = buildTerrainMesh(level);
     world.add(terrainMesh);
     rebuildGrass(level);
 
     for (const tree of level.trees) {
-      world.add(makeTree(tree));
+      const lean = makeTree(tree);
+      world.add(lean);
+      treeSwings.push({ lean, leanX: 0, leanZ: 0, velX: 0, velZ: 0, shudder: 0 });
     }
 
+    const target = currentTargetHole(level.holes);
     for (const hole of level.holes) {
       const flag = makeFlag(hole);
       world.add(flag);
       flagGroups.set(hole.id, flag);
+
+      const isTarget = target !== null && hole.id === target.id;
+      const liner = flag.getObjectByName("cupLiner");
+      const floor = flag.getObjectByName("cupFloor");
+      if (liner) liner.visible = isTarget;
+      if (floor) floor.visible = isTarget;
 
       const spriteMat = new THREE.SpriteMaterial({
         map: makeDistanceTexture("—", hole.color),
@@ -887,27 +1242,89 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
 
     builtLevel = level.levelNumber;
+    builtTargetHoleId = target?.id ?? -1;
   }
 
   function updateLabels(snap: RoundSnapshot) {
+    const target = currentTargetHole(snap.holes);
     for (const hole of snap.holes) {
       const sprite = labelSprites.get(hole.id);
       const flag = flagGroups.get(hole.id);
       if (!sprite || !flag) continue;
+
+      // Remaining flags stay up as course landmarks; only the current cup shows distance
       flag.visible = hole.active;
-      sprite.visible = hole.active;
-      if (!hole.active) continue;
+      const isTarget = target !== null && hole.id === target.id;
+      const liner = flag.getObjectByName("cupLiner");
+      const floor = flag.getObjectByName("cupFloor");
+      if (liner) liner.visible = isTarget;
+      if (floor) floor.visible = isTarget;
+
+      // Soften upcoming (non-target) flags so the next cup reads clearly
+      flag.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        if (obj.name === "cupLiner" || obj.name === "cupFloor") return;
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const m of mats) {
+          if ("opacity" in m) {
+            const mat = m as THREE.MeshLambertMaterial;
+            mat.transparent = !isTarget;
+            mat.opacity = isTarget ? 1 : 0.55;
+          }
+        }
+      });
+
+      if (!hole.active || !isTarget) {
+        sprite.visible = false;
+        continue;
+      }
 
       const dx = hole.x - snap.ball.pos.x;
       const dz = hole.z - snap.ball.pos.z;
       const dist = Math.hypot(dx, dz);
-      const yards = Math.round(dist * 1.2);
+      const yards = worldToYards(dist);
       const mat = sprite.material as THREE.SpriteMaterial;
       mat.map?.dispose();
       mat.map = makeDistanceTexture(`${yards}y`, hole.color);
       mat.needsUpdate = true;
+      sprite.visible = true;
       sprite.position.set(hole.x, hole.y + 3.1, hole.z);
     }
+  }
+
+  function updateWayArrow(level: LevelData, snap: RoundSnapshot) {
+    const target = currentTargetHole(snap.holes);
+    if (
+      !target ||
+      snap.status === "complete" ||
+      snap.ball.moving ||
+      snap.status === "flying" ||
+      snap.status === "holed"
+    ) {
+      wayArrow.visible = false;
+      return;
+    }
+
+    const dx = target.x - snap.ball.pos.x;
+    const dz = target.z - snap.ball.pos.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 2.5) {
+      wayArrow.visible = false;
+      return;
+    }
+
+    const yaw = yawToward(snap.ball.pos.x, snap.ball.pos.z, target.x, target.z);
+    const standOff = Math.min(3.2, dist * 0.22);
+    const ax = snap.ball.pos.x + Math.sin(yaw) * standOff;
+    const az = snap.ball.pos.z + Math.cos(yaw) * standOff;
+    const ground = sampleTerrain(level, ax, az);
+    wayArrow.visible = true;
+    wayArrow.position.set(ax, ground.height + 0.08, az);
+    // Shape tip lands on -Z after laying flat; +π aligns it with yawToward (+Z at 0)
+    wayArrow.rotation.y = yaw + Math.PI;
+    const mesh = wayArrow.children[0] as THREE.Mesh;
+    const mat = mesh.material as THREE.MeshLambertMaterial;
+    mat.color.set(target.color);
   }
 
   function updateCamera(snap: RoundSnapshot) {
@@ -937,14 +1354,72 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     );
   }
 
+  function hideSpreadPreview() {
+    for (const ghost of ghostBalls) ghost.visible = false;
+    for (const ghost of spreadLeftGhosts) ghost.visible = false;
+    for (const ghost of spreadRightGhosts) ghost.visible = false;
+    landRing.visible = false;
+    sprayFan.visible = false;
+  }
+
+  function placeSpreadGhosts(ghosts: THREE.Mesh[], points: Vec3[]) {
+    for (let i = 0; i < ghosts.length; i++) {
+      const ghost = ghosts[i]!;
+      const p = points[i];
+      if (!p) {
+        ghost.visible = false;
+        continue;
+      }
+      const t = ghosts.length <= 1 ? 0 : i / (ghosts.length - 1);
+      ghost.visible = true;
+      ghost.position.set(p.x, p.y, p.z);
+      (ghost.material as THREE.MeshLambertMaterial).opacity = 0.08 + 0.16 * (1 - t);
+    }
+  }
+
+  function updateSprayFan(
+    origin: { x: number; y: number; z: number },
+    leftLand: { x: number; y: number; z: number },
+    rightLand: { x: number; y: number; z: number },
+    strength: number,
+  ) {
+    const y = Math.min(origin.y, leftLand.y, rightLand.y) - BALL_RADIUS + 0.05;
+    const positions = new Float32Array([
+      origin.x,
+      y,
+      origin.z,
+      leftLand.x,
+      y,
+      leftLand.z,
+      rightLand.x,
+      y,
+      rightLand.z,
+    ]);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.computeVertexNormals();
+    sprayFan.geometry.dispose();
+    sprayFan.geometry = geo;
+    sprayFanMat.opacity = 0.06 + strength * 0.16;
+    sprayFan.visible = strength > 0.04;
+  }
+
   function sync(engine: WorkGolfEngine, snap: RoundSnapshot) {
+    const targetId = currentTargetHole(snap.holes)?.id ?? -1;
     if (builtLevel !== engine.level.levelNumber) {
-      rebuild(engine.level);
+      rebuild(engine.level, false);
+    } else if (builtTargetHoleId !== targetId) {
+      // New cup opens — keep confetti from the hole just sunk
+      rebuild(engine.level, true);
     }
 
     const now = performance.now();
     const dt = Math.min(0.05, (now - confettiLastTs) / 1000);
     confettiLastTs = now;
+
+    handleFx(engine.drainFx());
+    updateTreeSway(dt);
+    updateSplashes(dt);
 
     // Celebrate newly sunk cups — confetti stays on the ground for the rest of the round
     for (const hole of snap.holes) {
@@ -955,13 +1430,13 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
     updateConfetti(engine.level, dt);
 
-    // Lift slightly along terrain normal so the ball doesn't clip into slopes
+    // Physics center sits a bit high visually — sink along the ground normal (render only)
     const ground = sampleTerrain(engine.level, snap.ball.pos.x, snap.ball.pos.z);
-    const lift = 0.04;
+    const visualSink = -BALL_RADIUS * 0.5;
     ballMesh.position.set(
-      snap.ball.pos.x + ground.normal.x * lift,
-      snap.ball.pos.y + ground.normal.y * lift,
-      snap.ball.pos.z + ground.normal.z * lift,
+      snap.ball.pos.x + ground.normal.x * visualSink,
+      snap.ball.pos.y + ground.normal.y * visualSink,
+      snap.ball.pos.z + ground.normal.z * visualSink,
     );
     if (snap.ball.moving) {
       ballMesh.rotation.x += snap.ball.vel.z * 0.02;
@@ -969,13 +1444,23 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
 
     if (snap.aiming && snap.power > 0.02) {
-      const ghosts = predictShotGhosts({
+      const aimArgs = {
         origin: snap.ball.pos,
         power: snap.power,
-        yaw: snap.cameraYaw,
         club: snap.club,
         level: engine.level,
+      };
+      const spread = aimSpreadHalfAngle(snap.power);
+      const ghosts = predictShotGhosts({ ...aimArgs, yaw: snap.cameraYaw });
+      const leftGhosts = predictShotGhosts({
+        ...aimArgs,
+        yaw: snap.cameraYaw - spread,
       });
+      const rightGhosts = predictShotGhosts({
+        ...aimArgs,
+        yaw: snap.cameraYaw + spread,
+      });
+
       for (let i = 0; i < ghostBalls.length; i++) {
         const ghost = ghostBalls[i]!;
         const p = ghosts[i];
@@ -983,20 +1468,56 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
           ghost.visible = false;
           continue;
         }
+        const t = ghostBalls.length <= 1 ? 0 : i / (ghostBalls.length - 1);
         ghost.visible = true;
         ghost.position.set(p.x, p.y, p.z);
-        // Near → far: 50% → faint (keep impact site visible)
-        const t = ghostBalls.length <= 1 ? 0 : i / (ghostBalls.length - 1);
-        (ghost.material as THREE.MeshLambertMaterial).opacity = 0.5 * (1 - t) + 0.08 * t;
+        const isLand = i === ghostBalls.length - 1;
+        (ghost.material as THREE.MeshLambertMaterial).opacity = isLand
+          ? 0.72
+          : 0.48 * (1 - t) + 0.12 * t;
+        ghost.scale.setScalar(isLand ? 0.72 : 0.42 + 0.12 * (1 - t));
+      }
+
+      // Edge paths subsampled from full edge predictions
+      const pickEdge = (pts: Vec3[]): Vec3[] => {
+        const out: Vec3[] = [];
+        for (let i = 0; i < SHOT_SPREAD_GHOST_COUNT; i++) {
+          const t = (i + 1) / SHOT_SPREAD_GHOST_COUNT;
+          const idx = Math.min(pts.length - 1, Math.round(t * (pts.length - 1)));
+          const p = pts[idx];
+          if (p) out.push(p);
+        }
+        return out;
+      };
+      placeSpreadGhosts(spreadLeftGhosts, pickEdge(leftGhosts));
+      placeSpreadGhosts(spreadRightGhosts, pickEdge(rightGhosts));
+
+      const land = ghosts[ghosts.length - 1];
+      const landL = leftGhosts[leftGhosts.length - 1];
+      const landR = rightGhosts[rightGhosts.length - 1];
+      if (land && landL && landR) {
+        const lateral = Math.hypot(landL.x - landR.x, landL.z - landR.z);
+        // Bloom size tracks spray width at impact (FPS crosshair open)
+        const bloom = Math.max(1, 0.85 + lateral * 0.5);
+        landRing.visible = true;
+        landRing.position.set(land.x, land.y - BALL_RADIUS + 0.04, land.z);
+        landRing.rotation.set(-Math.PI / 2, 0, 0);
+        landRing.scale.setScalar(bloom);
+        landRingMat.opacity = 0.28 + snap.power * 0.4;
+        updateSprayFan(snap.ball.pos, landL, landR, spread / 0.155);
+      } else {
+        landRing.visible = false;
+        sprayFan.visible = false;
       }
     } else {
-      for (const ghost of ghostBalls) ghost.visible = false;
+      hideSpreadPreview();
     }
 
     waterMat.uniforms.uTime!.value = now * 0.001;
     updateGrass(snap.ball.pos.x, snap.ball.pos.z, now * 0.001);
 
     updateLabels(snap);
+    updateWayArrow(engine.level, snap);
     updateCamera(snap);
     renderer.render(scene, camera);
   }
@@ -1035,6 +1556,27 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   function dispose() {
     clearWorld();
     clearGrassCandidates();
+    scene.remove(wayArrow);
+    wayArrow.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const m of mats) m.dispose();
+      }
+    });
+    scene.remove(landRing);
+    landRingGeo.dispose();
+    landRingMat.dispose();
+    scene.remove(sprayFan);
+    sprayFan.geometry.dispose();
+    sprayFanMat.dispose();
+    scene.remove(ballMesh);
+    ballGeo.dispose();
+    ghostBallGeo.dispose();
+    ballMat.dispose();
+    scene.remove(fxGroup);
+    splashDropGeo.dispose();
+    splashRingGeo.dispose();
     scene.remove(grassMesh);
     grassMesh.dispose();
     grassGeo.dispose();

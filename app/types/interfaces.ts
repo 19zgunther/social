@@ -961,6 +961,8 @@ export type GameScoresLeaderboardRequest = {
   level?: string;
   /** all-time everyone vs accepted friends (+ self). Default "all". */
   scope?: GameScoreScope;
+  /** How many top personal-best rows to return (1–50). Default 20. */
+  limit?: number;
 };
 
 export type GameScoreLeaderboardEntry = {
@@ -968,6 +970,8 @@ export type GameScoreLeaderboardEntry = {
   username: string;
   score: number;
   created_at: string;
+  /** 1-based rank among personal bests in this scope. */
+  rank: number;
 };
 
 export type GameScoresLeaderboardResponse = {
@@ -975,6 +979,8 @@ export type GameScoresLeaderboardResponse = {
   level: string;
   scope: GameScoreScope;
   top: GameScoreLeaderboardEntry[];
+  /** Players with a personal best in this scope. */
+  total: number;
   me: {
     user_id: string;
     username: string;

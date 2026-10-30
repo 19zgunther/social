@@ -42,7 +42,7 @@ export async function fetchTetrisLeaderboard(
     const response = await fetch("/api/game-scores-leaderboard", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ game: TETRIS_GAME, level: TETRIS_LEVEL, scope }),
+      body: JSON.stringify({ game: TETRIS_GAME, level: TETRIS_LEVEL, scope, limit: 25 }),
     });
     if (!response.ok) return null;
     return (await response.json()) as GameScoresLeaderboardResponse;

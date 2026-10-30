@@ -1,12 +1,32 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { CloseIcon } from "@/app/components/Icons";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from "react";
+import {
+  BackIcon,
+  CloseIcon,
+  ForwardIcon,
+  GlobeIcon,
+  HomeIcon,
+  LogOutIcon,
+  PeopleIcon,
+  PlayIcon,
+  RefreshIcon,
+  TrophyIcon,
+  type LucideIcon,
+} from "@/app/components/Icons";
 import type { GameScoreScope, GameScoresLeaderboardResponse } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import {
   CLUBS,
   WorkGolfEngine,
+  estimateCarryYards,
   type ClubId,
   type RoundSnapshot,
 } from "./workGolfEngine";
@@ -39,15 +59,165 @@ const LEVEL_LIST_COUNT = 30;
 const MAX_POWER_DRAG_PX = 160;
 const YAW_PER_PX = 0.0075;
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return "";
-  }
+function formatRankLabel(
+  rank: number | null,
+  total: number,
+  scope: GameScoreScope,
+): string {
+  if (rank == null) return "Unranked";
+  const pool = scope === "friends" ? "friends" : "all";
+  if (total > 0) return `#${rank} of ${total} · ${pool}`;
+  return `#${rank} · ${pool}`;
+}
+
+type WorkGolfBtnTone =
+  | "play"
+  | "scores"
+  | "exit"
+  | "back"
+  | "resume"
+  | "quit"
+  | "next"
+  | "replay"
+  | "board"
+  | "title"
+  | "all"
+  | "friends";
+
+function WorkGolfBtn({
+  tone,
+  icon: Icon,
+  children,
+  className = "",
+  type = "button",
+  ...props
+}: {
+  tone: WorkGolfBtnTone;
+  icon: LucideIcon;
+  children: ReactNode;
+  className?: string;
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className" | "children">) {
+  return (
+    <button type={type} className={`workgolf-btn workgolf-btn--${tone} ${className}`} {...props}>
+      <Icon className="workgolf-btn-icon" aria-hidden />
+      <span>{children}</span>
+    </button>
+  );
+}
+
+function WorkGolfLeaderboardPanel(props: {
+  leaderboard: GameScoresLeaderboardResponse | null;
+  loading: boolean;
+  scope: GameScoreScope;
+  onScope: (scope: GameScoreScope) => void;
+  /** Tighter layout for the post-round card. */
+  compact?: boolean;
+}) {
+  const { leaderboard, loading, scope, onScope, compact } = props;
+  const meInTop =
+    leaderboard?.top.some((row) => row.user_id === leaderboard.me.user_id) ?? false;
+
+  return (
+    <div className="w-full">
+      <div className="workgolf-lb-scope mb-2">
+        <WorkGolfBtn
+          tone="all"
+          icon={GlobeIcon}
+          className={scope === "all" ? "" : "!opacity-45"}
+          onClick={() => onScope("all")}
+        >
+          All
+        </WorkGolfBtn>
+        <WorkGolfBtn
+          tone="friends"
+          icon={PeopleIcon}
+          className={scope === "friends" ? "" : "!opacity-45"}
+          onClick={() => onScope("friends")}
+        >
+          Friends
+        </WorkGolfBtn>
+      </div>
+
+      {loading ? (
+        <p className="workgolf-sub text-center">Loading board...</p>
+      ) : !leaderboard ? (
+        <p className="workgolf-sub text-center">Could not load scores.</p>
+      ) : (
+        <>
+          <div className="workgolf-lb-you">
+            <p className="text-[0.55rem] font-semibold uppercase tracking-wide text-emerald-200/90">
+              You
+            </p>
+            {leaderboard.me.personal_best == null ? (
+              <p className="workgolf-sub mt-0.5 text-[0.7rem]">No score on this level yet.</p>
+            ) : (
+              <p className="mt-0.5 text-[0.78rem] font-semibold text-white">
+                {formatRankLabel(leaderboard.me.rank, leaderboard.total, scope)}
+                <span className="ml-2 font-normal text-emerald-200">
+                  {leaderboard.me.personal_best}
+                </span>
+                {!compact ? (
+                  <span className="ml-2 font-normal text-white/45">
+                    @{leaderboard.me.username}
+                  </span>
+                ) : null}
+              </p>
+            )}
+          </div>
+
+          <p className="mb-1 text-[0.55rem] font-semibold uppercase tracking-wide text-white/55">
+            {scope === "friends" ? "Friends" : "Everyone"} · Level board
+          </p>
+          {leaderboard.top.length === 0 ? (
+            <p className="workgolf-sub text-center text-[0.7rem]">No scores yet.</p>
+          ) : (
+            <ul className={compact ? "space-y-0.5" : "space-y-1"}>
+              {leaderboard.top.map((row) => {
+                const isMe = row.user_id === leaderboard.me.user_id;
+                return (
+                  <li
+                    key={`${row.user_id}-${row.score}-${row.created_at}`}
+                    className={`workgolf-lb-row ${isMe ? "is-me" : ""}`}
+                  >
+                    <span className="w-7 shrink-0 text-[0.68rem] font-semibold text-white/55">
+                      #{row.rank}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[0.75rem] text-white">
+                      {row.username}
+                      {isMe ? " · you" : ""}
+                    </span>
+                    <span className="shrink-0 text-[0.75rem] font-semibold text-emerald-200">
+                      {row.score}
+                    </span>
+                  </li>
+                );
+              })}
+              {!meInTop &&
+              leaderboard.me.rank != null &&
+              leaderboard.me.personal_best != null ? (
+                <>
+                  <li className="py-0.5 text-center text-[0.55rem] text-white/35" aria-hidden>
+                    ···
+                  </li>
+                  <li className="workgolf-lb-row is-me">
+                    <span className="w-7 shrink-0 text-[0.68rem] font-semibold text-emerald-200/90">
+                      #{leaderboard.me.rank}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[0.75rem] text-white">
+                      {leaderboard.me.username} · you
+                    </span>
+                    <span className="shrink-0 text-[0.75rem] font-semibold text-emerald-200">
+                      {leaderboard.me.personal_best}
+                    </span>
+                  </li>
+                </>
+              ) : null}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
@@ -204,8 +374,9 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
               prev.includes(info.levelNumber) ? prev : [...prev, info.levelNumber],
             );
             setCompleteInfo(info);
+            setLeaderboardScope("all");
             setMenuScreen("complete");
-            void loadLeaderboard(info.levelNumber, leaderboardScope);
+            void loadLeaderboard(info.levelNumber, "all");
           })();
         }
       } else if (snapRef.current) {
@@ -299,6 +470,17 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
 
   const unlockedMax = computeUnlockedMax(playedLevels);
   const showCanvas = screen === "playing" || screen === "paused" || screen === "complete";
+  const aimingEngine = hud?.aiming ? engineRef.current : null;
+  const aimCarryYards =
+    aimingEngine && hud
+      ? estimateCarryYards({
+          origin: hud.ball.pos,
+          power: hud.power,
+          yaw: hud.cameraYaw,
+          club: hud.club,
+          level: aimingEngine.level,
+        })
+      : 0;
 
   return (
     <div
@@ -334,19 +516,19 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
           <p className="workgolf-title">Work Golf</p>
           <p className="workgolf-sub">Low-poly links. Five flags. Fewer strokes.</p>
           <div className="workgolf-btns mt-2 flex w-full max-w-sm flex-col items-center gap-3">
-            <button type="button" className="workgolf-btn" onClick={openLevels}>
+            <WorkGolfBtn tone="play" icon={PlayIcon} onClick={openLevels}>
               Play
-            </button>
-            <button
-              type="button"
-              className="workgolf-btn"
+            </WorkGolfBtn>
+            <WorkGolfBtn
+              tone="scores"
+              icon={TrophyIcon}
               onClick={() => openHighScores("title", selectedLevel)}
             >
               High Scores
-            </button>
-            <button type="button" className="workgolf-btn" onClick={onExit}>
+            </WorkGolfBtn>
+            <WorkGolfBtn tone="exit" icon={LogOutIcon} onClick={onExit}>
               Exit
-            </button>
+            </WorkGolfBtn>
           </div>
         </div>
       ) : null}
@@ -354,13 +536,14 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
       {screen === "levels" ? (
         <div className="relative z-20 flex flex-1 flex-col px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(3.5rem,env(safe-area-inset-top))]">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              className="workgolf-btn !max-w-[6.5rem] !px-3 !py-2 !text-[0.8rem]"
+            <WorkGolfBtn
+              tone="back"
+              icon={BackIcon}
+              className="!max-w-[6.5rem] !px-3 !py-2 !text-[0.8rem]"
               onClick={() => setMenuScreen("title")}
             >
               Back
-            </button>
+            </WorkGolfBtn>
             <p className="workgolf-title text-center" style={{ fontSize: "1.25rem" }}>
               Levels
             </p>
@@ -492,7 +675,9 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
           {hud.aiming ? (
             <div className="pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-0 right-0 z-20 flex justify-center">
               <p className="rounded-full bg-black/45 px-3 py-1 text-[0.7rem] text-white">
-                Power {Math.round(hud.power * 100)}%
+                {aimCarryYards > 0
+                  ? `~${aimCarryYards}y · ${Math.round(hud.power * 100)}%`
+                  : `Power ${Math.round(hud.power * 100)}%`}
               </p>
             </div>
           ) : hud.status === "ready" ? (
@@ -511,12 +696,12 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
             Paused
           </p>
           <div className="workgolf-btns flex w-full max-w-sm flex-col items-center gap-3">
-            <button type="button" className="workgolf-btn" onClick={() => setMenuScreen("playing")}>
+            <WorkGolfBtn tone="resume" icon={PlayIcon} onClick={() => setMenuScreen("playing")}>
               Resume
-            </button>
-            <button type="button" className="workgolf-btn" onClick={quitToTitle}>
+            </WorkGolfBtn>
+            <WorkGolfBtn tone="quit" icon={LogOutIcon} onClick={quitToTitle}>
               Quit
-            </button>
+            </WorkGolfBtn>
           </div>
         </div>
       ) : null}
@@ -543,47 +728,32 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
             </p>
             {completeInfo.runRank != null ? (
               <p className="workgolf-complete-rank workgolf-complete-item workgolf-complete-d5">
-                Run rank #{completeInfo.runRank}
-              </p>
-            ) : null}
-            {completeInfo.personalBest != null ? (
-              <p className="workgolf-sub workgolf-complete-item workgolf-complete-d6 text-center">
-                Best {completeInfo.personalBest}
-                {completeInfo.personalBestRank != null
-                  ? ` · #${completeInfo.personalBestRank}`
+                This run #{completeInfo.runRank}
+                {completeInfo.personalBest != null
+                  ? ` · Best ${completeInfo.personalBest}`
                   : ""}
+              </p>
+            ) : completeInfo.personalBest != null ? (
+              <p className="workgolf-sub workgolf-complete-item workgolf-complete-d5 text-center">
+                Best {completeInfo.personalBest}
               </p>
             ) : null}
 
             <div className="workgolf-complete-board workgolf-complete-item workgolf-complete-d7">
-              {leaderboardLoading ? (
-                <p className="workgolf-sub text-center">Loading board...</p>
-              ) : leaderboard ? (
-                <ul className="space-y-1.5">
-                  {leaderboard.top.map((row, i) => (
-                    <li
-                      key={`${row.user_id}-${row.created_at}`}
-                      className="flex justify-between text-[0.8rem] text-white"
-                    >
-                      <span>
-                        {i + 1}. {row.username}
-                      </span>
-                      <span className="font-semibold text-emerald-200">{row.score}</span>
-                    </li>
-                  ))}
-                  {leaderboard.top.length === 0 ? (
-                    <li className="workgolf-sub text-center">No scores yet.</li>
-                  ) : null}
-                </ul>
-              ) : (
-                <p className="workgolf-sub text-center">Could not load scores.</p>
-              )}
+              <WorkGolfLeaderboardPanel
+                leaderboard={leaderboard}
+                loading={leaderboardLoading}
+                scope={leaderboardScope}
+                onScope={setLeaderboardScopeAndLoad}
+                compact
+              />
             </div>
 
             <div className="workgolf-btns mt-3 flex w-full flex-col items-center gap-2">
-              <button
-                type="button"
-                className="workgolf-btn workgolf-complete-item workgolf-complete-d8"
+              <WorkGolfBtn
+                tone="next"
+                icon={ForwardIcon}
+                className="workgolf-complete-item workgolf-complete-d8"
                 onClick={() => {
                   const finished = completeInfo.levelNumber;
                   const nextPlayed = playedLevels.includes(finished)
@@ -593,28 +763,31 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
                 }}
               >
                 Next Level
-              </button>
-              <button
-                type="button"
-                className="workgolf-btn workgolf-complete-item workgolf-complete-d9"
+              </WorkGolfBtn>
+              <WorkGolfBtn
+                tone="replay"
+                icon={RefreshIcon}
+                className="workgolf-complete-item workgolf-complete-d9"
                 onClick={() => startLevel(completeInfo.levelNumber)}
               >
                 Replay
-              </button>
-              <button
-                type="button"
-                className="workgolf-btn workgolf-complete-item workgolf-complete-d10"
+              </WorkGolfBtn>
+              <WorkGolfBtn
+                tone="board"
+                icon={TrophyIcon}
+                className="workgolf-complete-item workgolf-complete-d10"
                 onClick={() => openHighScores("complete", completeInfo.levelNumber)}
               >
                 Full Leaderboard
-              </button>
-              <button
-                type="button"
-                className="workgolf-btn workgolf-complete-item workgolf-complete-d11"
+              </WorkGolfBtn>
+              <WorkGolfBtn
+                tone="title"
+                icon={HomeIcon}
+                className="workgolf-complete-item workgolf-complete-d11"
                 onClick={quitToTitle}
               >
                 Title
-              </button>
+              </WorkGolfBtn>
             </div>
           </div>
         </div>
@@ -626,78 +799,22 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
             High Scores
           </p>
           <p className="workgolf-sub mb-3 text-center">Level {leaderboardLevel}</p>
-          <div className="mx-auto mb-3 flex w-full max-w-sm gap-2">
-            <button
-              type="button"
-              className={`workgolf-btn !py-2 ${leaderboardScope === "all" ? "" : "!opacity-50"}`}
-              onClick={() => setLeaderboardScopeAndLoad("all")}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className={`workgolf-btn !py-2 ${leaderboardScope === "friends" ? "" : "!opacity-50"}`}
-              onClick={() => setLeaderboardScopeAndLoad("friends")}
-            >
-              Friends
-            </button>
-          </div>
-          <div className="mx-auto w-full max-w-sm flex-1 overflow-y-auto rounded-2xl border border-white/20 bg-black/45">
-            {leaderboardLoading ? (
-              <p className="workgolf-sub p-4 text-center">Loading...</p>
-            ) : !leaderboard ? (
-              <p className="workgolf-sub p-4 text-center">Could not load scores.</p>
-            ) : (
-              <div className="divide-y divide-white/10">
-                <div className="px-3 py-3">
-                  <p className="text-[0.55rem] font-semibold uppercase tracking-wide text-sky-200">
-                    You
-                  </p>
-                  {leaderboard.me.personal_best == null ? (
-                    <p className="workgolf-sub mt-1">No scores yet.</p>
-                  ) : (
-                    <p className="mt-1 text-[0.8rem] text-white">
-                      #{leaderboard.me.rank} · {leaderboard.me.personal_best}
-                      <span className="ml-2 text-white/50">@{leaderboard.me.username}</span>
-                    </p>
-                  )}
-                </div>
-                <div className="px-3 py-3">
-                  <p className="mb-2 text-[0.55rem] font-semibold uppercase tracking-wide text-sky-200">
-                    Top 3
-                  </p>
-                  {leaderboard.top.length === 0 ? (
-                    <p className="workgolf-sub">No scores yet.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {leaderboard.top.map((row, i) => (
-                        <li
-                          key={`${row.user_id}-${row.score}-${row.created_at}`}
-                          className="flex items-center gap-3"
-                        >
-                          <span className="w-6 text-[0.7rem] text-white/50">{i + 1}</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[0.75rem] text-white">{row.username}</p>
-                            <p className="text-[0.55rem] text-white/50">
-                              {row.score} · {formatDate(row.created_at)}
-                            </p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            )}
+          <div className="mx-auto w-full max-w-sm flex-1 overflow-y-auto rounded-2xl border border-white/20 bg-black/45 p-3">
+            <WorkGolfLeaderboardPanel
+              leaderboard={leaderboard}
+              loading={leaderboardLoading}
+              scope={leaderboardScope}
+              onScope={setLeaderboardScopeAndLoad}
+            />
           </div>
           <div className="workgolf-btns mx-auto mt-3 flex w-full max-w-sm flex-col items-center">
-            <button
-              type="button"
-              className="workgolf-btn"
+            <WorkGolfBtn
+              tone="back"
+              icon={BackIcon}
               onClick={() => setMenuScreen(highScoresBackRef.current)}
             >
               Back
-            </button>
+            </WorkGolfBtn>
           </div>
         </div>
       ) : null}

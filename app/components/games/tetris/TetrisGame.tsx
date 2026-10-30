@@ -588,23 +588,25 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
                     <p className="tetris-menu-sub mt-1">No scores yet.</p>
                   ) : (
                     <p className="tetris-pixel-font mt-1 text-[0.75rem] text-white">
-                      #{leaderboard.me.rank} · {leaderboard.me.personal_best}
+                      #{leaderboard.me.rank}
+                      {leaderboard.total > 0 ? ` of ${leaderboard.total}` : ""} ·{" "}
+                      {leaderboard.me.personal_best}
                       <span className="ml-2 text-slate-400">@{leaderboard.me.username}</span>
                     </p>
                   )}
                 </div>
                 <div className="px-3 py-3">
                   <p className="tetris-pixel-font mb-2 text-[0.55rem] text-cyan-300">
-                    TOP 3 · {leaderboardScope === "friends" ? "FRIENDS" : "ALL"}
+                    BOARD · {leaderboardScope === "friends" ? "FRIENDS" : "ALL"}
                   </p>
                   {leaderboard.top.length === 0 ? (
                     <p className="tetris-menu-sub">No scores yet.</p>
                   ) : (
                     <ul className="space-y-2">
-                      {leaderboard.top.map((row, i) => (
+                      {leaderboard.top.map((row) => (
                         <li key={`${row.user_id}-${row.score}-${row.created_at}`} className="flex items-center gap-3">
                           <span className="tetris-pixel-font w-7 text-[0.7rem] text-slate-400">
-                            {i + 1}
+                            #{row.rank}
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="tetris-pixel-font truncate text-[0.7rem] text-white">

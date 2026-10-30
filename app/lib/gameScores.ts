@@ -145,8 +145,10 @@ export async function loadGameLeaderboard(args: {
   game: string;
   level: string;
   scope: GameScoreScope;
+  limit?: number;
 }): Promise<{
   top: GameScoreLeaderboardEntry[];
+  total: number;
   me: {
     user_id: string;
     username: string;
@@ -167,11 +169,13 @@ export async function loadGameLeaderboard(args: {
     userIds,
   });
 
-  const top = bests.slice(0, 3).map((row) => ({
+  const limit = Math.max(1, Math.min(50, Math.floor(args.limit ?? 20)));
+  const top = bests.slice(0, limit).map((row, i) => ({
     user_id: row.user_id,
     username: row.username,
     score: row.score,
     created_at: row.created_at.toISOString(),
+    rank: i + 1,
   }));
 
   const myIndex = bests.findIndex((row) => row.user_id === args.userId);
@@ -179,6 +183,7 @@ export async function loadGameLeaderboard(args: {
 
   return {
     top,
+    total: bests.length,
     me: {
       user_id: args.userId,
       username: args.username,

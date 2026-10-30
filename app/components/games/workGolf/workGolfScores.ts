@@ -33,6 +33,7 @@ export async function submitWorkGolfScore(
 export async function fetchWorkGolfLeaderboard(
   levelNumber: number,
   scope: GameScoreScope,
+  limit = 25,
 ): Promise<GameScoresLeaderboardResponse | null> {
   try {
     const response = await fetch("/api/game-scores-leaderboard", {
@@ -42,6 +43,7 @@ export async function fetchWorkGolfLeaderboard(
         game: WORK_GOLF_GAME,
         level: levelIdForNumber(levelNumber),
         scope,
+        limit,
       }),
     });
     if (!response.ok) return null;

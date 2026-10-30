@@ -20,15 +20,20 @@ Fullscreen, mobile-first low-poly mini golf for the Profile → Games tab. Built
 
 - Camera follows the ball (bottom-third, horizontally centered); drag sideways to orbit
 - Press the ball and drag **down** for power; while aiming, drag sideways to rotate aim (camera-forward)
+- Aim HUD shows rough carry (`~Ny`) plus power %; landing ring + ghost arc preview the shot
+- Long shots open an FPS-style aim bloom (spray cone + landing ellipse); release picks a random angle inside it
 - Interactions lock while the ball is moving
-- Distance labels float above each remaining flag
-- After a cup is sunk, that flag disappears and play continues from the cup toward remaining holes
+- Holes are played **in order** along the fairway spine (1 → 5); only the current cup can be sunk
+- Distance label shows only for the current cup; upcoming flags stay visible (dimmed) as landmarks
+- A ground arrow near the ball points toward the next cup; camera faces it after each hole
+- After a cup is sunk, that flag disappears and play continues toward the next hole in order
 - Water hazard: ball returns to the last shot position and **+1 stroke**
 
 ### Round complete
 
 - Shows total score, per-hole scores, strokes, run rank / personal best
-- Mini top-3 for that level; full leaderboard available
+- Level leaderboard with **All** / **Friends** toggle, your rank (`#N of total`), and highlighted row
+- Full high-scores screen available from title / complete
 - **Next Level** / **Replay** / **Title**
 
 ## Scoring
@@ -48,7 +53,7 @@ Every shot release counts as one stroke. Landing in water adds one extra stroke 
 | Surface      | Behavior                                      |
 |--------------|-----------------------------------------------|
 | Medium grass | Default fairway — moderate roll               |
-| Tall grass   | Bounces like elsewhere; stops short rolls     |
+| Tall grass   | Bounces with less run; heavy drag, stops sooner than fairway |
 | Green        | Short grass near cups — fast roll             |
 | Sand         | Bounces; stops short rolls (no roll-out)      |
 | Water / void | Hazard — reset +1 stroke                      |

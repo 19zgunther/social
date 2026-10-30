@@ -982,17 +982,77 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
 }
 
 .workgolf-btn {
+  display: inline-flex;
   width: 100%;
   max-width: 18rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   border-radius: 999px;
   border: 2px solid rgba(255, 255, 255, 0.55);
-  background: color-mix(in srgb, var(--wg-grass) 88%, black);
+  background: #3f8f3a;
   color: #fff;
   font-family: var(--wg-font);
   font-size: 0.95rem;
   font-weight: 650;
   padding: 0.75rem 1rem;
   box-shadow: 0 3px 0 rgba(20, 48, 26, 0.45);
+}
+
+.workgolf-btn-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  stroke-width: 2.35;
+}
+
+.workgolf-btn--play {
+  background: #3f9e42;
+  box-shadow: 0 3px 0 #1f5a22;
+}
+.workgolf-btn--scores {
+  background: #2f8f6e;
+  box-shadow: 0 3px 0 #1a5a45;
+}
+.workgolf-btn--exit {
+  background: #5a7a3e;
+  box-shadow: 0 3px 0 #334820;
+}
+.workgolf-btn--back {
+  background: #4a8f5a;
+  box-shadow: 0 3px 0 #2a5534;
+}
+.workgolf-btn--resume {
+  background: #52b03c;
+  box-shadow: 0 3px 0 #2d6a20;
+}
+.workgolf-btn--quit {
+  background: #3d6340;
+  box-shadow: 0 3px 0 #243a26;
+}
+.workgolf-btn--next {
+  background: #2d9a7a;
+  box-shadow: 0 3px 0 #185a48;
+}
+.workgolf-btn--replay {
+  background: #6a9a32;
+  box-shadow: 0 3px 0 #3e5c1c;
+}
+.workgolf-btn--board {
+  background: #348f88;
+  box-shadow: 0 3px 0 #1d5550;
+}
+.workgolf-btn--title {
+  background: #2f6b3a;
+  box-shadow: 0 3px 0 #1a3d22;
+}
+.workgolf-btn--all {
+  background: #3d9450;
+  box-shadow: 0 3px 0 #22582e;
+}
+.workgolf-btn--friends {
+  background: #3a7d6a;
+  box-shadow: 0 3px 0 #214a3e;
 }
 
 .workgolf-btn:active:not(:disabled) {
@@ -1117,13 +1177,52 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
 
 .workgolf-complete-board {
   width: 100%;
-  max-height: 7.5rem;
+  max-height: 11.5rem;
   overflow-y: auto;
   margin-top: 0.35rem;
   border-radius: 0.9rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(0, 0, 0, 0.35);
-  padding: 0.65rem 0.75rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.workgolf-lb-scope {
+  display: flex;
+  width: 100%;
+  gap: 0.4rem;
+}
+
+.workgolf-lb-scope .workgolf-btn {
+  flex: 1;
+  gap: 0.35rem;
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+  font-size: 0.72rem;
+}
+
+.workgolf-lb-scope .workgolf-btn-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.workgolf-lb-you {
+  margin-bottom: 0.45rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(110, 231, 183, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+  padding: 0.4rem 0.55rem;
+}
+
+.workgolf-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.28rem 0.15rem;
+  border-radius: 0.4rem;
+}
+
+.workgolf-lb-row.is-me {
+  background: rgba(110, 231, 183, 0.16);
 }
 
 .workgolf-complete-item {
