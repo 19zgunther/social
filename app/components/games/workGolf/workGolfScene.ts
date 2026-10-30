@@ -27,9 +27,9 @@ const COLORS = {
   water: 0x4eb8d9,
   waterDeep: 0x1a6f8c,
   waterHorizon: 0x7ad0ea,
-  medium: 0x4cae3a,
-  tall: 0x2f7a28,
-  green: 0xa8d94a,
+  medium: 0x52b842,
+  tall: 0x34862c,
+  green: 0xb4e055,
   sand: 0xe2c98a,
   dirt: 0xc9a36a,
   trunk: 0x6b4423,
@@ -40,9 +40,9 @@ const COLORS = {
 };
 
 /** Cap visible grass cards — one InstancedMesh draw call, no shadows. */
-const GRASS_MAX_INSTANCES = 720;
+const GRASS_MAX_INSTANCES = 1100;
 /** Only populate tufts near the ball (mobile-friendly). */
-const GRASS_VIEW_RADIUS = 20;
+const GRASS_VIEW_RADIUS = 24;
 const GRASS_BUCKET = 4;
 const SURFACE_CODE_MEDIUM = 0;
 const SURFACE_CODE_TALL = 1;
@@ -105,6 +105,99 @@ function makeGrassTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+/** World meters per terrain detail tile. */
+const TERRAIN_TEX_TILE = 5.5;
+
+/**
+ * Soft grayscale grass/sand grain — multiplied with vertex colors so fairways
+ * read as turf without fighting sand / dirt hues.
+ */
+function makeTerrainDetailTexture(): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const img = ctx.createImageData(size, size);
+  const data = img.data;
+
+  const hash = (x: number, y: number) => {
+    const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  const smoothNoise = (x: number, y: number) => {
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const fx = x - x0;
+    const fy = y - y0;
+    const u = fx * fx * (3 - 2 * fx);
+    const v = fy * fy * (3 - 2 * fy);
+    const a = hash(x0, y0);
+    const b = hash(x0 + 1, y0);
+    const c = hash(x0, y0 + 1);
+    const d = hash(x0 + 1, y0 + 1);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  };
+  const fbm = (x: number, y: number) => {
+    let v = 0;
+    let a = 0.5;
+    let f = 1;
+    for (let i = 0; i < 4; i++) {
+      v += a * smoothNoise(x * f, y * f);
+      a *= 0.5;
+      f *= 2.05;
+    }
+    return v;
+  };
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = x / size;
+      const ny = y / size;
+      // Broad mottling + fine speckles
+      let n = fbm(nx * 6.5, ny * 6.5) * 0.72 + fbm(nx * 28, ny * 28) * 0.28;
+      // Soft blade streaks (anisotropic) for a grassy read on greens
+      const streak =
+        smoothNoise(nx * 40 + ny * 2.2, ny * 9) * 0.55 +
+        smoothNoise(nx * 70 - ny * 1.4, ny * 18) * 0.45;
+      n = n * 0.62 + streak * 0.38;
+      // Mid-gray (~128): shader remaps so we don't globally darken vertex colors
+      const g = Math.max(0, Math.min(255, Math.floor(128 + (n - 0.5) * 110)));
+      const i = (y * size + x) * 4;
+      data[i] = g;
+      data[i + 1] = g;
+      data[i + 2] = g;
+      data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Soft darker tuft blobs so flat polys don't look painted plastic
+  for (let i = 0; i < 90; i++) {
+    const px = hash(i * 3.1, 1.7) * size;
+    const py = hash(i * 5.9, 2.3) * size;
+    const r = 2 + hash(i, 9.1) * 7;
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, r);
+    const shade = Math.floor(70 + hash(i, 4.4) * 50);
+    grad.addColorStop(0, `rgba(${shade},${shade},${shade},0.4)`);
+    grad.addColorStop(1, `rgba(${shade},${shade},${shade},0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /** Two crossed quads = readable tuft from any yaw without camera-facing CPU work. */
 function makeGrassClumpGeometry(): THREE.BufferGeometry {
   const w = 0.55;
@@ -145,7 +238,8 @@ function createWaterMaterial(): THREE.ShaderMaterial {
       uTime: { value: 0 },
       uDeep: { value: new THREE.Color(COLORS.waterDeep) },
       uShallow: { value: new THREE.Color(COLORS.water) },
-      uFoam: { value: new THREE.Color(0xd7f6ff) },
+      uHorizon: { value: new THREE.Color(COLORS.waterHorizon) },
+      uFoam: { value: new THREE.Color(0xe8f7ff) },
       uSunDir: { value: new THREE.Vector3(-0.45, 0.82, 0.35).normalize() },
     },
     transparent: true,
@@ -159,21 +253,20 @@ function createWaterMaterial(): THREE.ShaderMaterial {
       void main() {
         vec3 p = position;
         float t = uTime;
-        float w1 = sin(p.x * 0.11 + t * 1.1) * cos(p.y * 0.09 + t * 0.85);
-        float w2 = sin(p.x * 0.29 - t * 1.4 + p.y * 0.17) * 0.45;
-        float w3 = cos(p.x * 0.07 - p.y * 0.13 + t * 0.55) * 0.35;
-        float wave = (w1 + w2 + w3) * 0.16;
+        float w1 = sin(p.x * 0.085 + t * 0.75) * cos(p.y * 0.07 + t * 0.55);
+        float w2 = sin(p.x * 0.19 - t * 0.95 + p.y * 0.13) * 0.42;
+        float w3 = cos(p.x * 0.045 - p.y * 0.09 + t * 0.38) * 0.55;
+        float wave = (w1 + w2 + w3) * 0.11;
         p.z += wave;
         vWave = wave;
 
-        // Analytic-ish normal for low-poly sparkle
-        float dx = cos(p.x * 0.11 + t * 1.1) * 0.11 * cos(p.y * 0.09 + t * 0.85)
-          + cos(p.x * 0.29 - t * 1.4 + p.y * 0.17) * 0.29 * 0.45
-          - sin(p.x * 0.07 - p.y * 0.13 + t * 0.55) * 0.07 * 0.35;
-        float dy = -sin(p.x * 0.11 + t * 1.1) * sin(p.y * 0.09 + t * 0.85) * 0.09
-          + cos(p.x * 0.29 - t * 1.4 + p.y * 0.17) * 0.17 * 0.45
-          + sin(p.x * 0.07 - p.y * 0.13 + t * 0.55) * 0.13 * 0.35;
-        vec3 n = normalize(vec3(-dx * 0.16, -dy * 0.16, 1.0));
+        float dx = cos(p.x * 0.085 + t * 0.75) * 0.085 * cos(p.y * 0.07 + t * 0.55)
+          + cos(p.x * 0.19 - t * 0.95 + p.y * 0.13) * 0.19 * 0.42
+          - sin(p.x * 0.045 - p.y * 0.09 + t * 0.38) * 0.045 * 0.55;
+        float dy = -sin(p.x * 0.085 + t * 0.75) * sin(p.y * 0.07 + t * 0.55) * 0.07
+          + cos(p.x * 0.19 - t * 0.95 + p.y * 0.13) * 0.13 * 0.42
+          + sin(p.x * 0.045 - p.y * 0.09 + t * 0.38) * 0.09 * 0.55;
+        vec3 n = normalize(vec3(-dx * 0.11, -dy * 0.11, 1.0));
 
         vec4 world = modelMatrix * vec4(p, 1.0);
         vWorldPos = world.xyz;
@@ -184,6 +277,7 @@ function createWaterMaterial(): THREE.ShaderMaterial {
     fragmentShader: `
       uniform vec3 uDeep;
       uniform vec3 uShallow;
+      uniform vec3 uHorizon;
       uniform vec3 uFoam;
       uniform vec3 uSunDir;
       uniform float uTime;
@@ -191,29 +285,56 @@ function createWaterMaterial(): THREE.ShaderMaterial {
       varying vec3 vNormalW;
       varying float vWave;
 
+      // Cheap value-noise for irregular caustics / glitter (no lattice)
+      float hash21(vec2 p) {
+        p = fract(p * vec2(123.34, 456.21));
+        p += dot(p, p + 45.32);
+        return fract(p.x * p.y);
+      }
+      float noise21(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        float a = hash21(i);
+        float b = hash21(i + vec2(1.0, 0.0));
+        float c = hash21(i + vec2(0.0, 1.0));
+        float d = hash21(i + vec2(1.0, 1.0));
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+      }
+
       void main() {
         vec3 N = normalize(vNormalW);
         vec3 V = normalize(cameraPosition - vWorldPos);
         float ndv = max(dot(N, V), 0.0);
-        float fresnel = pow(1.0 - ndv, 2.8);
+        float fresnel = pow(1.0 - ndv, 2.4);
 
-        vec3 col = mix(uShallow, uDeep, fresnel * 0.85 + 0.1);
-        // Crest foam on wave peaks
-        float crest = smoothstep(0.06, 0.14, vWave);
-        col = mix(col, uFoam, crest * 0.35);
+        // Slow color drift + depth feel from viewing angle
+        vec2 drift = vWorldPos.xz * 0.035 + vec2(uTime * 0.03, -uTime * 0.022);
+        float blot = noise21(drift * 2.4) * 0.55 + noise21(drift * 5.1 + 3.7) * 0.45;
+        vec3 base = mix(uShallow, uDeep, fresnel * 0.7 + blot * 0.35);
+        base = mix(base, uHorizon, fresnel * 0.22);
 
-        // Soft specular sun glitter
+        // Soft crest highlights (not hard foam dots)
+        float crest = smoothstep(0.04, 0.12, vWave);
+        base = mix(base, uFoam, crest * 0.18);
+
+        // Broad specular band
         vec3 R = reflect(-uSunDir, N);
-        float spec = pow(max(dot(R, V), 0.0), 42.0);
-        col += uFoam * spec * 0.55;
+        float spec = pow(max(dot(R, V), 0.0), 28.0);
+        base += uFoam * spec * 0.38;
 
-        // Tiny sparkles drifting across the surface
-        float spark = sin(vWorldPos.x * 2.8 + uTime * 2.0) * sin(vWorldPos.z * 2.4 - uTime * 1.6);
-        spark = smoothstep(0.92, 0.995, spark);
-        col += uFoam * spark * 0.4;
+        // Irregular glitter — sparse, drifting, not a grid
+        vec2 gp = vWorldPos.xz * 0.55 + vec2(uTime * 0.12, -uTime * 0.09);
+        float g = noise21(gp * 3.0);
+        float glitter = smoothstep(0.88, 0.97, g) * smoothstep(0.2, 0.7, ndv);
+        base += uFoam * glitter * 0.28;
 
-        float alpha = 0.82 + fresnel * 0.14;
-        gl_FragColor = vec4(col, alpha);
+        // Soft caustic mottling under the surface
+        float cau = noise21(vWorldPos.xz * 0.4 + vec2(-uTime * 0.08, uTime * 0.06));
+        base = mix(base, uShallow * 1.08, cau * 0.12 * (1.0 - fresnel));
+
+        float alpha = 0.78 + fresnel * 0.18;
+        gl_FragColor = vec4(base, alpha);
       }
     `,
   });
@@ -271,6 +392,7 @@ function cellNeedsDetail(level: LevelData, ix: number, iz: number): boolean {
 function pushTerrainVert(
   positions: number[],
   colors: number[],
+  uvs: number[],
   level: LevelData,
   x: number,
   z: number,
@@ -281,6 +403,7 @@ function pushTerrainVert(
   const h = sample.height;
   const i = positions.length / 3;
   positions.push(x, h, z);
+  uvs.push(x / TERRAIN_TEX_TILE, z / TERRAIN_TEX_TILE);
   if (sample.inCup) {
     color.setHex(0x1a1a1a);
   } else if (sample.onSandFloor) {
@@ -302,11 +425,12 @@ function pushTerrainVert(
   return i;
 }
 
-function buildTerrainMesh(level: LevelData): THREE.Mesh {
+function buildTerrainMesh(level: LevelData, detailTex: THREE.Texture): THREE.Mesh {
   const { size, cell, heights, waterY } = level;
   const half = ((size - 1) * cell) / 2;
   const positions: number[] = [];
   const colors: number[] = [];
+  const uvs: number[] = [];
   const indices: number[] = [];
   const color = new THREE.Color();
   const dirt = new THREE.Color(COLORS.dirt);
@@ -319,7 +443,6 @@ function buildTerrainMesh(level: LevelData): THREE.Mesh {
   for (let iz = 0; iz < size; iz++) {
     for (let ix = 0; ix < size; ix++) {
       const i = iz * size + ix;
-      const h = heights[i]!;
       const x = -half + ix * cell;
       const z = -half + iz * cell;
       // Still store coarse verts (shared); cup/bunker carve applied via sample
@@ -327,6 +450,7 @@ function buildTerrainMesh(level: LevelData): THREE.Mesh {
       const y = carved.height;
       coarseIndex[i] = positions.length / 3;
       positions.push(x, y, z);
+      uvs.push(x / TERRAIN_TEX_TILE, z / TERRAIN_TEX_TILE);
       if (carved.inCup) {
         color.setHex(0x1a1a1a);
       } else if (carved.onSandFloor) {
@@ -377,12 +501,12 @@ function buildTerrainMesh(level: LevelData): THREE.Mesh {
                 const key = `${x.toFixed(4)},${z.toFixed(4)}`;
                 let vi = refineEdgeCache.get(key);
                 if (vi === undefined) {
-                  vi = pushTerrainVert(positions, colors, level, x, z, color, dirt);
+                  vi = pushTerrainVert(positions, colors, uvs, level, x, z, color, dirt);
                   refineEdgeCache.set(key, vi);
                 }
                 local.push(vi);
               } else {
-                local.push(pushTerrainVert(positions, colors, level, x, z, color, dirt));
+                local.push(pushTerrainVert(positions, colors, uvs, level, x, z, color, dirt));
               }
             }
           }
@@ -410,13 +534,29 @@ function buildTerrainMesh(level: LevelData): THREE.Mesh {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geo.setIndex(indices);
   geo.computeVertexNormals();
 
   const mat = new THREE.MeshLambertMaterial({
+    map: detailTex,
     vertexColors: true,
     flatShading: true,
   });
+  // Soft contrast detail instead of raw map*color (which would muddying mid-grays)
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <map_fragment>",
+      /* glsl */ `
+      #ifdef USE_MAP
+        vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+        float detail = sampledDiffuseColor.r;
+        diffuseColor.rgb *= (0.78 + detail * 0.44);
+      #endif
+      `,
+    );
+  };
+  mat.customProgramCacheKey = () => "workGolfTerrainDetail";
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   mesh.castShadow = true;
@@ -583,6 +723,52 @@ function makeBeerCan(pu: PowerUpDef): THREE.Group {
   return g;
 }
 
+/** Tiny low-poly seagull; wings stored on userData for flapping. */
+function makeSeagull(): THREE.Group {
+  const g = new THREE.Group();
+  // Unique mats/geos per mesh so clearSeagulls can dispose safely
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(0.09, 6, 5),
+    new THREE.MeshLambertMaterial({ color: 0xf5f5f4, flatShading: true }),
+  );
+  body.scale.set(1.15, 0.75, 1.55);
+  body.castShadow = true;
+  g.add(body);
+
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.055, 5, 4),
+    new THREE.MeshLambertMaterial({ color: 0xf5f5f4, flatShading: true }),
+  );
+  head.position.set(0, 0.04, 0.1);
+  g.add(head);
+
+  const bill = new THREE.Mesh(
+    new THREE.ConeGeometry(0.025, 0.08, 4),
+    new THREE.MeshLambertMaterial({ color: 0xf59e0b, flatShading: true }),
+  );
+  bill.rotation.x = Math.PI / 2;
+  bill.position.set(0, 0.03, 0.16);
+  g.add(bill);
+
+  const leftWing = new THREE.Mesh(
+    new THREE.BoxGeometry(0.22, 0.02, 0.1),
+    new THREE.MeshLambertMaterial({ color: 0xd4d4d8, flatShading: true }),
+  );
+  leftWing.position.set(-0.12, 0.02, 0);
+  g.add(leftWing);
+  const rightWing = new THREE.Mesh(
+    new THREE.BoxGeometry(0.22, 0.02, 0.1),
+    new THREE.MeshLambertMaterial({ color: 0xd4d4d8, flatShading: true }),
+  );
+  rightWing.position.set(0.12, 0.02, 0);
+  g.add(rightWing);
+
+  g.userData.leftWing = leftWing;
+  g.userData.rightWing = rightWing;
+  g.scale.setScalar(0.85);
+  return g;
+}
+
 function makeWayArrow(): THREE.Group {
   const g = new THREE.Group();
   const shape = new THREE.Shape();
@@ -653,11 +839,16 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   scene.add(sun);
 
   const waterMat = createWaterMaterial();
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(280, 280, 72, 72), waterMat);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(280, 280, 96, 96), waterMat);
   water.rotation.x = -Math.PI / 2;
   water.position.y = 0;
   water.renderOrder = -1;
   scene.add(water);
+
+  const terrainDetailTex = makeTerrainDetailTexture();
+  // Higher anisotropy when the GPU allows it
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
+  terrainDetailTex.anisotropy = Math.min(8, maxAniso);
 
   const world = new THREE.Group();
   scene.add(world);
@@ -847,10 +1038,10 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
         const isTall = code === SURFACE_CODE_TALL;
         const isMed = code === SURFACE_CODE_MEDIUM;
         if (!isTall && !isMed) continue;
-        // Skip most cells: ~1 tuft / 2.2m (med) or / 1.35m (tall)
-        const stride = isTall ? 1 : 2;
+        // Denser near-ball carpet; tall still thicker than medium
+        const stride = isTall ? 1 : 1;
         if (ix % stride !== 0 || iz % stride !== 0) continue;
-        if (!isTall && (ix + iz) % 3 === 0) continue;
+        if (!isTall && (ix * 3 + iz * 7) % 5 === 0) continue;
 
         const jx = Math.abs(Math.sin(ix * 12.9898 + iz * 78.233) * 43758.5453) % 1;
         const jz = Math.abs(Math.sin(ix * 39.346 + iz * 11.135) * 24634.134) % 1;
@@ -863,8 +1054,8 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
 
         const yaw = jx * Math.PI * 2;
         const tall = sample.surface === "tall";
-        const sy = tall ? 0.55 + jz * 0.35 : 0.22 + jz * 0.14;
-        const sx = tall ? 0.7 + jx * 0.35 : 0.55 + jx * 0.25;
+        const sy = tall ? 0.55 + jz * 0.35 : 0.28 + jz * 0.16;
+        const sx = tall ? 0.7 + jx * 0.35 : 0.62 + jx * 0.28;
         const idx = grassTufts.length;
         grassTufts.push({
           x,
@@ -993,6 +1184,40 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   const splashDropGeo = new THREE.IcosahedronGeometry(0.08, 0);
   const splashRingGeo = new THREE.RingGeometry(0.35, 0.55, 20);
 
+  type BloodDrop = {
+    mesh: THREE.Mesh;
+    vx: number;
+    vy: number;
+    vz: number;
+    settled: boolean;
+  };
+  const bloodGroup = new THREE.Group();
+  scene.add(bloodGroup);
+  const bloodDrops: BloodDrop[] = [];
+  const bloodDropGeo = new THREE.IcosahedronGeometry(0.06, 0);
+
+  type GullMode = "fly" | "descend" | "stand" | "walk" | "ascend";
+  type Seagull = {
+    group: THREE.Group;
+    mode: GullMode;
+    timer: number;
+    x: number;
+    y: number;
+    z: number;
+    yaw: number;
+    speed: number;
+    wingPhase: number;
+    flyCenterX: number;
+    flyCenterZ: number;
+    flyRadius: number;
+    flyAngle: number;
+    flyHeight: number;
+    dead: boolean;
+  };
+  const seagullGroup = new THREE.Group();
+  scene.add(seagullGroup);
+  const seagulls: Seagull[] = [];
+
   function clearConfetti() {
     while (confettiGroup.children.length) {
       const child = confettiGroup.children[0]!;
@@ -1091,6 +1316,257 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
     splashDrops.length = 0;
     splashRings.length = 0;
+  }
+
+  function clearBlood() {
+    while (bloodGroup.children.length) {
+      const child = bloodGroup.children[0]!;
+      bloodGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const m of mats) m.dispose();
+      }
+    }
+    bloodDrops.length = 0;
+  }
+
+  function clearSeagulls() {
+    while (seagullGroup.children.length) {
+      const child = seagullGroup.children[0]!;
+      seagullGroup.remove(child);
+      child.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          for (const m of mats) m.dispose();
+        }
+      });
+    }
+    seagulls.length = 0;
+  }
+
+  function spawnSeagulls(level: LevelData) {
+    clearSeagulls();
+    const half = ((level.size - 1) * level.cell) / 2;
+    const count = 10 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < count; i++) {
+      let x = 0;
+      let z = 0;
+      let y = level.waterY + 4;
+      let placed = false;
+      for (let attempt = 0; attempt < 24; attempt++) {
+        const ang = Math.random() * Math.PI * 2;
+        const rad = half * (0.25 + Math.random() * 0.55);
+        x = Math.cos(ang) * rad;
+        z = Math.sin(ang) * rad;
+        const sample = sampleTerrain(level, x, z);
+        if (sample.height <= level.waterY + 0.2) continue;
+        y = sample.height + 2.2 + Math.random() * 2.5;
+        placed = true;
+        break;
+      }
+      if (!placed) continue;
+
+      const group = makeSeagull();
+      seagullGroup.add(group);
+      const flyAngle = Math.random() * Math.PI * 2;
+      const startFlying = Math.random() < 0.55;
+      const groundY = sampleTerrain(level, x, z).height + 0.08;
+      const gull: Seagull = {
+        group,
+        mode: startFlying ? "fly" : "stand",
+        timer: 2 + Math.random() * 5,
+        x,
+        y: startFlying ? y : groundY,
+        z,
+        yaw: flyAngle,
+        speed: 2.2 + Math.random() * 1.4,
+        wingPhase: Math.random() * Math.PI * 2,
+        flyCenterX: x,
+        flyCenterZ: z,
+        flyRadius: 6 + Math.random() * 10,
+        flyAngle,
+        flyHeight: y,
+        dead: false,
+      };
+      seagulls.push(gull);
+      group.position.set(gull.x, gull.y, gull.z);
+      group.rotation.y = gull.yaw;
+    }
+  }
+
+  function spawnBloodFountain(x: number, y: number, z: number) {
+    const count = 48;
+    for (let i = 0; i < count; i++) {
+      const mat = new THREE.MeshLambertMaterial({
+        color: i % 4 === 0 ? 0x7f1d1d : 0xdc2626,
+        flatShading: true,
+      });
+      const mesh = new THREE.Mesh(bloodDropGeo, mat);
+      const ang = Math.random() * Math.PI * 2;
+      const out = 1.2 + Math.random() * 4.5;
+      mesh.position.set(x, y, z);
+      mesh.scale.setScalar(0.5 + Math.random() * 1.1);
+      bloodGroup.add(mesh);
+      bloodDrops.push({
+        mesh,
+        vx: Math.cos(ang) * out,
+        vy: 4 + Math.random() * 9,
+        vz: Math.sin(ang) * out,
+        settled: false,
+      });
+    }
+  }
+
+  function updateBlood(level: LevelData, dt: number) {
+    const g = 26;
+    for (let i = bloodDrops.length - 1; i >= 0; i--) {
+      const drop = bloodDrops[i]!;
+      if (drop.settled) continue;
+
+      drop.vy -= g * dt;
+      drop.mesh.position.x += drop.vx * dt;
+      drop.mesh.position.y += drop.vy * dt;
+      drop.mesh.position.z += drop.vz * dt;
+      drop.vx *= Math.exp(-0.8 * dt);
+      drop.vz *= Math.exp(-0.8 * dt);
+
+      const ground = sampleTerrain(level, drop.mesh.position.x, drop.mesh.position.z);
+      const inWater = ground.surface === "water" || ground.height <= level.waterY + 0.05;
+      const floorY = (inWater ? level.waterY : ground.height) + 0.02;
+
+      if (drop.mesh.position.y > floorY || drop.vy > 0) continue;
+
+      // Wash away in water; otherwise splat and stay for the rest of the round
+      if (inWater) {
+        bloodGroup.remove(drop.mesh);
+        (drop.mesh.material as THREE.MeshLambertMaterial).dispose();
+        bloodDrops.splice(i, 1);
+        continue;
+      }
+
+      drop.mesh.position.y = ground.height + 0.015;
+      const s = 0.7 + Math.random() * 1.4;
+      drop.mesh.scale.set(s * 1.9, 0.18 + Math.random() * 0.12, s * 1.6);
+      drop.mesh.rotation.set(
+        (Math.random() - 0.5) * 0.35,
+        Math.random() * Math.PI * 2,
+        (Math.random() - 0.5) * 0.35,
+      );
+      drop.vx = 0;
+      drop.vy = 0;
+      drop.vz = 0;
+      drop.settled = true;
+    }
+  }
+
+  function killSeagull(gull: Seagull) {
+    if (gull.dead) return;
+    gull.dead = true;
+    spawnBloodFountain(gull.x, gull.y, gull.z);
+    gull.group.visible = false;
+  }
+
+  function updateSeagulls(level: LevelData, snap: RoundSnapshot, dt: number) {
+    for (const g of seagulls) {
+      if (g.dead) continue;
+
+      if (snap.ball.moving) {
+        const d = Math.hypot(
+          snap.ball.pos.x - g.x,
+          snap.ball.pos.y - g.y,
+          snap.ball.pos.z - g.z,
+        );
+        if (d < 0.3 + BALL_RADIUS) {
+          killSeagull(g);
+          continue;
+        }
+      }
+
+      g.timer -= dt;
+      const flapping = g.mode === "fly" || g.mode === "ascend" || g.mode === "descend";
+      g.wingPhase += dt * (flapping ? 16 : 1.5);
+
+      if (g.mode === "fly") {
+        g.flyAngle += (g.speed * dt) / Math.max(5, g.flyRadius);
+        g.x = g.flyCenterX + Math.cos(g.flyAngle) * g.flyRadius;
+        g.z = g.flyCenterZ + Math.sin(g.flyAngle) * g.flyRadius;
+        g.y = g.flyHeight + Math.sin(g.flyAngle * 2.2) * 0.4;
+        g.yaw = g.flyAngle + Math.PI / 2;
+        if (g.timer <= 0) {
+          g.mode = "descend";
+          g.timer = 3;
+        }
+      } else if (g.mode === "descend") {
+        const ground = sampleTerrain(level, g.x, g.z);
+        const landY = ground.height + 0.08;
+        g.y += (landY - g.y) * Math.min(1, 2.1 * dt);
+        g.x += Math.sin(g.yaw) * 0.35 * dt;
+        g.z += Math.cos(g.yaw) * 0.35 * dt;
+        if (ground.surface === "water" || ground.height <= level.waterY + 0.12) {
+          g.mode = "ascend";
+          g.timer = 2;
+        } else if (g.y <= landY + 0.06 || g.timer <= 0) {
+          g.y = landY;
+          g.mode = "stand";
+          g.timer = 1.4 + Math.random() * 3.2;
+        }
+      } else if (g.mode === "stand") {
+        const ground = sampleTerrain(level, g.x, g.z);
+        g.y = ground.height + 0.08;
+        if (g.timer <= 0) {
+          if (Math.random() < 0.6) {
+            g.mode = "walk";
+            g.timer = 1.1 + Math.random() * 2.2;
+            g.yaw += (Math.random() - 0.5) * 1.4;
+          } else {
+            g.mode = "ascend";
+            g.timer = 2;
+            g.flyHeight = 2.4 + Math.random() * 2.2;
+          }
+        }
+      } else if (g.mode === "walk") {
+        const ground = sampleTerrain(level, g.x, g.z);
+        g.x += Math.sin(g.yaw) * 0.5 * dt;
+        g.z += Math.cos(g.yaw) * 0.5 * dt;
+        g.y = ground.height + 0.08;
+        if (ground.surface === "water" || ground.height <= level.waterY + 0.15) {
+          g.mode = "ascend";
+          g.timer = 2;
+          g.flyHeight = 2.5 + Math.random() * 2;
+        } else if (g.timer <= 0) {
+          if (Math.random() < 0.45) {
+            g.mode = "stand";
+            g.timer = 1 + Math.random() * 2.5;
+          } else {
+            g.mode = "ascend";
+            g.timer = 2;
+            g.flyHeight = 2.4 + Math.random() * 2.2;
+          }
+        }
+      } else if (g.mode === "ascend") {
+        g.y += 1.85 * dt;
+        g.x += Math.sin(g.yaw) * 0.9 * dt;
+        g.z += Math.cos(g.yaw) * 0.9 * dt;
+        if (g.y >= g.flyHeight || g.timer <= 0) {
+          g.mode = "fly";
+          g.flyCenterX = g.x;
+          g.flyCenterZ = g.z;
+          g.flyAngle = g.yaw;
+          g.flyHeight = Math.max(g.y, 2.5);
+          g.flyRadius = 5 + Math.random() * 9;
+          g.timer = 4 + Math.random() * 9;
+        }
+      }
+
+      g.group.position.set(g.x, g.y, g.z);
+      g.group.rotation.y = g.yaw;
+      const flap = Math.sin(g.wingPhase) * (flapping ? 0.6 : 0.06);
+      const left = g.group.userData.leftWing as THREE.Mesh;
+      const right = g.group.userData.rightWing as THREE.Mesh;
+      left.rotation.z = flap;
+      right.rotation.z = -flap;
+    }
   }
 
   function impulseTree(treeIndex: number, nx: number, nz: number, strength: number) {
@@ -1248,7 +1724,10 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   }
 
   function clearWorld(keepConfetti = false) {
-    if (!keepConfetti) clearConfetti();
+    if (!keepConfetti) {
+      clearConfetti();
+      clearBlood();
+    }
     clearSplashes();
     treeSwings.length = 0;
     while (world.children.length) {
@@ -1277,7 +1756,7 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     clearWorld(keepConfetti);
     camSlide = null;
     water.position.y = level.waterY;
-    terrainMesh = buildTerrainMesh(level);
+    terrainMesh = buildTerrainMesh(level, terrainDetailTex);
     world.add(terrainMesh);
     rebuildGrass(level);
 
@@ -1294,6 +1773,9 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
       world.add(can);
       powerUpGroups.set(pu.id, can);
     }
+
+    // Fresh flock only on new levels (hole advances keep seagulls alive)
+    if (!keepConfetti) spawnSeagulls(level);
 
     const target = currentTargetHole(level.holes);
     for (const hole of level.holes) {
@@ -1510,6 +1992,8 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     handleFx(engine.drainFx());
     updateTreeSway(dt);
     updateSplashes(dt);
+    updateBlood(engine.level, dt);
+    updateSeagulls(engine.level, snap, dt);
 
     // Celebrate newly sunk cups — confetti stays on the ground for the rest of the round
     for (const hole of snap.holes) {
@@ -1647,6 +2131,7 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
 
   function dispose() {
     clearWorld();
+    clearSeagulls();
     clearGrassCandidates();
     scene.remove(wayArrow);
     wayArrow.traverse((obj) => {
@@ -1669,6 +2154,10 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     scene.remove(fxGroup);
     splashDropGeo.dispose();
     splashRingGeo.dispose();
+    clearBlood();
+    bloodDropGeo.dispose();
+    scene.remove(bloodGroup);
+    scene.remove(seagullGroup);
     scene.remove(grassMesh);
     grassMesh.dispose();
     grassGeo.dispose();
@@ -1677,6 +2166,7 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     confettiGeo.dispose();
     water.geometry.dispose();
     waterMat.dispose();
+    terrainDetailTex.dispose();
     renderer.dispose();
     renderer.domElement.remove();
   }
