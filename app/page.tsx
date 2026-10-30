@@ -615,28 +615,33 @@ export default function Home() {
           <div className="nav-rgb-row w-full h-fit flex justify-between border-t border-border bg-bg z-[1000]" style={{boxShadow: "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)"}}>
             <NavRowButton
               icon={<NavFeedIcon active={activeTab === "feed"} />}
+              active={activeTab === "feed"}
               showCircle={false}
               onClick={() => setActiveTab("feed")}
             />
             <NavRowButton
               icon={<NavGroupsIcon active={activeTab === "groups"} />}
+              active={activeTab === "groups"}
               showCircle={groupsUnreadCount > 0}
               onClick={() => setActiveTab("groups")}
             />
             <NavRowButton
               icon={<NavSharedPostsIcon active={activeTab === "shared_event_posts"} />}
+              active={activeTab === "shared_event_posts"}
               showCircle={sharedEventPostsUnread}
               onClick={() => setActiveTab("shared_event_posts")}
             />
             {/* events tab hidden — import NavEventsIcon from Icons when restoring
             <NavRowButton
               icon={<NavEventsIcon active={activeTab === "events"} />}
+              active={activeTab === "events"}
               showCircle={false}
               onClick={() => setActiveTab("events")}
             />
             */}
             <NavRowButton
               icon={<NavProfileIcon active={activeTab === "profile"} />}
+              active={activeTab === "profile"}
               showCircle={profileIncomingRequestCount > 0}
               onClick={() => {
                 setActiveTab("profile");
@@ -644,6 +649,7 @@ export default function Home() {
             />
             <NavRowButton
               icon={<NavFeedbackIcon active={activeTab === "feedback"} />}
+              active={activeTab === "feedback"}
               showCircle={false}
               onClick={() => setActiveTab("feedback")}
               className="max-w-[2rem] opacity-30"

@@ -2,11 +2,13 @@ import type { ReactNode } from "react";
 
 export default function NavRowButton({
   icon,
+  active = false,
   showCircle,
   onClick,
   className,
 }: {
   icon: ReactNode;
+  active?: boolean;
   showCircle: boolean;
   onClick: () => void;
   className?: string;
@@ -15,12 +17,21 @@ export default function NavRowButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-2 py-3 text-sm font-medium transition ${className ?? ""}`}
+      className={`flex flex-1 items-center justify-center py-3 text-sm font-medium transition active:scale-95 active:opacity-80 ${className ?? ""}`}
     >
-      {icon}
-      {showCircle && (
-        <div className="rounded-full bg-accent text-on-accent text-xs font-medium px-1 py-1" />
-      )}
+      <span
+        className={`relative flex items-center justify-center rounded-xl p-2 transition-colors duration-150 ${
+          active ? "bg-accent/15" : "bg-transparent"
+        }`}
+      >
+        {icon}
+        {showCircle ? (
+          <span
+            aria-hidden
+            className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-accent"
+          />
+        ) : null}
+      </span>
     </button>
   );
 }
