@@ -14,7 +14,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { CameraIcon, ImageIcon, VideoIcon } from "@/app/components/Icons";
+import { CameraIcon, VideoIcon } from "@/app/components/Icons";
 import CameraModal from "@/app/components/Camera";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
@@ -51,6 +51,8 @@ import {
   readThreadReplyCollapsedSet,
   writeThreadReplyCollapsed,
 } from "@/app/lib/threadReplyCollapseCache";
+import ThreadAvatar from "@/app/components/ThreadAvatar";
+import UserProfileImage from "@/app/components/UserProfileImage";
 import BackButton from "./utils/BackButton";
 
 type ThreadProps = {
@@ -78,6 +80,8 @@ const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
 const THREAD_MESSAGES_CACHE_KEY_PREFIX = "thread_messages_v1_";
 const TIMESTAMP_REVEAL_MAX_PX = 68;
 const TIMESTAMP_REVEAL_SETTLE_MS = 180;
+const DATE_SEPARATOR_GAP_MS = 3 * 60 * 60 * 1000;
+const MESSAGE_AVATAR_SIZE_PX = 28;
 
 type ThreadMessagesCachePayload = ThreadMessagesResponse & {
   cached_at: number;
@@ -94,6 +98,51 @@ const formatMessageTimestamp = (value: string): string => {
     hour: "numeric",
     minute: "2-digit",
   });
+};
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const FOUR_MONTHS_MS = 120 * 24 * 60 * 60 * 1000;
+const formatDateSeparator = (value: string): string => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const ageMs = Date.now() - date.getTime();
+  if (ageMs >= FOUR_MONTHS_MS) {
+    return date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+  if (ageMs >= ONE_WEEK_MS) {
+    return date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+  return date.toLocaleString(undefined, {
+    weekday: "long",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+const shouldShowDateSeparator = (
+  previousCreatedAt: string | null,
+  currentCreatedAt: string,
+): boolean => {
+  if (!previousCreatedAt) {
+    return true;
+  }
+  const previousMs = new Date(previousCreatedAt).getTime();
+  const currentMs = new Date(currentCreatedAt).getTime();
+  if (Number.isNaN(previousMs) || Number.isNaN(currentMs)) {
+    return false;
+  }
+  return currentMs - previousMs >= DATE_SEPARATOR_GAP_MS;
 };
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   return fetch(path, {
@@ -388,6 +437,7 @@ export default function Thread({
             event_background_image_id: cached.thread.event_background_image_id ?? null,
             event_background_image_access_grant: cached.thread.event_background_image_access_grant ?? null,
             is_direct: cached.thread.is_direct ?? previousThread?.is_direct,
+            member_user_ids: previousThread?.member_user_ids,
           }));
           setMessages(cached.messages);
           setHasMoreOlderMessages(cached.has_more_older);
@@ -416,6 +466,7 @@ export default function Thread({
               event_background_image_id: payload.thread.event_background_image_id ?? null,
               event_background_image_access_grant: payload.thread.event_background_image_access_grant ?? null,
               is_direct: payload.thread.is_direct ?? previousThread?.is_direct,
+              member_user_ids: previousThread?.member_user_ids,
             }));
             setMessages(payload.messages);
             setHasMoreOlderMessages(payload.has_more_older);
@@ -449,6 +500,16 @@ export default function Thread({
         const membersPayload = (await membersResponse.json()) as ThreadMembersResponse;
         if (!isCancelled) {
           setMembers(membersPayload.members);
+          setSelectedThread((previousThread: ThreadItem | null) => {
+            if (!previousThread) {
+              return previousThread;
+            }
+            return {
+              ...previousThread,
+              member_user_ids: membersPayload.members.map((member) => member.user_id),
+              participant_count: membersPayload.members.length,
+            };
+          });
         }
       } catch (error) {
         if (!isCancelled) {
@@ -692,6 +753,7 @@ export default function Thread({
         event_background_image_id: latestPayload.thread.event_background_image_id ?? null,
         event_background_image_access_grant: latestPayload.thread.event_background_image_access_grant ?? null,
         is_direct: latestPayload.thread.is_direct ?? previousThread?.is_direct,
+        member_user_ids: previousThread?.member_user_ids,
       }));
 
       const previousSnapshot = messagesRef.current;
@@ -1229,7 +1291,6 @@ export default function Thread({
       >
         <ThreadMessageBubbleContent
           message={message}
-          currentUserId={currentUserId}
           customEmojiByUuid={customEmojiByUuid}
           messageImageOverlay={messageImageOverlay}
           imageInteraction="options"
@@ -1247,12 +1308,23 @@ export default function Thread({
     );
   };
 
-  const renderMessage = (message: ThreadMessage, depth: number) => {
+  const renderMessage = (
+    message: ThreadMessage,
+    depth: number,
+    options?: {
+      showDateSeparator?: boolean;
+      showSenderName?: boolean;
+      showSenderAvatar?: boolean;
+    },
+  ) => {
     const isOwnMessage = message.created_by === currentUserId;
     const hasText = message.text.trim().length > 0;
     const hasImage = threadMessageHasRenderableImage(message);
     const isImageOnly = hasImage && !hasText;
     const messageImageOverlay = toImageOverlayData(message.data);
+    const showDateSeparator = options?.showDateSeparator === true;
+    const showSenderName = !isOwnMessage && depth === 0 && options?.showSenderName === true;
+    const showSenderAvatar = !isOwnMessage && depth === 0 && options?.showSenderAvatar !== false;
 
     if (depth > 0 && isHiddenUnderCollapsedParent(message)) {
       return null;
@@ -1264,58 +1336,96 @@ export default function Thread({
     const isRepliesSubtreeExpanded = !collapsedReplyIdSet.has(message.id);
     const isReplyTargetMessage = replyTargetMessageId === message.id;
 
+    const messageBubble = (
+      <div
+        onMouseDown={() => startLongPress(message.id)}
+        onMouseUp={cancelPressTimer}
+        onMouseLeave={cancelPressTimer}
+        onMouseMove={(event) => {
+          if (event.buttons === 1) {
+            cancelPressTimer();
+          }
+        }}
+        onTouchStart={() => startLongPress(message.id)}
+        onTouchEnd={cancelPressTimer}
+        onTouchMove={cancelPressTimer}
+        onTouchCancel={cancelPressTimer}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setActiveOptionsMessageId(message.id);
+          setReplyTargetMessageId(message.id);
+          setEditTargetMessageId(null);
+        }}
+        className={threadMessageBubbleShellClassName(isOwnMessage, isImageOnly, depth, "chat")}
+        style={threadMessageBubbleShellStyle(depth)}
+      >
+        <ThreadMessageBubbleContent
+          message={message}
+          customEmojiByUuid={customEmojiByUuid}
+          messageImageOverlay={messageImageOverlay}
+          imageInteraction="chat"
+          onOpenImageViewer={() => {
+            setImageViewer({
+              signedUrl: message.image_url,
+              imageId: message.image_id,
+              imageAccessGrant: message.image_access_grant ?? null,
+              imageStorageUserId: message.created_by,
+              alt: "Thread message attachment",
+            });
+          }}
+          onImageLoaded={handleMessageImageLoad}
+        />
+        <p
+          className="pointer-events-none absolute right-[-68px] top-1/2 w-16 -translate-y-1/2 text-right text-[11px] text-muted/90 transition-opacity duration-75"
+          style={{ opacity: timestampRevealPercent }}
+        >
+          {formatMessageTimestamp(message.created_at)}
+        </p>
+      </div>
+    );
+
     return (
       <div key={message.id}>
-        <div
-          onMouseDown={() => startLongPress(message.id)}
-          onMouseUp={cancelPressTimer}
-          onMouseLeave={cancelPressTimer}
-          onMouseMove={(event) => {
-            if (event.buttons === 1) {
-              cancelPressTimer();
-            }
-          }}
-          onTouchStart={() => startLongPress(message.id)}
-          onTouchEnd={cancelPressTimer}
-          onTouchMove={cancelPressTimer}
-          onTouchCancel={cancelPressTimer}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setActiveOptionsMessageId(message.id);
-            setReplyTargetMessageId(message.id);
-            setEditTargetMessageId(null);
-          }}
-          className={threadMessageBubbleShellClassName(isOwnMessage, isImageOnly, depth, "chat")}
-          style={threadMessageBubbleShellStyle(depth)}
-        >
-          <ThreadMessageBubbleContent
-            message={message}
-            currentUserId={currentUserId}
-            customEmojiByUuid={customEmojiByUuid}
-            messageImageOverlay={messageImageOverlay}
-            imageInteraction="chat"
-            onOpenImageViewer={() => {
-              setImageViewer({
-                signedUrl: message.image_url,
-                imageId: message.image_id,
-                imageAccessGrant: message.image_access_grant ?? null,
-                imageStorageUserId: message.created_by,
-                alt: "Thread message attachment",
-              });
-            }}
-            onImageLoaded={handleMessageImageLoad}
-          />
-          <p
-            className="pointer-events-none absolute right-[-68px] top-1/2 w-16 -translate-y-1/2 text-right text-[11px] text-muted/90 transition-opacity duration-75"
-            style={{ opacity: timestampRevealPercent }}
-          >
-            {formatMessageTimestamp(message.created_at)}
+        {showDateSeparator ? (
+          <p className="py-2 text-center text-[11px] text-muted">
+            {formatDateSeparator(message.created_at)}
           </p>
-        </div>
+        ) : null}
+
+        {depth === 0 && !isOwnMessage ? (
+          <div className={`flex items-end gap-2 ${showSenderName ? "mt-1" : ""}`}>
+            <div
+              className="shrink-0"
+              style={{ width: MESSAGE_AVATAR_SIZE_PX, height: MESSAGE_AVATAR_SIZE_PX }}
+            >
+              {showSenderAvatar ? (
+                <UserProfileImage
+                  userId={message.created_by}
+                  sizePx={MESSAGE_AVATAR_SIZE_PX}
+                  alt={`${message.username} profile`}
+                />
+              ) : null}
+            </div>
+            <div className="min-w-0 flex-1">
+              {showSenderName ? (
+                <p className="mb-0.5 px-1 text-xs text-muted [-webkit-touch-callout:none]">
+                  {message.username}
+                </p>
+              ) : null}
+              {messageBubble}
+            </div>
+          </div>
+        ) : (
+          messageBubble
+        )}
 
         {emojiOnlyChildren.length > 0 && (
-          <div className="ml-1 flex flex-wrap items-center gap-1 transform translate-y-[-4px]">
+          <div
+            className={`ml-1 flex flex-wrap items-center gap-1 transform translate-y-[-4px] ${
+              depth === 0 && !isOwnMessage ? "pl-9" : ""
+            }`}
+          >
             {emojiOnlyChildren.map((childMessage) => {
               const childCustomEmojiUuid = customEmojiUuidFromToken(childMessage.text);
               const childCustomEmoji = childCustomEmojiUuid ? customEmojiByUuid[childCustomEmojiUuid] : undefined;
@@ -1511,18 +1621,35 @@ export default function Thread({
                 });
               }}
             >
-              <CachedImage
-                signedUrl={selectedThread.image_url ?? null}
-                imageAccessGrant={selectedThread.image_access_grant ?? null}
-                imageThreadId={selectedThread.id}
-                imageId={selectedThread.image_id ?? null}
+              <ThreadAvatar
+                sizePx={40}
+                threadId={selectedThread.id}
+                imageId={selectedThread.image_id}
+                imageUrl={selectedThread.image_url}
+                imageAccessGrant={selectedThread.image_access_grant}
+                memberUserIds={
+                  members.length > 0
+                    ? members.map((member) => member.user_id)
+                    : selectedThread.member_user_ids
+                }
                 alt="Group photo"
-                className="h-10 w-10 rounded-full border border-border object-cover"
               />
             </button>
           ) : (
-            <div className="flex h-10 w-10 items-center justify-center">
-              <ImageIcon className="h-10 w-10 text-muted" />
+            <div className="h-10 w-10 shrink-0">
+              <ThreadAvatar
+                sizePx={40}
+                threadId={selectedThread.id}
+                imageId={selectedThread.image_id}
+                imageUrl={selectedThread.image_url}
+                imageAccessGrant={selectedThread.image_access_grant}
+                memberUserIds={
+                  members.length > 0
+                    ? members.map((member) => member.user_id)
+                    : selectedThread.member_user_ids
+                }
+                alt="Group photo"
+              />
             </div>
           )}
           <p className="truncate text-sm font-semibold text-foreground">
@@ -1585,10 +1712,33 @@ export default function Thread({
           ) : null}
 
           <div
-            className="space-y-2 transition-transform duration-75"
+            className="space-y-1 transition-transform duration-75"
             style={{ transform: `translateX(${-messagesRevealOffsetPx}px)` }}
           >
-            {rootMessages.map((message) => renderMessage(message, 0))}
+            {rootMessages.map((message, index) => {
+              const previousMessage = index > 0 ? rootMessages[index - 1] : null;
+              const nextMessage = index < rootMessages.length - 1 ? rootMessages[index + 1] : null;
+              const showDateSeparator = shouldShowDateSeparator(
+                previousMessage?.created_at ?? null,
+                message.created_at,
+              );
+              const showSenderName =
+                showDateSeparator ||
+                !previousMessage ||
+                previousMessage.created_by !== message.created_by;
+              const nextOpensDateSeparator = nextMessage
+                ? shouldShowDateSeparator(message.created_at, nextMessage.created_at)
+                : true;
+              const showSenderAvatar =
+                nextOpensDateSeparator ||
+                !nextMessage ||
+                nextMessage.created_by !== message.created_by;
+              return renderMessage(message, 0, {
+                showDateSeparator,
+                showSenderName,
+                showSenderAvatar,
+              });
+            })}
           </div>
         </div>
 

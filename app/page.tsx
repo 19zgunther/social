@@ -541,6 +541,12 @@ export default function Home() {
                 setThreadEventFocus(null);
                 setActiveTab("groups");
               }}
+              onThreadPinnedChange={(pinned) => {
+                setSelectedThread((previous) =>
+                  previous ? { ...previous, user_pinned_thread: pinned } : previous,
+                );
+                setGroupsListRefreshNonce((previous) => previous + 1);
+              }}
             />
           </div>}
 

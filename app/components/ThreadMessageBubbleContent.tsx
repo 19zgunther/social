@@ -13,7 +13,6 @@ export type ThreadMessageBubbleImageInteraction = "chat" | "options";
 
 type ThreadMessageBubbleContentProps = {
   message: ThreadMessage;
-  currentUserId: string;
   customEmojiByUuid: Record<string, EmojiItem>;
   messageImageOverlay: ImageOverlayData | null;
   imageInteraction: ThreadMessageBubbleImageInteraction;
@@ -23,14 +22,12 @@ type ThreadMessageBubbleContentProps = {
 
 export function ThreadMessageBubbleContent({
   message,
-  currentUserId,
   customEmojiByUuid,
   messageImageOverlay,
   imageInteraction,
   onOpenImageViewer,
   onImageLoaded,
 }: ThreadMessageBubbleContentProps) {
-  const isOwnMessage = message.created_by === currentUserId;
   const hasText = message.text.trim().length > 0;
   const hasImage = Boolean(
     message.image_id &&
@@ -43,21 +40,11 @@ export function ThreadMessageBubbleContent({
   return (
     <>
       {!isImageOnly ? (
-        <>
-          <p className="text-xs opacity-60 [-webkit-touch-callout:none]">
-            {isOwnMessage ? "You" : message.username}
-          </p>
-          {customEmoji ? (
-            <CustomEmoji key={message.id} customEmoji={customEmoji} />
-          ) : (
-            <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
-          )}
-        </>
-      ) : null}
-      {isImageOnly ? (
-        <p className="mb-1 px-1 text-xs opacity-60 [-webkit-touch-callout:none]">
-          {isOwnMessage ? "You" : message.username}
-        </p>
+        customEmoji ? (
+          <CustomEmoji key={message.id} customEmoji={customEmoji} />
+        ) : (
+          <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
+        )
       ) : null}
       {hasImage ? (
         <div className={`relative ${!isImageOnly ? "mt-1" : ""}`}>
@@ -109,7 +96,7 @@ export function threadMessageBubbleShellClassName(
       : "relative max-w-[85%] select-none text-sm";
   const shape = isImageOnly
     ? `${isOwnMessage ? "ml-auto" : ""}`
-    : `rounded-2xl px-3 py-1 shadow-sm ${isOwnMessage
+    : `rounded-2xl px-3 py-1.5 shadow-sm ${isOwnMessage
       ? "ml-auto rounded-br-sm bg-accent text-on-accent"
       : "rounded-bl-sm bg-surface text-foreground"
     }`;

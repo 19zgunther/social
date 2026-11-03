@@ -1,6 +1,16 @@
 "use client";
 
-import { FormEvent, TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  TouchEvent,
+  WheelEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   ApiError,
   GroupsListResponse,
@@ -12,8 +22,14 @@ import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CameraModal from "@/app/components/Camera";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
-import CachedImage from "./utils/CachedImage";
-import { ForwardIcon, ImageIcon, NewChatIcon, RefreshIcon } from "@/app/components/Icons";
+import ThreadAvatar from "@/app/components/ThreadAvatar";
+import {
+  ForwardIcon,
+  NewChatIcon,
+  PinIcon,
+  RefreshIcon,
+  SearchIcon,
+} from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
 import { AppTab } from "./utils";
 
@@ -34,6 +50,22 @@ type GroupsProps = {
 const GROUPS_CACHE_KEY = "groups_list_v1";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
+const PIN_LONG_PRESS_MS = 500;
+const PIN_ACTIONS_OVERLAY_Z = 1950;
+const PINNED_AVATAR_SIZE_PX = 72;
+
+const threadMatchesSearch = (thread: ThreadItem, rawQuery: string): boolean => {
+  const query = rawQuery.trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+  if (thread.name.toLowerCase().includes(query)) {
+    return true;
+  }
+  return (thread.member_usernames ?? []).some((username) =>
+    username.toLowerCase().includes(query),
+  );
+};
 
 type GroupsCachePayload = {
   threads: ThreadItem[];
@@ -110,10 +142,15 @@ export default function Groups({
     replyToMessageId: string;
   } | null>(null);
   const [isReplyCameraSending, setIsReplyCameraSending] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pinActionThreadId, setPinActionThreadId] = useState<string | null>(null);
+  const [isPinningThread, setIsPinningThread] = useState(false);
   const groupsContainerRef = useRef<HTMLDivElement | null>(null);
   const pullStartYRef = useRef<number | null>(null);
   const pullRefreshTriggeredRef = useRef(false);
   const lastTopRefreshAtRef = useRef(0);
+  const pinLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pinLongPressTriggeredRef = useRef(false);
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -395,8 +432,104 @@ export default function Groups({
       setActiveTab("thread");
       markThreadRead(thread);
     },
-    [markThreadRead, onOpenThreadFromGroups],
+    [markThreadRead, onOpenThreadFromGroups, setActiveTab, setSelectedThread],
   );
+
+  const applyPinnedLocally = useCallback(
+    (threadId: string, pinned: boolean) => {
+      setThreads((previous) => {
+        const next = previous.map((thread) =>
+          thread.id === threadId ? { ...thread, user_pinned_thread: pinned } : thread,
+        );
+        void writeGroupsCache(next);
+        return next;
+      });
+      if (selectedThread?.id === threadId) {
+        setSelectedThread({ ...selectedThread, user_pinned_thread: pinned });
+      }
+    },
+    [selectedThread, setSelectedThread, writeGroupsCache],
+  );
+
+  const setThreadPinned = useCallback(
+    async (thread: ThreadItem, pinned: boolean) => {
+      const previousPinned = thread.user_pinned_thread === true;
+      if (previousPinned === pinned) {
+        setPinActionThreadId(null);
+        return;
+      }
+
+      setIsPinningThread(true);
+      setStatusMessage("");
+      applyPinnedLocally(thread.id, pinned);
+
+      try {
+        const response = await postWithAuth("/api/thread-pin", {
+          thread_id: thread.id,
+          pinned,
+        });
+        if (!response.ok) {
+          applyPinnedLocally(thread.id, previousPinned);
+          setStatusMessage(await readErrorMessage(response));
+          return;
+        }
+        setPinActionThreadId(null);
+      } catch (error) {
+        applyPinnedLocally(thread.id, previousPinned);
+        setStatusMessage(error instanceof Error ? error.message : "Failed to update pin.");
+      } finally {
+        setIsPinningThread(false);
+      }
+    },
+    [applyPinnedLocally],
+  );
+
+  const clearPinLongPressTimer = () => {
+    if (pinLongPressTimerRef.current !== null) {
+      clearTimeout(pinLongPressTimerRef.current);
+      pinLongPressTimerRef.current = null;
+    }
+  };
+
+  const startPinLongPress = (threadId: string) => {
+    clearPinLongPressTimer();
+    pinLongPressTriggeredRef.current = false;
+    pinLongPressTimerRef.current = setTimeout(() => {
+      pinLongPressTriggeredRef.current = true;
+      setPinActionThreadId(threadId);
+      pinLongPressTimerRef.current = null;
+    }, PIN_LONG_PRESS_MS);
+  };
+
+  const cancelPinLongPress = () => {
+    clearPinLongPressTimer();
+  };
+
+  const filteredThreads = useMemo(
+    () => threads.filter((thread) => threadMatchesSearch(thread, searchQuery)),
+    [threads, searchQuery],
+  );
+  const pinnedThreads = useMemo(
+    () => filteredThreads.filter((thread) => thread.user_pinned_thread === true),
+    [filteredThreads],
+  );
+  const unpinnedThreads = useMemo(
+    () => filteredThreads.filter((thread) => thread.user_pinned_thread !== true),
+    [filteredThreads],
+  );
+  const pinActionThread = useMemo(
+    () =>
+      pinActionThreadId
+        ? threads.find((thread) => thread.id === pinActionThreadId) ?? null
+        : null,
+    [pinActionThreadId, threads],
+  );
+
+  useEffect(() => {
+    return () => {
+      clearPinLongPressTimer();
+    };
+  }, []);
 
   const onLastMessagePreviewClick = useCallback(
     (thread: ThreadItem) => {
@@ -542,6 +675,21 @@ export default function Groups({
         </div>
       </form>}
 
+      <div className="relative mx-2">
+        <SearchIcon
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+          aria-hidden
+        />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search"
+          className="w-full rounded-xl border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted focus:border-muted"
+          aria-label="Search groups"
+        />
+      </div>
+
       {isLoadingThreads ? (
         <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-bg px-3 py-2 text-xs text-muted">
           <Loader scale={0.7} />
@@ -562,18 +710,136 @@ export default function Groups({
           <p className="text-xs text-muted px-4">No threads yet. Create your first one.</p>
         ) : null}
 
-        {threads.map((thread) => (
+        {!isLoadingThreads && threads.length > 0 && filteredThreads.length === 0 ? (
+          <p className="text-xs text-muted px-4">No groups match your search.</p>
+        ) : null}
+
+        {pinnedThreads.length > 0 ? (
+          <div className="grid grid-cols-3 gap-x-2 gap-y-4 px-3 pb-4 pt-2">
+            {pinnedThreads.map((thread) => {
+              const isUnread = unreadThreadIds.has(thread.id);
+              return (
+                <button
+                  key={thread.id}
+                  type="button"
+                  onClick={() => {
+                    if (pinLongPressTriggeredRef.current) {
+                      pinLongPressTriggeredRef.current = false;
+                      return;
+                    }
+                    onOpenThread(thread);
+                  }}
+                  onMouseDown={() => startPinLongPress(thread.id)}
+                  onMouseUp={cancelPinLongPress}
+                  onMouseLeave={cancelPinLongPress}
+                  onTouchStart={() => startPinLongPress(thread.id)}
+                  onTouchEnd={cancelPinLongPress}
+                  onTouchMove={cancelPinLongPress}
+                  onTouchCancel={cancelPinLongPress}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setPinActionThreadId(thread.id);
+                  }}
+                  className="flex flex-col items-center gap-1.5 border-0 bg-transparent p-1 text-center"
+                  aria-label={`Open ${thread.name}`}
+                >
+                  <div className="relative">
+                    <ThreadAvatar
+                      sizePx={PINNED_AVATAR_SIZE_PX}
+                      threadId={thread.id}
+                      imageId={thread.image_id}
+                      imageUrl={thread.image_url}
+                      imageAccessGrant={thread.image_access_grant}
+                      memberUserIds={thread.member_user_ids}
+                      alt={`${thread.name} photo`}
+                    />
+                    {isUnread ? (
+                      <span
+                        aria-label="Unread messages"
+                        className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-accent ring-2 ring-bg"
+                      />
+                    ) : null}
+                  </div>
+                  <p className="line-clamp-2 w-full text-xs font-medium text-foreground">
+                    {thread.name}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {unpinnedThreads.map((thread) => (
           <GroupThreadRow
             key={thread.id}
             thread={thread}
             unreadThreadIds={unreadThreadIds}
-            onOpenThread={onOpenThread}
+            onOpenThread={(nextThread) => {
+              if (pinLongPressTriggeredRef.current) {
+                pinLongPressTriggeredRef.current = false;
+                return;
+              }
+              onOpenThread(nextThread);
+            }}
             onLastMessagePreviewClick={onLastMessagePreviewClick}
+            onLongPressStart={() => startPinLongPress(thread.id)}
+            onLongPressCancel={cancelPinLongPress}
+            onOpenPinActions={() => setPinActionThreadId(thread.id)}
           />
         ))}
       </div>
 
       {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
+
+      {pinActionThread
+        ? createPortal(
+            <div
+              className="fixed inset-0 flex items-end justify-center sm:items-center"
+              style={{ zIndex: PIN_ACTIONS_OVERLAY_Z }}
+              onClick={() => {
+                if (!isPinningThread) {
+                  setPinActionThreadId(null);
+                }
+              }}
+            >
+              <div className="absolute inset-0 bg-black/35 backdrop-blur-sm" aria-hidden />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Chat actions"
+                className="relative z-10 mb-6 w-[min(100%,22rem)] rounded-2xl border border-border bg-surface p-2 shadow-lg"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <p className="truncate px-3 py-2 text-sm font-semibold text-foreground">
+                  {pinActionThread.name}
+                </p>
+                <button
+                  type="button"
+                  disabled={isPinningThread}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-sm font-medium text-foreground hover:bg-bg disabled:opacity-60"
+                  onClick={() => {
+                    void setThreadPinned(
+                      pinActionThread,
+                      pinActionThread.user_pinned_thread !== true,
+                    );
+                  }}
+                >
+                  <PinIcon className="h-4 w-4 text-muted" aria-hidden />
+                  {pinActionThread.user_pinned_thread === true ? "Unpin" : "Pin"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isPinningThread}
+                  className="mt-1 w-full rounded-xl px-3 py-2 text-sm text-muted hover:bg-bg disabled:opacity-60"
+                  onClick={() => setPinActionThreadId(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       <ImageViewerModal
         open={groupsPhotoViewer !== null}
@@ -614,11 +880,17 @@ function GroupThreadRow({
   unreadThreadIds,
   onOpenThread,
   onLastMessagePreviewClick,
+  onLongPressStart,
+  onLongPressCancel,
+  onOpenPinActions,
 }: {
   thread: ThreadItem;
   unreadThreadIds: Set<string>;
   onOpenThread: (thread: ThreadItem) => void;
   onLastMessagePreviewClick: (thread: ThreadItem) => void;
+  onLongPressStart: () => void;
+  onLongPressCancel: () => void;
+  onOpenPinActions: () => void;
 }) {
   const preview = thread.last_photo_preview;
   const listTime = formatThreadListTime(thread.last_message_at);
@@ -647,26 +919,32 @@ function GroupThreadRow({
           onOpenThread(thread);
         }
       }}
+      onMouseDown={onLongPressStart}
+      onMouseUp={onLongPressCancel}
+      onMouseLeave={onLongPressCancel}
+      onTouchStart={onLongPressStart}
+      onTouchEnd={onLongPressCancel}
+      onTouchMove={onLongPressCancel}
+      onTouchCancel={onLongPressCancel}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onOpenPinActions();
+      }}
       className={`relative w-full cursor-pointer px-4 py-3 text-left transition border-b border-border/30 outline-none focus-visible:ring-2 focus-visible:ring-muted/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${isUnread
         ? "bg-surface/50"
         : "bg-bg hover:bg-surface/20"
         }`}
     >
       <div className="flex items-start gap-3">
-        {thread.image_id && (thread.image_url || thread.image_access_grant) ? (
-          <CachedImage
-            signedUrl={thread.image_url ?? null}
-            imageAccessGrant={thread.image_access_grant ?? null}
-            imageThreadId={thread.id}
-            imageId={thread.image_id ?? null}
-            alt="Group photo"
-            className="h-12 w-12 rounded-full object-cover flex-shrink-0"
-          />
-        ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-border/20 flex-shrink-0">
-            <ImageIcon className="h-6 w-6 text-muted" />
-          </div>
-        )}
+        <ThreadAvatar
+          sizePx={48}
+          threadId={thread.id}
+          imageId={thread.image_id}
+          imageUrl={thread.image_url}
+          imageAccessGrant={thread.image_access_grant}
+          memberUserIds={thread.member_user_ids}
+          alt={`${thread.name} photo`}
+        />
 
         <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
           <div className="min-w-0 flex-1">

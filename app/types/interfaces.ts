@@ -198,6 +198,12 @@ export type ThreadItem = {
   /** True when this is a 1:1 direct message thread. */
   is_direct?: boolean;
   participant_count?: number;
+  /** Member user ids for avatar collage when the thread has no group photo. */
+  member_user_ids?: string[];
+  /** Member usernames for Groups search. */
+  member_usernames?: string[];
+  /** Whether the current user has pinned this thread. */
+  user_pinned_thread?: boolean;
   image_id?: string | null;
   image_url?: string | null;
   /** Thread-scoped grant for `image_id`; resolve with `imageThreadId` = this thread's `id`. */

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { DeleteIcon } from "@/app/components/Icons";
-import CachedImage from "@/app/components/utils/CachedImage";
+import { DeleteIcon, PinIcon } from "@/app/components/Icons";
+import ThreadAvatar from "@/app/components/ThreadAvatar";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import ThreadPictureEditor from "@/app/components/ThreadPictureEditor";
 import BackButton from "@/app/components/utils/BackButton";
@@ -22,6 +22,7 @@ type ThreadSettingsProps = {
   onThreadImageUpdated: (imageId: string | null, imageUrl: string | null, imageAccessGrant: string | null) => void;
   onThreadRenamed: (name: string) => void;
   onThreadDeleted: () => void;
+  onThreadPinnedChange: (pinned: boolean) => void;
   onViewUserProfile: (userId: string) => void;
 };
 
@@ -49,6 +50,7 @@ export default function ThreadSettings({
   onThreadImageUpdated,
   onThreadRenamed,
   onThreadDeleted,
+  onThreadPinnedChange,
   onViewUserProfile,
 }: ThreadSettingsProps) {
   const [members, setMembers] = useState<ThreadMember[]>([]);
@@ -70,6 +72,8 @@ export default function ThreadSettings({
   const [confirmDeleteThread, setConfirmDeleteThread] = useState(false);
   const [isDeletingThread, setIsDeletingThread] = useState(false);
   const [sendingFriendUserId, setSendingFriendUserId] = useState<string | null>(null);
+  const [isPinned, setIsPinned] = useState(thread.user_pinned_thread === true);
+  const [isUpdatingPin, setIsUpdatingPin] = useState(false);
 
   const isOwner = currentUserId === thread.owner_user_id;
   const isDirect = thread.is_direct === true;
@@ -113,10 +117,41 @@ export default function ThreadSettings({
   }, [thread.name]);
 
   useEffect(() => {
+    setIsPinned(thread.user_pinned_thread === true);
+  }, [thread.id, thread.user_pinned_thread]);
+
+  useEffect(() => {
     setConfirmDeleteThread(false);
     setConfirmedRemoveMember(null);
     setIsEditingName(false);
   }, [thread.id]);
+
+  const onTogglePinned = async () => {
+    const nextPinned = !isPinned;
+    setIsUpdatingPin(true);
+    setStatusMessage("");
+    setIsPinned(nextPinned);
+    onThreadPinnedChange(nextPinned);
+    try {
+      const response = await postWithAuth("/api/thread-pin", {
+        thread_id: thread.id,
+        pinned: nextPinned,
+      });
+      if (!response.ok) {
+        setIsPinned(!nextPinned);
+        onThreadPinnedChange(!nextPinned);
+        setStatusMessage(await readErrorMessage(response));
+        return;
+      }
+      setStatusMessage(nextPinned ? "Pinned." : "Unpinned.");
+    } catch (error) {
+      setIsPinned(!nextPinned);
+      onThreadPinnedChange(!nextPinned);
+      setStatusMessage(error instanceof Error ? error.message : "Failed to update pin.");
+    } finally {
+      setIsUpdatingPin(false);
+    }
+  };
 
   useEffect(() => {
     void loadMembers();
@@ -322,20 +357,20 @@ export default function ThreadSettings({
               className="overflow-hidden rounded-full border border-border bg-bg"
               aria-label="Edit group photo"
             >
-              {localImageId && (localImageUrl || localImageAccessGrant) ? (
-                <CachedImage
-                  signedUrl={localImageUrl}
-                  imageAccessGrant={localImageAccessGrant}
-                  imageThreadId={thread.id}
-                  imageId={localImageId}
-                  alt="Group photo"
-                  className="h-16 w-16 object-cover"
-                />
-              ) : (
-                <div className="flex h-16 w-16 items-center justify-center text-xs text-muted">
-                  Add group photo
-                </div>
-              )}
+              <ThreadAvatar
+                sizePx={64}
+                threadId={thread.id}
+                imageId={localImageId}
+                imageUrl={localImageUrl}
+                imageAccessGrant={localImageAccessGrant}
+                memberUserIds={
+                  members.length > 0
+                    ? members.map((member) => member.user_id)
+                    : thread.member_user_ids
+                }
+                alt="Group photo"
+                className="border-0"
+              />
             </button>
             <div className="min-w-0 flex-1 space-y-1">
               {isDirect ? (
@@ -404,6 +439,34 @@ export default function ThreadSettings({
               </p>
             </div>
           </div>
+        </section>
+
+        <section className="rounded-xl border border-border bg-surface p-3">
+          <button
+            type="button"
+            disabled={isUpdatingPin}
+            onClick={() => {
+              void onTogglePinned();
+            }}
+            className="flex w-full items-center justify-between gap-3 text-left disabled:opacity-60"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <PinIcon className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+              <span className="text-sm font-medium text-foreground">Pin conversation</span>
+            </span>
+            <span
+              aria-hidden
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                isPinned ? "bg-accent" : "bg-border"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  isPinned ? "left-5" : "left-0.5"
+                }`}
+              />
+            </span>
+          </button>
         </section>
 
         <section className="rounded-xl border border-border bg-surface p-3">

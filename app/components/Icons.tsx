@@ -39,12 +39,14 @@ import {
   Palette,
   Pencil,
   PhoneOff,
+  Pin,
   Play,
   Plus,
   Redo2,
   RefreshCw,
   RotateCcw,
   Rss,
+  Search,
   Send,
   Settings,
   Smile,
@@ -140,6 +142,10 @@ export const PeopleIcon = Users;
 export const LockIcon = Lock;
 /** Start a new chat/thread */
 export const NewChatIcon = MessageCirclePlus;
+/** Search / filter */
+export const SearchIcon = Search;
+/** Pin a chat */
+export const PinIcon = Pin;
 
 /** Wax seal mark for pending shared events */
 export function WaxSealIcon({ className }: { className?: string }) {

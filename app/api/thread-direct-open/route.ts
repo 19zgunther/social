@@ -37,13 +37,23 @@ function toThreadItemPayload(input: {
     }
   }
 
+  const memberUserIds = [
+    ...new Set([
+      thread.owner,
+      ...thread.user_thread_access.map((access) => access.user_id),
+    ]),
+  ];
+
   return {
     id: thread.id,
     name: thread.name,
     created_at: thread.created_at.toISOString(),
     owner_user_id: thread.owner,
     owner_username: thread.users.username,
-    participant_count: 2,
+    participant_count: memberUserIds.length,
+    member_user_ids: memberUserIds,
+    member_usernames: [],
+    user_pinned_thread: false,
     is_direct: true,
     image_id: thread.image_id,
     image_url: null,

@@ -186,12 +186,13 @@ model user_sessions {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model user_thread_access {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  thread_id  String   @db.Uuid
-  user_id    String   @db.Uuid
-  created_at DateTime @db.Timestamptz(6)
-  threads    threads  @relation(fields: [thread_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  thread_id           String   @db.Uuid
+  user_id             String   @db.Uuid
+  created_at          DateTime @db.Timestamptz(6)
+  user_pinned_thread  Boolean  @default(false)
+  threads             threads  @relation(fields: [thread_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users               users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

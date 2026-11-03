@@ -182,6 +182,12 @@ export async function POST(request: Request) {
         user_thread_access: {
           select: {
             user_id: true,
+            user_pinned_thread: true,
+            users: {
+              select: {
+                username: true,
+              },
+            },
           },
         },
       },
@@ -217,10 +223,25 @@ export async function POST(request: Request) {
         );
 
         let last_photo_preview: ThreadItem["last_photo_preview"] = null;
-        const participantCount = new Set([
-          thread.owner,
-          ...thread.user_thread_access.map((access) => access.user_id),
-        ]).size;
+        const memberUserIds = [
+          ...new Set([
+            thread.owner,
+            ...thread.user_thread_access.map((access) => access.user_id),
+          ]),
+        ];
+        const memberUsernames = [
+          ...new Set(
+            [
+              thread.users.username,
+              ...thread.user_thread_access.map((access) => access.users.username),
+            ].filter((name) => Boolean(name?.trim())),
+          ),
+        ];
+        const participantCount = memberUserIds.length;
+        const viewerAccess = thread.user_thread_access.find(
+          (access) => access.user_id === authResult.user_id,
+        );
+        const user_pinned_thread = viewerAccess?.user_pinned_thread === true;
         if (latest && latest.created_by !== authResult.user_id) {
           if (latest.image_id) {
             try {
@@ -259,6 +280,9 @@ export async function POST(request: Request) {
           owner_username: thread.users.username,
           is_direct: thread.is_direct === true,
           participant_count: participantCount,
+          member_user_ids: memberUserIds,
+          member_usernames: memberUsernames,
+          user_pinned_thread,
           image_id: thread.image_id,
           image_url: null,
           image_access_grant: imageAccessGrantByThreadId.get(thread.id) ?? null,
