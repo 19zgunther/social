@@ -903,18 +903,35 @@ export default function SharedEventPostsTab({
                         placeholder="Weekend trip"
                       />
                     </label>
-                    <EventDateTimeSelect
-                      label="Allow adding until..."
-                      value={createCloseAt}
-                      onChange={setCreateCloseAt}
-                      compactFields
-                    />
-                    <EventDateTimeSelect
-                      label="Release shared post at..."
-                      value={createReleaseAt}
-                      onChange={setCreateReleaseAt}
-                      compactFields
-                    />
+                    <div className="overflow-hidden rounded-xl border border-border">
+                      <div className="flex gap-3 px-3 py-3">
+                        <div className="flex w-3 shrink-0 flex-col items-center pt-1.5" aria-hidden>
+                          <span className="h-2.5 w-2.5 rounded-full bg-accent" />
+                          <span className="mt-1 w-px flex-1 bg-border" />
+                        </div>
+                        <div className="min-w-0 flex-1 pb-1">
+                          <EventDateTimeSelect
+                            variant="inline"
+                            label="Contribute until"
+                            value={createCloseAt}
+                            onChange={setCreateCloseAt}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-3 border-t border-border px-3 py-3">
+                        <div className="flex w-3 shrink-0 flex-col items-center pt-1.5" aria-hidden>
+                          <span className="h-2.5 w-2.5 rounded-full border-2 border-accent bg-bg" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <EventDateTimeSelect
+                            variant="inline"
+                            label="Reveal at"
+                            value={createReleaseAt}
+                            onChange={setCreateReleaseAt}
+                          />
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="space-y-2">
                       <p className="text-xs text-muted">
