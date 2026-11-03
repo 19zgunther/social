@@ -23,6 +23,7 @@ Fullscreen, mobile-first low-poly mini golf for the Profile → Games tab. Built
 - Aim HUD shows rough carry (`~Ny`) plus power %; landing ring + ghost arc preview the shot
 - Long shots open an FPS-style aim bloom (spray cone + landing ellipse); release picks a random angle inside it
 - Sparse grounded **Beer Can** pickups: roll or chip into one for ~20s of tighter aim spray and **1.5×** shot distance
+- Sparse grounded **Grapes** pickups: ~20s of 5 purple volley balls across the aim bloom; after they all bounce/roll to a stop, the closest to (or in) the cup becomes your ball
 - Small seagulls cruise / land / walk; hitting one with the ball triggers a blood fountain
 - A couple of slow sailboats drift on open water; hitting one explodes it into wood/sail debris + splash
 - A little golf cart slowly follows the ball (parks just behind / beside you)

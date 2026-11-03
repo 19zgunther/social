@@ -723,6 +723,45 @@ function makeBeerCan(pu: PowerUpDef): THREE.Group {
   return g;
 }
 
+/** Small purple grape cluster on the turf. */
+function makeGrapeCluster(pu: PowerUpDef): THREE.Group {
+  const g = new THREE.Group();
+  g.position.set(pu.x, pu.y, pu.z);
+  g.userData.powerUpId = pu.id;
+
+  const colors = [0x7e22ce, 0x6b21a8, 0xa855f7, 0x581c87];
+  const offsets: [number, number, number][] = [
+    [0, 0.08, 0],
+    [0.12, 0.02, 0.06],
+    [-0.1, 0.04, 0.08],
+    [0.06, 0.14, -0.08],
+    [-0.08, 0.12, -0.06],
+    [0.02, -0.02, -0.12],
+    [0.14, 0.08, -0.02],
+    [-0.14, 0.06, 0.02],
+  ];
+  for (let i = 0; i < offsets.length; i++) {
+    const [ox, oy, oz] = offsets[i]!;
+    const berry = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1 + (i % 3) * 0.015, 6, 5),
+      new THREE.MeshLambertMaterial({ color: colors[i % colors.length]!, flatShading: true }),
+    );
+    berry.position.set(ox, oy, oz);
+    berry.castShadow = true;
+    g.add(berry);
+  }
+
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.015, 0.02, 0.18, 4),
+    new THREE.MeshLambertMaterial({ color: 0x4d7c0f, flatShading: true }),
+  );
+  stem.position.set(0.02, 0.28, 0);
+  stem.rotation.z = 0.35;
+  g.add(stem);
+
+  return g;
+}
+
 /** Petite low-poly golf cart (wheels in userData for roll). */
 function makeGolfCart(): THREE.Group {
   const g = new THREE.Group();
@@ -1311,6 +1350,20 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   const splashDropGeo = new THREE.IcosahedronGeometry(0.08, 0);
   const splashRingGeo = new THREE.RingGeometry(0.35, 0.55, 20);
 
+  type GrapeVolleyBall = {
+    mesh: THREE.Mesh;
+    path: Vec3[];
+    t: number;
+    /** Shared settle duration (all finish together before reveal). */
+    dur: number;
+    isWinner: boolean;
+    /** After paths finish: losers fade, winner flashes white then removes. */
+    revealed: boolean;
+  };
+  const grapeVolleyBalls: GrapeVolleyBall[] = [];
+  const grapeVolleyGeo = new THREE.SphereGeometry(BALL_RADIUS * 0.92, 10, 8);
+  let grapeRevealT = 0;
+
   type BloodDrop = {
     mesh: THREE.Mesh;
     vx: number;
@@ -1552,8 +1605,96 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
     splashDrops.length = 0;
     splashRings.length = 0;
-    // Debris lives in fxGroup — wipe tracking when FX are cleared
+    // Debris / grape volleys live in fxGroup — wipe tracking when FX are cleared
     boatDebris.length = 0;
+    grapeVolleyBalls.length = 0;
+    grapeRevealT = 0;
+  }
+
+  function spawnGrapeVolley(paths: Vec3[][], winnerIndex: number, duration: number) {
+    grapeRevealT = 0;
+    for (let i = 0; i < paths.length; i++) {
+      const path = paths[i]!;
+      if (path.length < 2) continue;
+      const mat = new THREE.MeshLambertMaterial({
+        color: 0xd8b4fe,
+        flatShading: false,
+        transparent: true,
+        opacity: 0.72,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(grapeVolleyGeo, mat);
+      mesh.position.set(path[0]!.x, path[0]!.y, path[0]!.z);
+      mesh.renderOrder = 9;
+      fxGroup.add(mesh);
+      grapeVolleyBalls.push({
+        mesh,
+        path,
+        t: 0,
+        dur: duration,
+        isWinner: i === winnerIndex,
+        revealed: false,
+      });
+    }
+  }
+
+  function updateGrapeVolley(dt: number) {
+    let allSettled = grapeVolleyBalls.length > 0;
+    for (const bit of grapeVolleyBalls) {
+      if (bit.t < bit.dur) allSettled = false;
+    }
+
+    if (allSettled) grapeRevealT += dt;
+
+    for (let i = grapeVolleyBalls.length - 1; i >= 0; i--) {
+      const bit = grapeVolleyBalls[i]!;
+      bit.t += dt;
+      const u = Math.min(1, bit.t / bit.dur);
+      const f = bit.path.length - 1;
+      const idx = u * f;
+      const i0 = Math.min(f - 1, Math.floor(idx));
+      const i1 = Math.min(f, i0 + 1);
+      const frac = idx - i0;
+      const a = bit.path[i0]!;
+      const b = bit.path[i1]!;
+      bit.mesh.position.set(
+        a.x + (b.x - a.x) * frac,
+        a.y + (b.y - a.y) * frac,
+        a.z + (b.z - a.z) * frac,
+      );
+      const mat = bit.mesh.material as THREE.MeshLambertMaterial;
+
+      if (!allSettled) {
+        // Stay light purple until every ball has finished bouncing/rolling
+        mat.color.setHex(0xd8b4fe);
+        mat.opacity = 0.72;
+        continue;
+      }
+
+      if (!bit.revealed) {
+        bit.revealed = true;
+        if (bit.isWinner) mat.color.setHex(0xf5f5f0);
+        else mat.color.setHex(0xa78bfa);
+      }
+
+      if (bit.isWinner) {
+        // Brief white flash on the closest ball, then remove (real ball takes over)
+        mat.opacity = 0.95 * Math.max(0, 1 - grapeRevealT / 0.35);
+        if (grapeRevealT > 0.35) {
+          fxGroup.remove(bit.mesh);
+          mat.dispose();
+          grapeVolleyBalls.splice(i, 1);
+        }
+      } else {
+        mat.opacity *= Math.exp(-6 * dt);
+        if (mat.opacity < 0.04) {
+          fxGroup.remove(bit.mesh);
+          mat.dispose();
+          grapeVolleyBalls.splice(i, 1);
+        }
+      }
+    }
+    if (grapeVolleyBalls.length === 0) grapeRevealT = 0;
   }
 
   function clearBlood() {
@@ -2425,6 +2566,8 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
       } else if (ev.kind === "powerUp") {
         const g = powerUpGroups.get(ev.powerUpId);
         if (g) g.visible = false;
+      } else if (ev.kind === "grapeVolley") {
+        spawnGrapeVolley(ev.paths, ev.winnerIndex, ev.duration);
       }
     }
   }
@@ -2486,11 +2629,12 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
 
     for (const pu of level.powerUps) {
-      if (pu.kind !== "beer") continue;
-      const can = makeBeerCan(pu);
-      can.visible = pu.active;
-      world.add(can);
-      powerUpGroups.set(pu.id, can);
+      const mesh =
+        pu.kind === "beer" ? makeBeerCan(pu) : pu.kind === "grapes" ? makeGrapeCluster(pu) : null;
+      if (!mesh) continue;
+      mesh.visible = pu.active;
+      world.add(mesh);
+      powerUpGroups.set(pu.id, mesh);
     }
 
     // Fresh flock / boats / cart only on new levels (hole advances keep them alive)
@@ -2747,6 +2891,7 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     handleFx(engine.drainFx());
     updateTreeSway(dt);
     updateSplashes(dt);
+    updateGrapeVolley(dt);
     updateBlood(engine.level, dt);
     updateSeagulls(engine.level, snap, dt);
     updateSailboats(engine.level, snap, dt);
@@ -2763,17 +2908,21 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     updateConfetti(engine.level, dt);
 
     // Physics center sits a bit high visually — sink along the ground normal (render only)
+    // During grapes volley the purple ghosts are the only balls on screen
     if (!menuPreview) {
-      const ground = sampleTerrain(engine.level, snap.ball.pos.x, snap.ball.pos.z);
-      const visualSink = -BALL_RADIUS * 0.5;
-      ballMesh.position.set(
-        snap.ball.pos.x + ground.normal.x * visualSink,
-        snap.ball.pos.y + ground.normal.y * visualSink,
-        snap.ball.pos.z + ground.normal.z * visualSink,
-      );
-      if (snap.ball.moving) {
-        ballMesh.rotation.x += snap.ball.vel.z * 0.02;
-        ballMesh.rotation.z -= snap.ball.vel.x * 0.02;
+      ballMesh.visible = !snap.grapeVolleyActive;
+      if (!snap.grapeVolleyActive) {
+        const ground = sampleTerrain(engine.level, snap.ball.pos.x, snap.ball.pos.z);
+        const visualSink = -BALL_RADIUS * 0.5;
+        ballMesh.position.set(
+          snap.ball.pos.x + ground.normal.x * visualSink,
+          snap.ball.pos.y + ground.normal.y * visualSink,
+          snap.ball.pos.z + ground.normal.z * visualSink,
+        );
+        if (snap.ball.moving) {
+          ballMesh.rotation.x += snap.ball.vel.z * 0.02;
+          ballMesh.rotation.z -= snap.ball.vel.x * 0.02;
+        }
       }
     }
 
@@ -2924,6 +3073,7 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     scene.remove(fxGroup);
     splashDropGeo.dispose();
     splashRingGeo.dispose();
+    grapeVolleyGeo.dispose();
     clearBlood();
     bloodDropGeo.dispose();
     scene.remove(bloodGroup);

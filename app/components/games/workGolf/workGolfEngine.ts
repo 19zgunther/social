@@ -76,7 +76,7 @@ export type BunkerDef = {
 
 export type TreeDef = { x: number; z: number; y: number; radius: number; height: number };
 
-export type PowerUpKind = "beer";
+export type PowerUpKind = "beer" | "grapes";
 
 export type PowerUpDef = {
   id: number;
@@ -123,7 +123,15 @@ export type WorkGolfFxEvent =
       strength: number;
     }
   | { kind: "splash"; x: number; y: number; z: number; strength: number }
-  | { kind: "powerUp"; powerUpId: number; powerKind: PowerUpKind };
+  | { kind: "powerUp"; powerUpId: number; powerKind: PowerUpKind }
+  | {
+      kind: "grapeVolley";
+      paths: Vec3[][];
+      /** Index of closest-to-cup outcome (revealed after paths finish). */
+      winnerIndex: number;
+      /** Shared playback length so all purple balls settle before reveal. */
+      duration: number;
+    };
 
 export type RoundSnapshot = {
   levelNumber: number;
@@ -147,6 +155,10 @@ export type RoundSnapshot = {
   message: string | null;
   /** Seconds of Beer Can steady-aim remaining (0 = inactive). */
   beerRemaining: number;
+  /** Seconds of Grapes multi-ball remaining (0 = inactive). */
+  grapesRemaining: number;
+  /** True while purple volley balls are in flight (real ball hidden). */
+  grapeVolleyActive: boolean;
   /** Multiplier applied to aim spray (1 = normal). */
   spreadMult: number;
   /** Multiplier applied to shot speed / carry (1 = normal). */
@@ -218,6 +230,198 @@ export const BEER_DURATION = 20;
 export const BEER_SPREAD_MULT = 0.28;
 /** Shot speed / carry scale while Beer is active. */
 export const BEER_SPEED_MULT = 1.5;
+/** Grapes multi-ball volley duration (seconds). */
+export const GRAPES_DURATION = 20;
+/** Balls fired per shot while Grapes is active. */
+export const GRAPES_COUNT = 5;
+
+export type ShotSimResult = {
+  pos: Vec3;
+  water: boolean;
+  holed: boolean;
+  path: Vec3[];
+};
+
+/**
+ * Offline full-shot sim (bounce / roll / water / cup) without mutating live round state.
+ * Used by Grapes to pick the best of several yaw offsets.
+ */
+export function simulateShotToRest(args: {
+  level: LevelData;
+  origin: Vec3;
+  power: number;
+  yaw: number;
+  club: ClubId;
+  speedMult?: number;
+}): ShotSimResult {
+  const level = args.level;
+  const vel0 = computeShotVelocity(args.power, args.yaw, args.club, args.speedMult ?? 1);
+  const lift = 0.12 + Math.max(0, vel0.y) * 0.01;
+  const pos = { x: args.origin.x, y: args.origin.y + lift, z: args.origin.z };
+  const vel = { ...vel0 };
+  let grounded = false;
+  let launchGrace = LAUNCH_GRACE;
+  let arcApexY = pos.y;
+  const path: Vec3[] = [{ ...pos }];
+  const dt = 1 / 120;
+  const maxSteps = 60 * 120; // 60s cap
+  const pathStride = 4;
+  const target = currentTargetHole(level.holes);
+
+  const collideTreesLocal = () => {
+    for (let ti = 0; ti < level.trees.length; ti++) {
+      const tree = level.trees[ti]!;
+      const dx = pos.x - tree.x;
+      const dz = pos.z - tree.z;
+      const r = tree.radius + BALL_RADIUS;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= r * r || d2 < 1e-8) continue;
+      if (pos.y > tree.y + tree.height) continue;
+      const d = Math.sqrt(d2);
+      const nx = dx / d;
+      const nz = dz / d;
+      pos.x = tree.x + nx * r * TREE_PUSH;
+      pos.z = tree.z + nz * r * TREE_PUSH;
+      const vn = vel.x * nx + vel.z * nz;
+      if (vn < 0) {
+        vel.x -= 1.6 * vn * nx;
+        vel.z -= 1.6 * vn * nz;
+      }
+    }
+  };
+
+  for (let i = 0; i < maxSteps; i++) {
+    if (launchGrace > 0) launchGrace = Math.max(0, launchGrace - dt);
+
+    vel.y -= GRAVITY * dt;
+    pos.x += vel.x * dt;
+    pos.y += vel.y * dt;
+    pos.z += vel.z * dt;
+    collideTreesLocal();
+
+    if (i % pathStride === 0) path.push({ ...pos });
+
+    const sample = sampleTerrain(level, pos.x, pos.z);
+    const groundY = sample.height + BALL_RADIUS;
+
+    if (sample.surface === "water" || sample.height <= level.waterY + 0.05) {
+      if (pos.y <= level.waterY + BALL_RADIUS + 0.15) {
+        path.push({ ...pos });
+        return { pos: { ...pos }, water: true, holed: false, path };
+      }
+    }
+
+    if (!grounded) arcApexY = Math.max(arcApexY, pos.y);
+
+    if (sample.inCup && launchGrace <= 0) {
+      grounded = false;
+      const horizSpeed = Math.hypot(vel.x, vel.z);
+      if (target) {
+        const dx = pos.x - target.x;
+        const dz = pos.z - target.z;
+        const d = Math.hypot(dx, dz);
+        if (d < CUP_RADIUS && d >= 1e-6) {
+          if (horizSpeed < CUP_CATCH_SPEED * 1.15 && d > CUP_RADIUS - BALL_RADIUS * 0.35) {
+            const nx = dx / d;
+            const nz = dz / d;
+            const push = CUP_RADIUS - BALL_RADIUS * 0.35;
+            pos.x = target.x + nx * push;
+            pos.z = target.z + nz * push;
+            const vn = vel.x * nx + vel.z * nz;
+            if (vn > 0) {
+              vel.x -= vn * nx;
+              vel.z -= vn * nz;
+            }
+          }
+          const dropped = target.y - pos.y;
+          if (dropped >= CUP_CATCH_DROP && horizSpeed < CUP_CATCH_SPEED) {
+            path.push({ x: target.x, y: target.y - CUP_DEPTH * 0.4, z: target.z });
+            return {
+              pos: { x: target.x, y: target.y - CUP_DEPTH * 0.4, z: target.z },
+              water: false,
+              holed: true,
+              path,
+            };
+          }
+        }
+      }
+      if (pos.y <= groundY) {
+        pos.y = groundY;
+        vel.y = Math.min(0, vel.y) * 0.15;
+        vel.x *= 0.85;
+        vel.z *= 0.85;
+      }
+    } else {
+      const canGround =
+        launchGrace <= 0 && vel.y <= 0.35 && sample.height > level.waterY + 0.05;
+
+      if (canGround && pos.y <= groundY) {
+        pos.y = groundY;
+        const n = sample.normal;
+        const vn = vel.x * n.x + vel.y * n.y + vel.z * n.z;
+        let tx = vel.x - vn * n.x;
+        let ty = vel.y - vn * n.y;
+        let tz = vel.z - vn * n.z;
+        const fallHeight = Math.max(0, arcApexY - groundY);
+        const bounceHeight = fallHeight * BOUNCE_HEIGHT_FRAC;
+
+        if (bounceHeight >= MIN_BOUNCE_HEIGHT) {
+          const bounceSpeed = Math.sqrt(2 * GRAVITY * bounceHeight);
+          const tanKeep = sample.surface === "tall" ? 0.62 : 0.92;
+          tx *= tanKeep;
+          ty *= tanKeep;
+          tz *= tanKeep;
+          vel.x = tx + n.x * bounceSpeed;
+          vel.y = ty + n.y * bounceSpeed;
+          vel.z = tz + n.z * bounceSpeed;
+          pos.y = groundY + 0.03;
+          grounded = false;
+          arcApexY = groundY;
+        } else {
+          vel.x = tx;
+          vel.y = ty;
+          vel.z = tz;
+
+          if (sample.surface === "sand") {
+            path.push({ ...pos });
+            return { pos: { ...pos }, water: false, holed: false, path };
+          }
+
+          if (sample.surface === "tall") {
+            const horiz = Math.hypot(tx, tz);
+            if (horiz < TALL_STOP_SPEED) {
+              path.push({ ...pos });
+              return { pos: { ...pos }, water: false, holed: false, path };
+            }
+          }
+
+          const friction = FRICTION[sample.surface];
+          const drag = Math.exp(-friction * dt);
+          vel.x *= drag;
+          vel.y *= drag;
+          vel.z *= drag;
+          vel.x += n.x * GRAVITY * 0.45 * dt;
+          vel.z += n.z * GRAVITY * 0.45 * dt;
+          grounded = true;
+        }
+      } else {
+        grounded = false;
+        if (launchGrace > 0 && pos.y < groundY) {
+          pos.y = groundY + 0.02;
+        }
+      }
+    }
+
+    const speed = Math.hypot(vel.x, vel.y, vel.z);
+    if (grounded && speed < STOP_SPEED) {
+      path.push({ ...pos });
+      return { pos: { ...pos }, water: false, holed: false, path };
+    }
+  }
+
+  path.push({ ...pos });
+  return { pos: { ...pos }, water: false, holed: false, path };
+}
 
 /**
  * FPS-style bloom: half-angle (radians) of aim spray at this power.
@@ -1561,9 +1765,9 @@ export function generateLevel(levelNumber: number): LevelData {
     if (sample.surface === "water" || sample.surface === "sand") continue;
     powerUps.push({
       id: powerUps.length,
-      kind: "beer",
+      kind: rng() < 0.5 ? "beer" : "grapes",
       x,
-      // Sit on the turf (can ~0.72 tall) so rolling shots can collect it
+      // Sit on the turf so rolling shots can collect it
       y: sample.height + 0.38,
       z,
       radius: 0.75,
@@ -1623,6 +1827,16 @@ export class WorkGolfEngine {
   } | null = null;
   /** Beer Can steady-aim timer (seconds). */
   private beerRemaining = 0;
+  private grapesRemaining = 0;
+  /** Active grapes volley — ball follows winner path for camera until resolve. */
+  private grapeVolley: {
+    paths: Vec3[][];
+    results: ShotSimResult[];
+    winnerIndex: number;
+    t: number;
+    dur: number;
+    origin: Vec3;
+  } | null = null;
 
   get spreadMult(): number {
     return this.beerRemaining > 0 ? BEER_SPREAD_MULT : 1;
@@ -1738,6 +1952,8 @@ export class WorkGolfEngine {
       status: this.status,
       message: this.message,
       beerRemaining: this.beerRemaining,
+      grapesRemaining: this.grapesRemaining,
+      grapeVolleyActive: this.grapeVolley !== null,
       spreadMult: this.spreadMult,
       speedMult: this.speedMult,
     };
@@ -1812,8 +2028,63 @@ export class WorkGolfEngine {
     this.strokesTotal += 1;
     this.strokesThisHole += 1;
 
-    // Random point inside the bloom cone (uniform in angle, like spray)
     const spread = aimSpreadHalfAngle(power, this.spreadMult);
+
+    // Grapes: simulate evenly spaced yaws; play purple volley then keep closest to cup
+    if (this.grapesRemaining > 0) {
+      const hole = currentTargetHole(this.level.holes);
+      const origin = { ...this.ball.pos };
+      const results: ShotSimResult[] = [];
+      let bestIdx = 0;
+      let bestScore = Infinity;
+      for (let i = 0; i < GRAPES_COUNT; i++) {
+        const t = GRAPES_COUNT <= 1 ? 0 : i / (GRAPES_COUNT - 1);
+        const jitter = -spread + t * spread * 2;
+        const sim = simulateShotToRest({
+          level: this.level,
+          origin,
+          power,
+          yaw: this.cameraYaw + jitter,
+          club: this.club,
+          speedMult: this.speedMult,
+        });
+        results.push(sim);
+        let score = Infinity;
+        if (sim.holed) score = -1;
+        else if (!sim.water && hole) {
+          score = Math.hypot(sim.pos.x - hole.x, sim.pos.z - hole.z);
+        }
+        if (score < bestScore) {
+          bestScore = score;
+          bestIdx = i;
+        }
+      }
+      const paths = results.map((r) => r.path);
+      let maxLen = 0;
+      for (const p of paths) maxLen = Math.max(maxLen, p.length);
+      // Shared settle time so all purple balls finish before we reveal the winner
+      const dur = Math.min(3.4, Math.max(1.05, 0.75 + maxLen * 0.012));
+      this.grapeVolley = {
+        paths,
+        results,
+        winnerIndex: bestIdx,
+        t: 0,
+        dur,
+        origin,
+      };
+      this.ball.vel = { x: 0, y: 0, z: 0 };
+      this.ball.grounded = false;
+      this.ball.moving = true;
+      this.status = "flying";
+      this.pendingFx.push({
+        kind: "grapeVolley",
+        paths,
+        winnerIndex: bestIdx,
+        duration: dur,
+      });
+      return;
+    }
+
     const yawJitter = (Math.random() * 2 - 1) * spread;
     const vel = computeShotVelocity(
       power,
@@ -1829,6 +2100,51 @@ export class WorkGolfEngine {
     this.launchGrace = LAUNCH_GRACE;
     this.arcApexY = this.ball.pos.y;
     this.status = "flying";
+  }
+
+  private samplePath(path: Vec3[], u: number): Vec3 {
+    if (path.length === 0) return { x: 0, y: 0, z: 0 };
+    if (path.length === 1) return { ...path[0]! };
+    const f = path.length - 1;
+    const idx = Math.max(0, Math.min(1, u)) * f;
+    const i0 = Math.min(f - 1, Math.floor(idx));
+    const i1 = Math.min(f, i0 + 1);
+    const frac = idx - i0;
+    const a = path[i0]!;
+    const b = path[i1]!;
+    return {
+      x: a.x + (b.x - a.x) * frac,
+      y: a.y + (b.y - a.y) * frac,
+      z: a.z + (b.z - a.z) * frac,
+    };
+  }
+
+  private resolveGrapeVolley() {
+    const volley = this.grapeVolley;
+    if (!volley) return;
+    const result = volley.results[volley.winnerIndex]!;
+    this.grapeVolley = null;
+    this.ball.vel = { x: 0, y: 0, z: 0 };
+
+    if (result.water) {
+      this.ball.pos = { ...result.pos };
+      this.resetFromWater();
+      return;
+    }
+
+    this.ball.pos = { ...result.pos };
+    if (result.holed) {
+      const hole = currentTargetHole(this.level.holes);
+      if (hole) {
+        this.beginCupSink(hole);
+        return;
+      }
+    }
+
+    this.ball.grounded = true;
+    this.ball.moving = false;
+    this.status = "ready";
+    this.ensureHoleInView(false);
   }
 
   private resetFromWater() {
@@ -1967,6 +2283,10 @@ export class WorkGolfEngine {
         this.beerRemaining = BEER_DURATION;
         this.message = "Beer! Steady aim · 1.5× power";
         this.messageT = 1.6;
+      } else if (pu.kind === "grapes") {
+        this.grapesRemaining = GRAPES_DURATION;
+        this.message = "Grapes! 5-ball volley";
+        this.messageT = 1.6;
       }
     }
   }
@@ -1980,8 +2300,26 @@ export class WorkGolfEngine {
     if (this.beerRemaining > 0) {
       this.beerRemaining = Math.max(0, this.beerRemaining - dt);
     }
+    if (this.grapesRemaining > 0) {
+      this.grapesRemaining = Math.max(0, this.grapesRemaining - dt);
+    }
 
     this.tickYawPan(dt);
+
+    // Purple volley playback — camera follows winner path; resolve after settle + brief reveal
+    if (this.grapeVolley) {
+      const v = this.grapeVolley;
+      v.t += dt;
+      const u = Math.min(1, v.t / v.dur);
+      const winPath = v.paths[v.winnerIndex]!;
+      this.ball.pos = this.samplePath(winPath.length ? winPath : [v.origin], u);
+      this.ball.moving = true;
+      this.ball.grounded = false;
+      this.status = "flying";
+      // Hold while scene flashes the closest purple → white (~0.35s)
+      if (v.t >= v.dur + 0.35) this.resolveGrapeVolley();
+      return;
+    }
 
     if (this.sinkingHole) {
       this.tickCupSink(dt);

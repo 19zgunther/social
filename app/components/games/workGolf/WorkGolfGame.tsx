@@ -26,6 +26,7 @@ import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import {
   BEER_DURATION,
   CLUBS,
+  GRAPES_DURATION,
   WorkGolfEngine,
   estimateCarryYards,
   type ClubId,
@@ -135,6 +136,50 @@ function BeerBoostIndicator({ remaining }: { remaining: number }) {
           <span className="workgolf-beer-can-body" />
           <span className="workgolf-beer-can-label" />
           <span className="workgolf-beer-can-top" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Left-side grapes buff (stacks under beer when both active). */
+function GrapesBoostIndicator({
+  remaining,
+  offsetForBeer,
+}: {
+  remaining: number;
+  offsetForBeer: boolean;
+}) {
+  const r = 18;
+  const c = 2 * Math.PI * r;
+  const t = Math.max(0, Math.min(1, remaining / GRAPES_DURATION));
+  const dashOffset = c * (1 - t);
+  const top = offsetForBeer
+    ? "max(18.2rem, calc(env(safe-area-inset-top) + 17.2rem))"
+    : "max(14.5rem, calc(env(safe-area-inset-top) + 13.5rem))";
+
+  return (
+    <div
+      className="workgolf-grapes-hud pointer-events-none absolute left-2 z-30"
+      style={{ top }}
+      aria-label={`Grapes volley ${Math.ceil(remaining)} seconds remaining`}
+    >
+      <div className="workgolf-grapes-hud-inner">
+        <svg className="workgolf-beer-ring" viewBox="0 0 44 44" aria-hidden>
+          <circle className="workgolf-beer-ring-track" cx="22" cy="22" r={r} />
+          <circle
+            className="workgolf-grapes-ring-prog"
+            cx="22"
+            cy="22"
+            r={r}
+            strokeDasharray={c}
+            strokeDashoffset={dashOffset}
+          />
+        </svg>
+        <div className="workgolf-grapes-icon" aria-hidden>
+          <span />
+          <span />
+          <span />
         </div>
       </div>
     </div>
@@ -403,7 +448,8 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
         sc.sync(engine, snap);
 
         hudAccRef.current += dt;
-        const hudInterval = snap.beerRemaining > 0 ? 0.05 : 0.1;
+        const hudInterval =
+          snap.beerRemaining > 0 || snap.grapesRemaining > 0 ? 0.05 : 0.1;
         if (
           hudAccRef.current >= hudInterval ||
           snap.status === "complete" ||
@@ -675,6 +721,12 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
             </div>
           </div>
           {hud.beerRemaining > 0 ? <BeerBoostIndicator remaining={hud.beerRemaining} /> : null}
+          {hud.grapesRemaining > 0 ? (
+            <GrapesBoostIndicator
+              remaining={hud.grapesRemaining}
+              offsetForBeer={hud.beerRemaining > 0}
+            />
+          ) : null}
           <button
             type="button"
             aria-label="Pause"
