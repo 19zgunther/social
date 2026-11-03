@@ -196,7 +196,7 @@ export default function PostOptionsPane({
   const [tierListSubmissionsError, setTierListSubmissionsError] = useState("");
 
   const requestClose = useCallback(() => {
-    closeModal(onBack);
+    closeModal({ onClosed: onBack });
   }, [closeModal, onBack]);
 
   useSwipeBackOverride(swipeBackOverrideRef, requestClose, isActive);

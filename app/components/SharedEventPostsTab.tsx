@@ -490,9 +490,11 @@ export default function SharedEventPostsTab({
   }, [isActive, editor, isEditorActive, loadFriends]);
 
   const closeEditor = useCallback(() => {
-    closeEditorModal(() => {
-      setEditor(null);
-      setStatusMessage("");
+    closeEditorModal({
+      onClosed: () => {
+        setEditor(null);
+        setStatusMessage("");
+      },
     });
   }, [closeEditorModal]);
 

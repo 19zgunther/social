@@ -326,7 +326,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     if (editorMode === "none") {
       return;
     }
-    // Portal canvas mounts with the mode change; draw after layout so the bitmap is visible.
+    // Modal canvas mounts with the mode change; draw after layout so the bitmap is visible.
     const frame = window.requestAnimationFrame(() => {
       if (canvasRef.current) {
         drawPixelsToCanvas(canvasRef.current, latestPixelsRef.current);
@@ -579,9 +579,11 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   }, [resetViewport]);
 
   const onCancelEditor = useCallback(() => {
-    closeEditorModal(() => {
-      exitEditor();
-      setStatusMessage("");
+    closeEditorModal({
+      onClosed: () => {
+        exitEditor();
+        setStatusMessage("");
+      },
     });
   }, [closeEditorModal, exitEditor]);
 

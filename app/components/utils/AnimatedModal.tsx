@@ -5,18 +5,27 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon } from "@/app/components/Icons";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 
-export const ANIMATED_MODAL_CLOSE_MS = 200;
+const ANIMATED_MODAL_CLOSE_MS = 200;
 
 const reducedMotionCloseMs = (): number =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ? 0
     : ANIMATED_MODAL_CLOSE_MS;
+
+const subscribeNoop = () => () => {};
+const clientMountedSnapshot = () => true;
+const serverMountedSnapshot = () => false;
+
+export type AnimatedModalCloseOptions = {
+  onClosed?: () => void;
+};
 
 export type UseAnimatedModalResult = {
   /** True while open or playing the close animation. */
@@ -26,7 +35,7 @@ export type UseAnimatedModalResult = {
   isActive: boolean;
   open: () => void;
   /** Starts the close animation; optional `onClosed` runs after unmount timing. */
-  close: (onClosed?: () => void) => void;
+  close: (options?: AnimatedModalCloseOptions) => void;
   /** Clears immediately with no animation (e.g. navigate away after submit). */
   dismiss: () => void;
 };
@@ -60,12 +69,12 @@ export function useAnimatedModal(initialOpen = false): UseAnimatedModalResult {
   }, [clearCloseTimeout]);
 
   const close = useCallback(
-    (onClosed?: () => void) => {
+    (options?: AnimatedModalCloseOptions) => {
       if (!isOpen || isClosing) {
         return;
       }
       setIsClosing(true);
-      onClosedRef.current = onClosed ?? null;
+      onClosedRef.current = options?.onClosed ?? null;
       closeTimeoutRef.current = window.setTimeout(() => {
         closeTimeoutRef.current = null;
         setIsOpen(false);
@@ -101,14 +110,10 @@ type AnimatedModalProps = {
   closeDisabled?: boolean;
   /** Defaults to `onClose`. */
   onEscape?: () => void;
-  /** Defaults to `onClose`. */
-  onBackdropClick?: () => void;
   /** Extra classes for the fixed root (z-index, padding). Default `z-[2200] px-3`. */
   rootClassName?: string;
   /** Extra classes for the panel (size, bg). Default `max-w-md bg-bg shadow-xl`. */
   panelClassName?: string;
-  /** Extra classes for the backdrop fill. Default `bg-black/45 backdrop-blur-md`. */
-  backdropClassName?: string;
 };
 
 export default function AnimatedModal({
@@ -122,16 +127,14 @@ export default function AnimatedModal({
   hideHeader = false,
   closeDisabled = false,
   onEscape,
-  onBackdropClick,
   rootClassName = "z-[2200] px-3",
   panelClassName = "max-w-md bg-bg shadow-xl",
-  backdropClassName = "bg-black/45 backdrop-blur-md",
 }: AnimatedModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    subscribeNoop,
+    clientMountedSnapshot,
+    serverMountedSnapshot,
+  );
 
   useEffect(() => {
     if (!isPresented || isClosing) {
@@ -167,7 +170,6 @@ export default function AnimatedModal({
     return null;
   }
 
-  const handleBackdropClick = onBackdropClick ?? onClose;
   const showHeader = !hideHeader && Boolean(title);
 
   return createPortal(
@@ -179,8 +181,8 @@ export default function AnimatedModal({
       <div
         className={`${
           isClosing ? "emoji-picker-backdrop-out" : "emoji-picker-backdrop-in"
-        } absolute inset-0 ${backdropClassName}`}
-        onClick={closeDisabled ? undefined : handleBackdropClick}
+        } absolute inset-0 bg-black/45 backdrop-blur-md`}
+        onClick={closeDisabled ? undefined : () => onClose()}
         aria-hidden="true"
       />
       <div
@@ -198,7 +200,7 @@ export default function AnimatedModal({
             {headerActions}
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => onClose()}
               disabled={closeDisabled}
               aria-label="Close"
               className="shrink-0 rounded-full p-1.5 text-muted transition hover:bg-surface hover:text-foreground disabled:opacity-50"

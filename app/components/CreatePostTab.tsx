@@ -1152,12 +1152,12 @@ export default function CreatePostTab({
   const progressPercent = postProgress ?? 0;
 
   return (
-    <div className={`relative flex h-full min-h-0 w-full flex-col bg-bg ${DONT_SWIPE_TABS_CLASSNAME}`}>
+    <div className="relative flex h-full min-h-0 w-full flex-col bg-bg">
       <header className="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-3">
         <h2 className="text-base font-semibold text-foreground">Create Post</h2>
         <button
           type="button"
-          onClick={onCancel}
+          onClick={() => onCancel()}
           disabled={isPosting}
           aria-label="Close"
           className="rounded-full p-1.5 text-muted transition hover:bg-surface hover:text-foreground disabled:opacity-50"

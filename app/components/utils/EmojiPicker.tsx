@@ -209,7 +209,7 @@ export default function EmojiPicker({
     isClosing,
     isActive: isOpen,
     open: openPicker,
-    close: closePickerModal,
+    close: closePicker,
   } = useAnimatedModal();
   const [showEmojiEditor, setShowEmojiEditor] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -292,10 +292,6 @@ export default function EmojiPicker({
     customEmojiByUuid,
     emojiSearchKeywordsByEmoji,
   ]);
-
-  const closePicker = useCallback(() => {
-    closePickerModal();
-  }, [closePickerModal]);
 
   useEffect(() => {
     setRecentEmojiUsage(loadStoredUsage());
@@ -484,15 +480,13 @@ export default function EmojiPicker({
         title={showEmojiEditor ? undefined : "Choose an emoji"}
         hideHeader={showEmojiEditor}
         headerActions={
-          showEmojiEditor ? undefined : (
-            <button
-              type="button"
-              onClick={() => setShowEmojiEditor(true)}
-              className="create-post-rgb-border shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
-            >
-              <span className="create-post-rgb-text">+ Create Emoji</span>
-            </button>
-          )
+          <button
+            type="button"
+            onClick={() => setShowEmojiEditor(true)}
+            className="create-post-rgb-border shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
+          >
+            <span className="create-post-rgb-text">+ Create Emoji</span>
+          </button>
         }
         rootClassName="z-[2000] px-3"
         panelClassName={`max-h-[min(85vh,720px)] ${showEmojiEditor ? "max-w-md" : "max-w-sm"} bg-bg shadow-xl`}
@@ -510,7 +504,7 @@ export default function EmojiPicker({
               </button>
               <button
                 type="button"
-                onClick={closePicker}
+                onClick={() => closePicker()}
                 aria-label="Close"
                 className="rounded-full p-1.5 text-muted transition hover:bg-surface hover:text-foreground"
               >
