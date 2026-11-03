@@ -523,6 +523,7 @@ export default function EmojiPicker({
           }
         }}
         className={`rounded-lg border border-border px-2 py-1 text-muted transition hover:text-foreground ${buttonClassName ?? ""}`}
+        style={{ transform: "translateY(-2px)" }} // fuck it now it looks good
         aria-label="Add emoji"
         disabled={disabled}
       >
