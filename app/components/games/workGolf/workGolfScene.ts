@@ -2270,25 +2270,44 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
   }
 
+  /** Real ball, or every grapes volley ball (all 5 purple shots count). */
+  function forEachLethalBall(
+    snap: RoundSnapshot,
+    fn: (x: number, y: number, z: number) => void,
+  ) {
+    if (grapeVolleyBalls.length > 0) {
+      for (const bit of grapeVolleyBalls) {
+        const p = bit.mesh.position;
+        fn(p.x, p.y, p.z);
+      }
+      return;
+    }
+    if (snap.ball.moving) {
+      fn(snap.ball.pos.x, snap.ball.pos.y, snap.ball.pos.z);
+    }
+  }
+
   function updateSailboats(level: LevelData, snap: RoundSnapshot, dt: number) {
     const t = performance.now() * 0.001;
     for (const b of sailboats) {
       if (b.dead) continue;
 
-      if (snap.ball.moving) {
-        const dx = snap.ball.pos.x - b.x;
-        const dz = snap.ball.pos.z - b.z;
-        const horiz = Math.hypot(dx, dz);
-        const ballY = snap.ball.pos.y;
+      let hit = false;
+      forEachLethalBall(snap, (bx, by, bz) => {
+        if (hit) return;
+        const horiz = Math.hypot(bx - b.x, bz - b.z);
         // Tall hit volume covering hull + sail
         if (
           horiz < 1.25 + BALL_RADIUS &&
-          ballY > level.waterY - 0.3 &&
-          ballY < level.waterY + 2.4
+          by > level.waterY - 0.3 &&
+          by < level.waterY + 2.4
         ) {
-          killSailboat(b, level.waterY);
-          continue;
+          hit = true;
         }
+      });
+      if (hit) {
+        killSailboat(b, level.waterY);
+        continue;
       }
 
       b.turnTimer -= dt;
@@ -2330,16 +2349,15 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     for (const g of seagulls) {
       if (g.dead) continue;
 
-      if (snap.ball.moving) {
-        const d = Math.hypot(
-          snap.ball.pos.x - g.x,
-          snap.ball.pos.y - g.y,
-          snap.ball.pos.z - g.z,
-        );
-        if (d < 0.3 + BALL_RADIUS) {
-          killSeagull(g);
-          continue;
-        }
+      let hit = false;
+      forEachLethalBall(snap, (bx, by, bz) => {
+        if (hit) return;
+        const d = Math.hypot(bx - g.x, by - g.y, bz - g.z);
+        if (d < 0.3 + BALL_RADIUS) hit = true;
+      });
+      if (hit) {
+        killSeagull(g);
+        continue;
       }
 
       g.timer -= dt;
