@@ -29,11 +29,13 @@ export function computeTetrisLayout(
     mode === "backdrop"
       ? Math.max(24, canvasH * 0.06)
       : Math.max(72, Math.min(110, canvasH * 0.12));
+  // One control row under the board (side buttons sit in the gutters).
   const bottomReserve =
     mode === "backdrop"
       ? Math.max(24, canvasH * 0.06)
-      : Math.max(180, Math.min(260, canvasH * 0.32));
-  const sidePad = mode === "backdrop" ? 8 : 12;
+      : Math.max(72, Math.min(100, canvasH * 0.13));
+  const sidePad =
+    mode === "backdrop" ? 8 : Math.max(56, Math.min(80, Math.floor(canvasW * 0.17)));
   const availableW = canvasW - sidePad * 2;
   const availableH = canvasH - topReserve - bottomReserve;
   const cell = Math.max(8, Math.floor(Math.min(availableW / BOARD_COLS, availableH / BOARD_ROWS)));

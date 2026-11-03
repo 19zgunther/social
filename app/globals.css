@@ -847,6 +847,14 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   font-size: 0.7rem;
 }
 
+.tetris-ctrl-side {
+  flex: 0 0 auto;
+  min-height: 3.5rem;
+  width: 100%;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+}
+
 .tetris-ctrl-left {
   --tetris-ctrl-color: #22d3ee;
   animation-delay: 0s;
@@ -859,12 +867,19 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   --tetris-ctrl-color: #4ade80;
   animation-delay: 0.3s;
 }
+.tetris-ctrl-rotcw,
+.tetris-ctrl-rotccw {
+  font-family: system-ui, sans-serif;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1;
+}
 .tetris-ctrl-rotcw {
   --tetris-ctrl-color: #a855f7;
   animation-delay: 0.45s;
 }
 .tetris-ctrl-drop {
-  flex: 1.6;
   font-size: 0.7rem;
   letter-spacing: 0.08em;
   --tetris-ctrl-color: #f87171;
@@ -875,7 +890,6 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   animation-delay: 0.25s;
 }
 .tetris-ctrl-hold {
-  flex: 0.7;
   opacity: 0.85;
   font-size: 0.58rem;
   --tetris-ctrl-color: #fb923c;

@@ -4,7 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { CloseIcon } from "@/app/components/Icons";
 import type { GameScoreScope, GameScoresLeaderboardResponse } from "@/app/types/interfaces";
 import { TetrisEngine, type TetrisSnapshot } from "./tetrisEngine";
-import { computeTetrisLayout, renderTetris } from "./tetrisRender";
+import { computeTetrisLayout, renderTetris, type TetrisLayout } from "./tetrisRender";
 import {
   clearLegacyLocalTetrisScores,
   fetchTetrisLeaderboard,
@@ -51,11 +51,30 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [gameOverInfo, setGameOverInfo] = useState<GameOverInfo | null>(null);
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const [playLayout, setPlayLayout] = useState<TetrisLayout | null>(null);
+  const playLayoutRef = useRef<TetrisLayout | null>(null);
 
   const setMenuScreen = (next: MenuScreen) => {
     screenRef.current = next;
     setScreen(next);
   };
+
+  const syncPlayLayout = useEffectEvent((layout: TetrisLayout) => {
+    const prev = playLayoutRef.current;
+    if (
+      prev &&
+      prev.playX === layout.playX &&
+      prev.playY === layout.playY &&
+      prev.playW === layout.playW &&
+      prev.playH === layout.playH &&
+      prev.canvasW === layout.canvasW &&
+      prev.canvasH === layout.canvasH
+    ) {
+      return;
+    }
+    playLayoutRef.current = layout;
+    setPlayLayout(layout);
+  });
 
   const paint = useEffectEvent(() => {
     const canvas = canvasRef.current;
@@ -71,6 +90,7 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const layout = computeTetrisLayout(cssW, cssH);
+    syncPlayLayout(layout);
     if (screenRef.current === "title") {
       renderTetris(ctx, layout, null);
       return;
@@ -657,8 +677,9 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
             <div>
               <p className="mb-1 text-cyan-300">Touch</p>
               <ul className="space-y-1 text-slate-300">
-                <li>← ↓ → ↻ primary row</li>
-                <li>DROP · ↺ · HOLD below</li>
+                <li>← ↓ → under board</li>
+                <li>HOLD · DROP left of board</li>
+                <li>↺ · ↻ right of board</li>
                 <li>Pause (II) top-right</li>
               </ul>
             </div>
@@ -690,131 +711,154 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
         </button>
       ) : null}
 
-      {/* Touch controls — one-thumb friendly: big move/rotate/down, secondary drop */}
-      {screen === "playing" ? (
+      {/* Touch controls — sides of board + L/D/R directly under it */}
+      {screen === "playing" && playLayout ? (
         <div
-          className="absolute bottom-0 left-0 right-0 z-10 px-2.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] pt-1 select-none [-webkit-touch-callout:none]"
+          className="pointer-events-none absolute inset-0 z-10 select-none [-webkit-touch-callout:none]"
           style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none" }}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <div className="mx-auto flex w-full max-w-lg flex-col gap-2">
-            <div className="flex gap-2">
-              <button
-                type="button"
-                aria-label="Move left"
-                className="tetris-ctrl tetris-ctrl-lg tetris-ctrl-left"
-                onContextMenu={(e) => e.preventDefault()}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  touchRightRef.current = false;
-                  touchLeftRef.current = true;
-                  dasRef.current = { key: null, charged: false, acc: 0 };
-                }}
-                onPointerUp={() => {
-                  touchLeftRef.current = false;
-                }}
-                onPointerCancel={() => {
-                  touchLeftRef.current = false;
-                }}
-              >
-                ←
-              </button>
-              <button
-                type="button"
-                aria-label="Soft drop"
-                className="tetris-ctrl tetris-ctrl-lg tetris-ctrl-soft"
-                onContextMenu={(e) => e.preventDefault()}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  softDropNeedsReleaseRef.current = false;
-                  softDropTouchRef.current = true;
-                  onControl("soft");
-                }}
-                onPointerUp={() => {
-                  softDropTouchRef.current = false;
-                  softDropNeedsReleaseRef.current = false;
-                }}
-                onPointerCancel={() => {
-                  softDropTouchRef.current = false;
-                  softDropNeedsReleaseRef.current = false;
-                }}
-              >
-                ↓
-              </button>
-              <button
-                type="button"
-                aria-label="Move right"
-                className="tetris-ctrl tetris-ctrl-lg tetris-ctrl-right"
-                onContextMenu={(e) => e.preventDefault()}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  touchLeftRef.current = false;
-                  touchRightRef.current = true;
-                  dasRef.current = { key: null, charged: false, acc: 0 };
-                }}
-                onPointerUp={() => {
-                  touchRightRef.current = false;
-                }}
-                onPointerCancel={() => {
-                  touchRightRef.current = false;
-                }}
-              >
-                →
-              </button>
-              <button
-                type="button"
-                aria-label="Rotate clockwise"
-                className="tetris-ctrl tetris-ctrl-lg tetris-ctrl-rotcw"
-                onContextMenu={(e) => e.preventDefault()}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  onControl("rotcw");
-                }}
-              >
-                ↻
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                aria-label="Hard drop"
-                className="tetris-ctrl tetris-ctrl-sm tetris-ctrl-drop"
-                onContextMenu={(e) => e.preventDefault()}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  onControl("hard");
-                }}
-              >
-                DROP
-              </button>
-              <button
-                type="button"
-                aria-label="Rotate counter-clockwise"
-                className="tetris-ctrl tetris-ctrl-sm tetris-ctrl-rotccw"
-                onContextMenu={(e) => e.preventDefault()}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  onControl("rotccw");
-                }}
-              >
-                ↺
-              </button>
-              <button
-                type="button"
-                aria-label="Hold"
-                className="tetris-ctrl tetris-ctrl-sm tetris-ctrl-hold"
-                onContextMenu={(e) => e.preventDefault()}
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  onControl("hold");
-                }}
-              >
-                HOLD
-              </button>
-            </div>
+          <div
+            className="pointer-events-auto absolute flex flex-col justify-between gap-2"
+            style={{
+              left: 6,
+              top: playLayout.playY,
+              width: Math.max(44, playLayout.playX - 12),
+              height: playLayout.playH,
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Hold"
+              className="tetris-ctrl tetris-ctrl-side tetris-ctrl-hold"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                onControl("hold");
+              }}
+            >
+              HOLD
+            </button>
+            <button
+              type="button"
+              aria-label="Hard drop"
+              className="tetris-ctrl tetris-ctrl-side tetris-ctrl-drop"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                onControl("hard");
+              }}
+            >
+              DROP
+            </button>
+          </div>
+          <div
+            className="pointer-events-auto absolute flex flex-col justify-between gap-2"
+            style={{
+              left: playLayout.playX + playLayout.playW + 6,
+              top: playLayout.playY,
+              width: Math.max(44, playLayout.canvasW - (playLayout.playX + playLayout.playW) - 12),
+              height: playLayout.playH,
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Rotate counter-clockwise"
+              className="tetris-ctrl tetris-ctrl-side tetris-ctrl-rotccw"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                onControl("rotccw");
+              }}
+            >
+              ↺
+            </button>
+            <button
+              type="button"
+              aria-label="Rotate clockwise"
+              className="tetris-ctrl tetris-ctrl-side tetris-ctrl-rotcw"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                onControl("rotcw");
+              }}
+            >
+              ↻
+            </button>
+          </div>
+          <div
+            className="pointer-events-auto absolute flex gap-2 px-2.5"
+            style={{
+              left: 0,
+              right: 0,
+              top: playLayout.playY + playLayout.playH + 8,
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Move left"
+              className="tetris-ctrl tetris-ctrl-lg tetris-ctrl-left"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                touchRightRef.current = false;
+                touchLeftRef.current = true;
+                dasRef.current = { key: null, charged: false, acc: 0 };
+              }}
+              onPointerUp={() => {
+                touchLeftRef.current = false;
+              }}
+              onPointerCancel={() => {
+                touchLeftRef.current = false;
+              }}
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              aria-label="Soft drop"
+              className="tetris-ctrl tetris-ctrl-lg tetris-ctrl-soft"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                softDropNeedsReleaseRef.current = false;
+                softDropTouchRef.current = true;
+                onControl("soft");
+              }}
+              onPointerUp={() => {
+                softDropTouchRef.current = false;
+                softDropNeedsReleaseRef.current = false;
+              }}
+              onPointerCancel={() => {
+                softDropTouchRef.current = false;
+                softDropNeedsReleaseRef.current = false;
+              }}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              aria-label="Move right"
+              className="tetris-ctrl tetris-ctrl-lg tetris-ctrl-right"
+              onContextMenu={(e) => e.preventDefault()}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                touchLeftRef.current = false;
+                touchRightRef.current = true;
+                dasRef.current = { key: null, charged: false, acc: 0 };
+              }}
+              onPointerUp={() => {
+                touchRightRef.current = false;
+              }}
+              onPointerCancel={() => {
+                touchRightRef.current = false;
+              }}
+            >
+              →
+            </button>
           </div>
         </div>
       ) : null}
