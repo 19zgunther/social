@@ -1,7 +1,19 @@
 "use client";
 
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
-import { CheckIcon, ChevronDownIcon, AddImageIcon, AddIcon, SettingsIcon, PeopleIcon } from "@/app/components/Icons";
+import { ChangeEvent, CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  AddImageIcon,
+  AddIcon,
+  SettingsIcon,
+  LockIcon,
+  WaxSealIcon,
+  ClockIcon,
+  CameraIcon,
+  CloseIcon,
+} from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
 import Camera from "@/app/components/Camera";
 import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
@@ -14,6 +26,7 @@ import {
   uploadPreparedImageToMainBucket,
   uploadPreparedVideoToMainBucket,
 } from "@/app/components/utils/client_file_storage_utils";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import { MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR } from "@/app/lib/sharedPosts";
 import {
   AcceptedFriend,
@@ -28,12 +41,13 @@ import {
 } from "@/app/types/interfaces";
 
 const SHARED_POST_UPLOAD_ACCEPT = "image/*,video/mp4,video/webm,video/quicktime,.mov";
+const EDITOR_CLOSE_ANIMATION_MS = 200;
 
-type ViewMode =
-  | { kind: "list" }
+type ViewMode = { kind: "list" } | { kind: "detail"; sharedPostId: string };
+
+type EditorMode =
   | { kind: "create" }
-  | { kind: "settings"; sharedPostId: string }
-  | { kind: "detail"; sharedPostId: string };
+  | { kind: "settings"; sharedPostId: string };
 
 const postWithAuth = async (path: string, body: unknown = {}): Promise<Response> =>
   fetch(path, {
@@ -63,6 +77,39 @@ const formatDateLabel = (iso: string): string => {
     minute: "2-digit",
   });
 };
+
+const formatCountdown = (iso: string): string => {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (Number.isNaN(ms) || ms <= 0) {
+    return "0m";
+  }
+  const totalMinutes = Math.floor(ms / 60_000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) {
+    return `${days}d ${String(hours).padStart(2, "0")}h`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  }
+  return `${minutes}m`;
+};
+
+const formatReleaseShort = (iso: string): string => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
+const sealedContributorCount = (item: SharedPostListItem): number =>
+  (item.viewer_has_contributed ? 1 : 0) + item.others_contributed_count;
 
 const localDatetimeToIso = (localValue: string): string => {
   const date = new Date(localValue);
@@ -114,6 +161,9 @@ export default function SharedEventPostsTab({
   isActive: boolean;
 }) {
   const [view, setView] = useState<ViewMode>({ kind: "list" });
+  const [editor, setEditor] = useState<EditorMode | null>(null);
+  const [isEditorClosing, setIsEditorClosing] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [openPosts, setOpenPosts] = useState<SharedPostListItem[]>([]);
   const [pendingPosts, setPendingPosts] = useState<SharedPostListItem[]>([]);
   const [releasedPosts, setReleasedPosts] = useState<SharedPostListItem[]>([]);
@@ -140,6 +190,16 @@ export default function SharedEventPostsTab({
   const [contributeUploadPostId, setContributeUploadPostId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const listUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const editorCloseTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => {
+      if (editorCloseTimeoutRef.current !== null) {
+        window.clearTimeout(editorCloseTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const loadList = useCallback(async () => {
     setIsLoading(true);
@@ -241,35 +301,79 @@ export default function SharedEventPostsTab({
   }, []);
 
   useEffect(() => {
-    if (!isActive || (view.kind !== "create" && view.kind !== "settings")) {
+    if (!isActive || !editor) {
       return;
     }
     void loadFriends();
-  }, [isActive, view.kind, loadFriends]);
+  }, [isActive, editor, loadFriends]);
+
+  const closeEditor = useCallback(() => {
+    if (!editor || isEditorClosing) {
+      return;
+    }
+    setIsEditorClosing(true);
+    const closeDelayMs = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? 0
+      : EDITOR_CLOSE_ANIMATION_MS;
+    if (editorCloseTimeoutRef.current !== null) {
+      window.clearTimeout(editorCloseTimeoutRef.current);
+    }
+    editorCloseTimeoutRef.current = window.setTimeout(() => {
+      setEditor(null);
+      setIsEditorClosing(false);
+      setStatusMessage("");
+      editorCloseTimeoutRef.current = null;
+    }, closeDelayMs);
+  }, [editor, isEditorClosing]);
 
   const onOpenCreate = () => {
+    if (editorCloseTimeoutRef.current !== null) {
+      window.clearTimeout(editorCloseTimeoutRef.current);
+      editorCloseTimeoutRef.current = null;
+    }
     setCreateTitle("");
     setCreateCloseAt(defaultCloseLocal());
     setCreateReleaseAt(defaultReleaseLocal());
     setSelectedInviteeIds(new Set());
     setStatusMessage("");
-    setView({ kind: "create" });
+    setIsEditorClosing(false);
+    setEditor({ kind: "create" });
   };
 
   const onOpenSettings = (sharedPostId: string) => {
+    if (editorCloseTimeoutRef.current !== null) {
+      window.clearTimeout(editorCloseTimeoutRef.current);
+      editorCloseTimeoutRef.current = null;
+    }
     setStatusMessage("");
     setSelectedInviteeIds(new Set());
-    setView({ kind: "settings", sharedPostId });
+    setIsEditorClosing(false);
+    setEditor({ kind: "settings", sharedPostId });
   };
 
   useEffect(() => {
-    if (view.kind !== "settings") {
+    if (!editor || isEditorClosing) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeEditor();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [editor, isEditorClosing, closeEditor]);
+
+  useEffect(() => {
+    if (editor?.kind !== "settings") {
       return;
     }
     let cancelled = false;
     setIsLoadingSettings(true);
     setStatusMessage("");
-    void postWithAuth("/api/shared-post-get", { shared_post_id: view.sharedPostId })
+    void postWithAuth("/api/shared-post-get", { shared_post_id: editor.sharedPostId })
       .then(async (response) => {
         if (cancelled) {
           return;
@@ -301,7 +405,7 @@ export default function SharedEventPostsTab({
     return () => {
       cancelled = true;
     };
-  }, [view, currentUserId]);
+  }, [editor, currentUserId]);
 
   const toggleCreateInvitee = (userId: string) => {
     setSelectedInviteeIds((previous) => {
@@ -333,6 +437,12 @@ export default function SharedEventPostsTab({
         return;
       }
       const payload = (await response.json()) as { shared_post: SharedPostListItem };
+      if (editorCloseTimeoutRef.current !== null) {
+        window.clearTimeout(editorCloseTimeoutRef.current);
+        editorCloseTimeoutRef.current = null;
+      }
+      setEditor(null);
+      setIsEditorClosing(false);
       setView({ kind: "detail", sharedPostId: payload.shared_post.id });
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to create shared post.");
@@ -342,14 +452,14 @@ export default function SharedEventPostsTab({
   };
 
   const onSettingsSubmit = async () => {
-    if (view.kind !== "settings" || isSavingEditor) {
+    if (editor?.kind !== "settings" || isSavingEditor) {
       return;
     }
     setIsSavingEditor(true);
     setStatusMessage("");
     try {
       const response = await postWithAuth("/api/shared-post-update", {
-        shared_post_id: view.sharedPostId,
+        shared_post_id: editor.sharedPostId,
         title: createTitle.trim(),
         close_at: localDatetimeToIso(createCloseAt),
         release_at: localDatetimeToIso(createReleaseAt),
@@ -359,7 +469,7 @@ export default function SharedEventPostsTab({
         setStatusMessage(await readErrorMessage(response));
         return;
       }
-      setView({ kind: "list" });
+      closeEditor();
       void loadList();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to save shared post.");
@@ -492,6 +602,14 @@ export default function SharedEventPostsTab({
     listUploadInputRef.current?.click();
   };
 
+  const onOpenCamera = (sharedPostId: string) => {
+    if (isContributing) {
+      return;
+    }
+    setStatusMessage("");
+    setContributeCameraPostId(sharedPostId);
+  };
+
   const onSendPhotoFromCamera = async (payload: {
     file: File;
     overlayText: string;
@@ -515,6 +633,29 @@ export default function SharedEventPostsTab({
     }
   };
 
+  const renderContributeButtons = (sharedPostId: string, compact = false) => (
+    <div className={`relative z-[1] flex gap-2 ${compact ? "mt-3" : "mt-4"}`}>
+      <button
+        type="button"
+        disabled={isContributing}
+        onClick={() => onOpenCamera(sharedPostId)}
+        className="shared-event-add-shot inline-flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-2 py-2.5 text-sm font-semibold"
+      >
+        <CameraIcon className={compact ? "h-4 w-4" : "h-5 w-5"} />
+        Take Photo
+      </button>
+      <button
+        type="button"
+        disabled={isContributing}
+        onClick={() => onOpenUploadPicker(sharedPostId)}
+        className="shared-event-add-shot inline-flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-2 py-2.5 text-sm font-semibold"
+      >
+        <AddImageIcon className={compact ? "h-4 w-4" : "h-5 w-5"} />
+        Upload Photo
+      </button>
+    </div>
+  );
+
   const onDetailPostUpdated = (updated: {
     id: string;
     data?: PostData | null;
@@ -537,48 +678,141 @@ export default function SharedEventPostsTab({
     });
   };
 
-  const renderContributionMeta = (item: SharedPostListItem) => (
-    <p
-      className={`mt-0.5 text-[11px] ${
-        item.viewer_has_contributed ? "text-accent" : "text-muted"
-      }`}
-    >
-      {item.viewer_has_contributed ? "You've contributed" : "You haven't contributed"}
-      {" · "}
-      {item.others_contributed_count === 1
-        ? "1 other contributed"
-        : `${item.others_contributed_count} others contributed`}
-    </p>
-  );
+  const renderContributorAvatars = (item: SharedPostListItem, sizePx = 34) => {
+    const contributors = item.contributors ?? [];
+    const visible = contributors.slice(0, 5);
+    const overflow = Math.max(0, contributors.length - visible.length);
+    if (visible.length === 0) {
+      return null;
+    }
+    return (
+      <div className="flex items-center">
+        {visible.map((contributor, index) => (
+          <div
+            key={contributor.user_id}
+            className="rounded-full ring-2 ring-surface"
+            style={{ marginLeft: index === 0 ? 0 : -10, zIndex: visible.length - index }}
+          >
+            <UserProfileImage
+              userId={contributor.user_id}
+              sizePx={sizePx}
+              alt={contributor.username}
+              imageId={contributor.profile_image_id}
+              imageAccessGrant={contributor.profile_image_access_grant}
+            />
+          </div>
+        ))}
+        {overflow > 0 ? (
+          <span
+            className="ml-2 rounded-full bg-border px-2 py-0.5 text-[11px] font-medium text-muted"
+            style={{ marginLeft: 6 }}
+          >
+            +{overflow}
+          </span>
+        ) : null}
+      </div>
+    );
+  };
 
-  const renderSharedPostRow = (
-    item: SharedPostListItem,
-    subtitle: string,
-    onMainClick: () => void,
-  ) => (
+  const renderHeroOpenCard = (item: SharedPostListItem) => {
+    const sealedCount = sealedContributorCount(item);
+    const progress =
+      item.contributor_count > 0
+        ? Math.min(100, Math.round((sealedCount / item.contributor_count) * 100))
+        : 0;
+    return (
+      <div
+        key={item.id}
+        className="shared-event-hero"
+        style={{ "--shared-event-progress": progress } as CSSProperties}
+      >
+        <div className="shared-event-hero-frost" aria-hidden />
+        {item.is_creator ? (
+          <button
+            type="button"
+            aria-label="Shared event settings"
+            onClick={() => onOpenSettings(item.id)}
+            className="absolute right-3 top-3 z-[1] rounded-full p-1.5 text-muted transition hover:bg-bg/40 hover:text-foreground"
+          >
+            <SettingsIcon className="h-4 w-4" />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => setView({ kind: "detail", sharedPostId: item.id })}
+          className="relative z-[1] flex w-full flex-col items-center text-center"
+        >
+          <LockIcon className="h-7 w-7 text-foreground" strokeWidth={1.75} />
+          <p className="mt-3 text-4xl font-bold tracking-tight text-accent">
+            {formatCountdown(item.close_at)}
+          </p>
+          <p className="mt-2 text-lg font-semibold text-foreground">{item.title}</p>
+          <p className="mt-1 text-xs text-muted">
+            {sealedCount} of {item.contributor_count}{" "}
+            {item.contributor_count === 1 ? "person has" : "people have"} contributed
+          </p>
+          <div className="mt-4 flex justify-center">{renderContributorAvatars(item)}</div>
+        </button>
+        {renderContributeButtons(item.id)}
+      </div>
+    );
+  };
+
+  const renderOpenGridCard = (item: SharedPostListItem) => (
     <div
       key={item.id}
-      className="flex items-stretch overflow-hidden rounded-xl border border-border bg-surface"
+      className="flex min-w-0 flex-col rounded-2xl border border-border bg-surface p-3"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setView({ kind: "detail", sharedPostId: item.id })}
+          className="min-w-0 flex-1 text-left"
+        >
+          <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
+          <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
+            <ClockIcon className="h-3.5 w-3.5 shrink-0 text-accent" />
+            <span>{formatCountdown(item.close_at)}</span>
+          </p>
+        </button>
+        {item.is_creator ? (
+          <button
+            type="button"
+            aria-label="Shared event settings"
+            onClick={() => onOpenSettings(item.id)}
+            className="shrink-0 rounded-full p-1 text-muted transition hover:text-foreground"
+          >
+            <SettingsIcon className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+      {renderContributeButtons(item.id, true)}
+    </div>
+  );
+
+  const renderPendingCard = (item: SharedPostListItem) => (
+    <div
+      key={item.id}
+      className="flex items-stretch overflow-hidden rounded-2xl border border-border bg-surface"
     >
       <button
         type="button"
-        onClick={onMainClick}
-        className="min-w-0 flex-1 px-3 py-3 text-left transition hover:bg-bg/40"
+        onClick={() => setView({ kind: "detail", sharedPostId: item.id })}
+        className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3 text-left transition hover:bg-bg/30"
       >
-        <div className="flex items-center gap-2">
+        <WaxSealIcon className="h-12 w-12 shrink-0" />
+        <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
-          <span className="shrink-0 text-[11px] text-muted">
-            <PeopleIcon className="mr-1 inline h-3 w-3" />
-            {item.contributor_count}
-          </span>
+          <p className="mt-0.5 text-sm font-medium text-foreground">
+            Releases {formatReleaseShort(item.release_at)}
+          </p>
+          <p className="mt-0.5 text-xs text-muted">Sealed until then</p>
         </div>
-        <p className="mt-1 text-xs text-muted">{subtitle}</p>
-        {renderContributionMeta(item)}
       </button>
       {item.is_creator ? (
         <button
           type="button"
-          aria-label="Shared post settings"
+          aria-label="Shared event settings"
           onClick={() => onOpenSettings(item.id)}
           className="flex shrink-0 items-center justify-center border-l border-border px-3 text-muted transition hover:bg-bg/40 hover:text-foreground"
         >
@@ -588,49 +822,23 @@ export default function SharedEventPostsTab({
     </div>
   );
 
-  const renderOpenSharedPostRow = (item: SharedPostListItem) => (
+  const renderReleasedRow = (item: SharedPostListItem) => (
     <div
       key={item.id}
-      className="flex items-stretch overflow-hidden rounded-xl border border-border bg-surface"
+      className="flex items-stretch overflow-hidden rounded-2xl border border-border bg-surface"
     >
-      <div className="min-w-0 flex-1 px-3 py-3">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
-          <span className="shrink-0 text-[11px] text-muted">
-            <PeopleIcon className="mr-1 inline h-3 w-3" />
-            {item.contributor_count}
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-muted">Closes {formatDateLabel(item.close_at)}</p>
-        {renderContributionMeta(item)}
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            disabled={isContributing}
-            onClick={() => {
-              setStatusMessage("");
-              setContributeCameraPostId(item.id);
-            }}
-            className="create-post-rgb-border inline-flex min-w-0 flex-1 flex-col items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition disabled:opacity-50"
-          >
-            <span className="create-post-rgb-icon create-post-rgb-icon-camera" aria-hidden />
-            <span className="create-post-rgb-text text-center">Take Photo</span>
-          </button>
-          <button
-            type="button"
-            disabled={isContributing}
-            onClick={() => onOpenUploadPicker(item.id)}
-            className="create-post-rgb-border inline-flex min-w-0 flex-1 flex-col items-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition disabled:opacity-50"
-          >
-            <span className="create-post-rgb-icon" aria-hidden />
-            <span className="create-post-rgb-text text-center">Upload Photos</span>
-          </button>
-        </div>
-      </div>
+      <button
+        type="button"
+        onClick={() => setView({ kind: "detail", sharedPostId: item.id })}
+        className="min-w-0 flex-1 px-3 py-3 text-left transition hover:bg-bg/40"
+      >
+        <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
+        <p className="mt-1 text-xs text-muted">Released {formatDateLabel(item.release_at)}</p>
+      </button>
       {item.is_creator ? (
         <button
           type="button"
-          aria-label="Shared post settings"
+          aria-label="Shared event settings"
           onClick={() => onOpenSettings(item.id)}
           className="flex shrink-0 items-center justify-center border-l border-border px-3 text-muted transition hover:bg-bg/40 hover:text-foreground"
         >
@@ -640,120 +848,152 @@ export default function SharedEventPostsTab({
     </div>
   );
 
-  if (view.kind === "create" || view.kind === "settings") {
-    const isSettings = view.kind === "settings";
-    return (
-      <div className="flex h-full min-h-0 flex-col bg-bg">
-        <header className="flex items-center justify-between border-b border-border px-3 py-2">
-          <BackButton onBack={() => setView({ kind: "list" })} />
-          <h1 className="text-sm font-semibold text-foreground">
-            {isSettings ? "Shared Event Settings" : "Create Shared Event"}
-          </h1>
-          <div className="w-20" />
-        </header>
-        <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-3">
-          {isSettings && isLoadingSettings ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-8 text-xs text-muted">
-              <Loader />
-              <span>Loading</span>
-            </div>
-          ) : (
-            <>
-              <label className="block space-y-1">
-                <span className="text-xs text-muted">Event title</span>
-                <input
-                  value={createTitle}
-                  onChange={(event) => setCreateTitle(event.target.value)}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
-                  placeholder="Weekend trip"
-                />
-              </label>
-              <EventDateTimeSelect
-                label="Allow adding until..."
-                value={createCloseAt}
-                onChange={setCreateCloseAt}
-                compactFields
-              />
-              <EventDateTimeSelect
-                label="Release shared post at..."
-                value={createReleaseAt}
-                onChange={setCreateReleaseAt}
-                compactFields
-              />
-
-              <div className="space-y-2">
-                <p className="text-xs text-muted">
-                  Invite friends
-                  {selectedInviteeIds.size > 0 ? ` (${selectedInviteeIds.size})` : ""}
-                </p>
-                {isLoadingFriends ? (
-                  <div className="flex items-center gap-2 py-3 text-xs text-muted">
-                    <Loader scale={0.7} />
-                    <span>Loading friends</span>
+  const isSettingsEditor = editor?.kind === "settings";
+  const editorModal =
+    isMounted && (editor || isEditorClosing)
+      ? createPortal(
+          <div
+            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2200] flex items-center justify-center px-3 ${
+              isEditorClosing ? "pointer-events-none" : ""
+            }`}
+          >
+            <div
+              className={`${
+                isEditorClosing ? "emoji-picker-backdrop-out" : "emoji-picker-backdrop-in"
+              } absolute inset-0 bg-black/45 backdrop-blur-md`}
+              onClick={closeEditor}
+              aria-hidden="true"
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={isSettingsEditor ? "Shared Event Settings" : "Create Shared Event"}
+              className={`${
+                isEditorClosing ? "emoji-picker-panel-out" : "emoji-picker-panel-in"
+              } relative flex max-h-[min(85vh,720px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-bg`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <h2 className="text-sm font-semibold text-foreground">
+                  {isSettingsEditor ? "Shared Event Settings" : "Create Shared Event"}
+                </h2>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={closeEditor}
+                  className="rounded-full p-1.5 text-muted transition hover:bg-surface hover:text-foreground"
+                >
+                  <CloseIcon className="h-4 w-4" />
+                </button>
+              </header>
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+                {isSettingsEditor && isLoadingSettings ? (
+                  <div className="flex flex-col items-center justify-center gap-2 py-8 text-xs text-muted">
+                    <Loader />
+                    <span>Loading</span>
                   </div>
-                ) : friends.length === 0 ? (
-                  <p className="text-xs text-muted">No friends to invite yet.</p>
                 ) : (
-                  <div className="overflow-hidden rounded-xl border border-border">
-                    {friends.map((friend) => {
-                      const selected = selectedInviteeIds.has(friend.user_id);
-                      return (
-                        <button
-                          key={friend.user_id}
-                          type="button"
-                          onClick={() => toggleCreateInvitee(friend.user_id)}
-                          className="flex w-full items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0 transition hover:bg-surface"
-                        >
-                          <UserProfileImage
-                            userId={friend.user_id}
-                            sizePx={36}
-                            alt={`${friend.username} profile`}
-                          />
-                          <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                            {friend.username}
-                          </span>
-                          <span
-                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-                              selected
-                                ? "border-accent bg-accent text-on-accent"
-                                : "border-muted text-transparent"
-                            }`}
-                            aria-hidden
-                          >
-                            <CheckIcon className="h-3.5 w-3.5" />
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <>
+                    <label className="block space-y-1">
+                      <span className="text-xs text-muted">Event title</span>
+                      <input
+                        value={createTitle}
+                        onChange={(event) => setCreateTitle(event.target.value)}
+                        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+                        placeholder="Weekend trip"
+                      />
+                    </label>
+                    <EventDateTimeSelect
+                      label="Allow adding until..."
+                      value={createCloseAt}
+                      onChange={setCreateCloseAt}
+                      compactFields
+                    />
+                    <EventDateTimeSelect
+                      label="Release shared post at..."
+                      value={createReleaseAt}
+                      onChange={setCreateReleaseAt}
+                      compactFields
+                    />
+
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted">
+                        Invite friends
+                        {selectedInviteeIds.size > 0 ? ` (${selectedInviteeIds.size})` : ""}
+                      </p>
+                      {isLoadingFriends ? (
+                        <div className="flex items-center gap-2 py-3 text-xs text-muted">
+                          <Loader scale={0.7} />
+                          <span>Loading friends</span>
+                        </div>
+                      ) : friends.length === 0 ? (
+                        <p className="text-xs text-muted">No friends to invite yet.</p>
+                      ) : (
+                        <div className="overflow-hidden rounded-xl border border-border">
+                          {friends.map((friend) => {
+                            const selected = selectedInviteeIds.has(friend.user_id);
+                            return (
+                              <button
+                                key={friend.user_id}
+                                type="button"
+                                onClick={() => toggleCreateInvitee(friend.user_id)}
+                                className="flex w-full items-center gap-3 border-b border-border px-3 py-2.5 text-left last:border-b-0 transition hover:bg-surface"
+                              >
+                                <UserProfileImage
+                                  userId={friend.user_id}
+                                  sizePx={36}
+                                  alt={`${friend.username} profile`}
+                                />
+                                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                                  {friend.username}
+                                </span>
+                                <span
+                                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                                    selected
+                                      ? "border-accent bg-accent text-on-accent"
+                                      : "border-muted text-transparent"
+                                  }`}
+                                  aria-hidden
+                                >
+                                  <CheckIcon className="h-3.5 w-3.5" />
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
+
+                    <button
+                      type="button"
+                      disabled={isSavingEditor || !createTitle.trim()}
+                      onClick={() =>
+                        void (isSettingsEditor ? onSettingsSubmit() : onCreateSubmit())
+                      }
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent bg-surface py-3 text-sm font-semibold text-accent disabled:opacity-50"
+                    >
+                      {isSavingEditor ? (
+                        <Loader scale={0.55} />
+                      ) : isSettingsEditor ? null : (
+                        <AddIcon className="h-4 w-4" />
+                      )}
+                      {isSettingsEditor ? "Save" : "Create"}
+                    </button>
+                  </>
                 )}
               </div>
-
-              {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
-
-              <button
-                type="button"
-                disabled={isSavingEditor || !createTitle.trim()}
-                onClick={() => void (isSettings ? onSettingsSubmit() : onCreateSubmit())}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent bg-surface py-3 text-sm font-semibold text-accent disabled:opacity-50"
-              >
-                {isSavingEditor ? (
-                  <Loader scale={0.55} />
-                ) : isSettings ? null : (
-                  <AddIcon className="h-4 w-4" />
-                )}
-                {isSettings ? "Save" : "Create"}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
   if (view.kind === "detail") {
     return (
       <div className="flex h-full min-h-0 flex-col bg-bg">
+        {editorModal}
         <header className="flex items-center gap-2 border-b border-border px-2 py-2">
           <BackButton
             onBack={() => {
@@ -850,26 +1090,30 @@ export default function SharedEventPostsTab({
     );
   }
 
+  const featuredOpen =
+    openPosts.length === 0
+      ? null
+      : [...openPosts].sort((a, b) => a.close_at.localeCompare(b.close_at))[0] ?? null;
+  const otherOpenPosts = featuredOpen
+    ? openPosts.filter((item) => item.id !== featuredOpen.id)
+    : [];
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-3 py-3">
-        <div className="min-w-0">
-          <h1 className="text-base font-semibold text-foreground">Shared Event Posts</h1>
-          <p className="text-xs text-muted">Contribute blindly. Reveal together.</p>
-        </div>
+      {editorModal}
+      <header className="flex items-center justify-between gap-3 px-4 pb-1 pt-3">
+        <h1 className="text-xl font-bold tracking-tight text-foreground">Shared Events</h1>
         <button
           type="button"
           onClick={onOpenCreate}
-          aria-label="Create Shared Post"
-          className="create-post-rgb-border flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition hover:opacity-90"
+          aria-label="Create Shared Event"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-foreground transition hover:border-accent hover:text-accent"
         >
-          <span className="create-post-rgb-text text-xl font-semibold leading-none" aria-hidden>
-            +
-          </span>
+          <AddIcon className="h-5 w-5" />
         </button>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-3 space-y-5">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center gap-2 py-6 text-xs text-muted">
             <Loader />
@@ -879,41 +1123,45 @@ export default function SharedEventPostsTab({
 
         {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
 
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Open Shared Posts
-          </h2>
-          {openPosts.length === 0 ? (
-            <p className="text-xs text-muted">No open shared posts.</p>
-          ) : (
-            openPosts.map((item) => renderOpenSharedPostRow(item))
-          )}
-        </section>
+        {!isLoading && featuredOpen ? (
+          <section>{renderHeroOpenCard(featuredOpen)}</section>
+        ) : null}
 
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Pending Posts
-          </h2>
-          {pendingPosts.length === 0 ? (
-            <p className="text-xs text-muted">Nothing waiting to release.</p>
-          ) : (
-            pendingPosts.map((item) =>
-              renderSharedPostRow(item, `Releases ${formatDateLabel(item.release_at)}`, () => {
-                setView({ kind: "detail", sharedPostId: item.id });
-              }),
-            )
-          )}
-        </section>
+        {!isLoading && openPosts.length === 0 && pendingPosts.length === 0 ? (
+          <p className="py-2 text-center text-xs text-muted">
+            No shared events yet. Create one to contribute blindly and reveal together.
+          </p>
+        ) : null}
 
-        <section className="space-y-2">
+        {otherOpenPosts.length > 0 ? (
+          <section className="space-y-2.5">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+              Open
+            </h2>
+            <div className="grid grid-cols-2 gap-2.5">
+              {otherOpenPosts.map((item) => renderOpenGridCard(item))}
+            </div>
+          </section>
+        ) : null}
+
+        {pendingPosts.length > 0 ? (
+          <section className="space-y-2.5">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+              Waiting to Open
+            </h2>
+            <div className="space-y-2">{pendingPosts.map((item) => renderPendingCard(item))}</div>
+          </section>
+        ) : null}
+
+        <section className="space-y-2.5">
           <button
             type="button"
             onClick={onToggleReleasedSection}
             aria-expanded={isReleasedExpanded}
             className="flex w-full items-center justify-between gap-2 text-left"
           >
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-              Released
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+              Opened
             </h2>
             <ChevronDownIcon
               className={`h-4 w-4 shrink-0 text-muted transition-transform ${
@@ -928,13 +1176,11 @@ export default function SharedEventPostsTab({
                 <span>Loading</span>
               </div>
             ) : releasedPosts.length === 0 ? (
-              <p className="text-xs text-muted">No released shared posts yet.</p>
+              <p className="text-xs text-muted">No opened events yet.</p>
             ) : (
-              releasedPosts.map((item) =>
-                renderSharedPostRow(item, `Released ${formatDateLabel(item.release_at)}`, () => {
-                  setView({ kind: "detail", sharedPostId: item.id });
-                }),
-              )
+              <div className="space-y-2">
+                {releasedPosts.map((item) => renderReleasedRow(item))}
+              </div>
             )
           ) : null}
         </section>

@@ -31,6 +31,7 @@ import {
   ImagePlus,
   LayoutList,
   ListChecks,
+  Lock,
   LogOut,
   MessageCirclePlus,
   MessageSquare,
@@ -135,8 +136,49 @@ export const ImageIcon = Image;
 export const AddImageIcon = ImagePlus;
 /** People / contributors */
 export const PeopleIcon = Users;
+/** Sealed / locked shared event */
+export const LockIcon = Lock;
 /** Start a new chat/thread */
 export const NewChatIcon = MessageCirclePlus;
+
+/** Wax seal mark for pending shared events */
+export function WaxSealIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden
+    >
+      <circle cx="24" cy="24" r="18" fill="var(--danger-fill)" />
+      <circle
+        cx="24"
+        cy="24"
+        r="14.5"
+        stroke="color-mix(in srgb, var(--foreground) 35%, transparent)"
+        strokeWidth="1.5"
+        fill="none"
+      />
+      <path
+        d="M24 16.5a4 4 0 0 0-4 4v2.2h8V20.5a4 4 0 0 0-4-4Z"
+        stroke="var(--foreground)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <rect
+        x="17.5"
+        y="22.5"
+        width="13"
+        height="10"
+        rx="2"
+        stroke="var(--foreground)"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
+}
 /** Date picker */
 export const CalendarIcon = Calendar;
 /** Time picker */

@@ -99,6 +99,7 @@ export async function POST(request: Request) {
       const item = serializeSharedPostListItem({
         row,
         viewerUserId: authResult.user_id,
+        includeContributors: true,
       });
       if (phase === "open") {
         payload.open.push(item);

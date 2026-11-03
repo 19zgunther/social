@@ -16,6 +16,7 @@ const MAX_RECENT_EMOJIS = 50;
 const MAX_UNRESOLVED_RECENT_CUSTOM_EMOJI_REFRESHES = 10;
 const UNRESOLVED_RECENT_CUSTOM_EMOJI_REFRESH_MS = 1000;
 const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
+const EMOJI_PICKER_CLOSE_ANIMATION_MS = 200;
 
 type EmojiUsageEntry = {
   emoji: string;
@@ -205,12 +206,14 @@ export default function EmojiPicker({
   disabled = false,
 }: EmojiPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [showEmojiEditor, setShowEmojiEditor] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [recentEmojiUsage, setRecentEmojiUsage] = useState<EmojiUsageEntry[]>([]);
   const [customEmojis, setCustomEmojis] = useState<EmojiItem[]>([]);
   const [hasLoadedCustomEmojis, setHasLoadedCustomEmojis] = useState(false);
+  const closeAnimationTimeoutRef = useRef<number | null>(null);
   const customEmojiByUuid = useMemo(
     () => Object.fromEntries(customEmojis.map((emoji) => [emoji.uuid, emoji])),
     [customEmojis],
@@ -291,6 +294,44 @@ export default function EmojiPicker({
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (closeAnimationTimeoutRef.current !== null) {
+        window.clearTimeout(closeAnimationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const openPicker = useCallback(() => {
+    if (closeAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(closeAnimationTimeoutRef.current);
+      closeAnimationTimeoutRef.current = null;
+    }
+    setIsClosing(false);
+    setIsOpen(true);
+  }, []);
+
+  const closePicker = useCallback(() => {
+    if (!isOpen || isClosing) {
+      return;
+    }
+
+    setIsClosing(true);
+    setIsOpen(false);
+
+    const closeDelayMs = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? 0
+      : EMOJI_PICKER_CLOSE_ANIMATION_MS;
+
+    if (closeAnimationTimeoutRef.current !== null) {
+      window.clearTimeout(closeAnimationTimeoutRef.current);
+    }
+    closeAnimationTimeoutRef.current = window.setTimeout(() => {
+      setIsClosing(false);
+      closeAnimationTimeoutRef.current = null;
+    }, closeDelayMs);
+  }, [isOpen, isClosing]);
 
   useEffect(() => {
     if (!isMounted) {
@@ -424,10 +465,10 @@ export default function EmojiPicker({
   }, [isOpen, refreshCustomEmojis]);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen && !isClosing) {
       setShowEmojiEditor(false);
     }
-  }, [isOpen]);
+  }, [isOpen, isClosing]);
 
   useEffect(() => {
     onOpenChange?.(isOpen);
@@ -445,14 +486,14 @@ export default function EmojiPicker({
       if (showEmojiEditor) {
         setShowEmojiEditor(false);
       } else {
-        setIsOpen(false);
+        closePicker();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [isOpen, showEmojiEditor]);
+  }, [isOpen, showEmojiEditor, closePicker]);
 
   const handleSelectEmoji = (emoji: string) => {
     try {
@@ -463,7 +504,7 @@ export default function EmojiPicker({
       const updatedUsage = updateUsageWithSelection(latestStoredUsage, emoji, now);
       persistUsage(updatedUsage);
       setRecentEmojiUsage(updatedUsage);
-      setIsOpen(false);
+      closePicker();
     }
   };
 
@@ -474,7 +515,13 @@ export default function EmojiPicker({
     <div className={DONT_SWIPE_TABS_CLASSNAME + " " + (className ?? "")}>
       <button
         type="button"
-        onClick={() => setIsOpen((previous) => !previous)}
+        onClick={() => {
+          if (isOpen) {
+            closePicker();
+          } else {
+            openPicker();
+          }
+        }}
         className={`rounded-lg border border-border px-2 py-1 text-muted transition hover:text-foreground ${buttonClassName ?? ""}`}
         aria-label="Add emoji"
         disabled={disabled}
@@ -482,31 +529,31 @@ export default function EmojiPicker({
         <EmojiIcon className={`h-4 w-4 ${buttonSmileIconClassName ?? ""}`} />
       </button>
 
-      {isMounted && isOpen
+      {isMounted && (isOpen || isClosing)
         ? createPortal(
           <div
-            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2000] flex items-center justify-center px-2`}
+            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2000] flex items-center justify-center px-2 ${isClosing ? "pointer-events-none" : ""}`}
           >
             <div
-              className="absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,color-mix(in_srgb,var(--accent)_22%,transparent),transparent_55%),radial-gradient(ellipse_80%_60%_at_100%_100%,color-mix(in_srgb,var(--muted)_12%,transparent),transparent_50%)] bg-black/45 backdrop-blur-md"
-              onClick={() => setIsOpen(false)}
+              className={`${isClosing ? "emoji-picker-backdrop-out" : "emoji-picker-backdrop-in"} absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,color-mix(in_srgb,var(--accent)_22%,transparent),transparent_55%),radial-gradient(ellipse_80%_60%_at_100%_100%,color-mix(in_srgb,var(--muted)_12%,transparent),transparent_50%)] bg-black/45 backdrop-blur-md`}
+              onClick={closePicker}
               aria-hidden="true"
             />
             <div
               role="dialog"
               aria-modal="true"
               aria-label={showEmojiEditor ? "Custom emoji editor" : "Emoji picker"}
-              className={`relative isolate w-full ${showEmojiEditor ? "max-w-md" : "max-w-sm"}`}
+              className={`${isClosing ? "emoji-picker-panel-out" : "emoji-picker-panel-in"} relative isolate w-full ${showEmojiEditor ? "max-w-md" : "max-w-sm"}`}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="pointer-events-none absolute -inset-px rounded-[1.6rem] bg-gradient-to-br from-white/25 via-white/[0.07] to-white/[0.02] opacity-90 blur-[1px]" />
+              <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-white/25 via-white/[0.07] to-white/[0.02] opacity-90 blur-[1px]" />
               <div
-                className="relative overflow-hidden rounded-[1.55rem] border border-white/[0.14] bg-gradient-to-b from-white/[0.11] via-surface/35 to-surface/55 px-1 py-3 shadow-[0_28px_90px_-20px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.22),inset_0_-1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-[1.35]"
+                className="relative overflow-hidden rounded-2xl border border-white/[0.14] bg-gradient-to-b from-white/[0.11] via-surface/35 to-surface/55 px-3 py-3 shadow-[0_28px_90px_-20px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.22),inset_0_-1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-[1.35]"
               >
                 <div className="pointer-events-none absolute -left-1/4 -top-1/3 h-[85%] w-[85%] rounded-full bg-gradient-to-br from-white/30 via-white/[0.06] to-transparent opacity-70 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-12 -right-8 h-48 w-48 rounded-full bg-accent/20 blur-3xl" />
                 <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" />
-                <div className="relative z-[1] max-h-[min(85vh,720px)] overflow-y-auto overscroll-contain pr">
+                <div className="relative z-[1] max-h-[min(85vh,720px)] overflow-y-auto overscroll-contain">
                   {showEmojiEditor ? (
                     <>
                       <div className="mb-3 flex items-center justify-between gap-2">
@@ -520,7 +567,7 @@ export default function EmojiPicker({
                         </button>
                         <button
                           type="button"
-                          onClick={() => setIsOpen(false)}
+                          onClick={closePicker}
                           className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
                           aria-label="Close emoji picker"
                         >
@@ -531,7 +578,7 @@ export default function EmojiPicker({
                     </>
                   ) : (
                     <>
-                      <div className="mb-3 flex items-center justify-between gap-2">
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
                         <p className="text-base font-semibold tracking-tight text-foreground/90 drop-shadow-sm">
                           Choose an emoji
                         </p>
@@ -547,7 +594,7 @@ export default function EmojiPicker({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setIsOpen(false)}
+                            onClick={closePicker}
                             className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
                             aria-label="Close emoji picker"
                           >

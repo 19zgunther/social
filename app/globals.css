@@ -291,6 +291,59 @@ body {
     center / contain no-repeat;
 }
 
+/* Shared Events — sealed capsule list */
+.shared-event-hero {
+  --shared-event-progress: 0;
+  position: relative;
+  border-radius: 1.35rem;
+  padding: 1.35rem 1.15rem 1.2rem;
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--surface) 88%, var(--accent)) 0%,
+      var(--surface) 45%,
+      var(--surface) 100%
+    )
+      padding-box,
+    conic-gradient(
+      from -90deg,
+      var(--accent) 0%,
+      var(--accent) calc(var(--shared-event-progress) * 1%),
+      var(--border) calc(var(--shared-event-progress) * 1%),
+      var(--border) 100%
+    )
+      border-box;
+  border: 2.5px solid transparent;
+}
+
+.shared-event-hero-frost {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 80% 55% at 50% 0%,
+    color-mix(in srgb, var(--foreground) 7%, transparent),
+    transparent 70%
+  );
+}
+
+.shared-event-add-shot {
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.shared-event-add-shot:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.shared-event-add-shot:disabled {
+  opacity: 0.5;
+}
+
 .logo-rgb-bg {
   display: flex;
   align-items: center;
@@ -1495,4 +1548,73 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   border: 2px solid rgba(255, 255, 255, 0.85);
   background: #4cae3a;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes emoji-picker-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes emoji-picker-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes emoji-picker-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes emoji-picker-panel-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+    filter: blur(10px);
+  }
+}
+
+.emoji-picker-backdrop-in {
+  animation: emoji-picker-backdrop-in 0.22s ease-out both;
+}
+
+.emoji-picker-backdrop-out {
+  animation: emoji-picker-backdrop-out 0.2s ease-in both;
+}
+
+.emoji-picker-panel-in {
+  animation: emoji-picker-panel-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.emoji-picker-panel-out {
+  animation: emoji-picker-panel-out 0.2s ease-in both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emoji-picker-backdrop-in,
+  .emoji-picker-backdrop-out,
+  .emoji-picker-panel-in,
+  .emoji-picker-panel-out {
+    animation: none;
+  }
 }
