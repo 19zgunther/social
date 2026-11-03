@@ -40,8 +40,6 @@ import {
   UserProfileResponse,
 } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
-import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
-
 type ProfileProps = {
   userId: string;
   username: string;
@@ -586,12 +584,6 @@ function Profile({
     setShowSelectedPostOptions(false);
   }, []);
 
-  useSwipeBackOverride(
-    swipeBackOverrideRef,
-    onCloseSelectedPostOptions,
-    Boolean(selectedPost) && showSelectedPostOptions,
-  );
-
   const onDeleteSelectedPost = async () => {
     if (!selectedPost) {
       return;
@@ -623,17 +615,6 @@ function Profile({
   };
 
   if (selectedPost) {
-    if (showSelectedPostOptions) {
-      return (
-        <PostOptionsPane
-          post={selectedPost}
-          onBack={onCloseSelectedPostOptions}
-          currentUserId={userId}
-          onViewUserProfile={onViewUserProfile}
-        />
-      );
-    }
-
     return (
       <div className="flex h-full min-h-0 w-full flex-col bg-bg">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
@@ -677,6 +658,15 @@ function Profile({
           />
         </div>
         {statusMessage ? <p className="px-3 py-2 text-xs text-muted">{statusMessage}</p> : null}
+        {showSelectedPostOptions ? (
+          <PostOptionsPane
+            post={selectedPost}
+            onBack={onCloseSelectedPostOptions}
+            currentUserId={userId}
+            onViewUserProfile={onViewUserProfile}
+            swipeBackOverrideRef={swipeBackOverrideRef}
+          />
+        ) : null}
       </div>
     );
   }
@@ -991,12 +981,6 @@ function ProfileOtherUser({
     setShowSelectedPostOptions(false);
   }, []);
 
-  useSwipeBackOverride(
-    swipeBackOverrideRef,
-    onCloseSelectedPostOptions,
-    Boolean(selectedPost) && showSelectedPostOptions && !isBotSettingsOpen,
-  );
-
   const loadProfile = async (cursorPostId?: string) => {
     if (cursorPostId) {
       setIsLoadingMorePosts(true);
@@ -1138,16 +1122,6 @@ function ProfileOtherUser({
   }
 
   if (selectedPost) {
-    if (showSelectedPostOptions) {
-      return (
-        <PostOptionsPane
-          post={selectedPost}
-          onBack={onCloseSelectedPostOptions}
-          currentUserId={currentUserId}
-        />
-      );
-    }
-
     return (
       <div
         className="flex h-full min-h-0 w-full flex-col bg-bg"
@@ -1201,6 +1175,15 @@ function ProfileOtherUser({
           />
         </div>
         {statusMessage ? <p className="px-3 py-2 text-xs text-muted">{statusMessage}</p> : null}
+        {showSelectedPostOptions ? (
+          <PostOptionsPane
+            post={selectedPost}
+            onBack={onCloseSelectedPostOptions}
+            currentUserId={currentUserId}
+            onViewUserProfile={onViewUserProfile}
+            swipeBackOverrideRef={swipeBackOverrideRef}
+          />
+        ) : null}
       </div>
     );
   }

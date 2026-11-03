@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
-import { createPortal } from "react-dom";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
 import {
@@ -34,7 +33,8 @@ import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
 import ThreadEventPage from "./components/ThreadEventPage";
 // import UpcomingEventsTab from "./components/UpcomingEventsTab"; // events tab hidden
-import useSwipeBack, { DONT_SWIPE_TABS_CLASSNAME } from "./components/utils/useSwipeBack";
+import useSwipeBack from "./components/utils/useSwipeBack";
+import AnimatedModal, { useAnimatedModal } from "./components/utils/AnimatedModal";
 import useSharedEventPostsUnread from "./components/utils/useSharedEventPostsUnread";
 import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
@@ -45,8 +45,6 @@ import {
   persistAndApplyTheme,
   resetThemeToDefault,
 } from "@/app/lib/theme";
-
-const CREATE_POST_CLOSE_ANIMATION_MS = 200;
 
 const TAB_TO_BACK_BASE: { [key in AppTab]: { forward: AppTab | null; back: AppTab | null } } = {
   thread_event: { forward: null, back: "thread_settings" },
@@ -87,61 +85,13 @@ export default function Home() {
   const [eventsRefreshNonce, setEventsRefreshNonce] = useState(0); // events tab hidden; nonce kept for thread_event delete refresh
   const [groupsListRefreshNonce, setGroupsListRefreshNonce] = useState(0);
   const [profileReloadSignal, setProfileReloadSignal] = useState(0);
-  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
-  const [isCreatePostClosing, setIsCreatePostClosing] = useState(false);
-  const [isCreatePostMounted, setIsCreatePostMounted] = useState(false);
-  const createPostCloseTimeoutRef = useRef<number | null>(null);
-
-  const openCreatePost = useCallback(() => {
-    if (createPostCloseTimeoutRef.current !== null) {
-      window.clearTimeout(createPostCloseTimeoutRef.current);
-      createPostCloseTimeoutRef.current = null;
-    }
-    setIsCreatePostClosing(false);
-    setIsCreatePostOpen(true);
-  }, []);
-
-  const closeCreatePost = useCallback(() => {
-    if (!isCreatePostOpen || isCreatePostClosing) {
-      return;
-    }
-    setIsCreatePostClosing(true);
-    const closeDelayMs = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? 0
-      : CREATE_POST_CLOSE_ANIMATION_MS;
-    if (createPostCloseTimeoutRef.current !== null) {
-      window.clearTimeout(createPostCloseTimeoutRef.current);
-    }
-    createPostCloseTimeoutRef.current = window.setTimeout(() => {
-      setIsCreatePostOpen(false);
-      setIsCreatePostClosing(false);
-      createPostCloseTimeoutRef.current = null;
-    }, closeDelayMs);
-  }, [isCreatePostOpen, isCreatePostClosing]);
-
-  useEffect(() => {
-    setIsCreatePostMounted(true);
-    return () => {
-      if (createPostCloseTimeoutRef.current !== null) {
-        window.clearTimeout(createPostCloseTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isCreatePostOpen || isCreatePostClosing) {
-      return;
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeCreatePost();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isCreatePostOpen, isCreatePostClosing, closeCreatePost]);
+  const {
+    isPresented: isCreatePostPresented,
+    isClosing: isCreatePostClosing,
+    isActive: isCreatePostActive,
+    open: openCreatePost,
+    close: closeCreatePost,
+  } = useAnimatedModal();
 
   const onLogout = () => {
     const token = undefined;
@@ -440,47 +390,29 @@ export default function Home() {
   const otherUserProfileStyle = TAB_TO_STYLE["other_user_profile"];
   const feedbackStyle = TAB_TO_STYLE["feedback"];
 
-  const createPostModal =
-    isCreatePostMounted && (isCreatePostOpen || isCreatePostClosing)
-      ? createPortal(
-          <div
-            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2200] flex items-center justify-center px-3 ${
-              isCreatePostClosing ? "pointer-events-none" : ""
-            }`}
-          >
-            <div
-              className={`${
-                isCreatePostClosing ? "emoji-picker-backdrop-out" : "emoji-picker-backdrop-in"
-              } absolute inset-0 bg-black/45 backdrop-blur-md`}
-              onClick={closeCreatePost}
-              aria-hidden="true"
-            />
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Create Post"
-              className={`${
-                isCreatePostClosing ? "emoji-picker-panel-out" : "emoji-picker-panel-in"
-              } relative flex h-[80dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-bg shadow-xl`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <CreatePostTab
-                isActive={isCreatePostOpen && !isCreatePostClosing}
-                currentUserId={authUser.user_id}
-                username={authUser.username}
-                profileImageId={authUser.profile_image_id}
-                profileImageUrl={authUser.profile_image_url}
-                onCancel={closeCreatePost}
-                onPosted={() => {
-                  setProfileReloadSignal((previous) => previous + 1);
-                  closeCreatePost();
-                }}
-              />
-            </div>
-          </div>,
-          document.body,
-        )
-      : null;
+  const createPostModal = (
+    <AnimatedModal
+      isPresented={isCreatePostPresented}
+      isClosing={isCreatePostClosing}
+      onClose={closeCreatePost}
+      ariaLabel="Create Post"
+      hideHeader
+      panelClassName="h-[80dvh] max-w-md bg-bg shadow-xl"
+    >
+      <CreatePostTab
+        isActive={isCreatePostActive}
+        currentUserId={authUser.user_id}
+        username={authUser.username}
+        profileImageId={authUser.profile_image_id}
+        profileImageUrl={authUser.profile_image_url}
+        onCancel={closeCreatePost}
+        onPosted={() => {
+          setProfileReloadSignal((previous) => previous + 1);
+          closeCreatePost();
+        }}
+      />
+    </AnimatedModal>
+  );
 
   return (
     <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">

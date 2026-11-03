@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from "react";
 import CachedImage from "@/app/components/utils/CachedImage";
-import BackButton from "@/app/components/utils/BackButton";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import { getPollViewerState } from "@/app/components/PollBlock";
 import { getTierListViewerState } from "@/app/components/TierListBlock";
+import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
+import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
   CustomEmoji,
@@ -28,6 +29,7 @@ type PostOptionsPaneProps = {
   onBack: () => void;
   currentUserId?: string | null;
   onViewUserProfile?: (userId: string) => void;
+  swipeBackOverrideRef: MutableRefObject<(() => void) | null>;
 };
 
 const EMOJI_ONLY_COMMENT_REGEX = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
@@ -171,7 +173,9 @@ export default function PostOptionsPane({
   onBack,
   currentUserId,
   onViewUserProfile,
+  swipeBackOverrideRef,
 }: PostOptionsPaneProps) {
+  const { isPresented, isClosing, isActive, close: closeModal } = useAnimatedModal(true);
   const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
   const [imageGrantById, setImageGrantById] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -190,6 +194,12 @@ export default function PostOptionsPane({
     useState<FeedPostTierListSubmissionsResponse | null>(null);
   const [isLoadingTierListSubmissions, setIsLoadingTierListSubmissions] = useState(false);
   const [tierListSubmissionsError, setTierListSubmissionsError] = useState("");
+
+  const requestClose = useCallback(() => {
+    closeModal(onBack);
+  }, [closeModal, onBack]);
+
+  useSwipeBackOverride(swipeBackOverrideRef, requestClose, isActive);
 
   const comments = post.data?.comments;
   const imageIds = useMemo(() => buildImageIds(post), [post]);
@@ -449,14 +459,15 @@ export default function PostOptionsPane({
   }, [onBack, onViewUserProfile]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-bg">
-      <div className="flex items-center justify-between border-b border-border px-3 py-3">
-        <BackButton onBack={onBack} />
-        <h1 className="text-lg font-semibold text-foreground">Post</h1>
-        <div className="w-20" />
-      </div>
-
-      <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4">
+    <AnimatedModal
+      isPresented={isPresented}
+      isClosing={isClosing}
+      onClose={requestClose}
+      ariaLabel="Post options"
+      title="Post"
+      panelClassName="h-[80dvh] max-w-md bg-bg shadow-xl"
+    >
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y px-4 py-4">
         {hasImages ? (
           <section className="mb-4">
             <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Images</h2>
@@ -724,6 +735,6 @@ export default function PostOptionsPane({
           <p className="text-sm text-muted">No reactions yet.</p>
         ) : null}
       </div>
-    </div>
+    </AnimatedModal>
   );
 }

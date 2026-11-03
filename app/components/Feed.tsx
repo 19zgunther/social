@@ -3,7 +3,6 @@
 import { TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { PostSection} from "@/app/components/PostSection";
 import PostOptionsPane from "@/app/components/PostOptionsPane";
-import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
 import { AddIcon } from "@/app/components/Icons";
@@ -260,19 +259,6 @@ export default function Feed({
     setPostOptionsPostId(null);
   }, []);
 
-  useSwipeBackOverride(swipeBackOverrideRef, onClosePostOptions, postOptionsPost !== null);
-
-  if (postOptionsPost) {
-    return (
-      <PostOptionsPane
-        post={postOptionsPost}
-        onBack={onClosePostOptions}
-        currentUserId={viewerUserId}
-        onViewUserProfile={onViewUserProfile}
-      />
-    );
-  }
-
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg">
       <div
@@ -350,6 +336,16 @@ export default function Feed({
 
         {statusMessage ? <p className="px-3 py-2 text-xs text-muted">{statusMessage}</p> : null}
       </div>
+
+      {postOptionsPost ? (
+        <PostOptionsPane
+          post={postOptionsPost}
+          onBack={onClosePostOptions}
+          currentUserId={viewerUserId}
+          onViewUserProfile={onViewUserProfile}
+          swipeBackOverrideRef={swipeBackOverrideRef}
+        />
+      ) : null}
     </div>
   );
 }

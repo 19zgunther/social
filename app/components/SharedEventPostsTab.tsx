@@ -10,7 +10,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -21,7 +20,6 @@ import {
   WaxSealIcon,
   ClockIcon,
   CameraIcon,
-  CloseIcon,
   RefreshIcon,
 } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
@@ -29,6 +27,7 @@ import Camera from "@/app/components/Camera";
 import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
 import { PostSection } from "@/app/components/PostSection";
 import UserProfileImage from "@/app/components/UserProfileImage";
+import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import BackButton from "@/app/components/utils/BackButton";
 import {
   prepareImageForUpload,
@@ -36,7 +35,6 @@ import {
   uploadPreparedImageToMainBucket,
   uploadPreparedVideoToMainBucket,
 } from "@/app/components/utils/client_file_storage_utils";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import { MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR } from "@/app/lib/sharedPosts";
 import {
   AcceptedFriend,
@@ -51,7 +49,6 @@ import {
 } from "@/app/types/interfaces";
 
 const SHARED_POST_UPLOAD_ACCEPT = "image/*,video/mp4,video/webm,video/quicktime,.mov";
-const EDITOR_CLOSE_ANIMATION_MS = 200;
 const SHARED_EVENTS_LIST_CACHE_TTL_MS = 60_000;
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
@@ -225,8 +222,14 @@ export default function SharedEventPostsTab({
 }) {
   const [view, setView] = useState<ViewMode>({ kind: "list" });
   const [editor, setEditor] = useState<EditorMode | null>(null);
-  const [isEditorClosing, setIsEditorClosing] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
+  const {
+    isPresented: isEditorPresented,
+    isClosing: isEditorClosing,
+    isActive: isEditorActive,
+    open: openEditorModal,
+    close: closeEditorModal,
+    dismiss: dismissEditorModal,
+  } = useAnimatedModal();
   const [openPosts, setOpenPosts] = useState<SharedPostListItem[]>(
     () => readFreshOpenCache()?.open ?? [],
   );
@@ -266,16 +269,6 @@ export default function SharedEventPostsTab({
   const [contributeUploadPostId, setContributeUploadPostId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const listUploadInputRef = useRef<HTMLInputElement | null>(null);
-  const editorCloseTimeoutRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    setIsMounted(true);
-    return () => {
-      if (editorCloseTimeoutRef.current !== null) {
-        window.clearTimeout(editorCloseTimeoutRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     openPostsRef.current = openPosts;
@@ -490,73 +483,38 @@ export default function SharedEventPostsTab({
   }, []);
 
   useEffect(() => {
-    if (!isActive || !editor) {
+    if (!isActive || !editor || !isEditorActive) {
       return;
     }
     void loadFriends();
-  }, [isActive, editor, loadFriends]);
+  }, [isActive, editor, isEditorActive, loadFriends]);
 
   const closeEditor = useCallback(() => {
-    if (!editor || isEditorClosing) {
-      return;
-    }
-    setIsEditorClosing(true);
-    const closeDelayMs = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? 0
-      : EDITOR_CLOSE_ANIMATION_MS;
-    if (editorCloseTimeoutRef.current !== null) {
-      window.clearTimeout(editorCloseTimeoutRef.current);
-    }
-    editorCloseTimeoutRef.current = window.setTimeout(() => {
+    closeEditorModal(() => {
       setEditor(null);
-      setIsEditorClosing(false);
       setStatusMessage("");
-      editorCloseTimeoutRef.current = null;
-    }, closeDelayMs);
-  }, [editor, isEditorClosing]);
+    });
+  }, [closeEditorModal]);
 
   const onOpenCreate = () => {
-    if (editorCloseTimeoutRef.current !== null) {
-      window.clearTimeout(editorCloseTimeoutRef.current);
-      editorCloseTimeoutRef.current = null;
-    }
     setCreateTitle("");
     setCreateCloseAt(defaultCloseLocal());
     setCreateReleaseAt(defaultReleaseLocal());
     setSelectedInviteeIds(new Set());
     setStatusMessage("");
-    setIsEditorClosing(false);
     setEditor({ kind: "create" });
+    openEditorModal();
   };
 
   const onOpenSettings = (sharedPostId: string) => {
-    if (editorCloseTimeoutRef.current !== null) {
-      window.clearTimeout(editorCloseTimeoutRef.current);
-      editorCloseTimeoutRef.current = null;
-    }
     setStatusMessage("");
     setSelectedInviteeIds(new Set());
-    setIsEditorClosing(false);
     setEditor({ kind: "settings", sharedPostId });
+    openEditorModal();
   };
 
   useEffect(() => {
-    if (!editor || isEditorClosing) {
-      return;
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeEditor();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [editor, isEditorClosing, closeEditor]);
-
-  useEffect(() => {
-    if (editor?.kind !== "settings") {
+    if (editor?.kind !== "settings" || !isEditorActive) {
       return;
     }
     let cancelled = false;
@@ -594,7 +552,7 @@ export default function SharedEventPostsTab({
     return () => {
       cancelled = true;
     };
-  }, [editor, currentUserId]);
+  }, [editor, currentUserId, isEditorActive]);
 
   const toggleCreateInvitee = (userId: string) => {
     setSelectedInviteeIds((previous) => {
@@ -626,13 +584,9 @@ export default function SharedEventPostsTab({
         return;
       }
       const payload = (await response.json()) as { shared_post: SharedPostListItem };
-      if (editorCloseTimeoutRef.current !== null) {
-        window.clearTimeout(editorCloseTimeoutRef.current);
-        editorCloseTimeoutRef.current = null;
-      }
       invalidateSharedEventsCaches();
+      dismissEditorModal();
       setEditor(null);
-      setIsEditorClosing(false);
       setView({ kind: "detail", sharedPostId: payload.shared_post.id });
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to create shared post.");
@@ -1042,106 +996,78 @@ export default function SharedEventPostsTab({
   );
 
   const isSettingsEditor = editor?.kind === "settings";
-  const editorModal =
-    isMounted && (editor || isEditorClosing)
-      ? createPortal(
-          <div
-            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2200] flex items-center justify-center px-3 ${
-              isEditorClosing ? "pointer-events-none" : ""
-            }`}
-          >
-            <div
-              className={`${
-                isEditorClosing ? "emoji-picker-backdrop-out" : "emoji-picker-backdrop-in"
-              } absolute inset-0 bg-black/45 backdrop-blur-md`}
-              onClick={closeEditor}
-              aria-hidden="true"
-            />
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label={isSettingsEditor ? "Shared Event Settings" : "Create Shared Event"}
-              className={`${
-                isEditorClosing ? "emoji-picker-panel-out" : "emoji-picker-panel-in"
-              } relative flex max-h-[min(85vh,720px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-bg`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
-                <h2 className="text-sm font-semibold text-foreground">
-                  {isSettingsEditor ? "Shared Event Settings" : "Create Shared Event"}
-                </h2>
-                <button
-                  type="button"
-                  aria-label="Close"
-                  onClick={closeEditor}
-                  className="rounded-full p-1.5 text-muted transition hover:bg-surface hover:text-foreground"
-                >
-                  <CloseIcon className="h-4 w-4" />
-                </button>
-              </header>
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
-                {isSettingsEditor && isLoadingSettings ? (
-                  <div className="flex flex-col items-center justify-center gap-2 py-8 text-xs text-muted">
-                    <Loader />
-                    <span>Loading</span>
-                  </div>
-                ) : (
-                  <>
-                    <label className="block space-y-1">
-                      <span className="text-xs text-muted">Event title</span>
-                      <input
-                        value={createTitle}
-                        onChange={(event) => setCreateTitle(event.target.value)}
-                        className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
-                        placeholder="Weekend trip"
-                      />
-                    </label>
-                    <div className="overflow-hidden rounded-xl border border-border">
-                      <div className="flex gap-3 px-3 py-3">
-                        <div className="flex w-3 shrink-0 flex-col items-center pt-1.5" aria-hidden>
-                          <span className="h-2.5 w-2.5 rounded-full bg-accent" />
-                          <span className="mt-1 w-px flex-1 bg-border" />
-                        </div>
-                        <div className="min-w-0 flex-1 pb-1">
-                          <EventDateTimeSelect
-                            variant="inline"
-                            label="Contribute until"
-                            value={createCloseAt}
-                            onChange={setCreateCloseAt}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-3 border-t border-border px-3 py-3">
-                        <div className="flex w-3 shrink-0 flex-col items-center pt-1.5" aria-hidden>
-                          <span className="h-2.5 w-2.5 rounded-full border-2 border-accent bg-bg" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <EventDateTimeSelect
-                            variant="inline"
-                            label="Reveal at"
-                            value={createReleaseAt}
-                            onChange={setCreateReleaseAt}
-                          />
-                        </div>
-                      </div>
-                    </div>
+  const editorModal = editor ? (
+    <AnimatedModal
+      isPresented={isEditorPresented}
+      isClosing={isEditorClosing}
+      onClose={closeEditor}
+      ariaLabel={isSettingsEditor ? "Shared Event Settings" : "Create Shared Event"}
+      title={isSettingsEditor ? "Shared Event Settings" : "Create Shared Event"}
+      panelClassName="max-h-[min(85vh,720px)] max-w-md bg-bg"
+    >
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+        {isSettingsEditor && isLoadingSettings ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-xs text-muted">
+            <Loader />
+            <span>Loading</span>
+          </div>
+        ) : (
+          <>
+            <label className="block space-y-1">
+              <span className="text-xs text-muted">Event title</span>
+              <input
+                value={createTitle}
+                onChange={(event) => setCreateTitle(event.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+                placeholder="Weekend trip"
+              />
+            </label>
+            <div className="overflow-hidden rounded-xl border border-border">
+              <div className="flex gap-3 px-3 py-3">
+                <div className="flex w-3 shrink-0 flex-col items-center pt-1.5" aria-hidden>
+                  <span className="h-2.5 w-2.5 rounded-full bg-accent" />
+                  <span className="mt-1 w-px flex-1 bg-border" />
+                </div>
+                <div className="min-w-0 flex-1 pb-1">
+                  <EventDateTimeSelect
+                    variant="inline"
+                    label="Contribute until"
+                    value={createCloseAt}
+                    onChange={setCreateCloseAt}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 border-t border-border px-3 py-3">
+                <div className="flex w-3 shrink-0 flex-col items-center pt-1.5" aria-hidden>
+                  <span className="h-2.5 w-2.5 rounded-full border-2 border-accent bg-bg" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <EventDateTimeSelect
+                    variant="inline"
+                    label="Reveal at"
+                    value={createReleaseAt}
+                    onChange={setCreateReleaseAt}
+                  />
+                </div>
+              </div>
+            </div>
 
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted">
-                        Invite friends
-                        {selectedInviteeIds.size > 0 ? ` (${selectedInviteeIds.size})` : ""}
-                      </p>
-                      {isLoadingFriends ? (
-                        <div className="flex items-center gap-2 py-3 text-xs text-muted">
-                          <Loader scale={0.7} />
-                          <span>Loading friends</span>
-                        </div>
-                      ) : friends.length === 0 ? (
-                        <p className="text-xs text-muted">No friends to invite yet.</p>
-                      ) : (
-                        <div className="overflow-hidden rounded-xl border border-border">
-                          {friends.map((friend) => {
-                            const selected = selectedInviteeIds.has(friend.user_id);
+            <div className="space-y-2">
+              <p className="text-xs text-muted">
+                Invite friends
+                {selectedInviteeIds.size > 0 ? ` (${selectedInviteeIds.size})` : ""}
+              </p>
+              {isLoadingFriends ? (
+                <div className="flex items-center gap-2 py-3 text-xs text-muted">
+                  <Loader scale={0.7} />
+                  <span>Loading friends</span>
+                </div>
+              ) : friends.length === 0 ? (
+                <p className="text-xs text-muted">No friends to invite yet.</p>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-border">
+                  {friends.map((friend) => {
+                    const selected = selectedInviteeIds.has(friend.user_id);
                             return (
                               <button
                                 key={friend.user_id}
@@ -1189,16 +1115,13 @@ export default function SharedEventPostsTab({
                       ) : isSettingsEditor ? null : (
                         <AddIcon className="h-4 w-4" />
                       )}
-                      {isSettingsEditor ? "Save" : "Create"}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )
-      : null;
+              {isSettingsEditor ? "Save" : "Create"}
+            </button>
+          </>
+        )}
+      </div>
+    </AnimatedModal>
+  ) : null;
 
   if (view.kind === "detail") {
     return (

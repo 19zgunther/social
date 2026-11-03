@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { loadAllCustomEmojis, putEmojiInCache } from "@/app/lib/customEmojiCache";
 import { ApiError, EmojiItem, EmojiSaveResponse } from "@/app/types/interfaces";
+import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import { PixelGradientSlider } from "@/app/components/utils/PixelGradientSlider";
 import { TriangleThicknessSlider } from "@/app/components/utils/TriangleThicknessSlider";
@@ -292,24 +292,13 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   const [isSaving, setIsSaving] = useState(false);
   const [undoStack, setUndoStack] = useState<Uint16Array[]>([]);
   const [redoStack, setRedoStack] = useState<Uint16Array[]>([]);
-  const [portalMounted, setPortalMounted] = useState(false);
-
-  useEffect(() => {
-    // DOM is unavailable during SSR; defer portal until after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount gate for createPortal
-    setPortalMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (editorMode === "none") {
-      return;
-    }
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [editorMode]);
+  const {
+    isPresented: isEditorPresented,
+    isClosing: isEditorClosing,
+    open: openEditorModal,
+    close: closeEditorModal,
+    dismiss: dismissEditorModal,
+  } = useAnimatedModal();
 
   const currentColorPacked = useMemo(() => {
     const rgb = (r << 6) | (g << 3) | b;
@@ -564,6 +553,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     setRedoStack([]);
     resetViewport();
     setStatusMessage(`Loaded "${emoji.name || "Untitled"}".`);
+    openEditorModal();
   };
 
   const onNewEmoji = () => {
@@ -575,6 +565,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
     setRedoStack([]);
     resetViewport();
     setStatusMessage("Started a new emoji.");
+    openEditorModal();
   };
 
   const exitEditor = useCallback(() => {
@@ -588,25 +579,11 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
   }, [resetViewport]);
 
   const onCancelEditor = useCallback(() => {
-    exitEditor();
-    setStatusMessage("");
-  }, [exitEditor]);
-
-  useEffect(() => {
-    if (editorMode === "none") {
-      return;
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isSaving) {
-        // Capture + stop so a parent EmojiPicker Escape handler does not also fire.
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        onCancelEditor();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [editorMode, isSaving, onCancelEditor]);
+    closeEditorModal(() => {
+      exitEditor();
+      setStatusMessage("");
+    });
+  }, [closeEditorModal, exitEditor]);
 
   const onUploadImage = async (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -711,6 +688,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
       setPixels(importedPixels);
       resetViewport();
       setStatusMessage("Imported image into emoji canvas.");
+      openEditorModal();
     } catch {
       setStatusMessage("Failed to import image.");
     }
@@ -742,6 +720,7 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
         return [saved, ...remaining];
       });
       setStatusMessage("Emoji saved.");
+      dismissEditorModal();
       exitEditor();
       onSaved?.();
     } catch (error) {
@@ -807,32 +786,19 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
         ) : null}
       </div>
 
-      {portalMounted && editorMode !== "none"
-        ? createPortal(
-          <div
-            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2050] flex items-center justify-center px-3 py-4`}
-          >
-            <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={() => {
-                if (!isSaving) {
-                  onCancelEditor();
-                }
-              }}
-              aria-hidden="true"
-            />
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label={editorMode === "editing" ? "Edit emoji" : "Create emoji"}
-              className="relative flex h-[min(92dvh,900px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-surface p-3 shadow-xl shadow-black/40"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="flex min-h-0 flex-1 flex-col">
-                <div className="shrink-0">
-                  <p className="mb-2 text-sm font-semibold text-foreground">
-                    {editorMode === "editing" ? "Edit Emoji" : "Create Emoji"}
-                  </p>
+      {editorMode !== "none" ? (
+        <AnimatedModal
+          isPresented={isEditorPresented}
+          isClosing={isEditorClosing}
+          onClose={onCancelEditor}
+          closeDisabled={isSaving}
+          ariaLabel={editorMode === "editing" ? "Edit emoji" : "Create emoji"}
+          title={editorMode === "editing" ? "Edit Emoji" : "Create Emoji"}
+          rootClassName="z-[2050] px-3 py-4"
+          panelClassName="h-[min(92dvh,900px)] max-w-md bg-surface shadow-xl shadow-black/40"
+        >
+          <div className="flex min-h-0 flex-1 flex-col p-3">
+            <div className="shrink-0">
                   <div className="mb-1">
                     <label className="mb-1 block text-xs text-muted" htmlFor="emoji-name-input">Name</label>
                     <input
@@ -988,31 +954,28 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
                   </div>
                 </div>
 
-                <div className="mt-2 flex shrink-0 flex-col gap-2">
-                  {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
-                  <button
-                    type="button"
-                    onClick={() => { void onSaveEmoji(); }}
-                    disabled={isSaving}
-                    className="w-full rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
-                  >
-                    {isSaving ? "Saving..." : saveButtonLabel}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onCancelEditor}
-                    disabled={isSaving}
-                    className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
+            <div className="mt-2 flex shrink-0 flex-col gap-2">
+              {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
+              <button
+                type="button"
+                onClick={() => { void onSaveEmoji(); }}
+                disabled={isSaving}
+                className="w-full rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
+              >
+                {isSaving ? "Saving..." : saveButtonLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onCancelEditor}
+                disabled={isSaving}
+                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
+              >
+                Cancel
+              </button>
             </div>
-          </div>,
-          document.body,
-        )
-        : null}
+          </div>
+        </AnimatedModal>
+      ) : null}
 
       {editorMode === "none" ? (
         <>

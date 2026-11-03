@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BackIcon, EditIcon, EmojiIcon, CloseIcon } from "@/app/components/Icons";
-import { createPortal } from "react-dom";
+import { BackIcon, EmojiIcon, CloseIcon } from "@/app/components/Icons";
 import emojiKeywordsByEmoji from "emojilib";
+import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./useSwipeBack";
 import { loadAllCustomEmojis, resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import { EmojiItem } from "@/app/types/interfaces";
@@ -16,7 +16,6 @@ const MAX_RECENT_EMOJIS = 50;
 const MAX_UNRESOLVED_RECENT_CUSTOM_EMOJI_REFRESHES = 10;
 const UNRESOLVED_RECENT_CUSTOM_EMOJI_REFRESH_MS = 1000;
 const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
-const EMOJI_PICKER_CLOSE_ANIMATION_MS = 200;
 
 type EmojiUsageEntry = {
   emoji: string;
@@ -205,15 +204,18 @@ export default function EmojiPicker({
   onOpenChange,
   disabled = false,
 }: EmojiPickerProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
+  const {
+    isPresented,
+    isClosing,
+    isActive: isOpen,
+    open: openPicker,
+    close: closePickerModal,
+  } = useAnimatedModal();
   const [showEmojiEditor, setShowEmojiEditor] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [recentEmojiUsage, setRecentEmojiUsage] = useState<EmojiUsageEntry[]>([]);
   const [customEmojis, setCustomEmojis] = useState<EmojiItem[]>([]);
   const [hasLoadedCustomEmojis, setHasLoadedCustomEmojis] = useState(false);
-  const closeAnimationTimeoutRef = useRef<number | null>(null);
   const customEmojiByUuid = useMemo(
     () => Object.fromEntries(customEmojis.map((emoji) => [emoji.uuid, emoji])),
     [customEmojis],
@@ -291,53 +293,11 @@ export default function EmojiPicker({
     emojiSearchKeywordsByEmoji,
   ]);
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (closeAnimationTimeoutRef.current !== null) {
-        window.clearTimeout(closeAnimationTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const openPicker = useCallback(() => {
-    if (closeAnimationTimeoutRef.current !== null) {
-      window.clearTimeout(closeAnimationTimeoutRef.current);
-      closeAnimationTimeoutRef.current = null;
-    }
-    setIsClosing(false);
-    setIsOpen(true);
-  }, []);
-
   const closePicker = useCallback(() => {
-    if (!isOpen || isClosing) {
-      return;
-    }
-
-    setIsClosing(true);
-    setIsOpen(false);
-
-    const closeDelayMs = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? 0
-      : EMOJI_PICKER_CLOSE_ANIMATION_MS;
-
-    if (closeAnimationTimeoutRef.current !== null) {
-      window.clearTimeout(closeAnimationTimeoutRef.current);
-    }
-    closeAnimationTimeoutRef.current = window.setTimeout(() => {
-      setIsClosing(false);
-      closeAnimationTimeoutRef.current = null;
-    }, closeDelayMs);
-  }, [isOpen, isClosing]);
+    closePickerModal();
+  }, [closePickerModal]);
 
   useEffect(() => {
-    if (!isMounted) {
-      return;
-    }
-
     setRecentEmojiUsage(loadStoredUsage());
 
     const onStorageChange = (event: StorageEvent) => {
@@ -354,7 +314,7 @@ export default function EmojiPicker({
     return () => {
       window.removeEventListener("storage", onStorageChange);
     };
-  }, [isMounted]);
+  }, []);
 
   const refreshCustomEmojis = useCallback(async (resolveUuids?: string[]) => {
     try {
@@ -377,7 +337,7 @@ export default function EmojiPicker({
   customEmojiByUuidRef.current = customEmojiByUuid;
 
   useEffect(() => {
-    if (!isMounted || !isOpen) {
+    if (!isOpen) {
       return;
     }
     let cancelled = false;
@@ -406,7 +366,7 @@ export default function EmojiPicker({
     return () => {
       cancelled = true;
     };
-  }, [isMounted, isOpen]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -465,35 +425,14 @@ export default function EmojiPicker({
   }, [isOpen, refreshCustomEmojis]);
 
   useEffect(() => {
-    if (!isOpen && !isClosing) {
+    if (!isPresented) {
       setShowEmojiEditor(false);
     }
-  }, [isOpen, isClosing]);
+  }, [isPresented]);
 
   useEffect(() => {
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-      if (showEmojiEditor) {
-        setShowEmojiEditor(false);
-      } else {
-        closePicker();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isOpen, showEmojiEditor, closePicker]);
 
   const handleSelectEmoji = (emoji: string) => {
     try {
@@ -509,7 +448,7 @@ export default function EmojiPicker({
   };
 
   const emojiTileBase =
-    "rounded-xl transition-[background-color,box-shadow,transform] duration-200 hover:bg-white/[0.08] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] active:scale-95";
+    "rounded-lg transition hover:bg-surface active:scale-95";
 
   return (
     <div className={DONT_SWIPE_TABS_CLASSNAME + " " + (className ?? "")}>
@@ -530,205 +469,178 @@ export default function EmojiPicker({
         <EmojiIcon className={`h-4 w-4 ${buttonSmileIconClassName ?? ""}`} />
       </button>
 
-      {isMounted && (isOpen || isClosing)
-        ? createPortal(
-          <div
-            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2000] flex items-center justify-center px-2 ${isClosing ? "pointer-events-none" : ""}`}
-          >
-            <div
-              className={`${isClosing ? "emoji-picker-backdrop-out" : "emoji-picker-backdrop-in"} absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,color-mix(in_srgb,var(--accent)_22%,transparent),transparent_55%),radial-gradient(ellipse_80%_60%_at_100%_100%,color-mix(in_srgb,var(--muted)_12%,transparent),transparent_50%)] bg-black/45 backdrop-blur-md`}
-              onClick={closePicker}
-              aria-hidden="true"
-            />
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label={showEmojiEditor ? "Custom emoji editor" : "Emoji picker"}
-              className={`${isClosing ? "emoji-picker-panel-out" : "emoji-picker-panel-in"} relative isolate w-full ${showEmojiEditor ? "max-w-md" : "max-w-sm"}`}
-              onClick={(event) => event.stopPropagation()}
+      <AnimatedModal
+        isPresented={isPresented}
+        isClosing={isClosing}
+        onClose={closePicker}
+        onEscape={() => {
+          if (showEmojiEditor) {
+            setShowEmojiEditor(false);
+          } else {
+            closePicker();
+          }
+        }}
+        ariaLabel={showEmojiEditor ? "Custom emoji editor" : "Emoji picker"}
+        title={showEmojiEditor ? undefined : "Choose an emoji"}
+        hideHeader={showEmojiEditor}
+        headerActions={
+          showEmojiEditor ? undefined : (
+            <button
+              type="button"
+              onClick={() => setShowEmojiEditor(true)}
+              className="create-post-rgb-border shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
             >
-              <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-white/25 via-white/[0.07] to-white/[0.02] opacity-90 blur-[1px]" />
-              <div
-                className="relative overflow-hidden rounded-2xl border border-white/[0.14] bg-gradient-to-b from-white/[0.11] via-surface/35 to-surface/55 px-3 py-3 shadow-[0_28px_90px_-20px_rgba(0,0,0,0.75),inset_0_1px_0_0_rgba(255,255,255,0.22),inset_0_-1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-2xl backdrop-saturate-[1.35]"
+              <span className="create-post-rgb-text">+ Create Emoji</span>
+            </button>
+          )
+        }
+        rootClassName="z-[2000] px-3"
+        panelClassName={`max-h-[min(85vh,720px)] ${showEmojiEditor ? "max-w-md" : "max-w-sm"} bg-bg shadow-xl`}
+      >
+        {showEmojiEditor ? (
+          <>
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 pb-2 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowEmojiEditor(false)}
+                className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
               >
-                <div className="pointer-events-none absolute -left-1/4 -top-1/3 h-[85%] w-[85%] rounded-full bg-gradient-to-br from-white/30 via-white/[0.06] to-transparent opacity-70 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-12 -right-8 h-48 w-48 rounded-full bg-accent/20 blur-3xl" />
-                <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" />
-                <div className="relative z-[1] max-h-[min(85vh,720px)] overflow-y-auto overscroll-contain">
-                  {showEmojiEditor ? (
-                    <>
-                      <div className="mb-3 flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowEmojiEditor(false)}
-                          className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
-                        >
-                          <BackIcon className="h-4 w-4 shrink-0" />
-                          Back to picker
-                        </button>
-                        <button
-                          type="button"
-                          onClick={closePicker}
-                          className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
-                          aria-label="Close emoji picker"
-                        >
-                          <CloseIcon className="h-5 w-5" />
-                        </button>
-                      </div>
-                      <EmojiEditorTab isActive onSaved={refreshCustomEmojis} />
-                    </>
-                  ) : (
-                    <>
-                      <div className="mb-1.5 flex items-center justify-between gap-2">
-                        <p className="text-base font-semibold tracking-tight text-foreground/90 drop-shadow-sm">
-                          Choose an emoji
-                        </p>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setShowEmojiEditor(true)}
-                            className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
-                            aria-label="Create or edit custom emoji"
-                            title="Create or edit custom emoji"
-                          >
-                            <EditIcon className="h-5 w-5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={closePicker}
-                            className="rounded-full border border-white/[0.12] bg-white/[0.05] p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md transition hover:border-white/20 hover:bg-white/[0.1] hover:text-foreground"
-                            aria-label="Close emoji picker"
-                          >
-                            <CloseIcon className="h-5 w-5" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <label htmlFor="emoji-search" className="mb-1.5 block text-[13px] font-semibold text-foreground/55">
-                          Search
-                        </label>
-                        <input
-                          id="emoji-search"
-                          type="text"
-                          value={searchTerm}
-                          onChange={(event) => setSearchTerm(event.target.value)}
-                          placeholder="Emoji, keyword, or your custom emoji name..."
-                          className="w-full rounded-xl border border-white/[0.1] bg-black/25 px-3 py-2 text-sm text-foreground shadow-[inset_0_2px_8px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none backdrop-blur-md placeholder:text-muted/55 focus:border-accent/40 focus:ring-2 focus:ring-accent/25"
-                        />
-                      </div>
+                <BackIcon className="h-4 w-4 shrink-0" />
+                Back to picker
+              </button>
+              <button
+                type="button"
+                onClick={closePicker}
+                aria-label="Close"
+                className="rounded-full p-1.5 text-muted transition hover:bg-surface hover:text-foreground"
+              >
+                <CloseIcon className="h-5 w-5" />
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <EmojiEditorTab isActive onSaved={refreshCustomEmojis} />
+            </div>
+          </>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
+            <div className="mb-3">
+              <label htmlFor="emoji-search" className="mb-1 block text-xs text-muted">
+                Search
+              </label>
+              <input
+                id="emoji-search"
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Emoji, keyword, or custom name..."
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted focus:border-muted"
+              />
+            </div>
 
-                      {/** Recent emojis */}
-                      <p className="text-[13px] font-semibold text-foreground/55">Recent</p>
-                      <div className="mb-3 overflow-x-auto overflow-y-hidden">
-                        <div className="grid grid-flow-col grid-rows-1 gap-0 py-0">
-                          {filteredRecentEmojiOptions.map((emoji, index) => (
-                            (() => {
-                              const customEmojiUuid = customEmojiUuidFromToken(emoji);
-                              const customEmoji = customEmojiUuid ? customEmojiByUuid[customEmojiUuid] : undefined;
-                              if (customEmoji) {
-                                return (
-                                  <button
-                                    key={`recent-${emoji}-${index}`}
-                                    type="button"
-                                    onClick={() => handleSelectEmoji(emoji)}
-                                    className={`flex h-[3rem] w-[3rem] items-center justify-center px-0 py-0 [&_canvas]:!h-9 [&_canvas]:!w-9 ${emojiTileBase}`}
-                                    aria-label={`Insert custom emoji ${customEmoji.name}`}
-                                    title={customEmoji.name}
-                                  >
-                                    <CustomEmoji customEmoji={customEmoji} enablePeek={false} />
-                                  </button>
-                                );
-                              } else if (customEmojiUuid) {
-                                return (
-                                  <span
-                                    key={`recent-pending-${emoji}-${index}`}
-                                    className="flex h-[3rem] w-[3rem] items-center justify-center text-sm text-muted/45 animate-pulse"
-                                    aria-hidden="true"
-                                  >
-                                    …
-                                  </span>
-                                );
-                              }
-                              return (
-                                <button
-                                  key={`recent-${emoji}-${index}`}
-                                  type="button"
-                                  onClick={() => handleSelectEmoji(emoji)}
-                                  className={`h-[3rem] w-[3rem] px-0 py-0 text-[1.46rem] leading-none ${emojiTileBase}`}
-                                  aria-label={`Insert ${emoji}`}
-                                >
-                                  {emoji}
-                                </button>
-                              );
-                            })()
-                          ))}
-                        </div>
-                      </div>
-
-                      {/** Custom emojis — always reserve 4 rows until first load so All emojis never shifts */}
-                      {!hasLoadedCustomEmojis || filteredCustomEmojis.length > 0 || !trimmedSearchTerm ? (
-                        <>
-                          <p className="text-[13px] font-semibold text-foreground/55">Your custom emojis</p>
-                          <div className="relative mb-2 overflow-x-auto overflow-y-hidden pb-1">
-                            <div
-                              className="grid h-[calc(4*2.6rem)] grid-flow-col grid-rows-4 gap-0.5 py-0.5"
-                              aria-busy={!hasLoadedCustomEmojis || undefined}
-                            >
-                              {hasLoadedCustomEmojis
-                                ? filteredCustomEmojis.map((emoji) => (
-                                    <button
-                                      key={emoji.uuid}
-                                      type="button"
-                                      onClick={() => handleSelectEmoji(customEmojiToken(emoji.uuid))}
-                                      className={`flex h-[2.6rem] w-[2.6rem] items-center justify-center px-1 py-1 [&_canvas]:!h-9 [&_canvas]:!w-9 ${emojiTileBase}`}
-                                      aria-label={`Insert custom emoji ${emoji.name}`}
-                                      title={emoji.name}
-                                    >
-                                      <CustomEmoji customEmoji={emoji} enablePeek={false} />
-                                    </button>
-                                  ))
-                                : null}
-                            </div>
-                            {!hasLoadedCustomEmojis ? (
-                              <div
-                                className="pointer-events-none absolute inset-0 flex items-center justify-center"
-                                role="status"
-                                aria-label="Loading custom emojis"
-                              >
-                                <Loader scale={0.55} animateHeight={false} />
-                              </div>
-                            ) : null}
-                          </div>
-                        </>
-                      ) : null}
-
-                      {/** All emojis */}
-                      <p className="text-[13px] font-semibold text-foreground/55">All emojis</p>
-                      <div className="overflow-x-auto overflow-y-hidden rounded-xl">
-                        <div className="grid h-[11rem] grid-flow-col grid-rows-4 gap-0 px-0.5">
-                          {filteredEmojiOptions.map((emoji, index) => (
-                            <button
-                              key={`${emoji}-${index}`}
-                              type="button"
-                              onClick={() => handleSelectEmoji(emoji)}
-                              className={`h-8 w-8 px-1 py-1 text-xl ${emojiTileBase}`}
-                              aria-label={`Insert ${emoji}`}
-                              style={{ fontSize: "1.5rem" }}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Recent</p>
+            <div className="mb-3 overflow-x-auto overflow-y-hidden">
+              <div className="grid grid-flow-col grid-rows-1 gap-0 py-0">
+                {filteredRecentEmojiOptions.map((emoji, index) => {
+                  const customEmojiUuid = customEmojiUuidFromToken(emoji);
+                  const customEmoji = customEmojiUuid ? customEmojiByUuid[customEmojiUuid] : undefined;
+                  if (customEmoji) {
+                    return (
+                      <button
+                        key={`recent-${emoji}-${index}`}
+                        type="button"
+                        onClick={() => handleSelectEmoji(emoji)}
+                        className={`flex h-[3rem] w-[3rem] items-center justify-center px-0 py-0 [&_canvas]:!h-9 [&_canvas]:!w-9 ${emojiTileBase}`}
+                        aria-label={`Insert custom emoji ${customEmoji.name}`}
+                        title={customEmoji.name}
+                      >
+                        <CustomEmoji customEmoji={customEmoji} enablePeek={false} />
+                      </button>
+                    );
+                  }
+                  if (customEmojiUuid) {
+                    return (
+                      <span
+                        key={`recent-pending-${emoji}-${index}`}
+                        className="flex h-[3rem] w-[3rem] items-center justify-center text-sm text-muted animate-pulse"
+                        aria-hidden="true"
+                      >
+                        …
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      key={`recent-${emoji}-${index}`}
+                      type="button"
+                      onClick={() => handleSelectEmoji(emoji)}
+                      className={`h-[3rem] w-[3rem] px-0 py-0 text-[1.46rem] leading-none ${emojiTileBase}`}
+                      aria-label={`Insert ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          </div>,
-          document.body,
-        )
-        : null}
+
+            {!hasLoadedCustomEmojis || filteredCustomEmojis.length > 0 || !trimmedSearchTerm ? (
+              <>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                  Your custom emojis
+                </p>
+                <div className="relative mb-3 overflow-x-auto overflow-y-hidden pb-1">
+                  <div
+                    className="grid h-[calc(4*2.6rem)] grid-flow-col grid-rows-4 gap-0.5 py-0.5"
+                    aria-busy={!hasLoadedCustomEmojis || undefined}
+                  >
+                    {hasLoadedCustomEmojis
+                      ? filteredCustomEmojis.map((emoji) => (
+                          <button
+                            key={emoji.uuid}
+                            type="button"
+                            onClick={() => handleSelectEmoji(customEmojiToken(emoji.uuid))}
+                            className={`flex h-[2.6rem] w-[2.6rem] items-center justify-center px-1 py-1 [&_canvas]:!h-9 [&_canvas]:!w-9 ${emojiTileBase}`}
+                            aria-label={`Insert custom emoji ${emoji.name}`}
+                            title={emoji.name}
+                          >
+                            <CustomEmoji customEmoji={emoji} enablePeek={false} />
+                          </button>
+                        ))
+                      : null}
+                  </div>
+                  {!hasLoadedCustomEmojis ? (
+                    <div
+                      className="pointer-events-none absolute inset-0 flex items-center justify-center"
+                      role="status"
+                      aria-label="Loading custom emojis"
+                    >
+                      <Loader scale={0.55} animateHeight={false} />
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">All emojis</p>
+            <div className="overflow-x-auto overflow-y-hidden">
+              <div className="grid h-[11rem] grid-flow-col grid-rows-4 gap-0 px-0.5">
+                {filteredEmojiOptions.map((emoji, index) => (
+                  <button
+                    key={`${emoji}-${index}`}
+                    type="button"
+                    onClick={() => handleSelectEmoji(emoji)}
+                    className={`h-8 w-8 px-1 py-1 text-xl ${emojiTileBase}`}
+                    aria-label={`Insert ${emoji}`}
+                    style={{ fontSize: "1.5rem" }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatedModal>
     </div>
   );
 }
