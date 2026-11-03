@@ -751,6 +751,7 @@ export default function Groups({
                       imageUrl={thread.image_url}
                       imageAccessGrant={thread.image_access_grant}
                       memberUserIds={thread.member_user_ids}
+                      currentUserId={currentUserId}
                       alt={`${thread.name} photo`}
                     />
                     {isUnread ? (
@@ -773,6 +774,7 @@ export default function Groups({
           <GroupThreadRow
             key={thread.id}
             thread={thread}
+            currentUserId={currentUserId}
             unreadThreadIds={unreadThreadIds}
             onOpenThread={(nextThread) => {
               if (pinLongPressTriggeredRef.current) {
@@ -877,6 +879,7 @@ export default function Groups({
 
 function GroupThreadRow({
   thread,
+  currentUserId,
   unreadThreadIds,
   onOpenThread,
   onLastMessagePreviewClick,
@@ -885,6 +888,7 @@ function GroupThreadRow({
   onOpenPinActions,
 }: {
   thread: ThreadItem;
+  currentUserId: string;
   unreadThreadIds: Set<string>;
   onOpenThread: (thread: ThreadItem) => void;
   onLastMessagePreviewClick: (thread: ThreadItem) => void;
@@ -943,6 +947,7 @@ function GroupThreadRow({
           imageUrl={thread.image_url}
           imageAccessGrant={thread.image_access_grant}
           memberUserIds={thread.member_user_ids}
+          currentUserId={currentUserId}
           alt={`${thread.name} photo`}
         />
 

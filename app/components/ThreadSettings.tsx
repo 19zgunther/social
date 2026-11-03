@@ -368,6 +368,7 @@ export default function ThreadSettings({
                     ? members.map((member) => member.user_id)
                     : thread.member_user_ids
                 }
+                currentUserId={currentUserId}
                 alt="Group photo"
                 className="border-0"
               />

@@ -1632,6 +1632,7 @@ export default function Thread({
                     ? members.map((member) => member.user_id)
                     : selectedThread.member_user_ids
                 }
+                currentUserId={currentUserId}
                 alt="Group photo"
               />
             </button>
@@ -1648,6 +1649,7 @@ export default function Thread({
                     ? members.map((member) => member.user_id)
                     : selectedThread.member_user_ids
                 }
+                currentUserId={currentUserId}
                 alt="Group photo"
               />
             </div>

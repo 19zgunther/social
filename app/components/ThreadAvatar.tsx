@@ -18,6 +18,8 @@ type ThreadAvatarProps = {
   imageUrl?: string | null;
   imageAccessGrant?: string | null;
   memberUserIds?: string[] | null;
+  /** Omit this user from the collage (typically the viewer). */
+  currentUserId?: string | null;
   alt?: string;
   className?: string;
 };
@@ -158,11 +160,18 @@ export default function ThreadAvatar({
   imageUrl,
   imageAccessGrant,
   memberUserIds,
+  currentUserId,
   alt = "Group photo",
   className,
 }: ThreadAvatarProps) {
   const hasThreadImage = Boolean(imageId && (imageUrl || imageAccessGrant));
-  const members = [...new Set((memberUserIds ?? []).filter(Boolean))];
+  const members = [
+    ...new Set(
+      (memberUserIds ?? []).filter(
+        (userId) => Boolean(userId) && userId !== currentUserId,
+      ),
+    ),
+  ];
   const showCollage = !hasThreadImage && members.length > 0;
 
   return (
