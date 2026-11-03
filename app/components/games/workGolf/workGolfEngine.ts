@@ -1535,7 +1535,7 @@ export function generateLevel(levelNumber: number): LevelData {
   }
   level.trees = trees;
 
-  // Sparse floating pickups along the course (usually 1, sometimes 0 or 2)
+  // Sparse ground pickups along the course (usually 1, sometimes 0 or 2)
   const powerUps: PowerUpDef[] = [];
   const powerRoll = rng();
   const powerCount = powerRoll < 0.22 ? 0 : powerRoll < 0.82 ? 1 : 2;
@@ -1563,9 +1563,10 @@ export function generateLevel(levelNumber: number): LevelData {
       id: powerUps.length,
       kind: "beer",
       x,
-      y: sample.height + 1.15 + rng() * 0.55,
+      // Sit on the turf (can ~0.72 tall) so rolling shots can collect it
+      y: sample.height + 0.38,
       z,
-      radius: 0.55,
+      radius: 0.75,
       active: true,
     });
   }
@@ -1956,12 +1957,10 @@ export class WorkGolfEngine {
   private collectPowerUps() {
     for (const pu of this.level.powerUps) {
       if (!pu.active) continue;
-      const d = Math.hypot(
-        this.ball.pos.x - pu.x,
-        this.ball.pos.y - pu.y,
-        this.ball.pos.z - pu.z,
-      );
-      if (d > pu.radius + BALL_RADIUS) continue;
+      // Horizontal pickup with a short vertical window (ground rolls + low chips)
+      const horiz = Math.hypot(this.ball.pos.x - pu.x, this.ball.pos.z - pu.z);
+      if (horiz > pu.radius + BALL_RADIUS) continue;
+      if (Math.abs(this.ball.pos.y - pu.y) > 0.95) continue;
       pu.active = false;
       this.pendingFx.push({ kind: "powerUp", powerUpId: pu.id, powerKind: pu.kind });
       if (pu.kind === "beer") {

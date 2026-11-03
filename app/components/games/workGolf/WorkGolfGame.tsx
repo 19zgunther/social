@@ -336,6 +336,7 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
     if (!isLevelUnlocked(levelNumber, played)) return;
     runRecordedRef.current = false;
     completingRef.current = false;
+    sceneRef.current?.setMenuPreview(false);
     engineRef.current = new WorkGolfEngine(levelNumber);
     snapRef.current = engineRef.current.snapshot();
     setHud(snapRef.current);
@@ -372,6 +373,11 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
     if (!el) return;
     const scene = createWorkGolfScene(el);
     sceneRef.current = scene;
+
+    // Level 1 flyover behind the title screen
+    engineRef.current = new WorkGolfEngine(1);
+    snapRef.current = engineRef.current.snapshot();
+    scene.setMenuPreview(true);
 
     const onResize = () => {
       scene.resize(el.clientWidth, el.clientHeight);
@@ -421,6 +427,7 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
           })();
         }
       } else if (snapRef.current) {
+        // Keep seagulls / boats / water alive on menus & pause
         sc.sync(engine, snapRef.current);
       }
     };
@@ -433,6 +440,18 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
       sceneRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const sc = sceneRef.current;
+    if (!sc) return;
+    const orbit =
+      screen === "title" || screen === "levels" || (screen === "highscores" && !hud);
+    sc.setMenuPreview(orbit);
+    if (orbit && (!engineRef.current || engineRef.current.level.levelNumber !== 1)) {
+      engineRef.current = new WorkGolfEngine(1);
+      snapRef.current = engineRef.current.snapshot();
+    }
+  }, [screen, hud]);
 
   const onPointerDown = useEffectEvent((e: React.PointerEvent) => {
     if (screenRef.current !== "playing") return;
@@ -502,15 +521,22 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
     void loadLeaderboard(leaderboardLevel, scope);
   };
 
+  const ensurePreviewLevel = () => {
+    engineRef.current = new WorkGolfEngine(1);
+    snapRef.current = engineRef.current.snapshot();
+    sceneRef.current?.setMenuPreview(true);
+  };
+
   const quitToTitle = () => {
-    engineRef.current = null;
-    snapRef.current = null;
     setHud(null);
+    setCompleteInfo(null);
+    ensurePreviewLevel();
     setMenuScreen("title");
   };
 
   const unlockedMax = computeUnlockedMax(playedLevels);
-  const showCanvas = screen === "playing" || screen === "paused" || screen === "complete";
+  const menuOrbit =
+    screen === "title" || screen === "levels" || (screen === "highscores" && !hud);
   const aimingEngine = hud?.aiming ? engineRef.current : null;
   const aimCarryYards =
     aimingEngine && hud
@@ -532,16 +558,18 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
     >
       <div
         ref={mountRef}
-        className={`absolute inset-0 ${showCanvas ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`absolute inset-0 ${
+          screen === "playing" ? "" : "pointer-events-none"
+        }`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       />
 
-      {/* Soft title / menu backdrop when not in a round */}
-      {!showCanvas ? (
-        <div className="workgolf-backdrop pointer-events-none absolute inset-0" aria-hidden />
+      {/* Soft veil so menu text stays readable over the live course */}
+      {menuOrbit ? (
+        <div className="workgolf-backdrop pointer-events-none absolute inset-0 z-[1]" aria-hidden />
       ) : null}
 
       <button

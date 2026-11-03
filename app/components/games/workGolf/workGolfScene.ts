@@ -723,6 +723,75 @@ function makeBeerCan(pu: PowerUpDef): THREE.Group {
   return g;
 }
 
+/** Petite low-poly golf cart (wheels in userData for roll). */
+function makeGolfCart(): THREE.Group {
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc, flatShading: true });
+  const accentMat = new THREE.MeshLambertMaterial({ color: 0x16a34a, flatShading: true });
+  const darkMat = new THREE.MeshLambertMaterial({ color: 0x1f2937, flatShading: true });
+  const seatMat = new THREE.MeshLambertMaterial({ color: 0x374151, flatShading: true });
+  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x111827, flatShading: true });
+
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.22, 1.45), bodyMat);
+  chassis.position.y = 0.38;
+  chassis.castShadow = true;
+  g.add(chassis);
+
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.16, 0.35), accentMat);
+  nose.position.set(0, 0.4, 0.62);
+  g.add(nose);
+
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.14, 0.55), seatMat);
+  seat.position.set(0, 0.52, -0.05);
+  g.add(seat);
+
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.42, 0.1), seatMat);
+  back.position.set(0, 0.7, -0.32);
+  g.add(back);
+
+  const bagWell = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.28, 0.4), darkMat);
+  bagWell.position.set(0, 0.48, -0.7);
+  g.add(bagWell);
+
+  // Roof posts + canopy
+  const postGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.7, 4);
+  const posts: [number, number][] = [
+    [-0.38, 0.45],
+    [0.38, 0.45],
+    [-0.38, -0.35],
+    [0.38, -0.35],
+  ];
+  for (const [px, pz] of posts) {
+    const post = new THREE.Mesh(postGeo, darkMat);
+    post.position.set(px, 0.85, pz);
+    g.add(post);
+  }
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.06, 1.15), accentMat);
+  roof.position.set(0, 1.2, 0.05);
+  roof.castShadow = true;
+  g.add(roof);
+
+  const wheels: THREE.Mesh[] = [];
+  const wheelGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.14, 8);
+  const wheelPos: [number, number, number][] = [
+    [-0.48, 0.2, 0.48],
+    [0.48, 0.2, 0.48],
+    [-0.48, 0.2, -0.48],
+    [0.48, 0.2, -0.48],
+  ];
+  for (const [wx, wy, wz] of wheelPos) {
+    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(wx, wy, wz);
+    wheel.castShadow = true;
+    g.add(wheel);
+    wheels.push(wheel);
+  }
+  g.userData.wheels = wheels;
+  g.scale.setScalar(0.69);
+  return g;
+}
+
 /** Tiny low-poly seagull; wings stored on userData for flapping. */
 function makeSeagull(): THREE.Group {
   const g = new THREE.Group();
@@ -769,6 +838,58 @@ function makeSeagull(): THREE.Group {
   return g;
 }
 
+/** Small low-poly sailboat for open water (hitbox ~hull size). */
+function makeSailboat(): THREE.Group {
+  const g = new THREE.Group();
+  const hullMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b, flatShading: true });
+  const deckMat = new THREE.MeshLambertMaterial({ color: 0xc4a574, flatShading: true });
+  const mastMat = new THREE.MeshLambertMaterial({ color: 0x5c4033, flatShading: true });
+  const sailMat = new THREE.MeshLambertMaterial({
+    color: 0xf8fafc,
+    flatShading: true,
+    side: THREE.DoubleSide,
+  });
+  const accentMat = new THREE.MeshLambertMaterial({ color: 0xb91c1c, flatShading: true });
+
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.22, 1.35), hullMat);
+  hull.position.y = 0.05;
+  hull.castShadow = true;
+  g.add(hull);
+
+  const bow = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.55, 4), hullMat);
+  bow.rotation.x = -Math.PI / 2;
+  bow.position.set(0, 0.05, 0.85);
+  bow.castShadow = true;
+  g.add(bow);
+
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.7), deckMat);
+  deck.position.y = 0.18;
+  g.add(deck);
+
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.2, 0.35), accentMat);
+  cabin.position.set(0, 0.3, -0.15);
+  g.add(cabin);
+
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 1.55, 5), mastMat);
+  mast.position.set(0, 0.95, 0.1);
+  mast.castShadow = true;
+  g.add(mast);
+
+  // Triangle sail (two faces via DoubleSide)
+  const sailGeo = new THREE.BufferGeometry();
+  sailGeo.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([0, 0, 0, 0, 1.25, 0, 0, 0.15, 0.7], 3),
+  );
+  sailGeo.computeVertexNormals();
+  const sail = new THREE.Mesh(sailGeo, sailMat);
+  sail.position.set(0.04, 0.35, 0.05);
+  g.add(sail);
+
+  g.scale.setScalar(1.15);
+  return g;
+}
+
 function makeWayArrow(): THREE.Group {
   const g = new THREE.Group();
   const shape = new THREE.Shape();
@@ -801,6 +922,8 @@ export type WorkGolfSceneHandle = {
   dom: HTMLCanvasElement;
   resize: (w: number, h: number) => void;
   sync: (engine: WorkGolfEngine, snap: RoundSnapshot) => void;
+  /** Slow orbital flyover for title / level select (hides ball HUD chrome). */
+  setMenuPreview: (active: boolean) => void;
   worldToScreen: (x: number, y: number, z: number) => { x: number; y: number } | null;
   pickBall: (clientX: number, clientY: number, rect: DOMRect) => boolean;
   dispose: () => void;
@@ -968,6 +1091,10 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   scene.add(wayArrow);
   let builtLevel = -1;
   let builtTargetHoleId = -1;
+
+  /** Title-screen cinematic orbit (instead of ball-follow cam). */
+  let menuPreview = false;
+  let previewYaw = 0.35;
 
   /** Smooth camera follow after water reset (anchor → ball over ~1s). */
   const WATER_CAM_SLIDE_DUR = 1;
@@ -1218,6 +1345,115 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   scene.add(seagullGroup);
   const seagulls: Seagull[] = [];
 
+  type Sailboat = {
+    group: THREE.Group;
+    x: number;
+    y: number;
+    z: number;
+    yaw: number;
+    speed: number;
+    bobPhase: number;
+    turnTimer: number;
+    dead: boolean;
+  };
+  const sailboatGroup = new THREE.Group();
+  scene.add(sailboatGroup);
+  const sailboats: Sailboat[] = [];
+
+  /** Cart center must stay at least this far from the ball (XZ). */
+  const CART_BALL_KEEP = 2.15;
+
+  /** Fairway-ish turf only — no sand, water, cups, or cliff skirts. */
+  function cartDrivable(level: LevelData, x: number, z: number): boolean {
+    const s = sampleTerrain(level, x, z);
+    if (s.inCup || s.inBunker) return false;
+    if (s.surface === "water" || s.surface === "sand" || s.surface === "void") return false;
+    if (s.height <= level.waterY + 0.25) return false;
+    if (s.normal.y < 0.74) return false;
+    if (isBeachSkirt(s.height, level.waterY, s.normal)) return false;
+    return true;
+  }
+
+  /** Pick a nearby drivable stand-off; falls back to current cart pose if none. */
+  function findCartPark(
+    level: LevelData,
+    bx: number,
+    bz: number,
+    face: number,
+    avoidSide: number,
+    fallbackX: number,
+    fallbackZ: number,
+  ): { x: number; z: number } {
+    const candidates: { behind: number; side: number }[] = [
+      { behind: 4.4, side: 1.55 * avoidSide },
+      { behind: 3.6, side: 2.2 * avoidSide },
+      { behind: 5.2, side: 1.2 * avoidSide },
+      { behind: 4.0, side: -1.55 * avoidSide },
+      { behind: 3.2, side: -2.1 * avoidSide },
+      { behind: 2.8, side: 2.6 * avoidSide },
+      { behind: 5.5, side: 0.4 * avoidSide },
+      { behind: 2.5, side: 0 },
+    ];
+    for (const c of candidates) {
+      let x = bx - Math.sin(face) * c.behind + Math.cos(face) * c.side;
+      let z = bz - Math.cos(face) * c.behind - Math.sin(face) * c.side;
+      const pdx = x - bx;
+      const pdz = z - bz;
+      const pdist = Math.hypot(pdx, pdz);
+      if (pdist < CART_BALL_KEEP) {
+        if (pdist < 1e-4) continue;
+        const s = CART_BALL_KEEP / pdist;
+        x = bx + pdx * s;
+        z = bz + pdz * s;
+      }
+      if (cartDrivable(level, x, z)) return { x, z };
+    }
+    // Spiral search around the ball for any safe turf
+    for (let ring = 0; ring < 8; ring++) {
+      const rad = CART_BALL_KEEP + 0.4 + ring * 0.55;
+      for (let k = 0; k < 10; k++) {
+        const a = face + (k / 10) * Math.PI * 2 + avoidSide * 0.2;
+        const x = bx + Math.sin(a) * rad;
+        const z = bz + Math.cos(a) * rad;
+        if (cartDrivable(level, x, z)) return { x, z };
+      }
+    }
+    if (cartDrivable(level, fallbackX, fallbackZ)) return { x: fallbackX, z: fallbackZ };
+    return { x: fallbackX, z: fallbackZ };
+  }
+
+  type GolfCartState = {
+    group: THREE.Group;
+    x: number;
+    y: number;
+    z: number;
+    yaw: number;
+    vx: number;
+    vy: number;
+    vz: number;
+    pitch: number;
+    roll: number;
+    grounded: boolean;
+    wheelSpin: number;
+    /** Consistent orbit direction when skirting the ball (+1 / -1). */
+    avoidSide: number;
+  };
+  const golfCartGroup = new THREE.Group();
+  scene.add(golfCartGroup);
+  let golfCart: GolfCartState | null = null;
+
+  type BoatDebris = {
+    mesh: THREE.Mesh;
+    vx: number;
+    vy: number;
+    vz: number;
+    spinX: number;
+    spinY: number;
+    spinZ: number;
+    life: number;
+  };
+  const boatDebris: BoatDebris[] = [];
+
   function clearConfetti() {
     while (confettiGroup.children.length) {
       const child = confettiGroup.children[0]!;
@@ -1316,6 +1552,8 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
     splashDrops.length = 0;
     splashRings.length = 0;
+    // Debris lives in fxGroup — wipe tracking when FX are cleared
+    boatDebris.length = 0;
   }
 
   function clearBlood() {
@@ -1343,6 +1581,306 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
       });
     }
     seagulls.length = 0;
+  }
+
+  function clearSailboats() {
+    while (sailboatGroup.children.length) {
+      const child = sailboatGroup.children[0]!;
+      sailboatGroup.remove(child);
+      child.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          for (const m of mats) m.dispose();
+        }
+      });
+    }
+    sailboats.length = 0;
+  }
+
+  function clearGolfCart() {
+    while (golfCartGroup.children.length) {
+      const child = golfCartGroup.children[0]!;
+      golfCartGroup.remove(child);
+      child.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          for (const m of mats) m.dispose();
+        }
+      });
+    }
+    golfCart = null;
+  }
+
+  function spawnGolfCart(level: LevelData) {
+    clearGolfCart();
+    const group = makeGolfCart();
+    golfCartGroup.add(group);
+    const hole = level.holes[0];
+    const yaw = hole
+      ? yawToward(level.tee.x, level.tee.z, hole.x, hole.z)
+      : 0;
+    const x = level.tee.x - Math.sin(yaw) * 3.2 + Math.cos(yaw) * 1.4;
+    const z = level.tee.z - Math.cos(yaw) * 3.2 - Math.sin(yaw) * 1.4;
+    const ground = sampleTerrain(level, x, z);
+    const y =
+      ground.height > level.waterY + 0.1 ? ground.height : level.tee.y;
+    golfCart = {
+      group,
+      x,
+      y,
+      z,
+      yaw,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      pitch: 0,
+      roll: 0,
+      grounded: true,
+      wheelSpin: 0,
+      avoidSide: 1,
+    };
+    group.position.set(x, y, z);
+    group.rotation.y = yaw;
+  }
+
+  function updateGolfCart(level: LevelData, snap: RoundSnapshot, dt: number) {
+    const cart = golfCart;
+    if (!cart) return;
+
+    const bx = snap.ball.pos.x;
+    const bz = snap.ball.pos.z;
+
+    // Stand-off relative to next cup (not aim yaw) — only on drivable turf
+    const hole = currentTargetHole(snap.holes);
+    const face = hole
+      ? yawToward(bx, bz, hole.x, hole.z)
+      : snap.cameraYaw;
+    const park = findCartPark(level, bx, bz, face, cart.avoidSide, cart.x, cart.z);
+    const tx = park.x;
+    const tz = park.z;
+
+    const grav = 28;
+    const maxSpeed = snap.ball.moving ? 2.5 : 3.4;
+    const accel = 7.5;
+    const friction = cart.grounded ? 4.2 : 0.35;
+    const turnRate = 2.8;
+
+    // Drive toward stand-off, steering around the ball + bad terrain
+    const toX = tx - cart.x;
+    const toZ = tz - cart.z;
+    const toDist = Math.hypot(toX, toZ);
+    if (cart.grounded && toDist > 0.18) {
+      let steerX = toX / toDist;
+      let steerZ = toZ / toDist;
+
+      // If the straight line to the parking spot clips the ball, detour sideways
+      const abx = bx - cart.x;
+      const abz = bz - cart.z;
+      const abLen = Math.hypot(abx, abz);
+      const along = abLen > 1e-4 ? (abx * steerX + abz * steerZ) : 0;
+      if (along > 0 && along < toDist) {
+        const closestX = cart.x + steerX * along;
+        const closestZ = cart.z + steerZ * along;
+        const miss = Math.hypot(closestX - bx, closestZ - bz);
+        if (miss < CART_BALL_KEEP + 0.35) {
+          const bypass = CART_BALL_KEEP + 0.9;
+          const wx = bx + Math.cos(face) * bypass * cart.avoidSide;
+          const wz = bz - Math.sin(face) * bypass * cart.avoidSide;
+          if (cartDrivable(level, wx, wz)) {
+            const wdx = wx - cart.x;
+            const wdz = wz - cart.z;
+            const wlen = Math.hypot(wdx, wdz) || 1;
+            steerX = wdx / wlen;
+            steerZ = wdz / wlen;
+          } else {
+            cart.avoidSide *= -1;
+          }
+        }
+      }
+
+      // Strong radial push if already inside / near the keep-out
+      if (abLen < CART_BALL_KEEP + 1.1 && abLen > 1e-4) {
+        const push = (CART_BALL_KEEP + 1.1 - abLen) / (CART_BALL_KEEP + 1.1);
+        const awayX = -abx / abLen;
+        const awayZ = -abz / abLen;
+        const tangX = -awayZ * cart.avoidSide;
+        const tangZ = awayX * cart.avoidSide;
+        steerX = steerX + awayX * push * 1.8 + tangX * push * 1.15;
+        steerZ = steerZ + awayZ * push * 1.8 + tangZ * push * 1.15;
+        const sl = Math.hypot(steerX, steerZ) || 1;
+        steerX /= sl;
+        steerZ /= sl;
+      }
+
+      // Look-ahead: if next few meters are undrivable, veer along the hazard edge
+      const look = 1.6;
+      const probeX = cart.x + steerX * look;
+      const probeZ = cart.z + steerZ * look;
+      if (!cartDrivable(level, probeX, probeZ)) {
+        const leftX = cart.x + (-steerZ * cart.avoidSide) * look + steerX * 0.4;
+        const leftZ = cart.z + (steerX * cart.avoidSide) * look + steerZ * 0.4;
+        const rightX = cart.x + (steerZ * cart.avoidSide) * look + steerX * 0.4;
+        const rightZ = cart.z + (-steerX * cart.avoidSide) * look + steerZ * 0.4;
+        const leftOk = cartDrivable(level, leftX, leftZ);
+        const rightOk = cartDrivable(level, rightX, rightZ);
+        if (leftOk && !rightOk) {
+          const dx = leftX - cart.x;
+          const dz = leftZ - cart.z;
+          const l = Math.hypot(dx, dz) || 1;
+          steerX = dx / l;
+          steerZ = dz / l;
+        } else if (rightOk && !leftOk) {
+          const dx = rightX - cart.x;
+          const dz = rightZ - cart.z;
+          const l = Math.hypot(dx, dz) || 1;
+          steerX = dx / l;
+          steerZ = dz / l;
+        } else if (leftOk) {
+          const dx = leftX - cart.x;
+          const dz = leftZ - cart.z;
+          const l = Math.hypot(dx, dz) || 1;
+          steerX = dx / l;
+          steerZ = dz / l;
+        } else {
+          // Dead end — brake and flip preferred side
+          cart.vx *= Math.exp(-6 * dt);
+          cart.vz *= Math.exp(-6 * dt);
+          cart.avoidSide *= -1;
+        }
+      }
+
+      cart.vx += steerX * accel * dt;
+      cart.vz += steerZ * accel * dt;
+      const wantYaw = Math.atan2(steerX, steerZ);
+      let dyaw = wantYaw - cart.yaw;
+      while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+      while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+      cart.yaw += dyaw * Math.min(1, turnRate * dt);
+    } else if (cart.grounded && toDist <= 0.18) {
+      // Soft brake at parking spot
+      cart.vx *= Math.exp(-8 * dt);
+      cart.vz *= Math.exp(-8 * dt);
+    }
+
+    // Cap horizontal speed
+    const hSpeed = Math.hypot(cart.vx, cart.vz);
+    if (hSpeed > maxSpeed) {
+      const s = maxSpeed / hSpeed;
+      cart.vx *= s;
+      cart.vz *= s;
+    }
+
+    // Gravity + integrate
+    cart.vy -= grav * dt;
+    let nextX = cart.x + cart.vx * dt;
+    let nextZ = cart.z + cart.vz * dt;
+    let nextY = cart.y + cart.vy * dt;
+
+    // Hard keep-out: never step onto the ball
+    {
+      const ndx = nextX - bx;
+      const ndz = nextZ - bz;
+      const nd = Math.hypot(ndx, ndz);
+      if (nd < CART_BALL_KEEP) {
+        if (nd < 1e-4) {
+          nextX = bx + Math.cos(face) * CART_BALL_KEEP * cart.avoidSide;
+          nextZ = bz - Math.sin(face) * CART_BALL_KEEP * cart.avoidSide;
+        } else {
+          const s = CART_BALL_KEEP / nd;
+          nextX = bx + ndx * s;
+          nextZ = bz + ndz * s;
+        }
+        const inward = cart.vx * (bx - nextX) + cart.vz * (bz - nextZ);
+        if (inward > 0) {
+          const il = Math.hypot(bx - nextX, bz - nextZ) || 1;
+          cart.vx -= ((bx - nextX) / il) * inward;
+          cart.vz -= ((bz - nextZ) / il) * inward;
+        }
+      }
+    }
+
+    // Never drive onto sand / cliffs / water / cups
+    if (!cartDrivable(level, nextX, nextZ)) {
+      nextX = cart.x;
+      nextZ = cart.z;
+      cart.vx *= 0.25;
+      cart.vz *= 0.25;
+      cart.avoidSide *= -1;
+    }
+
+    const ground = sampleTerrain(level, nextX, nextZ);
+    const floorY = ground.height;
+
+    // Ground contact (only on turf we already validated)
+    if (nextY <= floorY && cart.vy <= 0.5) {
+      nextY = floorY;
+      cart.vy = 0;
+      cart.grounded = true;
+      const n = ground.normal;
+      const vn = cart.vx * n.x + cart.vy * n.y + cart.vz * n.z;
+      if (vn < 0) {
+        cart.vx -= n.x * vn;
+        cart.vy -= n.y * vn;
+        cart.vz -= n.z * vn;
+      }
+    } else {
+      cart.grounded = false;
+    }
+
+    // If we somehow ended up off-road, crawl back toward park / ball ring
+    if (!cartDrivable(level, cart.x, cart.z) && cart.grounded) {
+      const hx = tx - cart.x;
+      const hz = tz - cart.z;
+      const hl = Math.hypot(hx, hz) || 1;
+      cart.vx += (hx / hl) * 10 * dt;
+      cart.vz += (hz / hl) * 10 * dt;
+    }
+
+    // Horizontal friction
+    const damp = Math.exp(-friction * dt);
+    cart.vx *= damp;
+    cart.vz *= damp;
+
+    cart.x = nextX;
+    cart.y = nextY;
+    cart.z = nextZ;
+
+    // Orient to ground normal (smoothed)
+    const n = ground.normal;
+    const wantPitch = Math.atan2(n.z, n.y);
+    const wantRoll = -Math.atan2(n.x, n.y);
+    const lean = Math.min(1, 10 * dt);
+    cart.pitch += (wantPitch - cart.pitch) * lean;
+    cart.roll += (wantRoll - cart.roll) * lean;
+
+    const moved = Math.hypot(cart.vx, cart.vz) * dt;
+    cart.wheelSpin += moved * 4.2;
+    cart.group.position.set(cart.x, cart.y, cart.z);
+    cart.group.rotation.set(cart.pitch, cart.yaw, cart.roll);
+    const wheels = cart.group.userData.wheels as THREE.Mesh[];
+    for (const w of wheels) {
+      w.rotation.x = cart.wheelSpin;
+    }
+
+    // Run over / clip seagulls
+    for (const g of seagulls) {
+      if (g.dead) continue;
+      const horiz = Math.hypot(g.x - cart.x, g.z - cart.z);
+      if (horiz > 0.85) continue;
+      if (Math.abs(g.y - (cart.y + 0.45)) > 1.05) continue;
+      killSeagull(g);
+    }
+  }
+
+  function clearBoatDebris() {
+    for (const bit of boatDebris) {
+      fxGroup.remove(bit.mesh);
+      bit.mesh.geometry.dispose();
+      (bit.mesh.material as THREE.MeshLambertMaterial).dispose();
+    }
+    boatDebris.length = 0;
   }
 
   function spawnSeagulls(level: LevelData) {
@@ -1465,6 +2003,186 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     gull.dead = true;
     spawnBloodFountain(gull.x, gull.y, gull.z);
     gull.group.visible = false;
+  }
+
+  function spawnSailboats(level: LevelData) {
+    clearSailboats();
+    clearBoatDebris();
+    const half = ((level.size - 1) * level.cell) / 2;
+    const count = 2 + Math.floor(Math.random() * 2); // 2–3
+    for (let i = 0; i < count; i++) {
+      let x = 0;
+      let z = 0;
+      let placed = false;
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const ang = Math.random() * Math.PI * 2;
+        const rad = half * (0.35 + Math.random() * 0.55);
+        x = Math.cos(ang) * rad;
+        z = Math.sin(ang) * rad;
+        const sample = sampleTerrain(level, x, z);
+        if (sample.height > level.waterY + 0.08) continue;
+        // Prefer open water — check a few nearby points stay wet
+        let open = true;
+        for (let k = 0; k < 4; k++) {
+          const a = (k / 4) * Math.PI * 2;
+          const s = sampleTerrain(level, x + Math.cos(a) * 2.2, z + Math.sin(a) * 2.2);
+          if (s.height > level.waterY + 0.15) {
+            open = false;
+            break;
+          }
+        }
+        if (!open) continue;
+        placed = true;
+        break;
+      }
+      if (!placed) continue;
+
+      const group = makeSailboat();
+      sailboatGroup.add(group);
+      const yaw = Math.random() * Math.PI * 2;
+      const boat: Sailboat = {
+        group,
+        x,
+        y: level.waterY,
+        z,
+        yaw,
+        speed: 0.35 + Math.random() * 0.35,
+        bobPhase: Math.random() * Math.PI * 2,
+        turnTimer: 4 + Math.random() * 8,
+        dead: false,
+      };
+      sailboats.push(boat);
+      group.position.set(boat.x, boat.y, boat.z);
+      group.rotation.y = boat.yaw;
+    }
+  }
+
+  function spawnBoatExplosion(x: number, y: number, z: number, waterY: number) {
+    spawnSplash(x, waterY, z, 1.4);
+    const wood = [0x8b5a2b, 0x6b4423, 0xa67c52, 0x5c4033];
+    const cloth = [0xf8fafc, 0xe2e8f0, 0xb91c1c];
+    const count = 42;
+    for (let i = 0; i < count; i++) {
+      const isSail = i % 5 === 0;
+      const mat = new THREE.MeshLambertMaterial({
+        color: isSail ? cloth[i % cloth.length]! : wood[i % wood.length]!,
+        flatShading: true,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(
+        isSail
+          ? new THREE.PlaneGeometry(0.18 + Math.random() * 0.25, 0.22 + Math.random() * 0.3)
+          : new THREE.BoxGeometry(
+              0.08 + Math.random() * 0.18,
+              0.04 + Math.random() * 0.08,
+              0.12 + Math.random() * 0.28,
+            ),
+        mat,
+      );
+      const ang = Math.random() * Math.PI * 2;
+      const out = 2.2 + Math.random() * 6.5;
+      mesh.position.set(x, y + 0.4, z);
+      fxGroup.add(mesh);
+      boatDebris.push({
+        mesh,
+        vx: Math.cos(ang) * out,
+        vy: 5 + Math.random() * 11,
+        vz: Math.sin(ang) * out,
+        spinX: (Math.random() - 0.5) * 14,
+        spinY: (Math.random() - 0.5) * 16,
+        spinZ: (Math.random() - 0.5) * 14,
+        life: 1.4 + Math.random() * 1.2,
+      });
+    }
+  }
+
+  function killSailboat(boat: Sailboat, waterY: number) {
+    if (boat.dead) return;
+    boat.dead = true;
+    spawnBoatExplosion(boat.x, boat.y, boat.z, waterY);
+    boat.group.visible = false;
+  }
+
+  function updateBoatDebris(level: LevelData, dt: number) {
+    const g = 22;
+    for (let i = boatDebris.length - 1; i >= 0; i--) {
+      const bit = boatDebris[i]!;
+      bit.life -= dt;
+      bit.vy -= g * dt;
+      bit.vx *= Math.exp(-0.55 * dt);
+      bit.vz *= Math.exp(-0.55 * dt);
+      bit.mesh.position.x += bit.vx * dt;
+      bit.mesh.position.y += bit.vy * dt;
+      bit.mesh.position.z += bit.vz * dt;
+      bit.mesh.rotation.x += bit.spinX * dt;
+      bit.mesh.rotation.y += bit.spinY * dt;
+      bit.mesh.rotation.z += bit.spinZ * dt;
+
+      const ground = sampleTerrain(level, bit.mesh.position.x, bit.mesh.position.z);
+      const floorY = Math.max(ground.height, level.waterY) + 0.02;
+      if (bit.life <= 0 || (bit.mesh.position.y <= floorY && bit.vy <= 0)) {
+        fxGroup.remove(bit.mesh);
+        bit.mesh.geometry.dispose();
+        (bit.mesh.material as THREE.MeshLambertMaterial).dispose();
+        boatDebris.splice(i, 1);
+      }
+    }
+  }
+
+  function updateSailboats(level: LevelData, snap: RoundSnapshot, dt: number) {
+    const t = performance.now() * 0.001;
+    for (const b of sailboats) {
+      if (b.dead) continue;
+
+      if (snap.ball.moving) {
+        const dx = snap.ball.pos.x - b.x;
+        const dz = snap.ball.pos.z - b.z;
+        const horiz = Math.hypot(dx, dz);
+        const ballY = snap.ball.pos.y;
+        // Tall hit volume covering hull + sail
+        if (
+          horiz < 1.25 + BALL_RADIUS &&
+          ballY > level.waterY - 0.3 &&
+          ballY < level.waterY + 2.4
+        ) {
+          killSailboat(b, level.waterY);
+          continue;
+        }
+      }
+
+      b.turnTimer -= dt;
+      if (b.turnTimer <= 0) {
+        b.yaw += (Math.random() - 0.5) * 1.1;
+        b.turnTimer = 5 + Math.random() * 9;
+      }
+
+      const nx = b.x + Math.sin(b.yaw) * b.speed * 1.6;
+      const nz = b.z + Math.cos(b.yaw) * b.speed * 1.6;
+      const ahead = sampleTerrain(level, nx, nz);
+      if (ahead.height > level.waterY + 0.12) {
+        // Steer away from shore
+        b.yaw += Math.PI * 0.55 + (Math.random() - 0.5) * 0.6;
+        b.turnTimer = 2 + Math.random() * 3;
+      } else {
+        b.x += Math.sin(b.yaw) * b.speed * dt;
+        b.z += Math.cos(b.yaw) * b.speed * dt;
+      }
+
+      const here = sampleTerrain(level, b.x, b.z);
+      if (here.height > level.waterY + 0.1) {
+        // Nudged onto land — reverse
+        b.yaw += Math.PI;
+        b.x += Math.sin(b.yaw) * 1.2;
+        b.z += Math.cos(b.yaw) * 1.2;
+      }
+
+      const bob = Math.sin(t * 1.3 + b.bobPhase) * 0.07;
+      const roll = Math.sin(t * 1.1 + b.bobPhase * 1.3) * 0.05;
+      const pitch = Math.sin(t * 0.9 + b.bobPhase * 0.7) * 0.035;
+      b.y = level.waterY + bob;
+      b.group.position.set(b.x, b.y, b.z);
+      b.group.rotation.set(pitch, b.yaw, roll);
+    }
   }
 
   function updateSeagulls(level: LevelData, snap: RoundSnapshot, dt: number) {
@@ -1718,8 +2436,9 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
       if (!g) continue;
       g.visible = pu.active;
       if (!pu.active) continue;
-      g.position.y = pu.y + Math.sin(t * 2.4 + pu.id * 1.7) * 0.12;
-      g.rotation.y = t * 1.1 + pu.id;
+      // Grounded can — tiny wobble, not a float
+      g.position.y = pu.y + Math.sin(t * 3.2 + pu.id * 1.7) * 0.02;
+      g.rotation.y = t * 0.85 + pu.id;
     }
   }
 
@@ -1774,8 +2493,12 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
       powerUpGroups.set(pu.id, can);
     }
 
-    // Fresh flock only on new levels (hole advances keep seagulls alive)
-    if (!keepConfetti) spawnSeagulls(level);
+    // Fresh flock / boats / cart only on new levels (hole advances keep them alive)
+    if (!keepConfetti) {
+      spawnSeagulls(level);
+      spawnSailboats(level);
+      spawnGolfCart(level);
+    }
 
     const target = currentTargetHole(level.holes);
     for (const hole of level.holes) {
@@ -1887,6 +2610,38 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     mat.color.set(target.color);
   }
 
+  function setMenuPreview(active: boolean) {
+    menuPreview = active;
+    if (active) {
+      camSlide = null;
+      hideSpreadPreview();
+      wayArrow.visible = false;
+      ballMesh.visible = false;
+    } else {
+      ballMesh.visible = true;
+    }
+  }
+
+  function updatePreviewCamera(level: LevelData, dt: number) {
+    previewYaw += dt * 0.11;
+    const tee = level.tee;
+    const hole = level.holes[0];
+    const cx = hole ? tee.x * 0.45 + hole.x * 0.55 : tee.x;
+    const cz = hole ? tee.z * 0.45 + hole.z * 0.55 : tee.z;
+    const cy = (hole ? Math.max(tee.y, hole.y) : tee.y) + 1.2;
+    // Slow bob so the flyover feels alive
+    const breathe = Math.sin(performance.now() * 0.00035) * 2.2;
+    const dist = 36 + breathe;
+    const height = 18 + Math.sin(previewYaw * 0.7) * 1.5;
+    camera.position.set(
+      cx - Math.sin(previewYaw) * dist,
+      cy + height,
+      cz - Math.cos(previewYaw) * dist,
+    );
+    camera.lookAt(cx, cy + 1.5, cz);
+    updateGrass(cx, cz, performance.now() * 0.001);
+  }
+
   function updateCamera(snap: RoundSnapshot, dt: number) {
     // Shot goes along cameraYaw; view sits ~3° off to the side so the arc is visible
     const aimYaw = snap.cameraYaw;
@@ -1994,6 +2749,9 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     updateSplashes(dt);
     updateBlood(engine.level, dt);
     updateSeagulls(engine.level, snap, dt);
+    updateSailboats(engine.level, snap, dt);
+    updateBoatDebris(engine.level, dt);
+    updateGolfCart(engine.level, snap, dt);
 
     // Celebrate newly sunk cups — confetti stays on the ground for the rest of the round
     for (const hole of snap.holes) {
@@ -2005,19 +2763,21 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     updateConfetti(engine.level, dt);
 
     // Physics center sits a bit high visually — sink along the ground normal (render only)
-    const ground = sampleTerrain(engine.level, snap.ball.pos.x, snap.ball.pos.z);
-    const visualSink = -BALL_RADIUS * 0.5;
-    ballMesh.position.set(
-      snap.ball.pos.x + ground.normal.x * visualSink,
-      snap.ball.pos.y + ground.normal.y * visualSink,
-      snap.ball.pos.z + ground.normal.z * visualSink,
-    );
-    if (snap.ball.moving) {
-      ballMesh.rotation.x += snap.ball.vel.z * 0.02;
-      ballMesh.rotation.z -= snap.ball.vel.x * 0.02;
+    if (!menuPreview) {
+      const ground = sampleTerrain(engine.level, snap.ball.pos.x, snap.ball.pos.z);
+      const visualSink = -BALL_RADIUS * 0.5;
+      ballMesh.position.set(
+        snap.ball.pos.x + ground.normal.x * visualSink,
+        snap.ball.pos.y + ground.normal.y * visualSink,
+        snap.ball.pos.z + ground.normal.z * visualSink,
+      );
+      if (snap.ball.moving) {
+        ballMesh.rotation.x += snap.ball.vel.z * 0.02;
+        ballMesh.rotation.z -= snap.ball.vel.x * 0.02;
+      }
     }
 
-    if (snap.aiming && snap.power > 0.02) {
+    if (!menuPreview && snap.aiming && snap.power > 0.02) {
       const aimArgs = {
         origin: snap.ball.pos,
         power: snap.power,
@@ -2089,12 +2849,19 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     }
 
     waterMat.uniforms.uTime!.value = now * 0.001;
-    updateGrass(snap.ball.pos.x, snap.ball.pos.z, now * 0.001);
-
     updatePowerUps(snap, now);
-    updateLabels(snap);
-    updateWayArrow(engine.level, snap);
-    updateCamera(snap, dt);
+
+    if (menuPreview) {
+      hideSpreadPreview();
+      wayArrow.visible = false;
+      for (const sprite of labelSprites.values()) sprite.visible = false;
+      updatePreviewCamera(engine.level, dt);
+    } else {
+      updateGrass(snap.ball.pos.x, snap.ball.pos.z, now * 0.001);
+      updateLabels(snap);
+      updateWayArrow(engine.level, snap);
+      updateCamera(snap, dt);
+    }
     renderer.render(scene, camera);
   }
 
@@ -2132,6 +2899,9 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
   function dispose() {
     clearWorld();
     clearSeagulls();
+    clearSailboats();
+    clearGolfCart();
+    clearBoatDebris();
     clearGrassCandidates();
     scene.remove(wayArrow);
     wayArrow.traverse((obj) => {
@@ -2158,6 +2928,8 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     bloodDropGeo.dispose();
     scene.remove(bloodGroup);
     scene.remove(seagullGroup);
+    scene.remove(sailboatGroup);
+    scene.remove(golfCartGroup);
     scene.remove(grassMesh);
     grassMesh.dispose();
     grassGeo.dispose();
@@ -2175,6 +2947,7 @@ export function createWorkGolfScene(container: HTMLElement): WorkGolfSceneHandle
     dom: renderer.domElement,
     resize,
     sync,
+    setMenuPreview,
     worldToScreen,
     pickBall,
     dispose,

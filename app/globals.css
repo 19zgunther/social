@@ -976,8 +976,13 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
 
 .workgolf-backdrop {
   background:
-    radial-gradient(120% 80% at 50% 0%, #7ad4ef 0%, #5ec8e8 42%, transparent 70%),
-    linear-gradient(180deg, #5ec8e8 0%, #4cae3a 48%, #2f6b28 100%);
+    radial-gradient(90% 55% at 50% 18%, rgba(8, 24, 18, 0.18) 0%, transparent 70%),
+    linear-gradient(
+      180deg,
+      rgba(8, 28, 40, 0.42) 0%,
+      rgba(12, 40, 22, 0.28) 42%,
+      rgba(8, 24, 14, 0.55) 100%
+    );
 }
 
 .workgolf-title {
