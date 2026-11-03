@@ -487,36 +487,65 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
 
 .post-rgb-top-border {
   position: relative;
-  border-top-color: transparent;
-  --post-top-radius: 0.5rem;
+  --post-top-radius: 1rem;
+  --post-top-rgb: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--rainbow-1) 22%, var(--border)),
+    color-mix(in srgb, var(--rainbow-2) 22%, var(--border)),
+    color-mix(in srgb, var(--rainbow-3) 22%, var(--border)),
+    color-mix(in srgb, var(--rainbow-4) 22%, var(--border)),
+    color-mix(in srgb, var(--rainbow-5) 22%, var(--border)),
+    color-mix(in srgb, var(--rainbow-1) 22%, var(--border))
+  );
 }
 
-.post-rgb-top-border::before {
+/* Real fade layer at the top of the post, shifted 1rem down so it straddles the lip */
+.post-top-fade {
+  position: absolute;
+  top: -2rem;
+  left: 0;
+  right: 0;
+  height: 2rem;
+  transform: translateY(1rem);
+  z-index: 0;
+  pointer-events: none;
+  background: var(--post-top-rgb);
+  background-size: 200% 100%;
+  animation: post-rgb-top-border-shift 28s linear infinite;
+  filter: blur(8px);
+  opacity: 0.55;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+}
+
+/* Soft curved lip — enough to read the radius, quiet enough not to read as a hard border */
+.post-rgb-top-border::after {
   content: "";
   position: absolute;
-  top: -1px;
+  top: 0;
   left: 0;
   right: 0;
   height: var(--post-top-radius);
   border-radius: var(--post-top-radius) var(--post-top-radius) 0 0;
   padding: 1px 1px 0;
-  background: linear-gradient(
-    125deg,
-    color-mix(in srgb, var(--rainbow-1) 20%, var(--border)),
-    color-mix(in srgb, var(--rainbow-2) 20%, var(--border)),
-    color-mix(in srgb, var(--rainbow-3) 20%, var(--border)),
-    color-mix(in srgb, var(--rainbow-4) 20%, var(--border)),
-    color-mix(in srgb, var(--rainbow-5) 20%, var(--border)),
-    color-mix(in srgb, var(--rainbow-1) 20%, var(--border))
-  );
+  background: var(--post-top-rgb);
   background-size: 200% 100%;
   animation: post-rgb-top-border-shift 28s linear infinite;
+  opacity: 0.7;
   pointer-events: none;
+  z-index: 2;
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+}
+
+.post-rgb-top-border > header {
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
+  border-radius: var(--post-top-radius) var(--post-top-radius) 0 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -621,17 +650,10 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
     );
   }
 
-  .post-rgb-top-border::before {
+  .post-top-fade,
+  .post-rgb-top-border::after {
     animation: none;
     background-size: 100% 100%;
-    background: linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--rainbow-1) 50%, var(--foreground)),
-      color-mix(in srgb, var(--rainbow-2) 50%, var(--foreground)),
-      color-mix(in srgb, var(--rainbow-3) 50%, var(--foreground)),
-      color-mix(in srgb, var(--rainbow-4) 50%, var(--foreground)),
-      color-mix(in srgb, var(--rainbow-5) 50%, var(--foreground))
-    );
   }
 
   .tetris-title-mark,
@@ -1610,11 +1632,27 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   animation: emoji-picker-panel-out 0.2s ease-in both;
 }
 
+@keyframes create-post-preview-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.create-post-preview-in {
+  animation: create-post-preview-in 0.28s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .emoji-picker-backdrop-in,
   .emoji-picker-backdrop-out,
   .emoji-picker-panel-in,
-  .emoji-picker-panel-out {
+  .emoji-picker-panel-out,
+  .create-post-preview-in {
     animation: none;
   }
 }

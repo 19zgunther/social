@@ -12,8 +12,7 @@ type AppTab =
     | "thread_settings"
     | "thread_event"
     | "profile_settings"
-    | "other_user_profile"
-    | "create_post";
+    | "other_user_profile";
 
 const MOBILE_FRAME_STYLE: CSSProperties = {
     width: "100vw",
@@ -24,20 +23,27 @@ const APP_VIEWPORT_STYLE: CSSProperties = {
     minHeight: "100svh",
 };
 
-const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | null } => {
+const parseDeepLinkFromLocation = (): {
+    tab: AppTab | null;
+    threadId: string | null;
+    openCreatePost: boolean;
+} => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get("tab");
     const threadIdParam = params.get("thread_id");
+    const openCreatePost = tabParam === "create_post";
     let tab: AppTab | null =
         tabParam === "feed" ||
             tabParam === "groups" ||
             // tabParam === "events" || // events tab hidden
             tabParam === "shared_event_posts" ||
             tabParam === "profile" ||
-            tabParam === "feedback" ||
-            tabParam === "create_post"
+            tabParam === "feedback"
             ? tabParam
             : null;
+    if (openCreatePost) {
+        tab = "profile";
+    }
     if (!tab && threadIdParam) {
         tab = "groups";
     }
@@ -45,6 +51,7 @@ const parseDeepLinkFromLocation = (): { tab: AppTab | null; threadId: string | n
     return {
         tab,
         threadId: threadIdParam?.trim() || null,
+        openCreatePost,
     };
 };
 

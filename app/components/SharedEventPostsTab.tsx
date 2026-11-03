@@ -1,6 +1,15 @@
 "use client";
 
-import { ChangeEvent, CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  CSSProperties,
+  TouchEvent,
+  WheelEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   CheckIcon,
@@ -13,6 +22,7 @@ import {
   ClockIcon,
   CameraIcon,
   CloseIcon,
+  RefreshIcon,
 } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
 import Camera from "@/app/components/Camera";
@@ -42,12 +52,65 @@ import {
 
 const SHARED_POST_UPLOAD_ACCEPT = "image/*,video/mp4,video/webm,video/quicktime,.mov";
 const EDITOR_CLOSE_ANIMATION_MS = 200;
+const SHARED_EVENTS_LIST_CACHE_TTL_MS = 60_000;
+const TOP_REFRESH_COOLDOWN_MS = 1500;
+const PULL_REFRESH_THRESHOLD_PX = 55;
+const MIN_REFRESH_SPIN_MS = 1_000;
 
 type ViewMode = { kind: "list" } | { kind: "detail"; sharedPostId: string };
 
 type EditorMode =
   | { kind: "create" }
   | { kind: "settings"; sharedPostId: string };
+
+type SharedEventsOpenCache = {
+  fetchedAt: number;
+  open: SharedPostListItem[];
+  pending: SharedPostListItem[];
+};
+
+type SharedEventsReleasedCache = {
+  fetchedAt: number;
+  released: SharedPostListItem[];
+};
+
+let sharedEventsOpenCache: SharedEventsOpenCache | null = null;
+let sharedEventsReleasedCache: SharedEventsReleasedCache | null = null;
+
+const readFreshOpenCache = (): SharedEventsOpenCache | null => {
+  if (!sharedEventsOpenCache) {
+    return null;
+  }
+  if (Date.now() - sharedEventsOpenCache.fetchedAt >= SHARED_EVENTS_LIST_CACHE_TTL_MS) {
+    sharedEventsOpenCache = null;
+    return null;
+  }
+  return sharedEventsOpenCache;
+};
+
+const writeOpenCache = (open: SharedPostListItem[], pending: SharedPostListItem[]) => {
+  sharedEventsOpenCache = { fetchedAt: Date.now(), open, pending };
+};
+
+const readFreshReleasedCache = (): SharedEventsReleasedCache | null => {
+  if (!sharedEventsReleasedCache) {
+    return null;
+  }
+  if (Date.now() - sharedEventsReleasedCache.fetchedAt >= SHARED_EVENTS_LIST_CACHE_TTL_MS) {
+    sharedEventsReleasedCache = null;
+    return null;
+  }
+  return sharedEventsReleasedCache;
+};
+
+const writeReleasedCache = (released: SharedPostListItem[]) => {
+  sharedEventsReleasedCache = { fetchedAt: Date.now(), released };
+};
+
+const invalidateSharedEventsCaches = () => {
+  sharedEventsOpenCache = null;
+  sharedEventsReleasedCache = null;
+};
 
 const postWithAuth = async (path: string, body: unknown = {}): Promise<Response> =>
   fetch(path, {
@@ -164,14 +227,27 @@ export default function SharedEventPostsTab({
   const [editor, setEditor] = useState<EditorMode | null>(null);
   const [isEditorClosing, setIsEditorClosing] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const [openPosts, setOpenPosts] = useState<SharedPostListItem[]>([]);
-  const [pendingPosts, setPendingPosts] = useState<SharedPostListItem[]>([]);
+  const [openPosts, setOpenPosts] = useState<SharedPostListItem[]>(
+    () => readFreshOpenCache()?.open ?? [],
+  );
+  const [pendingPosts, setPendingPosts] = useState<SharedPostListItem[]>(
+    () => readFreshOpenCache()?.pending ?? [],
+  );
   const [releasedPosts, setReleasedPosts] = useState<SharedPostListItem[]>([]);
   const [isReleasedExpanded, setIsReleasedExpanded] = useState(false);
   const [isLoadingReleased, setIsLoadingReleased] = useState(false);
   const [hasLoadedReleased, setHasLoadedReleased] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !readFreshOpenCache());
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const openPostsRef = useRef<SharedPostListItem[]>([]);
+  const pendingPostsRef = useRef<SharedPostListItem[]>([]);
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
+  const pullStartYRef = useRef<number | null>(null);
+  const pullRefreshTriggeredRef = useRef(false);
+  const lastTopRefreshAtRef = useRef(0);
+  const isReleasedExpandedRef = useRef(false);
+  const hasLoadedReleasedRef = useRef(false);
 
   const [createTitle, setCreateTitle] = useState("");
   const [createCloseAt, setCreateCloseAt] = useState(defaultCloseLocal);
@@ -201,8 +277,38 @@ export default function SharedEventPostsTab({
     };
   }, []);
 
-  const loadList = useCallback(async () => {
-    setIsLoading(true);
+  useEffect(() => {
+    openPostsRef.current = openPosts;
+  }, [openPosts]);
+
+  useEffect(() => {
+    pendingPostsRef.current = pendingPosts;
+  }, [pendingPosts]);
+
+  useEffect(() => {
+    isReleasedExpandedRef.current = isReleasedExpanded;
+  }, [isReleasedExpanded]);
+
+  useEffect(() => {
+    hasLoadedReleasedRef.current = hasLoadedReleased;
+  }, [hasLoadedReleased]);
+
+  const loadList = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    if (!force) {
+      const cached = readFreshOpenCache();
+      if (cached) {
+        setOpenPosts(cached.open);
+        setPendingPosts(cached.pending);
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    const hasExisting =
+      openPostsRef.current.length > 0 || pendingPostsRef.current.length > 0;
+    if (!hasExisting) {
+      setIsLoading(true);
+    }
     setStatusMessage("");
     try {
       const body: SharedPostsListRequest = { phases: ["open", "pending"] };
@@ -214,6 +320,7 @@ export default function SharedEventPostsTab({
       const payload = (await response.json()) as SharedPostsListResponse;
       setOpenPosts(payload.open);
       setPendingPosts(payload.pending);
+      writeOpenCache(payload.open, payload.pending);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to load shared posts.");
     } finally {
@@ -221,7 +328,17 @@ export default function SharedEventPostsTab({
     }
   }, []);
 
-  const loadReleased = useCallback(async () => {
+  const loadReleased = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    if (!force) {
+      const cached = readFreshReleasedCache();
+      if (cached) {
+        setReleasedPosts(cached.released);
+        setHasLoadedReleased(true);
+        setIsLoadingReleased(false);
+        return;
+      }
+    }
+
     setIsLoadingReleased(true);
     setStatusMessage("");
     try {
@@ -234,6 +351,7 @@ export default function SharedEventPostsTab({
       const payload = (await response.json()) as SharedPostsListResponse;
       setReleasedPosts(payload.released);
       setHasLoadedReleased(true);
+      writeReleasedCache(payload.released);
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to load released posts.");
     } finally {
@@ -254,6 +372,77 @@ export default function SharedEventPostsTab({
     }
     void loadReleased();
   }, [isActive, view.kind, isReleasedExpanded, loadReleased]);
+
+  const onRefreshSharedEvents = useCallback(async () => {
+    if (isRefreshing) {
+      return;
+    }
+    setIsRefreshing(true);
+    setStatusMessage("");
+    const startedAt = Date.now();
+    try {
+      await loadList({ force: true });
+      if (isReleasedExpandedRef.current || hasLoadedReleasedRef.current) {
+        await loadReleased({ force: true });
+      }
+    } finally {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_REFRESH_SPIN_MS) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, MIN_REFRESH_SPIN_MS - elapsed);
+        });
+      }
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, loadList, loadReleased]);
+
+  const triggerTopRefresh = useCallback(() => {
+    const now = Date.now();
+    if (isLoading || isRefreshing || now - lastTopRefreshAtRef.current < TOP_REFRESH_COOLDOWN_MS) {
+      return;
+    }
+    lastTopRefreshAtRef.current = now;
+    void onRefreshSharedEvents();
+  }, [isLoading, isRefreshing, onRefreshSharedEvents]);
+
+  const onListTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    pullStartYRef.current = event.touches[0]?.clientY ?? null;
+    pullRefreshTriggeredRef.current = false;
+  };
+
+  const onListTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (pullRefreshTriggeredRef.current) {
+      return;
+    }
+    const startY = pullStartYRef.current;
+    const currentY = event.touches[0]?.clientY;
+    const container = listContainerRef.current;
+    if (startY === null || currentY === undefined || !container) {
+      return;
+    }
+    if (container.scrollTop > 0) {
+      return;
+    }
+    if (currentY - startY >= PULL_REFRESH_THRESHOLD_PX) {
+      pullRefreshTriggeredRef.current = true;
+      triggerTopRefresh();
+    }
+  };
+
+  const resetPullGesture = () => {
+    pullStartYRef.current = null;
+    pullRefreshTriggeredRef.current = false;
+  };
+
+  const onListWheel = (event: WheelEvent<HTMLDivElement>) => {
+    const container = listContainerRef.current;
+    if (!container) {
+      return;
+    }
+    if (container.scrollTop <= 0 && event.deltaY < -30) {
+      triggerTopRefresh();
+    }
+  };
 
   const onToggleReleasedSection = () => {
     setIsReleasedExpanded((prev) => !prev);
@@ -441,6 +630,7 @@ export default function SharedEventPostsTab({
         window.clearTimeout(editorCloseTimeoutRef.current);
         editorCloseTimeoutRef.current = null;
       }
+      invalidateSharedEventsCaches();
       setEditor(null);
       setIsEditorClosing(false);
       setView({ kind: "detail", sharedPostId: payload.shared_post.id });
@@ -469,8 +659,9 @@ export default function SharedEventPostsTab({
         setStatusMessage(await readErrorMessage(response));
         return;
       }
+      invalidateSharedEventsCaches();
       closeEditor();
-      void loadList();
+      void loadList({ force: true });
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to save shared post.");
     } finally {
@@ -528,11 +719,13 @@ export default function SharedEventPostsTab({
   };
 
   const markOpenPostContributed = (sharedPostId: string) => {
-    setOpenPosts((previous) =>
-      previous.map((item) =>
+    setOpenPosts((previous) => {
+      const next = previous.map((item) =>
         item.id === sharedPostId ? { ...item, viewer_has_contributed: true } : item,
-      ),
-    );
+      );
+      writeOpenCache(next, pendingPostsRef.current);
+      return next;
+    });
   };
 
   const contributeStatusLabel = (addedCount: number): string => {
@@ -1119,7 +1312,23 @@ export default function SharedEventPostsTab({
     <div className="flex h-full min-h-0 flex-col bg-bg">
       {editorModal}
       <header className="flex items-center justify-between gap-3 px-4 pb-1 pt-3">
-        <h1 className="text-xl font-bold tracking-tight text-foreground">Shared Events</h1>
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="text-xl font-bold tracking-tight text-foreground">Shared Events</h1>
+          <button
+            type="button"
+            onClick={() => {
+              void onRefreshSharedEvents();
+            }}
+            disabled={isRefreshing}
+            className="rounded-md p-0.5 text-muted transition hover:text-foreground disabled:opacity-80"
+            aria-label="Refresh shared events"
+          >
+            <RefreshIcon
+              className={`h-5 w-5 shrink-0 ${isRefreshing ? "animate-spin" : ""}`}
+              aria-hidden
+            />
+          </button>
+        </div>
         <button
           type="button"
           onClick={onOpenCreate}
@@ -1130,8 +1339,16 @@ export default function SharedEventPostsTab({
         </button>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-3 space-y-5">
-        {isLoading ? (
+      <div
+        ref={listContainerRef}
+        className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-3 space-y-5"
+        onTouchStart={onListTouchStart}
+        onTouchMove={onListTouchMove}
+        onTouchEnd={resetPullGesture}
+        onTouchCancel={resetPullGesture}
+        onWheel={onListWheel}
+      >
+        {isLoading && !isRefreshing ? (
           <div className="flex flex-col items-center justify-center gap-2 py-6 text-xs text-muted">
             <Loader />
             <span>Loading</span>

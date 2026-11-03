@@ -3,7 +3,7 @@
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   VignetteIcon,
-  BackIcon,
+  CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -49,6 +49,12 @@ type CreatePostTabProps = {
 };
 
 type CreatePostKind = "post" | "poll" | "tier_list";
+
+const CREATE_POST_KINDS = [
+  { kind: "post", label: "Post" },
+  { kind: "poll", label: "Poll" },
+  { kind: "tier_list", label: "Tiers" },
+] as const;
 
 const DEFAULT_TIER_NAMES = ["S", "A", "B", "C", "D"];
 const MAX_TIER_LIST_TIERS = 8;
@@ -379,6 +385,7 @@ export default function CreatePostTab({
   const createInputRef = useRef<HTMLInputElement | null>(null);
   const textInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [postKind, setPostKind] = useState<CreatePostKind>("post");
+  const activePostKindIndex = CREATE_POST_KINDS.findIndex((entry) => entry.kind === postKind);
   const [comment, setComment] = useState("");
   const [mediaItems, setMediaItems] = useState<PendingUploadMedia[]>([]);
   const [imageEditDrafts, setImageEditDrafts] = useState<Record<string, ImageEditDraft>>({});
@@ -569,21 +576,15 @@ export default function CreatePostTab({
     }
   }, [audience, postGroups]);
 
-  const audienceHint = useMemo(() => {
-    if (audience.mode === "permanent") {
-      return "Visible to all current and future friends.";
-    }
-    if (audience.mode === "all") {
-      return "Visible only to people who are friends right now.";
+  const audienceWarning = useMemo(() => {
+    if (audience.mode !== "group") {
+      return null;
     }
     const group = postGroups.find((entry) => entry.id === audience.groupId);
-    if (!group) {
-      return "Pick a group.";
+    if (!group || group.member_ids.length > 0) {
+      return null;
     }
-    if (group.member_ids.length === 0) {
-      return "This group has no members — only you will see the post.";
-    }
-    return `Visible to ${group.member_ids.length} friend${group.member_ids.length === 1 ? "" : "s"} in “${group.name}”.`;
+    return "This group has no members — only you will see the post.";
   }, [audience, postGroups]);
 
   const onSelectAudience = (value: string) => {
@@ -1152,19 +1153,20 @@ export default function CreatePostTab({
 
   return (
     <div className={`relative flex h-full min-h-0 w-full flex-col bg-bg ${DONT_SWIPE_TABS_CLASSNAME}`}>
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+      <header className="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-3">
+        <h2 className="text-base font-semibold text-foreground">Create Post</h2>
         <button
           type="button"
           onClick={onCancel}
           disabled={isPosting}
-          className="rounded-full flex items-center gap-2 px-3 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
+          aria-label="Close"
+          className="rounded-full p-1.5 text-muted transition hover:bg-surface hover:text-foreground disabled:opacity-50"
         >
-          <BackIcon className="h-5 w-5" />
-          Cancel
+          <CloseIcon className="h-5 w-5" />
         </button>
-      </div>
+      </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 pb-24">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3">
         <input
           ref={createInputRef}
           type="file"
@@ -1174,38 +1176,49 @@ export default function CreatePostTab({
           className="hidden"
         />
 
-        <div className="mb-3 flex gap-2">
-          {([
-            { kind: "post", label: "Post" },
-            { kind: "poll", label: "Poll" },
-            { kind: "tier_list", label: "Tiers" },
-          ] as const).map((entry) => (
-            <button
-              key={entry.kind}
-              type="button"
-              onClick={() => setPostKind(entry.kind)}
-              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                postKind === entry.kind
-                  ? "border-accent bg-accent text-on-accent"
-                  : "border-border bg-surface text-muted hover:text-foreground"
-              }`}
-            >
-              {entry.label}
-            </button>
-          ))}
+        <div
+          role="tablist"
+          aria-label="Post type"
+          className="relative mb-3 flex w-full rounded-full border-2 border-border bg-surface p-1"
+        >
+          <div
+            aria-hidden
+            className="absolute inset-y-1 left-1 rounded-full bg-accent transition-transform duration-200 ease-out"
+            style={{
+              width: `calc((100% - 0.5rem) / ${CREATE_POST_KINDS.length})`,
+              transform: `translateX(${Math.max(activePostKindIndex, 0) * 100}%)`,
+            }}
+          />
+          {CREATE_POST_KINDS.map((entry) => {
+            const isActive = postKind === entry.kind;
+            return (
+              <button
+                key={entry.kind}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setPostKind(entry.kind)}
+                className={`relative z-10 flex flex-1 items-center justify-center gap-1 rounded-full px-1 py-2.5 text-xs font-semibold transition-colors ${
+                  isActive ? "text-on-accent" : "text-muted hover:text-foreground"
+                }`}
+              >
+                {isActive ? <CheckIcon aria-hidden className="h-3 w-3 shrink-0" strokeWidth={2.75} /> : null}
+                <span className="truncate">{entry.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="mb-3">
           <label htmlFor="post-audience" className="mb-1 block text-xs font-semibold text-muted">
-            Who can see this{" "}
-            {postKind === "poll" ? "poll" : postKind === "tier_list" ? "tier list" : "post"}?
+            Audience
           </label>
           <div className="relative">
             <select
               id="post-audience"
               value={audienceSelectValue}
               onChange={(event) => onSelectAudience(event.target.value)}
-              className="w-full appearance-none rounded-lg border border-border bg-surface px-3 py-2 pr-10 text-sm text-foreground outline-none focus:border-muted"
+              className="w-full appearance-none rounded-xl border border-border bg-surface px-3 py-2 pr-10 text-sm text-foreground outline-none focus:border-muted"
             >
               <option value="permanent">All friends (including future)</option>
               <option value="all">All friends right now</option>
@@ -1217,14 +1230,17 @@ export default function CreatePostTab({
             </select>
             <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
           </div>
-          <p className="mt-1 text-xs text-muted">{audienceHint}</p>
+          {audienceWarning ? (
+            <p className="mt-1 text-[11px] leading-snug text-muted">{audienceWarning}</p>
+          ) : null}
         </div>
 
-        <div className="flex justify-center pt-2">
+        <div className="mb-3">
+          <p className="mb-1 text-xs font-semibold text-muted">Content</p>
           <button
             type="button"
             onClick={() => createInputRef.current?.click()}
-            className="create-post-rgb-border inline-flex min-w-[10rem] flex-col items-center gap-2 rounded-xl px-6 py-4 text-sm font-semibold transition"
+            className="create-post-rgb-border flex w-full flex-col items-center justify-center gap-2 rounded-xl px-4 py-5 text-sm font-semibold transition"
           >
             <span className="create-post-rgb-icon" aria-hidden />
             <span className="create-post-rgb-text">Add photos or videos</span>
@@ -1465,19 +1481,18 @@ export default function CreatePostTab({
           </div>
         ) : null}
 
-        <div className="mt-7">
-          <textarea
-            ref={textInputRef}
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-            placeholder={
-              postKind === "poll" || postKind === "tier_list"
-                ? "Ask a question..."
-                : "Write a comment..."
-            }
-            className="min-h-[20vh] max-h-[20vh] w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
-          />
-        </div>
+        <textarea
+          ref={textInputRef}
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          rows={4}
+          placeholder={
+            postKind === "poll" || postKind === "tier_list"
+              ? "Ask a question..."
+              : "What's on your mind?"
+          }
+          className="mb-1 max-h-[28vh] min-h-[6.5rem] w-full resize-y rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground outline-none focus:border-muted"
+        />
 
         {postKind === "tier_list" ? (
           <div className="mt-4 space-y-4">
@@ -1688,7 +1703,7 @@ export default function CreatePostTab({
         ) : null}
 
         {hasPreviewContent ? (
-          <div className="mt-[10vh]">
+          <div className="create-post-preview-in mt-4">
             <p className="mb-2 text-xs font-semibold text-muted">Preview</p>
             <PostSection
               post={previewPost}
@@ -1701,22 +1716,23 @@ export default function CreatePostTab({
           </div>
         ) : null}
 
-        {statusMessage ? <p className="mt-2 text-xs text-muted">{statusMessage}</p> : null}
+        {statusMessage && postProgress === null ? (
+          <p className="mt-2 text-xs text-muted">{statusMessage}</p>
+        ) : null}
       </div>
 
-      <div className="absolute bottom-4 right-4">
+      <footer className="flex shrink-0 items-center justify-end border-t border-border px-4 py-3">
         <button
           type="button"
           onClick={onPost}
-          style={{ boxShadow: "0 0 10px 2px var(--black)" }}
           disabled={!canSubmit}
-          className="create-post-rgb-border rounded-xl px-6 py-3 text-base font-semibold transition disabled:opacity-50"
+          className="create-post-rgb-border rounded-xl px-5 py-2.5 text-sm font-semibold transition disabled:opacity-50"
         >
           <span className="create-post-rgb-text">
-            {isPosting ? "Posting..." : "Post ->"}
+            {isPosting ? "Posting..." : "Post →"}
           </span>
         </button>
-      </div>
+      </footer>
 
       {postProgress !== null ? (
         <div

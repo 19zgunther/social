@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
 import {
@@ -33,7 +34,7 @@ import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
 import ThreadEventPage from "./components/ThreadEventPage";
 // import UpcomingEventsTab from "./components/UpcomingEventsTab"; // events tab hidden
-import useSwipeBack from "./components/utils/useSwipeBack";
+import useSwipeBack, { DONT_SWIPE_TABS_CLASSNAME } from "./components/utils/useSwipeBack";
 import useSharedEventPostsUnread from "./components/utils/useSharedEventPostsUnread";
 import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
@@ -45,6 +46,7 @@ import {
   resetThemeToDefault,
 } from "@/app/lib/theme";
 
+const CREATE_POST_CLOSE_ANIMATION_MS = 200;
 
 const TAB_TO_BACK_BASE: { [key in AppTab]: { forward: AppTab | null; back: AppTab | null } } = {
   thread_event: { forward: null, back: "thread_settings" },
@@ -58,7 +60,6 @@ const TAB_TO_BACK_BASE: { [key in AppTab]: { forward: AppTab | null; back: AppTa
   feedback: { forward: "profile_settings", back: "profile" },
   profile_settings: { forward: null, back: "profile" },
   other_user_profile: { forward: null, back: "profile" },
-  create_post: { forward: null, back: "profile" },
 };
 
 
@@ -86,6 +87,61 @@ export default function Home() {
   const [eventsRefreshNonce, setEventsRefreshNonce] = useState(0); // events tab hidden; nonce kept for thread_event delete refresh
   const [groupsListRefreshNonce, setGroupsListRefreshNonce] = useState(0);
   const [profileReloadSignal, setProfileReloadSignal] = useState(0);
+  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
+  const [isCreatePostClosing, setIsCreatePostClosing] = useState(false);
+  const [isCreatePostMounted, setIsCreatePostMounted] = useState(false);
+  const createPostCloseTimeoutRef = useRef<number | null>(null);
+
+  const openCreatePost = useCallback(() => {
+    if (createPostCloseTimeoutRef.current !== null) {
+      window.clearTimeout(createPostCloseTimeoutRef.current);
+      createPostCloseTimeoutRef.current = null;
+    }
+    setIsCreatePostClosing(false);
+    setIsCreatePostOpen(true);
+  }, []);
+
+  const closeCreatePost = useCallback(() => {
+    if (!isCreatePostOpen || isCreatePostClosing) {
+      return;
+    }
+    setIsCreatePostClosing(true);
+    const closeDelayMs = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? 0
+      : CREATE_POST_CLOSE_ANIMATION_MS;
+    if (createPostCloseTimeoutRef.current !== null) {
+      window.clearTimeout(createPostCloseTimeoutRef.current);
+    }
+    createPostCloseTimeoutRef.current = window.setTimeout(() => {
+      setIsCreatePostOpen(false);
+      setIsCreatePostClosing(false);
+      createPostCloseTimeoutRef.current = null;
+    }, closeDelayMs);
+  }, [isCreatePostOpen, isCreatePostClosing]);
+
+  useEffect(() => {
+    setIsCreatePostMounted(true);
+    return () => {
+      if (createPostCloseTimeoutRef.current !== null) {
+        window.clearTimeout(createPostCloseTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isCreatePostOpen || isCreatePostClosing) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeCreatePost();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isCreatePostOpen, isCreatePostClosing, closeCreatePost]);
 
   const onLogout = () => {
     const token = undefined;
@@ -232,6 +288,9 @@ export default function Home() {
       if (deepLink.tab) {
         setActiveTab(deepLink.tab);
       }
+      if (deepLink.openCreatePost) {
+        openCreatePost();
+      }
       if (deepLink.threadId) {
         setPendingDeepLinkThreadId(deepLink.threadId);
       }
@@ -242,7 +301,7 @@ export default function Home() {
     return () => {
       window.removeEventListener("popstate", applyDeepLinkState);
     };
-  }, []);
+  }, [openCreatePost]);
 
   // Poll groups unread count at an interval while user is authenticated.
   useEffect(() => {
@@ -353,7 +412,6 @@ export default function Home() {
     profile: DEFAULT_TAB,
     profile_settings: DEFAULT_TAB,
     other_user_profile: DEFAULT_TAB,
-    create_post: DEFAULT_TAB,
     feedback: DEFAULT_TAB,
   }
 
@@ -380,8 +438,49 @@ export default function Home() {
   const profileStyle = TAB_TO_STYLE["profile"];
   const profileSettingsStyle = TAB_TO_STYLE["profile_settings"];
   const otherUserProfileStyle = TAB_TO_STYLE["other_user_profile"];
-  const createPostStyle = TAB_TO_STYLE["create_post"];
   const feedbackStyle = TAB_TO_STYLE["feedback"];
+
+  const createPostModal =
+    isCreatePostMounted && (isCreatePostOpen || isCreatePostClosing)
+      ? createPortal(
+          <div
+            className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 z-[2200] flex items-center justify-center px-3 ${
+              isCreatePostClosing ? "pointer-events-none" : ""
+            }`}
+          >
+            <div
+              className={`${
+                isCreatePostClosing ? "emoji-picker-backdrop-out" : "emoji-picker-backdrop-in"
+              } absolute inset-0 bg-black/45 backdrop-blur-md`}
+              onClick={closeCreatePost}
+              aria-hidden="true"
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Create Post"
+              className={`${
+                isCreatePostClosing ? "emoji-picker-panel-out" : "emoji-picker-panel-in"
+              } relative flex h-[80dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-bg shadow-xl`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <CreatePostTab
+                isActive={isCreatePostOpen && !isCreatePostClosing}
+                currentUserId={authUser.user_id}
+                username={authUser.username}
+                profileImageId={authUser.profile_image_id}
+                profileImageUrl={authUser.profile_image_url}
+                onCancel={closeCreatePost}
+                onPosted={() => {
+                  setProfileReloadSignal((previous) => previous + 1);
+                  closeCreatePost();
+                }}
+              />
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
     <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
@@ -450,7 +549,7 @@ export default function Home() {
           <div className="absolute w-full h-full" style={feedStyle}>
             <Feed
               onViewUserProfile={onViewUserProfile}
-              onOpenCreatePost={() => setActiveTab("create_post")}
+              onOpenCreatePost={openCreatePost}
               swipeBackOverrideRef={swipeBackOverrideRef}
             />
           </div>
@@ -564,23 +663,8 @@ export default function Home() {
               onProfileImageUpdated={onProfileImageUpdated}
               onOpenSettings={() => setActiveTab("profile_settings")}
               onViewUserProfile={onViewUserProfile}
-              onOpenCreatePost={() => setActiveTab("create_post")}
+              onOpenCreatePost={openCreatePost}
               swipeBackOverrideRef={swipeBackOverrideRef}
-            />
-          </div>
-
-          <div className="absolute w-full h-full" style={createPostStyle}>
-            <CreatePostTab
-              isActive={activeTab === "create_post"}
-              currentUserId={authUser.user_id}
-              username={authUser.username}
-              profileImageId={authUser.profile_image_id}
-              profileImageUrl={authUser.profile_image_url}
-              onCancel={() => setActiveTab("profile")}
-              onPosted={() => {
-                setProfileReloadSignal((previous) => previous + 1);
-                setActiveTab("profile");
-              }}
             />
           </div>
 
@@ -611,8 +695,9 @@ export default function Home() {
 
         </div>
 
-        {activeTab !== "create_post" ? (
-          <div className="nav-rgb-row w-full h-fit flex justify-between border-t border-border bg-bg z-[1000]" style={{boxShadow: "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)"}}>
+        {createPostModal}
+
+        <div className="nav-rgb-row w-full h-fit flex justify-between border-t border-border bg-bg z-[1000]" style={{boxShadow: "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)"}}>
             <NavRowButton
               icon={<NavFeedIcon active={activeTab === "feed"} />}
               active={activeTab === "feed"}
@@ -655,7 +740,6 @@ export default function Home() {
               className="max-w-[2rem] opacity-30"
             />
           </div>
-        ) : null}
       </section>
       </UserSessionSyncProvider>
     </main>

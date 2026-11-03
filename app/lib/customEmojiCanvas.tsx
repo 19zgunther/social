@@ -101,6 +101,7 @@ function CustomEmojiPeekOverlay({
   const overlayRef = useRef<HTMLDivElement>(null);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+  const dismissRef = useRef<(() => void) | null>(null);
   const flySizePx = Math.min(window.innerWidth, window.innerHeight) * EMOJI_FLY_SIZE_RATIO;
   const centerX = window.innerWidth / 2;
   const centerY = window.innerHeight / 2;
@@ -116,11 +117,15 @@ function CustomEmojiPeekOverlay({
     let expandAnimation: Animation | null = null;
     let shrinkAnimation: Animation | null = null;
     let holdTimer = 0;
+    let shrinkStarted = false;
 
     const shrinkBack = () => {
-      if (cancelled) {
+      if (cancelled || shrinkStarted) {
         return;
       }
+      shrinkStarted = true;
+      window.clearTimeout(holdTimer);
+      dismissRef.current = null;
       const sourceEl = sourceElRef.current;
       const endRect = sourceEl?.getBoundingClientRect();
       const endX = endRect ? endRect.left + endRect.width / 2 : source.x;
@@ -173,6 +178,11 @@ function CustomEmojiPeekOverlay({
       if (cancelled) {
         return;
       }
+      // Enable tap-to-dismiss only after expand finishes so the opening tap
+      // can't immediately close the peek (backdrop mounts under the finger).
+      dismissRef.current = () => {
+        shrinkBack();
+      };
       holdTimer = window.setTimeout(shrinkBack, EMOJI_PEEK_HOLD_MS);
     }).catch(() => {
       // Animation was cancelled.
@@ -180,35 +190,47 @@ function CustomEmojiPeekOverlay({
 
     return () => {
       cancelled = true;
+      dismissRef.current = null;
       window.clearTimeout(holdTimer);
       expandAnimation?.cancel();
       shrinkAnimation?.cancel();
     };
   }, [centerX, centerY, flySizePx, source.x, source.y, source.size, sourceElRef, startScale]);
 
+  const handleDismissPointerDown = () => {
+    dismissRef.current?.();
+  };
+
   return createPortal(
-    <div
-      ref={overlayRef}
-      className="pointer-events-none fixed left-0 top-0 z-[3000] flex items-center justify-center"
-      style={{
-        width: flySizePx,
-        height: flySizePx,
-        transform: `translate(${source.x}px, ${source.y}px) translate(-50%, -50%) scale(${startScale})`,
-      }}
-      aria-hidden
-    >
-      <canvas
-        width={CUSTOM_EMOJI_RENDER_SIZE}
-        height={CUSTOM_EMOJI_RENDER_SIZE}
-        ref={(el) => {
-          if (el) {
-            drawCustomEmojiCanvas(el, customEmoji.data_b64);
-          }
-        }}
-        className="h-full w-full rounded-md [image-rendering:pixelated]"
-        title={customEmoji.name}
+    <>
+      <div
+        className="fixed inset-0 z-[2999]"
+        onPointerDown={handleDismissPointerDown}
+        aria-hidden
       />
-    </div>,
+      <div
+        ref={overlayRef}
+        className="pointer-events-none fixed left-0 top-0 z-[3000] flex items-center justify-center"
+        style={{
+          width: flySizePx,
+          height: flySizePx,
+          transform: `translate(${source.x}px, ${source.y}px) translate(-50%, -50%) scale(${startScale})`,
+        }}
+        aria-hidden
+      >
+        <canvas
+          width={CUSTOM_EMOJI_RENDER_SIZE}
+          height={CUSTOM_EMOJI_RENDER_SIZE}
+          ref={(el) => {
+            if (el) {
+              drawCustomEmojiCanvas(el, customEmoji.data_b64);
+            }
+          }}
+          className="h-full w-full rounded-md [image-rendering:pixelated]"
+          title={customEmoji.name}
+        />
+      </div>
+    </>,
     document.body,
   );
 }
