@@ -5,6 +5,7 @@ import {
   BotIcon,
   CheckIcon,
   ChevronRightIcon,
+  CloseIcon,
   UserPlaceholderIcon,
   MessageIcon,
   PlayIcon,
@@ -16,6 +17,7 @@ import {
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
 import BackButton from "@/app/components/utils/BackButton";
+import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import { Button, IconButton } from "@/app/ui-components";
 import { PostSection } from "@/app/components/PostSection";
 import PostOptionsPane from "@/app/components/PostOptionsPane";
@@ -369,6 +371,12 @@ function Profile({
   const [outgoingRequests, setOutgoingRequests] = useState<OutgoingFriendRequest[]>([]);
   const [acceptedFriends, setAcceptedFriends] = useState<AcceptedFriend[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<ProfileSubTab>("posts");
+  const {
+    isPresented: isFriendSearchPresented,
+    isClosing: isFriendSearchClosing,
+    open: openFriendSearch,
+    close: closeFriendSearch,
+  } = useAnimatedModal();
   const activeSubTabIndex = PROFILE_SUB_TABS.findIndex((tab) => tab.id === activeSubTab);
   const [isLoadingFriendRows, setIsLoadingFriendRows] = useState(true);
   const [activeFriendUserId, setActiveFriendUserId] = useState<string | null>(null);
@@ -516,10 +524,11 @@ function Profile({
     if (option.hint) {
       setStatusMessage(option.hint);
     }
+    closeFriendSearch();
     if (option.id !== userId) {
       onViewUserProfile(option.id);
     }
-  }, [userId, onViewUserProfile]);
+  }, [userId, onViewUserProfile, closeFriendSearch]);
 
   const onRespondToFriendRequest = async (friendId: string, accept: boolean) => {
     setActiveIncomingRequestId(friendId);
@@ -736,30 +745,60 @@ function Profile({
       {activeSubTab === "friends" ? (
         <section className="border-b border-border px-3 w-full">
           <div className="mt-3 w-full">
-            <UserSearch
-              value={friendSearchQuery}
-              onValueChange={setFriendSearchQuery}
-              onSelect={onSelectUserFromSearch}
-              searchUsers={searchFriendOptions}
-              placeholder="Search to add or find friends..."
-              inputClassName="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
-              dropdownClassName="min-h-[30vh] max-h-[30vh]"
-              getOptionActionLabel={(option) => {
-                if (option.friendshipStatus === "none" || option.friendshipStatus === "rejected") {
-                  return "Request to Follow";
-                }
-                if (option.friendshipStatus === "pending_sent") {
-                  return "Pending";
-                }
-                return null;
-              }}
-              isOptionActionDisabled={(option) =>
-                activeFriendUserId === option.id
-                || option.friendshipStatus !== "none"
-                && option.friendshipStatus !== "rejected"
-              }
-              onOptionAction={onRequestFollowFromSearch}
-            />
+            <button
+              type="button"
+              onClick={() => openFriendSearch()}
+              className="w-full rounded-xl border border-border bg-bg px-3 py-2 text-left text-sm text-muted transition hover:border-muted hover:text-foreground"
+            >
+              Search to add or find friends...
+            </button>
+            <AnimatedModal
+              isPresented={isFriendSearchPresented}
+              isClosing={isFriendSearchClosing}
+              onClose={() => closeFriendSearch()}
+              ariaLabel="Search friends"
+              hideHeader
+              rootClassName="z-[2200] px-3"
+              panelClassName="h-[80vh] max-h-[80vh] max-w-lg border-0 bg-transparent shadow-none"
+              backdropClassName="bg-black/35 backdrop-blur-xl"
+            >
+              <div className="flex h-full min-h-0 flex-col pt-2">
+                <UserSearch
+                  variant="panel"
+                  value={friendSearchQuery}
+                  onValueChange={setFriendSearchQuery}
+                  onSelect={onSelectUserFromSearch}
+                  searchUsers={searchFriendOptions}
+                  placeholder="Search to add or find friends..."
+                  autoFocus
+                  trailingAction={
+                    <IconButton
+                      type="button"
+                      variant="ghost"
+                      aria-label="Close search"
+                      onClick={() => closeFriendSearch()}
+                    >
+                      <CloseIcon className="h-5 w-5" />
+                    </IconButton>
+                  }
+                  getOptionActionLabel={(option) => {
+                    if (option.friendshipStatus === "none" || option.friendshipStatus === "rejected") {
+                      return "Request to Follow";
+                    }
+                    if (option.friendshipStatus === "pending_sent") {
+                      return "Pending";
+                    }
+                    return null;
+                  }}
+                  isOptionActionDisabled={(option) =>
+                    activeFriendUserId === option.id
+                    || option.friendshipStatus !== "none"
+                    && option.friendshipStatus !== "rejected"
+                  }
+                  onOptionAction={onRequestFollowFromSearch}
+                />
+              </div>
+            </AnimatedModal>
           </div>
 
           <div className="mt-5">

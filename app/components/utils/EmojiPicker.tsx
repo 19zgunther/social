@@ -489,7 +489,7 @@ export default function EmojiPicker({
           </button>
         }
         rootClassName="z-[2000] px-3"
-        panelClassName={`max-h-[min(85vh,720px)] ${showEmojiEditor ? "max-w-md" : "max-w-sm"} bg-bg shadow-xl`}
+        panelClassName={`h-[min(85dvh,720px)] ${showEmojiEditor ? "max-w-md" : "max-w-sm"} bg-bg shadow-xl`}
       >
         {showEmojiEditor ? (
           <>

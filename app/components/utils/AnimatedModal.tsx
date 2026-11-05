@@ -11,7 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { CloseIcon } from "@/app/components/Icons";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
-import { IconButton } from "@/app/ui-components";
+import { IconButton, cn } from "@/app/ui-components";
 
 const ANIMATED_MODAL_CLOSE_MS = 200;
 
@@ -115,6 +115,8 @@ type AnimatedModalProps = {
   rootClassName?: string;
   /** Extra classes for the panel (size, bg). Default `max-w-md bg-bg shadow-xl`. */
   panelClassName?: string;
+  /** Extra classes for the dimmed/blurred backdrop. */
+  backdropClassName?: string;
 };
 
 export default function AnimatedModal({
@@ -130,12 +132,18 @@ export default function AnimatedModal({
   onEscape,
   rootClassName = "z-[2200] px-3",
   panelClassName = "max-w-md bg-bg shadow-xl",
+  backdropClassName,
 }: AnimatedModalProps) {
   const mounted = useSyncExternalStore(
     subscribeNoop,
     clientMountedSnapshot,
     serverMountedSnapshot,
   );
+  // Keep the overlay inside the visible area so iOS/Android keyboards don't cover the panel.
+  const [visualViewportBox, setVisualViewportBox] = useState<{
+    top: number;
+    height: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!isPresented || isClosing) {
@@ -167,6 +175,33 @@ export default function AnimatedModal({
     };
   }, [isPresented]);
 
+  useEffect(() => {
+    if (!isPresented) {
+      setVisualViewportBox(null);
+      return;
+    }
+
+    const visualViewport = window.visualViewport;
+    if (!visualViewport) {
+      return;
+    }
+
+    const syncVisualViewport = () => {
+      setVisualViewportBox({
+        top: visualViewport.offsetTop,
+        height: visualViewport.height,
+      });
+    };
+
+    syncVisualViewport();
+    visualViewport.addEventListener("resize", syncVisualViewport);
+    visualViewport.addEventListener("scroll", syncVisualViewport);
+    return () => {
+      visualViewport.removeEventListener("resize", syncVisualViewport);
+      visualViewport.removeEventListener("scroll", syncVisualViewport);
+    };
+  }, [isPresented]);
+
   if (!mounted || !isPresented) {
     return null;
   }
@@ -175,14 +210,28 @@ export default function AnimatedModal({
 
   return createPortal(
     <div
-      className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 flex items-center justify-center ${rootClassName} ${
-        isClosing ? "pointer-events-none" : ""
-      }`}
+      className={cn(
+        DONT_SWIPE_TABS_CLASSNAME,
+        "fixed inset-0 flex items-center justify-center py-2",
+        rootClassName,
+        isClosing && "pointer-events-none",
+      )}
+      style={
+        visualViewportBox
+          ? {
+              top: visualViewportBox.top,
+              height: visualViewportBox.height,
+              bottom: "auto",
+            }
+          : undefined
+      }
     >
       <div
-        className={`${
-          isClosing ? "emoji-picker-backdrop-out" : "emoji-picker-backdrop-in"
-        } absolute inset-0 bg-black/45 backdrop-blur-md`}
+        className={cn(
+          isClosing ? "emoji-picker-backdrop-out" : "emoji-picker-backdrop-in",
+          "absolute inset-0 bg-black/45 backdrop-blur-md",
+          backdropClassName,
+        )}
         onClick={closeDisabled ? undefined : () => onClose()}
         aria-hidden="true"
       />
@@ -190,9 +239,11 @@ export default function AnimatedModal({
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
-        className={`${
-          isClosing ? "emoji-picker-panel-out" : "emoji-picker-panel-in"
-        } relative flex w-full flex-col overflow-hidden rounded-2xl border border-border ${panelClassName}`}
+        className={cn(
+          isClosing ? "emoji-picker-panel-out" : "emoji-picker-panel-in",
+          "relative flex max-h-full w-full flex-col overflow-hidden rounded-2xl border border-border",
+          panelClassName,
+        )}
         onClick={(event) => event.stopPropagation()}
       >
         {showHeader ? (
