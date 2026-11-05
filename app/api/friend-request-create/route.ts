@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { sendPushToUsers } from "@/app/lib/push_notifications";
 
 type FriendRequestCreateBody = {
   other_user_id?: string;
@@ -114,6 +115,20 @@ export async function POST(request: Request) {
         accepted_at: true,
       },
     });
+
+    // Notify the recipient for pending human friend requests (skip auto-accepted bot follows).
+    if (!isPublicBot) {
+      void sendPushToUsers({
+        recipientUserIds: [otherUserId],
+        payload: {
+          title: "New friend request",
+          body: `${authResult.username} sent you a friend request.`,
+          url: "/?tab=profile",
+        },
+      }).catch((error) => {
+        console.error("friend_request_create_push_dispatch_failed", error);
+      });
+    }
 
     return NextResponse.json({ friend }, { status: 200 });
   } catch (error) {

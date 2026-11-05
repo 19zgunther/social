@@ -5,6 +5,7 @@ import {
   createThreadBucketImageAccessGrant,
 } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
+import { directPeerUsernameFromMembers } from "@/app/lib/threadDirect";
 import {
   GroupsListResponse,
   ImageOverlayData,
@@ -242,6 +243,10 @@ export async function POST(request: Request) {
           (access) => access.user_id === authResult.user_id,
         );
         const user_pinned_thread = viewerAccess?.user_pinned_thread === true;
+        const displayName =
+          thread.is_direct === true
+            ? directPeerUsernameFromMembers(thread, authResult.user_id) ?? thread.name
+            : thread.name;
         if (latest && latest.created_by !== authResult.user_id) {
           if (latest.image_id) {
             try {
@@ -274,7 +279,7 @@ export async function POST(request: Request) {
 
         return {
           id: thread.id,
-          name: thread.name,
+          name: displayName,
           created_at: thread.created_at.toISOString(),
           owner_user_id: thread.owner,
           owner_username: thread.users.username,

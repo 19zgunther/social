@@ -4,6 +4,7 @@ import { prisma } from "@/app/lib/prisma";
 
 type ThreadCreateBody = {
   name?: string;
+  member_user_ids?: string[];
 };
 
 export async function POST(request: Request) {
@@ -24,6 +25,25 @@ export async function POST(request: Request) {
       );
     }
 
+    const requestedMemberIds = Array.isArray(body.member_user_ids)
+      ? [
+          ...new Set(
+            body.member_user_ids
+              .filter((id): id is string => typeof id === "string")
+              .map((id) => id.trim())
+              .filter((id) => id.length > 0 && id !== authResult.user_id),
+          ),
+        ]
+      : [];
+
+    const validMembers =
+      requestedMemberIds.length > 0
+        ? await prisma.users.findMany({
+            where: { id: { in: requestedMemberIds } },
+            select: { id: true, username: true },
+          })
+        : [];
+
     const createdThread = await prisma.$transaction(async (tx) => {
       const thread = await tx.threads.create({
         data: {
@@ -38,16 +58,29 @@ export async function POST(request: Request) {
         },
       });
 
-      await tx.user_thread_access.create({
-        data: {
-          thread_id: thread.id,
-          user_id: authResult.user_id,
-          created_at: new Date(),
-        },
+      await tx.user_thread_access.createMany({
+        data: [
+          {
+            thread_id: thread.id,
+            user_id: authResult.user_id,
+            created_at: new Date(),
+          },
+          ...validMembers.map((member) => ({
+            thread_id: thread.id,
+            user_id: member.id,
+            created_at: new Date(),
+          })),
+        ],
       });
 
       return thread;
     });
+
+    const memberUserIds = [authResult.user_id, ...validMembers.map((member) => member.id)];
+    const memberUsernames = [
+      authResult.username,
+      ...validMembers.map((member) => member.username),
+    ];
 
     return NextResponse.json(
       {
@@ -57,9 +90,9 @@ export async function POST(request: Request) {
           created_at: createdThread.created_at,
           owner_user_id: createdThread.owner,
           owner_username: authResult.username,
-          participant_count: 1,
-          member_user_ids: [authResult.user_id],
-          member_usernames: [authResult.username],
+          participant_count: memberUserIds.length,
+          member_user_ids: memberUserIds,
+          member_usernames: memberUsernames,
           user_pinned_thread: false,
           image_id: null,
           image_url: null,

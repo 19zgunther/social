@@ -64,16 +64,40 @@ export async function findDirectThreadBetweenUsers(
   return null;
 }
 
+/** Peer username when member usernames are already loaded (no extra DB read). */
+export function directPeerUsernameFromMembers(
+  thread: {
+    owner: string;
+    users: { username: string };
+    user_thread_access: { user_id: string; users?: { username: string } | null }[];
+  },
+  viewerUserId: string,
+): string | null {
+  const peerId = directPeerUserId(thread, viewerUserId);
+  if (!peerId) {
+    return null;
+  }
+  if (peerId === thread.owner) {
+    return thread.users.username;
+  }
+  const accessRow = thread.user_thread_access.find((access) => access.user_id === peerId);
+  return accessRow?.users?.username ?? null;
+}
+
 /** Username to show for a direct thread to `viewerUserId` (the other participant). */
 export async function directPeerUsernameForViewer(
   prisma: PrismaClient,
   thread: {
     owner: string;
     users: { username: string };
-    user_thread_access: { user_id: string }[];
+    user_thread_access: { user_id: string; users?: { username: string } | null }[];
   },
   viewerUserId: string,
 ): Promise<string | null> {
+  const fromMembers = directPeerUsernameFromMembers(thread, viewerUserId);
+  if (fromMembers) {
+    return fromMembers;
+  }
   const peerId = directPeerUserId(thread, viewerUserId);
   if (!peerId) {
     return null;

@@ -249,7 +249,7 @@ export default function ProfileFriendsTab({
           panelClassName="h-full max-w-lg border-0 bg-transparent shadow-none"
           backdropClassName="bg-black/35 backdrop-blur-xl"
         >
-          <div className="flex h-full min-h-0 flex-col pt-6">
+          <div className="flex h-full min-h-0 flex-col pt-10">
             <UserSearch
               variant="panel"
               value={friendSearchQuery}

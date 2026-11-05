@@ -5,6 +5,7 @@ import {
   createThreadBucketImageAccessGrant,
 } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
+import { directPeerUsernameForViewer } from "@/app/lib/threadDirect";
 import { MessageData, ThreadMessagesRequest, ThreadMessagesResponse } from "@/app/types/interfaces";
 
 const PAGE_SIZE = 100;
@@ -43,6 +44,21 @@ export async function POST(request: Request) {
         image_id: true,
         created_by_event: true,
         is_direct: true,
+        users: {
+          select: {
+            username: true,
+          },
+        },
+        user_thread_access: {
+          select: {
+            user_id: true,
+            users: {
+              select: {
+                username: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -52,6 +68,11 @@ export async function POST(request: Request) {
         { status: 404 },
       );
     }
+
+    const threadDisplayName =
+      thread.is_direct === true
+        ? (await directPeerUsernameForViewer(prisma, thread, authResult.user_id)) ?? thread.name
+        : thread.name;
 
     const rootMessagesDesc = await prisma.thread_messages.findMany({
       where: {
@@ -193,7 +214,7 @@ export async function POST(request: Request) {
     const payload: ThreadMessagesResponse = {
       thread: {
         id: thread.id,
-        name: thread.name,
+        name: threadDisplayName,
         owner_user_id: thread.owner,
         image_id: thread.image_id ?? null,
         image_url: null,

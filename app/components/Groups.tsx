@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  FormEvent,
   TouchEvent,
   WheelEvent,
   useCallback,
@@ -13,6 +12,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   ApiError,
+  FriendSearchResponse,
   GroupsListResponse,
   ImageOverlayData,
   MessageData,
@@ -24,6 +24,7 @@ import { prepareImageForUpload } from "@/app/components/utils/client_file_storag
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import ThreadAvatar from "@/app/components/ThreadAvatar";
 import {
+  CloseIcon,
   ForwardIcon,
   NewChatIcon,
   PinIcon,
@@ -31,7 +32,10 @@ import {
   SearchIcon,
 } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
-import { Button, TextField } from "@/app/ui-components";
+import UserProfileImage from "@/app/components/UserProfileImage";
+import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
+import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
+import { Button, IconButton, TextField } from "@/app/ui-components";
 import { AppTab } from "./utils";
 
 type GroupsProps = {
@@ -123,12 +127,23 @@ export default function Groups({
 }: GroupsProps) {
   const [threads, setThreads] = useState<ThreadItem[]>([]);
   const [unreadThreadIds, setUnreadThreadIds] = useState<Set<string>>(new Set());
-  const [threadName, setThreadName] = useState("");
+  const [createGroupTitle, setCreateGroupTitle] = useState("");
+  const [createGroupSearchQuery, setCreateGroupSearchQuery] = useState("");
+  const [createGroupSelectedMembers, setCreateGroupSelectedMembers] = useState<UserSearchOption[]>(
+    [],
+  );
+  const [createGroupError, setCreateGroupError] = useState("");
   const [isLoadingThreads, setIsLoadingThreads] = useState(true);
   const [isRefreshingList, setIsRefreshingList] = useState(false);
-  const [createThreadIsVisible, setCreateThreadIsVisible] = useState(false);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const {
+    isPresented: isCreateGroupPresented,
+    isClosing: isCreateGroupClosing,
+    open: openCreateGroupModal,
+    close: closeCreateGroupModal,
+    dismiss: dismissCreateGroupModal,
+  } = useAnimatedModal();
   const [groupsPhotoViewer, setGroupsPhotoViewer] = useState<{
     threadId: string;
     signedUrl: string | null;
@@ -144,6 +159,8 @@ export default function Groups({
   } | null>(null);
   const [isReplyCameraSending, setIsReplyCameraSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchFriendSuggestions, setSearchFriendSuggestions] = useState<UserSearchOption[]>([]);
+  const [isLoadingSearchFriends, setIsLoadingSearchFriends] = useState(false);
   const [pinActionThreadId, setPinActionThreadId] = useState<string | null>(null);
   const [isPinningThread, setIsPinningThread] = useState(false);
   const groupsContainerRef = useRef<HTMLDivElement | null>(null);
@@ -388,30 +405,125 @@ export default function Groups({
     }
   }, [loadUnreadThreads, isActiveTab])
 
-  const onCreateThread = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!threadName.trim()) {
+  const resetCreateGroupState = useCallback(() => {
+    setCreateGroupTitle("");
+    setCreateGroupSearchQuery("");
+    setCreateGroupSelectedMembers([]);
+    setCreateGroupError("");
+  }, []);
+
+  const onOpenCreateGroup = useCallback(
+    (preselectedMembers?: UserSearchOption[]) => {
+      resetCreateGroupState();
+      if (preselectedMembers && preselectedMembers.length > 0) {
+        setCreateGroupSelectedMembers(preselectedMembers);
+      }
+      openCreateGroupModal();
+    },
+    [openCreateGroupModal, resetCreateGroupState],
+  );
+
+  const onCloseCreateGroup = useCallback(() => {
+    if (isCreatingThread) {
+      return;
+    }
+    closeCreateGroupModal({
+      onClosed: resetCreateGroupState,
+    });
+  }, [closeCreateGroupModal, isCreatingThread, resetCreateGroupState]);
+
+  const searchCreateGroupMembers = useCallback(
+    async (query: string): Promise<UserSearchOption[]> => {
+      try {
+        const response = await postWithAuth("/api/friend-search", {
+          query: query.trim() || undefined,
+        });
+        if (!response.ok) {
+          return [];
+        }
+        const payload = (await response.json()) as FriendSearchResponse;
+        const selectedIds = new Set(createGroupSelectedMembers.map((member) => member.id));
+        return payload.users
+          .filter((user) => user.id !== currentUserId && !selectedIds.has(user.id))
+          .map((user) => {
+            const relation = user.relation;
+            const friendshipStatus: UserSearchOption["friendshipStatus"] = relation
+              ? relation.accepted === true
+                ? "friends"
+                : relation.accepted === false
+                  ? "rejected"
+                  : relation.direction === "incoming"
+                    ? "pending_received"
+                    : "pending_sent"
+              : "none";
+            const hint =
+              friendshipStatus === "friends"
+                ? "Friends"
+                : friendshipStatus === "pending_sent"
+                  ? "Pending request"
+                  : friendshipStatus === "pending_received"
+                    ? "Incoming request"
+                    : "Not friends";
+            return {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              hint,
+              friendshipStatus,
+            };
+          });
+      } catch {
+        return [];
+      }
+    },
+    [createGroupSelectedMembers, currentUserId],
+  );
+
+  const onSelectCreateGroupMember = useCallback((option: UserSearchOption) => {
+    setCreateGroupSelectedMembers((previous) => {
+      if (previous.some((member) => member.id === option.id)) {
+        return previous;
+      }
+      return [...previous, option];
+    });
+    setCreateGroupSearchQuery("");
+    setCreateGroupError("");
+  }, []);
+
+  const onRemoveCreateGroupMember = useCallback((userId: string) => {
+    setCreateGroupSelectedMembers((previous) =>
+      previous.filter((member) => member.id !== userId),
+    );
+  }, []);
+
+  const onCreateThread = async () => {
+    const name = createGroupTitle.trim();
+    if (!name || isCreatingThread) {
       return;
     }
 
     setIsCreatingThread(true);
+    setCreateGroupError("");
     setStatusMessage("");
 
     try {
-      const response = await postWithAuth("/api/thread-create", { name: threadName });
+      const response = await postWithAuth("/api/thread-create", {
+        name,
+        member_user_ids: createGroupSelectedMembers.map((member) => member.id),
+      });
       if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
+        setCreateGroupError(await readErrorMessage(response));
         return;
       }
 
       const payload = (await response.json()) as { thread: ThreadItem };
       setThreads((previous) => [payload.thread, ...previous]);
-      setThreadName("");
+      dismissCreateGroupModal();
+      resetCreateGroupState();
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to create thread.");
+      setCreateGroupError(error instanceof Error ? error.message : "Failed to create thread.");
     } finally {
       setIsCreatingThread(false);
-      setCreateThreadIsVisible(false);
     }
   };
 
@@ -505,6 +617,74 @@ export default function Groups({
   const cancelPinLongPress = () => {
     clearPinLongPressTimer();
   };
+
+  const threadMemberUserIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const thread of threads) {
+      for (const userId of thread.member_user_ids ?? []) {
+        ids.add(userId);
+      }
+    }
+    return ids;
+  }, [threads]);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchFriendSuggestions([]);
+      setIsLoadingSearchFriends(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingSearchFriends(true);
+
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const response = await postWithAuth("/api/friend-search", { query });
+          if (!response.ok || cancelled) {
+            if (!cancelled) {
+              setSearchFriendSuggestions([]);
+            }
+            return;
+          }
+          const payload = (await response.json()) as FriendSearchResponse;
+          if (cancelled) {
+            return;
+          }
+          const suggestions = payload.users
+            .filter((user) => {
+              if (user.id === currentUserId || threadMemberUserIds.has(user.id)) {
+                return false;
+              }
+              return user.relation?.accepted === true;
+            })
+            .map((user) => ({
+              id: user.id,
+              username: user.username,
+              email: user.email,
+              hint: "Friends",
+              friendshipStatus: "friends" as const,
+            }));
+          setSearchFriendSuggestions(suggestions);
+        } catch {
+          if (!cancelled) {
+            setSearchFriendSuggestions([]);
+          }
+        } finally {
+          if (!cancelled) {
+            setIsLoadingSearchFriends(false);
+          }
+        }
+      })();
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [currentUserId, searchQuery, threadMemberUserIds]);
 
   const filteredThreads = useMemo(
     () => threads.filter((thread) => threadMatchesSearch(thread, searchQuery)),
@@ -643,42 +823,97 @@ export default function Groups({
               </button>
             )}
           </div>
-          <button type="button" onClick={() => { setCreateThreadIsVisible(true); }}>
+          <button
+            type="button"
+            onClick={() => onOpenCreateGroup()}
+            aria-label="Create group"
+          >
             <NewChatIcon className="h-6 w-6 text-accent" />
           </button>
         </header>
       </div>
 
-      {createThreadIsVisible && <form onSubmit={onCreateThread} className="w-full block relative">
-        <TextField
-          className="flex-1"
-          placeholder="New thread name"
-          value={threadName}
-          onChange={(event) => setThreadName(event.target.value)}
-          required
-        />
-        <div className="flex items-center gap-2 mt-2">
+      <AnimatedModal
+        isPresented={isCreateGroupPresented}
+        isClosing={isCreateGroupClosing}
+        onClose={onCloseCreateGroup}
+        ariaLabel="Create group"
+        title="Create Group"
+        closeDisabled={isCreatingThread}
+        rootClassName="z-[2200] items-start px-3"
+        panelClassName="flex h-[min(92vh,40rem)] max-w-lg flex-col overflow-hidden bg-bg shadow-xl"
+      >
+        <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pt-3 pb-4">
+          <TextField
+            type="text"
+            value={createGroupTitle}
+            onChange={(event) => setCreateGroupTitle(event.target.value)}
+            placeholder="Title..."
+            disabled={isCreatingThread}
+            aria-label="Group title"
+          />
+
+          {createGroupSelectedMembers.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {createGroupSelectedMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1 pr-1.5"
+                >
+                  <UserProfileImage
+                    userId={member.id}
+                    sizePx={24}
+                    alt={`${member.username} profile`}
+                  />
+                  <span className="max-w-[8rem] truncate text-xs font-medium text-foreground">
+                    {member.username}
+                  </span>
+                  <IconButton
+                    type="button"
+                    variant="ghost"
+                    className="h-6 w-6 shrink-0"
+                    disabled={isCreatingThread}
+                    aria-label={`Remove ${member.username}`}
+                    onClick={() => onRemoveCreateGroupMember(member.id)}
+                  >
+                    <CloseIcon className="h-3.5 w-3.5" />
+                  </IconButton>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="min-h-0 flex-1">
+            <UserSearch
+              variant="panel"
+              value={createGroupSearchQuery}
+              onValueChange={setCreateGroupSearchQuery}
+              onSelect={onSelectCreateGroupMember}
+              searchUsers={searchCreateGroupMembers}
+              placeholder="Search to add friends..."
+              autoFocus
+              disabled={isCreatingThread}
+              noResultsText="No matching users."
+            />
+          </div>
+
+          {createGroupError ? (
+            <p className="text-xs text-muted">{createGroupError}</p>
+          ) : null}
+
           <Button
             type="button"
-            variant="secondary"
-            size="sm"
-            className="flex-1"
-            onClick={() => { setCreateThreadIsVisible(false); }}
-            disabled={isCreatingThread}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
             variant="primary"
-            size="sm"
-            className="flex-1"
-            disabled={isCreatingThread}
+            className="w-full shrink-0"
+            disabled={isCreatingThread || !createGroupTitle.trim()}
+            onClick={() => {
+              void onCreateThread();
+            }}
           >
             {isCreatingThread ? "Creating..." : "Create"}
           </Button>
         </div>
-      </form>}
+      </AnimatedModal>
 
       <div className="relative mx-2">
         <SearchIcon
@@ -711,11 +946,15 @@ export default function Groups({
         onWheel={onGroupsWheel}
         className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y"
       >
-        {!isLoadingThreads && threads.length === 0 ? (
+        {!isLoadingThreads && threads.length === 0 && !searchQuery.trim() ? (
           <p className="text-xs text-muted px-4">No threads yet. Create your first one.</p>
         ) : null}
 
-        {!isLoadingThreads && threads.length > 0 && filteredThreads.length === 0 ? (
+        {!isLoadingThreads &&
+        filteredThreads.length === 0 &&
+        searchFriendSuggestions.length === 0 &&
+        !isLoadingSearchFriends &&
+        searchQuery.trim() ? (
           <p className="text-xs text-muted px-4">No groups match your search.</p>
         ) : null}
 
@@ -794,6 +1033,51 @@ export default function Groups({
             onOpenPinActions={() => setPinActionThreadId(thread.id)}
           />
         ))}
+
+        {searchQuery.trim() &&
+        (isLoadingSearchFriends || searchFriendSuggestions.length > 0) ? (
+          <div className="mt-2 border-t border-border/40 pt-2">
+            <p className="px-4 pb-2 text-xs font-semibold text-muted">Friends</p>
+            {isLoadingSearchFriends && searchFriendSuggestions.length === 0 ? (
+              <p className="px-4 py-2 text-xs text-muted">Searching friends...</p>
+            ) : null}
+            {searchFriendSuggestions.map((friend) => (
+              <div
+                key={friend.id}
+                className="flex w-full items-center gap-3 border-b border-border/30 px-4 py-3"
+              >
+                <button
+                  type="button"
+                  onClick={() => onOpenCreateGroup([friend])}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left transition hover:opacity-90"
+                >
+                  <UserProfileImage
+                    userId={friend.id}
+                    sizePx={48}
+                    alt={`${friend.username} profile`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-base font-semibold text-foreground">
+                      {friend.username}
+                    </p>
+                    {friend.email ? (
+                      <p className="truncate text-sm text-muted">{friend.email}</p>
+                    ) : null}
+                  </div>
+                </button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => onOpenCreateGroup([friend])}
+                >
+                  Create thread
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}

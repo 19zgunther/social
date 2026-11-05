@@ -3,6 +3,7 @@ import { authCheck } from "@/app/api/auth_utils";
 import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import {
+  directPeerUsernameFromMembers,
   findDirectThreadBetweenUsers,
 } from "@/app/lib/threadDirect";
 import type { ThreadItem } from "@/app/types/interfaces";
@@ -19,9 +20,10 @@ function toThreadItemPayload(input: {
     owner: string;
     image_id: string | null;
     users: { username: string };
-    user_thread_access: { user_id: string }[];
+    user_thread_access: { user_id: string; users?: { username: string } | null }[];
   };
   viewerUserId: string;
+  peerUsername?: string | null;
 }): ThreadItem {
   const { thread, viewerUserId } = input;
   let image_access_grant: string | null = null;
@@ -44,9 +46,14 @@ function toThreadItemPayload(input: {
     ]),
   ];
 
+  const peerUsername =
+    input.peerUsername?.trim() ||
+    directPeerUsernameFromMembers(thread, viewerUserId) ||
+    thread.name;
+
   return {
     id: thread.id,
-    name: thread.name,
+    name: peerUsername,
     created_at: thread.created_at.toISOString(),
     owner_user_id: thread.owner,
     owner_username: thread.users.username,
@@ -106,6 +113,7 @@ export async function POST(request: Request) {
       const thread = toThreadItemPayload({
         thread: existing,
         viewerUserId: authResult.user_id,
+        peerUsername: otherUser.username,
       });
       return NextResponse.json({ thread }, { status: 200 });
     }
@@ -114,7 +122,7 @@ export async function POST(request: Request) {
       const thread = await tx.threads.create({
         data: {
           owner: authResult.user_id,
-          name: otherUser.username + ' & ' + authResult.username,
+          name: otherUser.username,
           is_direct: true,
         },
         select: {
@@ -145,7 +153,12 @@ export async function POST(request: Request) {
           owner: true,
           image_id: true,
           users: { select: { username: true } },
-          user_thread_access: { select: { user_id: true } },
+          user_thread_access: {
+            select: {
+              user_id: true,
+              users: { select: { username: true } },
+            },
+          },
         },
       });
 
@@ -159,6 +172,7 @@ export async function POST(request: Request) {
     const thread = toThreadItemPayload({
       thread: created,
       viewerUserId: authResult.user_id,
+      peerUsername: otherUser.username,
     });
 
     return NextResponse.json({ thread }, { status: 200 });
