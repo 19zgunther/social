@@ -3,6 +3,7 @@
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AddImageIcon, CloseIcon, DeleteIcon } from "@/app/components/Icons";
 import { ThreadImageRemoveResponse, ThreadImageSetResponse } from "@/app/types/interfaces";
+import { Button } from "@/app/ui-components";
 
 type ThreadPictureEditorProps = {
   threadId: string;
@@ -230,14 +231,16 @@ export default function ThreadPictureEditor({
       <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-3 shadow-xl shadow-black/35">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Edit Group Photo</h2>
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            className="inline-flex items-center gap-1"
             onClick={onClose}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
           >
             <CloseIcon className="h-3.5 w-3.5" />
             Close
-          </button>
+          </Button>
         </div>
 
         <input
@@ -311,23 +314,25 @@ export default function ThreadPictureEditor({
               />
             </div>
             <div className="mt-3 flex items-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg border border-border px-3 py-2 text-xs text-muted hover:text-foreground"
               >
                 Choose another
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                size="sm"
                 onClick={() => {
                   void onSaveThreadPicture();
                 }}
                 disabled={isSaving}
-                className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent disabled:opacity-50"
               >
                 {isSaving ? "Saving..." : "Save"}
-              </button>
+              </Button>
             </div>
           </>
         )}

@@ -16,6 +16,7 @@ import {
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
 import BackButton from "@/app/components/utils/BackButton";
+import { Button, IconButton } from "@/app/ui-components";
 import { PostSection } from "@/app/components/PostSection";
 import PostOptionsPane from "@/app/components/PostOptionsPane";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
@@ -323,18 +324,20 @@ function ProfilePostsSection({
 
       {hasMorePosts ? (
         <div className="px-3 py-3">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            className="w-full"
             onClick={() => {
               if (nextCursorPostId && !isLoadingMorePosts) {
                 void loadPosts(nextCursorPostId);
               }
             }}
             disabled={!nextCursorPostId || isLoadingMorePosts}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-xs font-medium text-muted transition hover:text-foreground disabled:opacity-50"
           >
             {isLoadingMorePosts ? "Loading..." : "Load more"}
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>
@@ -774,11 +777,11 @@ function Profile({
                   <p className="mb-1 text-xs font-semibold text-muted">
                     Incoming requests ({incomingRequests.length})
                   </p>
-                  <div className="space-y-2 pt-2">
+                  <div className="pt-2">
                     {incomingRequests.map((requestRow) => (
                       <div
                         key={requestRow.id}
-                        className="w-full border-b border-border/50 bg-bg px-3 py-0 pb-3 flex items-center gap-4"
+                        className="flex w-full items-center gap-4 border-b border-border/50 bg-bg px-3 py-3"
                       >
                         <UserProfileImage
                           userId={requestRow.requesting_user_id}
@@ -792,26 +795,28 @@ function Profile({
                           ) : null}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <button
+                          <Button
                             type="button"
+                            variant="primary"
+                            size="sm"
                             onClick={() => {
                               void onRespondToFriendRequest(requestRow.id, true);
                             }}
                             disabled={activeIncomingRequestId === requestRow.id}
-                            className="rounded-lg bg-accent px-2 py-1 text-xs font-semibold text-on-accent disabled:opacity-50"
                           >
                             Confirm
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
+                            variant="secondary"
+                            size="sm"
                             onClick={() => {
                               void onRespondToFriendRequest(requestRow.id, false);
                             }}
                             disabled={activeIncomingRequestId === requestRow.id}
-                            className="rounded-lg border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-50"
                           >
                             Reject
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -820,13 +825,13 @@ function Profile({
               ) : null}
 
               <p className="mb-1 text-xs font-semibold text-muted">Your friends ({acceptedFriends.length})</p>
-              <div className="space-y-2 pt-2">
+              <div className="pt-2">
                 {acceptedFriends.map((friend) => (
                   <button
                     key={friend.id}
                     type="button"
                     onClick={() => { onViewUserProfile(friend.user_id); }}
-                    className="w-full border-b border-border/50 bg-bg px-3 py-0 pb-3 flex items-center gap-4 transition hover:bg-surface"
+                    className="flex w-full items-center gap-4 border-b border-border/50 bg-bg px-3 py-2 transition hover:bg-surface"
                   >
                     <UserProfileImage
                       userId={friend.user_id}
@@ -849,11 +854,11 @@ function Profile({
           {pendingOutgoingRequests.length > 0 ? (
             <div className="mt-3">
               <p className="mb-1 text-xs font-semibold text-muted">Pending sent requests</p>
-              <div className="space-y-2 pt-2">
+              <div className="pt-2">
                 {pendingOutgoingRequests.map((row) => (
                   <div
                     key={row.id}
-                    className="w-full border-b border-border/50 bg-bg px-3 py-0 pb-3 flex items-center gap-4"
+                    className="flex w-full items-center gap-4 border-b border-border/50 bg-bg px-3 py-3"
                   >
                     <UserProfileImage
                       userId={row.other_user_id}
@@ -1231,35 +1236,33 @@ function ProfileOtherUser({
         trailingAction={
           <div className="flex shrink-0 items-center gap-2">
             {botInfo && (!botInfo.is_private || botInfo.is_owner) ? (
-              <button
+              <IconButton
                 type="button"
+                variant="bordered"
                 onClick={() => setIsBotSettingsOpen(true)}
-                className="rounded-full border border-border bg-surface p-2 text-muted transition hover:text-foreground"
                 aria-label={botInfo.is_owner ? "Bot settings" : "View bot settings"}
                 title={botInfo.is_owner ? "Bot settings" : "View bot settings"}
               >
                 <SettingsIcon className="h-5 w-5" />
-              </button>
+              </IconButton>
             ) : null}
             {isFriends ? (
               <>
-                <button
+                <IconButton
                   type="button"
+                  variant="bordered"
                   onClick={() => { void onOpenMessage(); }}
                   disabled={isOpeningDirectThread}
-                  className="rounded-full border border-border bg-surface p-2 text-muted transition hover:text-foreground disabled:opacity-50"
                   aria-label={isOpeningDirectThread ? "Opening messages" : "Message"}
                   title={isOpeningDirectThread ? "Opening..." : "Message"}
                 >
                   <MessageIcon className="h-5 w-5" />
-                </button>
-                <button
+                </IconButton>
+                <IconButton
                   type="button"
+                  variant={removeFriendConfirmed ? "danger" : "bordered"}
                   onClick={() => { void onRemoveFriend(); }}
                   disabled={isRemovingFriend}
-                  className={`rounded-full border bg-surface p-2 text-muted transition hover:text-foreground disabled:opacity-50 ${
-                    removeFriendConfirmed ? "border-danger text-danger" : "border-border"
-                  }`}
                   aria-label={
                     isRemovingFriend
                       ? "Removing friend"
@@ -1276,7 +1279,7 @@ function ProfileOtherUser({
                   }
                 >
                   <DeleteIcon className="h-5 w-5" />
-                </button>
+                </IconButton>
               </>
             ) : null}
           </div>
@@ -1316,14 +1319,16 @@ function ProfileOtherUser({
               <p className="text-sm text-muted text-center">
                 Send a friend request to view {profileData.user.username}'s posts.
               </p>
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
+                className="px-6"
                 onClick={() => { void onSendFriendRequest(); }}
                 disabled={isSendingRequest}
-                className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-50"
               >
                 {isSendingRequest ? "Sending..." : "Request To Follow"}
-              </button>
+              </Button>
             </>
           ) : profileData.friendship_status === "pending_sent" ? (
             <p className="text-sm text-muted text-center">
@@ -1344,13 +1349,15 @@ function ProfileOtherUser({
                 <span className="font-medium text-foreground">{profileData.user.username}</span>{" "}
                 as a friend.
               </p>
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
+                className="shrink-0"
                 onClick={() => setRemoveFriendConfirmed(false)}
-                className="shrink-0 rounded-lg border border-border px-3 py-1 text-xs font-medium text-muted transition hover:text-foreground"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           ) : null}
           <ProfilePostsSection

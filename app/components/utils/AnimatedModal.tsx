@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { CloseIcon } from "@/app/components/Icons";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { IconButton } from "@/app/ui-components";
 
 const ANIMATED_MODAL_CLOSE_MS = 200;
 
@@ -198,15 +199,16 @@ export default function AnimatedModal({
           <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 pb-2 pt-3">
             <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">{title}</h2>
             {headerActions}
-            <button
+            <IconButton
               type="button"
+              variant="ghost"
               onClick={() => onClose()}
               disabled={closeDisabled}
               aria-label="Close"
-              className="shrink-0 rounded-full p-1.5 text-muted transition hover:bg-surface hover:text-foreground disabled:opacity-50"
+              className="shrink-0"
             >
               <CloseIcon className="h-5 w-5" />
-            </button>
+            </IconButton>
           </header>
         ) : null}
         {children}

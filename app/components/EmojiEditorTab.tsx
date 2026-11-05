@@ -8,6 +8,7 @@ import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import { PixelGradientSlider } from "@/app/components/utils/PixelGradientSlider";
 import { TriangleThicknessSlider } from "@/app/components/utils/TriangleThicknessSlider";
 import { BrushIcon, EraserIcon, PanIcon, AddImageIcon, AddIcon, RedoIcon, UndoIcon, ZoomInIcon, ZoomOutIcon } from "@/app/components/Icons";
+import { Button, TextField } from "@/app/ui-components";
 
 const GRID_SIZE = 64;
 const PIXEL_COUNT = GRID_SIZE * GRID_SIZE;
@@ -757,20 +758,24 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
         <p className="text-sm font-semibold text-foreground">Emoji Editor</p>
         {editorMode === "none" ? (
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="soft"
+              size="md"
+              className="inline-flex flex-1 items-center justify-center gap-2"
               onClick={onNewEmoji}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-accent/50 bg-accent/15 px-3 py-3 text-sm font-semibold text-accent transition hover:border-accent hover:bg-accent/25"
             >
               <AddIcon className="h-4 w-4" /> New Emoji
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="soft"
+              size="md"
+              className="inline-flex flex-1 items-center justify-center gap-2"
               onClick={() => uploadInputRef.current?.click()}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-accent/50 bg-accent/15 px-3 py-3 text-sm font-semibold text-accent transition hover:border-accent hover:bg-accent/25"
             >
               <AddImageIcon className="h-4 w-4" /> Upload Image
-            </button>
+            </Button>
             <input
               ref={uploadInputRef}
               type="file"
@@ -802,14 +807,13 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
           <div className="flex min-h-0 flex-1 flex-col p-3">
             <div className="shrink-0">
                   <div className="mb-1">
-                    <label className="mb-1 block text-xs text-muted" htmlFor="emoji-name-input">Name</label>
-                    <input
+                    <TextField
                       id="emoji-name-input"
+                      label="Name"
                       type="text"
                       value={emojiName}
                       onChange={(event) => setEmojiName(event.target.value)}
                       maxLength={40}
-                      className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
                       placeholder="Enter emoji name..."
                     />
                   </div>
@@ -958,22 +962,26 @@ export default function EmojiEditorTab({ isActive, onSaved }: EmojiEditorTabProp
 
             <div className="mt-2 flex shrink-0 flex-col gap-2">
               {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="sm"
+                className="w-full"
                 onClick={() => { void onSaveEmoji(); }}
                 disabled={isSaving}
-                className="w-full rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
               >
                 {isSaving ? "Saving..." : saveButtonLabel}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
+                className="w-full"
                 onClick={onCancelEditor}
                 disabled={isSaving}
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         </AnimatedModal>

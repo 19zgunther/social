@@ -18,6 +18,7 @@ import { customEmojiUuidFromToken } from "@/app/lib/customEmojiCanvas";
 import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
 import { collectPostMediaObjectIds, getPostMediaSlides } from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
+import { Button, IconButton, TextField } from "@/app/ui-components";
 import { formatPostText } from "@/app/components/utils/formatPostText";
 import { hasCongratsComment } from "@/app/lib/congratsComment";
 import PollBlock, { getPollViewerState } from "@/app/components/PollBlock";
@@ -839,21 +840,21 @@ function PostSectionComponent({
 
         {isReplyInputOpen ? (
           <div className="mt-1 flex items-center gap-2 ml-10">
-            <input
+            <TextField
               value={replyDraft}
               onChange={(event) => setReplyDraftByPath((previous) => ({ ...previous, [pathKey]: event.target.value }))}
               placeholder={`Replying to ${replyTargetDisplayName}...`}
-              className="flex-1 rounded-lg border border-border px-2 py-2 text-sm text-foreground outline-none focus:border-muted"
+              className="flex-1"
             />
-            <button
+            <IconButton
               type="button"
+              variant="bordered"
               onClick={() => { void onSubmitComment(path); }}
               disabled={isSubmittingComment || replyDraft.trim().length === 0}
-              className="rounded-lg border border-border px-2 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
               aria-label="Send"
             >
               <SendIcon className="h-4 w-4" />
-            </button>
+            </IconButton>
           </div>
         ) : null}
 
@@ -1063,35 +1064,39 @@ function PostSectionComponent({
         {/** Post Text */}
         {isEditingPostText ? (
           <div className="space-y-2">
-            <textarea
+            <TextField
+              as="textarea"
               value={postTextDraft}
               onChange={(event) => setPostTextDraft(event.target.value)}
               placeholder="Write a caption..."
-              className="min-h-24 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+              tone="surface"
+              className="min-h-24"
             />
             <div className="flex items-center justify-end gap-2">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   setPostTextDraft(post.text);
                   setIsEditingPostText(false);
                   setPostTextStatusMessage("");
                 }}
                 disabled={isSavingPostText}
-                className="rounded-lg border border-border px-2 py-1 text-xs text-muted hover:text-foreground disabled:opacity-50"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                size="sm"
                 onClick={() => {
                   void onSavePostText();
                 }}
                 disabled={isSavingPostText}
-                className="rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-on-accent disabled:opacity-50"
               >
                 {isSavingPostText ? "Saving..." : "Save"}
-              </button>
+              </Button>
             </div>
             {postTextStatusMessage ? <p className="text-xs text-muted">{postTextStatusMessage}</p> : null}
           </div>
@@ -1212,22 +1217,22 @@ function PostSectionComponent({
 
             {/** Add Comment Input */}
             <div className="flex items-center gap-2">
-              <input
+              <TextField
                 value={rootCommentDraft}
                 onChange={(event) => setRootCommentDraft(event.target.value)}
                 placeholder="Add a comment..."
                 disabled={disableCommentSendInput}
-                className="flex-1 rounded-lg border border-border bg-bg px-2 py-2 text-sm text-foreground outline-none focus:border-muted"
+                className="flex-1"
               />
-              <button
+              <IconButton
                 type="button"
+                variant="bordered"
                 onClick={() => { void onSubmitComment([]); }}
                 disabled={isSubmittingComment || rootCommentDraft.trim().length === 0}
-                className="rounded-lg border border-border px-2 py-2 text-sm text-muted hover:text-foreground disabled:opacity-50"
                 aria-label="Send"
               >
                 <SendIcon className="h-4 w-4" />
-              </button>
+              </IconButton>
             </div>
 
             {/** Comment Tree */}

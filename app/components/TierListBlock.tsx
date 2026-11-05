@@ -3,6 +3,7 @@
 import { PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, PostData, TierListViewerState } from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { Button } from "@/app/ui-components";
 
 type TierListBlockProps = {
   postId: string;
@@ -431,16 +432,17 @@ export default function TierListBlock({
       ) : null}
 
       {!isPreview && !tierList.has_submitted ? (
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
           onClick={() => {
             void onSubmit();
           }}
           disabled={!canSubmit}
-          className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
         >
           {isSubmitting ? "Submitting..." : "Submit tier list"}
-        </button>
+        </Button>
       ) : null}
 
       {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}

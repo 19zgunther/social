@@ -16,6 +16,7 @@ import { useState, useEffect, useRef, type MutableRefObject } from "react";
 import BackButton from "@/app/components/utils/BackButton";
 import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
 import EditBot from "@/app/components/bots/EditBot";
+import { Button, TextField } from "@/app/ui-components";
 import { clearAllCachedCustomEmojis, getCustomEmojiCacheStats, type CustomEmojiCacheStats } from "@/app/lib/customEmojiCache";
 import { clearAllCachedImages, getImageCacheStats, type ImageCacheStats } from "@/app/lib/imageCache";
 import { ensurePushSubscription, isInstalledPwa, PUSH_PROMPT_DISMISSED_KEY } from "@/app/lib/pushClient";
@@ -493,14 +494,16 @@ export default function ProfileSettings({
               );
             })}
 
-            <button
+            <Button
               type="button"
+              variant="danger"
+              size="md"
+              className="mt-4 flex w-full items-center gap-2 text-left"
               onClick={onLogout}
-              className="mt-4 flex w-full items-center gap-2 rounded-lg border border-danger-fill/50 bg-danger-fill/10 px-4 py-3 text-left text-sm text-danger hover:bg-danger-fill/20 transition"
             >
               <LogOutIcon className="h-4 w-4" />
-              <p className="font-medium">Log out</p>
-            </button>
+              <span className="font-medium">Log out</span>
+            </Button>
           </section>
         ) : null}
 
@@ -514,27 +517,29 @@ export default function ProfileSettings({
                 </p>
               ) : (
                 <div className="flex gap-2">
-                  <input
+                  <TextField
                     type="text"
                     value={newBotUsername}
                     onChange={(event) => setNewBotUsername(event.target.value)}
                     placeholder="username"
-                    className="min-w-0 flex-1 rounded-xl border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                    className="min-w-0 flex-1"
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="primary"
+                    size="sm"
+                    className="inline-flex items-center gap-1"
                     onClick={() => {
                       void onCreateBot();
                     }}
                     disabled={isCreatingBot}
-                    className="inline-flex items-center gap-1 rounded-xl bg-accent px-3 py-2 text-sm font-medium text-on-accent disabled:opacity-60"
                   >
                     <AddIcon className="h-4 w-4" />
                     {isCreatingBot ? "…" : "Create"}
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -650,7 +655,7 @@ export default function ProfileSettings({
                     }}
                     className="h-9 w-10 shrink-0 cursor-pointer rounded border border-border bg-bg p-0.5"
                   />
-                  <input
+                  <TextField
                     type="text"
                     value={hexDrafts[key]}
                     onChange={(event) => {
@@ -658,7 +663,7 @@ export default function ProfileSettings({
                     }}
                     spellCheck={false}
                     maxLength={7}
-                    className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-xs text-foreground outline-none focus:border-accent"
+                    className="min-w-0 flex-1 px-2 py-1.5 font-mono text-xs"
                     aria-label={`${THEME_COLOR_LABELS[key]} hex`}
                   />
                 </div>

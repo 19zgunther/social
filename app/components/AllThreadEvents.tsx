@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshIcon } from "@/app/components/Icons";
 import ThreadEventListRow from "@/app/components/ThreadEventListRow";
+import { Button, TextField } from "@/app/ui-components";
 import type {
   ApiError,
   ThreadEventCreateResponse,
@@ -188,16 +189,18 @@ export default function AllThreadEvents({
             <RefreshIcon className={`h-3.5 w-3.5 ${refreshBusy ? "animate-spin" : ""}`} aria-hidden />
           </button>
         </div>
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
           onClick={() => {
             setShowCreateName((open) => !open);
             setCreateError("");
           }}
-          className="shrink-0 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted transition hover:text-foreground"
         >
           {showCreateName ? "Cancel" : "Create"}
-        </button>
+        </Button>
       </div>
 
       {showCreateName ? (
@@ -208,22 +211,23 @@ export default function AllThreadEvents({
             void onCreate();
           }}
         >
-          <input
+          <TextField
             type="text"
             value={createName}
             onChange={(e) => setCreateName(e.target.value)}
             placeholder="Event name"
-            className="w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
             autoFocus
           />
           {createError ? <p className="text-xs text-muted">{createError}</p> : null}
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            size="sm"
+            className="w-full"
             disabled={isCreating}
-            className="w-full rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
           >
             {isCreating ? "Creating…" : "Continue"}
-          </button>
+          </Button>
         </form>
       ) : null}
 

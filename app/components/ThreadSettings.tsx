@@ -7,6 +7,7 @@ import UserProfileImage from "@/app/components/UserProfileImage";
 import ThreadPictureEditor from "@/app/components/ThreadPictureEditor";
 import BackButton from "@/app/components/utils/BackButton";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
+import { Button, IconButton, TextField } from "@/app/ui-components";
 import {
   ApiError,
   FriendSearchResponse,
@@ -384,37 +385,41 @@ export default function ThreadSettings({
                   }}
                   className="relative block w-full"
                 >
-                  <input
+                  <TextField
                     type="text"
                     value={localName}
                     onChange={(event) => setLocalName(event.target.value)}
-                    className="min-w-0 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+                    className="min-w-0"
                     placeholder="Group name"
                     autoFocus
                   />
 
                   <div className="flex items-center gap-2 mt-2">
-                    <button
+                    <Button
                       type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="flex-1"
                       onClick={() => {
                         setLocalName(thread.name);
                         setIsEditingName(false);
                       }}
-                      className="flex-1 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted transition hover:text-foreground"
                     >
                       Cancel
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="submit"
+                      variant="primary"
+                      size="sm"
+                      className="flex-1"
                       disabled={
                         isRenaming ||
                         !localName.trim() ||
                         localName.trim() === thread.name
                       }
-                      className="flex-1 rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
                     >
                       {isRenaming ? "Saving..." : "Save"}
-                    </button>
+                    </Button>
                   </div>
                 </form>
               ) : (
@@ -422,16 +427,18 @@ export default function ThreadSettings({
                   <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
                     {thread.name}
                   </p>
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="shrink-0"
                     onClick={() => {
                       setLocalName(thread.name);
                       setIsEditingName(true);
                     }}
-                    className="shrink-0 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold text-muted transition hover:text-foreground"
                   >
                     Edit
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -503,13 +510,14 @@ export default function ThreadSettings({
                     <p className="mt-1 text-xs text-muted">{memberFormError}</p>
                   ) : null}
                 </div>
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="sm"
                   disabled={isUpdatingMembers}
-                  className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
                 >
                   Add
-                </button>
+                </Button>
               </form>
             ) : null}
 
@@ -550,18 +558,19 @@ export default function ThreadSettings({
                     member.friendship_status !== "friends" ? (
                       member.friendship_status === "none" ||
                       member.friendship_status === "rejected" ? (
-                        <button
+                        <Button
                           type="button"
+                          variant="secondary"
+                          size="sm"
                           onClick={() => {
                             void onSendFriendRequest(member.user_id);
                           }}
                           disabled={
                             sendingFriendUserId === member.user_id || isUpdatingMembers
                           }
-                          className="rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-muted transition hover:text-foreground disabled:opacity-50"
                         >
                           {sendingFriendUserId === member.user_id ? "Sending…" : "Add Friend"}
-                        </button>
+                        </Button>
                       ) : member.friendship_status === "pending_sent" ? (
                         <span className="max-w-[5.5rem] text-center text-[11px] text-muted">
                           Request sent
@@ -574,28 +583,22 @@ export default function ThreadSettings({
                     ) : null}
 
                     {!member.is_owner ? (
-                      <button
+                      <IconButton
                         type="button"
+                        variant={confirmedRemoveMember === member.user_id ? "danger" : "ghost"}
                         onClick={() => {
                           void onRemoveMember(member.user_id);
                         }}
                         disabled={isUpdatingMembers}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-bg/60 hover:text-foreground disabled:opacity-60"
+                        className="h-8 w-8 shrink-0"
                         aria-label={
                           confirmedRemoveMember === member.user_id
                             ? "Tap again to confirm remove from group"
                             : `Remove ${member.username} from group`
                         }
                       >
-                        <DeleteIcon
-                          className={`h-4 w-4 ${
-                            confirmedRemoveMember === member.user_id
-                              ? "text-danger"
-                              : "opacity-50"
-                          }`}
-                          aria-hidden
-                        />
-                      </button>
+                        <DeleteIcon className="h-4 w-4" aria-hidden />
+                      </IconButton>
                     ) : null}
                   </div>
                 </div>
@@ -610,34 +613,34 @@ export default function ThreadSettings({
             <p className="mt-1 text-xs text-muted">
               Permanently delete this group and all of its messages. This cannot be undone.
             </p>
-            <button
+            <Button
               type="button"
+              variant={confirmDeleteThread ? "danger" : "secondary"}
+              size="sm"
+              className="mt-3 w-full"
               onClick={() => {
                 void onDeleteThread();
               }}
               disabled={isDeletingThread}
-              className="mt-3 w-full rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:opacity-60"
-              style={{
-                borderColor: confirmDeleteThread ? "var(--danger)" : undefined,
-                color: confirmDeleteThread ? "var(--danger)" : undefined,
-              }}
             >
               {isDeletingThread
                 ? "Deleting…"
                 : confirmDeleteThread
                   ? "Tap again to confirm — cannot be undone"
                   : "Delete group"}
-            </button>
+            </Button>
             {confirmDeleteThread && !isDeletingThread ? (
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
+                className="mt-2 w-full"
                 onClick={() => {
                   setConfirmDeleteThread(false);
                 }}
-                className="mt-2 w-full rounded-xl border border-border px-3 py-2 text-xs font-semibold text-muted transition hover:text-foreground"
               >
                 Cancel
-              </button>
+              </Button>
             ) : null}
           </section>
         ) : null}

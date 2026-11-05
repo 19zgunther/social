@@ -35,6 +35,7 @@ import {
 } from "@/app/types/interfaces";
 import { MAX_POST_MEDIA_ITEMS } from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
+import { IconButton, TextField } from "@/app/ui-components";
 import { PostSection } from "@/app/components/PostSection";
 import type { PostPreviewMedia } from "@/app/components/PostSection";
 
@@ -1155,15 +1156,15 @@ export default function CreatePostTab({
     <div className="relative flex h-full min-h-0 w-full flex-col bg-bg">
       <header className="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-3">
         <h2 className="text-base font-semibold text-foreground">Create Post</h2>
-        <button
+        <IconButton
           type="button"
+          variant="ghost"
           onClick={() => onCancel()}
           disabled={isPosting}
           aria-label="Close"
-          className="rounded-full p-1.5 text-muted transition hover:bg-surface hover:text-foreground disabled:opacity-50"
         >
           <CloseIcon className="h-5 w-5" />
-        </button>
+        </IconButton>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3">
@@ -1501,7 +1502,7 @@ export default function CreatePostTab({
               <div className="space-y-2">
                 {tierNames.map((tierName, index) => (
                   <div key={`tier-name-${index}`} className="flex items-center gap-2">
-                    <input
+                    <TextField
                       type="text"
                       value={tierName}
                       onChange={(event) => {
@@ -1514,21 +1515,21 @@ export default function CreatePostTab({
                       }}
                       placeholder={`Tier ${index + 1}`}
                       maxLength={200}
-                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+                      tone="surface"
                     />
                     {tierNames.length > 2 ? (
-                      <button
+                      <IconButton
                         type="button"
+                        variant="bordered"
                         onClick={() =>
                           setTierNames((previous) =>
                             previous.filter((_, entryIndex) => entryIndex !== index),
                           )
                         }
-                        className="rounded-lg border border-border px-2 py-2 text-muted hover:text-foreground"
                         aria-label={`Remove tier ${index + 1}`}
                       >
                         <CloseIcon className="h-4 w-4" />
-                      </button>
+                      </IconButton>
                     ) : null}
                   </div>
                 ))}
@@ -1551,7 +1552,7 @@ export default function CreatePostTab({
               <div className="space-y-2">
                 {tierListOptions.map((option, index) => (
                   <div key={`tier-option-${index}`} className="flex items-center gap-2">
-                    <input
+                    <TextField
                       type="text"
                       value={option}
                       onChange={(event) => {
@@ -1564,21 +1565,21 @@ export default function CreatePostTab({
                       }}
                       placeholder={`Option ${index + 1}`}
                       maxLength={200}
-                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+                      tone="surface"
                     />
                     {tierListOptions.length > 2 ? (
-                      <button
+                      <IconButton
                         type="button"
+                        variant="bordered"
                         onClick={() =>
                           setTierListOptions((previous) =>
                             previous.filter((_, entryIndex) => entryIndex !== index),
                           )
                         }
-                        className="rounded-lg border border-border px-2 py-2 text-muted hover:text-foreground"
                         aria-label={`Remove option ${index + 1}`}
                       >
                         <CloseIcon className="h-4 w-4" />
-                      </button>
+                      </IconButton>
                     ) : null}
                   </div>
                 ))}
@@ -1603,7 +1604,7 @@ export default function CreatePostTab({
               <div className="space-y-2">
                 {pollOptions.map((option, index) => (
                   <div key={`poll-option-${index}`} className="flex items-center gap-2">
-                    <input
+                    <TextField
                       type="text"
                       value={option}
                       onChange={(event) => {
@@ -1616,19 +1617,19 @@ export default function CreatePostTab({
                       }}
                       placeholder={`Option ${index + 1}`}
                       maxLength={200}
-                      className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+                      tone="surface"
                     />
                     {pollOptions.length > 2 ? (
-                      <button
+                      <IconButton
                         type="button"
+                        variant="bordered"
                         onClick={() =>
                           setPollOptions((previous) => previous.filter((_, entryIndex) => entryIndex !== index))
                         }
-                        className="rounded-lg border border-border px-2 py-2 text-muted hover:text-foreground"
                         aria-label={`Remove option ${index + 1}`}
                       >
                         <CloseIcon className="h-4 w-4" />
-                      </button>
+                      </IconButton>
                     ) : null}
                   </div>
                 ))}

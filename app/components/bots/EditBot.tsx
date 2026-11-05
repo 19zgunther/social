@@ -12,6 +12,7 @@ import BotRssEdit from "@/app/components/bots/BotRssEdit";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 import BackButton from "@/app/components/utils/BackButton";
 import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
+import { Button, TextField } from "@/app/ui-components";
 import {
   BotDetail,
   BotLogDetail,
@@ -499,17 +500,15 @@ export default function EditBot({
                   spellCheck={false}
                 />
                 {canEdit ? (
-                  <button
+                  <Button
                     type="button"
+                    variant={confirmDelete ? "danger" : "secondary"}
+                    size="sm"
+                    className="inline-flex h-11 shrink-0 items-center justify-center rounded-2xl px-3"
                     onClick={() => {
                       void onDelete();
                     }}
                     disabled={isDeleting || isSaving || isWaking}
-                    className={`inline-flex h-11 shrink-0 items-center justify-center rounded-2xl border px-3 text-xs font-semibold transition disabled:opacity-60 ${
-                      confirmDelete
-                        ? "border-danger bg-danger/15 text-danger"
-                        : "border-border text-muted hover:text-foreground"
-                    }`}
                     aria-label={
                       isDeleting
                         ? "Deleting bot"
@@ -532,7 +531,7 @@ export default function EditBot({
                     ) : (
                       <DeleteIcon className="h-5 w-5" aria-hidden />
                     )}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </div>
@@ -542,26 +541,27 @@ export default function EditBot({
                 <p className="min-w-0 text-xs text-muted">
                   Tap delete again to permanently remove this bot and its posts.
                 </p>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
                   onClick={() => setConfirmDelete(false)}
-                  className="shrink-0 rounded-lg border border-border px-3 py-1 text-xs font-medium text-muted transition hover:text-foreground"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             ) : null}
 
-            <label className="block space-y-1">
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                readOnly={!canEdit}
-                rows={3}
-                placeholder="What this bot does / who it is"
-                className="w-full rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent read-only:opacity-80"
-              />
-            </label>
+            <TextField
+              as="textarea"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              readOnly={!canEdit}
+              rows={3}
+              placeholder="What this bot does / who it is"
+              className="px-4 py-3 read-only:opacity-80"
+            />
 
             <div className="flex items-center gap-2">
               <span className="w-14 shrink-0 text-xs leading-tight text-muted">Privacy</span>
@@ -680,16 +680,15 @@ export default function EditBot({
               </div>
             </div>
 
-            <label className="block space-y-1">
-              <span className="text-xs text-muted">System prompt</span>
-              <textarea
-                value={systemPrompt}
-                onChange={(event) => setSystemPrompt(event.target.value)}
-                readOnly={!canEdit}
-                rows={6}
-                className="w-full rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-accent read-only:opacity-80"
-              />
-            </label>
+            <TextField
+              as="textarea"
+              label="System prompt"
+              value={systemPrompt}
+              onChange={(event) => setSystemPrompt(event.target.value)}
+              readOnly={!canEdit}
+              rows={6}
+              className="px-4 py-3 read-only:opacity-80"
+            />
 
             <div className="space-y-2">
               <h2 className="text-sm font-semibold text-foreground">Resources</h2>
@@ -851,16 +850,18 @@ export default function EditBot({
           {statusMessage ? (
             <p className="mb-2 text-xs text-muted">{statusMessage}</p>
           ) : null}
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="md"
+            className="w-full"
             onClick={() => {
               void onSave();
             }}
             disabled={isSaving || isWaking}
-            className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-medium text-on-accent disabled:opacity-60"
           >
             {isSaving ? "Saving…" : "Save"}
-          </button>
+          </Button>
         </div>
       ) : null}
 

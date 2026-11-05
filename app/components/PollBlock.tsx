@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, PollViewerState, PostData } from "@/app/types/interfaces";
+import { Button } from "@/app/ui-components";
 
 type PollBlockProps = {
   postId: string;
@@ -220,16 +221,17 @@ export default function PollBlock({
       ) : null}
 
       {showVotingUi ? (
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
           onClick={() => {
             void onSubmitVote();
           }}
           disabled={isSubmitting || selectedOptionIds.length === 0}
-          className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
         >
           {isSubmitting ? "Submitting..." : isChangingVote ? "Update vote" : "Vote"}
-        </button>
+        </Button>
       ) : null}
 
       {canChangeVote ? (

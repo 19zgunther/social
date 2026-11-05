@@ -31,6 +31,7 @@ import {
   SearchIcon,
 } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
+import { Button, TextField } from "@/app/ui-components";
 import { AppTab } from "./utils";
 
 type GroupsProps = {
@@ -649,29 +650,33 @@ export default function Groups({
       </div>
 
       {createThreadIsVisible && <form onSubmit={onCreateThread} className="w-full block relative">
-        <input
-          className="flex-1 w-full rounded-xl border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+        <TextField
+          className="flex-1"
           placeholder="New thread name"
           value={threadName}
           onChange={(event) => setThreadName(event.target.value)}
           required
         />
         <div className="flex items-center gap-2 mt-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            className="flex-1"
             onClick={() => { setCreateThreadIsVisible(false); }}
             disabled={isCreatingThread}
-            className="flex-1 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            variant="primary"
+            size="sm"
+            className="flex-1"
             disabled={isCreatingThread}
-            className="flex-1 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
           >
             {isCreatingThread ? "Creating..." : "Create"}
-          </button>
+          </Button>
         </div>
       </form>}
 

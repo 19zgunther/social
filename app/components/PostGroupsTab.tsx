@@ -12,6 +12,7 @@ import {
   PostGroupsSetResponse,
 } from "@/app/types/interfaces";
 import { POST_GROUPS_MAX_GROUPS, POST_GROUPS_NAME_MAX_LENGTH } from "@/app/lib/postGroups";
+import { Button, IconButton, TextField } from "@/app/ui-components";
 
 type PostGroupsTabProps = {
   isActive: boolean;
@@ -377,7 +378,7 @@ export default function PostGroupsTab({
 
       {isCreating ? (
         <div className="mt-3 flex items-center gap-2">
-          <input
+          <TextField
             type="text"
             value={newGroupName}
             onChange={(event) => setNewGroupName(event.target.value)}
@@ -392,23 +393,24 @@ export default function PostGroupsTab({
             maxLength={POST_GROUPS_NAME_MAX_LENGTH}
             placeholder="Group name"
             autoFocus
-            className="min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+            className="min-w-0 flex-1"
           />
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={onCreateGroup}
-            className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent"
           >
             Create
-          </button>
-          <button
+          </Button>
+          <IconButton
             type="button"
+            variant="bordered"
             onClick={() => setIsCreating(false)}
-            className="rounded-lg border border-border px-2 py-2 text-muted hover:text-foreground"
             aria-label="Cancel create"
           >
             <CloseIcon className="h-4 w-4" />
-          </button>
+          </IconButton>
         </div>
       ) : null}
 
@@ -416,7 +418,7 @@ export default function PostGroupsTab({
         <div className="mt-3 border-b border-border/50 bg-bg px-3 py-0 pb-3">
           {isRenaming ? (
             <div className="flex items-center gap-2">
-              <input
+              <TextField
                 type="text"
                 value={renameValue}
                 onChange={(event) => setRenameValue(event.target.value)}
@@ -431,26 +433,28 @@ export default function PostGroupsTab({
                 }}
                 maxLength={POST_GROUPS_NAME_MAX_LENGTH}
                 autoFocus
-                className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground outline-none focus:border-muted"
+                tone="surface"
+                className="min-w-0 flex-1"
               />
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="sm"
                 onClick={onRenameGroup}
-                className="rounded-lg bg-accent px-2 py-1.5 text-xs font-semibold text-on-accent"
               >
                 Save
-              </button>
-              <button
+              </Button>
+              <IconButton
                 type="button"
+                variant="bordered"
                 onClick={() => {
                   setIsRenaming(false);
                   setRenameValue(selectedGroup.name);
                 }}
-                className="rounded-lg border border-border px-2 py-1.5 text-muted"
                 aria-label="Cancel rename"
               >
                 <CloseIcon className="h-4 w-4" />
-              </button>
+              </IconButton>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -461,42 +465,49 @@ export default function PostGroupsTab({
                   {selectedGroup.member_ids.length === 1 ? "" : "s"}
                 </span>
               </p>
-              <button
+              <IconButton
                 type="button"
+                variant="bordered"
                 onClick={() => {
                   setIsRenaming(true);
                   setRenameValue(selectedGroup.name);
                   setConfirmDelete(false);
                 }}
-                className="rounded-lg border border-border p-1.5 text-muted hover:text-foreground"
                 aria-label="Rename group"
               >
                 <EditIcon className="h-5 w-5" />
-              </button>
-              <button
-                type="button"
-                onClick={onDeleteGroup}
-                className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition ${
-                  confirmDelete
-                    ? "border-danger bg-danger/15 text-danger"
-                    : "border-border text-muted hover:text-foreground"
-                }`}
-                aria-label={confirmDelete ? "Confirm delete group" : "Delete group"}
-              >
-                {confirmDelete ? "Delete?" : <DeleteIcon className="h-5 w-5" />}
-              </button>
+              </IconButton>
+              {confirmDelete ? (
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  onClick={onDeleteGroup}
+                  aria-label="Confirm delete group"
+                >
+                  Delete?
+                </Button>
+              ) : (
+                <IconButton
+                  type="button"
+                  variant="bordered"
+                  onClick={onDeleteGroup}
+                  aria-label="Delete group"
+                >
+                  <DeleteIcon className="h-5 w-5" />
+                </IconButton>
+              )}
             </div>
           )}
         </div>
       ) : null}
 
       <div className="mt-3">
-        <input
+        <TextField
           type="search"
           value={friendSearch}
           onChange={(event) => setFriendSearch(event.target.value)}
           placeholder="Search friends"
-          className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
         />
       </div>
 
@@ -511,13 +522,15 @@ export default function PostGroupsTab({
             <p className="mt-1 text-xs text-muted">
               Groups are lists of your friends used when sharing posts.
             </p>
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
+              className="mt-3"
               onClick={onGoToFriendsTab}
-              className="mt-3 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent"
             >
               Go to Friends
-            </button>
+            </Button>
           </div>
         ) : null}
 
@@ -532,17 +545,19 @@ export default function PostGroupsTab({
               Then pick that group as the audience when creating a post. You can still post to all
               friends without a group.
             </p>
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
+              className="mt-3 inline-flex items-center gap-1"
               onClick={() => {
                 setIsCreating(true);
                 setNewGroupName("");
               }}
-              className="mt-3 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent"
             >
               <AddIcon className="h-3.5 w-3.5" />
               New group
-            </button>
+            </Button>
           </div>
         ) : null}
 

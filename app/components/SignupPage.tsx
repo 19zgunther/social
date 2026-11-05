@@ -10,6 +10,7 @@ import { useMemo } from "react";
 import { Mode, MOBILE_FRAME_STYLE, APP_VIEWPORT_STYLE } from "@/app/components/utils";
 import { DEFAULT_THEME, persistAndApplyTheme } from "@/app/lib/theme";
 import TetrisBackdrop from "@/app/components/games/tetris/TetrisBackdrop";
+import { Button, TextField } from "@/app/ui-components";
 
 
 export default function SignUpPage({
@@ -158,7 +159,7 @@ export default function SignUpPage({
                 {pageTitleClicked && (
                     <div className="text-sm text-muted">
                         Hello there! Testing...
-                        <input type="text" onFocus={handleInputFocus} placeholder="Type something..." className="rounded-xl border border-border bg-bg px-4 py-3" />
+                        <TextField type="text" onFocus={handleInputFocus} placeholder="Type something..." className="px-4 py-3" />
                         {tempInputFocused && <p className="text-sm text-muted">Input focused</p>}
                     </div>
                 )}
@@ -171,8 +172,8 @@ export default function SignUpPage({
 
                 {mode === "login" ? (
                     <form className="mt-6 flex flex-col gap-3" onSubmit={submitLogin}>
-                        <input
-                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-muted"
+                        <TextField
+                            className="px-4 py-3"
                             placeholder="Username or email"
                             value={identifier}
                             onChange={(event) => setIdentifier(event.target.value)}
@@ -180,8 +181,8 @@ export default function SignUpPage({
                             autoComplete="username"
                             required
                         />
-                        <input
-                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-muted"
+                        <TextField
+                            className="px-4 py-3"
                             placeholder="Password"
                             type="password"
                             value={password}
@@ -189,26 +190,29 @@ export default function SignUpPage({
                             autoComplete="current-password"
                             required
                         />
-                        <button
+                        <Button
                             type="submit"
+                            variant="primary"
+                            size="md"
+                            className="mt-2"
                             disabled={isSubmitting || isSendingTempEmail}
-                            className="mt-2 rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
                         >
                             {isSubmitting ? "Logging in..." : "Log in"}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             type="button"
+                            variant="secondary"
+                            size="md"
                             onClick={() => void sendTempLoginEmail()}
                             disabled={isSubmitting || isSendingTempEmail}
-                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm font-medium text-foreground transition hover:border-muted disabled:opacity-60"
                         >
                             {isSendingTempEmail ? "Sending…" : "Email me a temporary login code"}
-                        </button>
+                        </Button>
                     </form>
                 ) : (
                     <form className="mt-6 flex flex-col gap-3" onSubmit={submitSignup}>
-                        <input
-                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-muted"
+                        <TextField
+                            className="px-4 py-3"
                             placeholder="Username"
                             value={username}
                             onChange={(event) => setUsername(event.target.value)}
@@ -216,8 +220,8 @@ export default function SignUpPage({
                             autoComplete="username"
                             required
                         />
-                        <input
-                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-muted"
+                        <TextField
+                            className="px-4 py-3"
                             placeholder="Email"
                             type="email"
                             value={email}
@@ -226,8 +230,8 @@ export default function SignUpPage({
                             autoComplete="email"
                             required
                         />
-                        <input
-                            className="rounded-xl border border-border bg-bg px-4 py-3 text-sm text-foreground outline-none focus:border-muted"
+                        <TextField
+                            className="px-4 py-3"
                             placeholder="Password"
                             type="password"
                             value={password}
@@ -235,13 +239,15 @@ export default function SignUpPage({
                             autoComplete="new-password"
                             required
                         />
-                        <button
+                        <Button
                             type="submit"
+                            variant="primary"
+                            size="md"
+                            className="mt-2"
                             disabled={isSubmitting}
-                            className="mt-2 rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
                         >
                             {isSubmitting ? "Creating account..." : "Sign up"}
-                        </button>
+                        </Button>
                     </form>
                 )}
 

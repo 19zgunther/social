@@ -1,6 +1,7 @@
 "use client";
 
 import { DeleteIcon } from "@/app/components/Icons";
+import { TextField } from "@/app/ui-components";
 
 type BotRssEditProps = {
   rssFeeds: string[];
@@ -48,13 +49,13 @@ export default function BotRssEdit({
       ) : (
         visibleFeeds.map((feed, index) => (
           <div key={`rss-${index}`} className="flex items-center gap-2">
-            <input
+            <TextField
               type="url"
               value={feed}
               onChange={(event) => onFeedChange(index, event.target.value)}
               readOnly={!canEdit}
               placeholder="https://example.com/feed.xml"
-              className="h-8 min-w-0 flex-1 rounded-xl border border-border/50 bg-bg px-4 text-sm text-foreground outline-none focus:border-accent read-only:opacity-80"
+              className="h-8 min-w-0 flex-1 px-4"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}

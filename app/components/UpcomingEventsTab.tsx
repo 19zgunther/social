@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshIcon } from "@/app/components/Icons";
 import ThreadEventListRow from "@/app/components/ThreadEventListRow";
+import { Button } from "@/app/ui-components";
 import type {
   ApiError,
   EventCreateResponse,
@@ -233,16 +234,18 @@ export default function UpcomingEventsTab({
             placeholder="Event name"
             className="min-w-0 flex-1 rounded-lg border border-white/20 bg-black px-3 py-2 text-sm text-white outline-none focus:border-white/45"
           />
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
+            className="shrink-0"
             disabled={isCreating || !createName.trim()}
             onClick={() => {
               void onCreateEvent();
             }}
-            className="shrink-0 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-50"
           >
             {isCreating ? "Creating..." : "Create"}
-          </button>
+          </Button>
         </div>
         {createError ? <p className="mt-1 text-xs text-muted">{createError}</p> : null}
       </header>

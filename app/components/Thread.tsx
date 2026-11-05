@@ -54,6 +54,7 @@ import {
 import ThreadAvatar from "@/app/components/ThreadAvatar";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import BackButton from "./utils/BackButton";
+import { Button, IconButton } from "@/app/ui-components";
 
 type ThreadProps = {
   currentUserId: string;
@@ -1539,26 +1540,30 @@ export default function Thread({
 
       {!isComposerExpanded ? (
         <>
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            className="flex-1 rounded-full py-3"
             onClick={() => {
               openCameraModal();
             }}
             disabled={Boolean(editTargetMessageId)}
-            className="flex-1 rounded-full border border-border px-3 py-3 text-xs font-semibold text-muted transition hover:text-foreground disabled:opacity-50"
             aria-label="Take photo"
           >
             <CameraIcon className="mx-auto h-4 w-4" />
-          </button>
+          </Button>
         </>
       ) : (
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="sm"
+          className="rounded-full py-3"
           disabled={isSendingMessage || !messageDraft.trim()}
-          className="rounded-full bg-accent px-4 py-3 text-xs font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
         >
           {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}
-        </button>
+        </Button>
       )}
     </form>
   );
@@ -1658,14 +1663,15 @@ export default function Thread({
             {selectedThread.name}
           </p>
         </div>
-        <button
+        <IconButton
           type="button"
+          variant="ghost"
           aria-label="Start video call"
           onClick={() => setIsVideoCallOpen(true)}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-border/30 hover:text-foreground"
+          className="flex h-8 w-8 items-center justify-center hover:bg-border/30"
         >
           <VideoIcon className="h-4 w-4" />
-        </button>
+        </IconButton>
       </div>
 
       <div className="relative flex-1 min-h-0">
@@ -1745,8 +1751,10 @@ export default function Thread({
         </div>
 
         {showNewMessagesButton ? (
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={() => {
               setShowNewMessagesButton(false);
               const container = chatContainerRef.current;
@@ -1758,10 +1766,10 @@ export default function Thread({
                 behavior: "smooth",
               });
             }}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-on-accent shadow-lg shadow-black/30"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full shadow-lg shadow-black/30"
           >
             New messages
-          </button>
+          </Button>
         ) : null}
       </div>
 

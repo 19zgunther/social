@@ -7,6 +7,7 @@ import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { Button, IconButton, TextField } from "@/app/ui-components";
 import { ApiError } from "@/app/types/interfaces";
 
 export type FeedbackItem = {
@@ -222,11 +223,13 @@ export default function Feedback({
     <div className="flex h-full min-h-0 flex-col bg-bg">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-2 py-1.5">
         <h1 className="text-lg font-semibold text-foreground">Feedback</h1>
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          className="inline-flex items-center gap-1.5"
           onClick={() => void load({ refresh: true })}
           disabled={isRefreshing || isLoading}
-          className="flex items-center gap-1.5 rounded-md border border-border px-1 py-0.5 text-sm text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
           aria-label="Refresh feedback"
         >
           {isRefreshing ? (
@@ -235,20 +238,22 @@ export default function Feedback({
             <RefreshIcon className="h-4 w-4" aria-hidden />
           )}
           Refresh
-        </button>
+        </Button>
       </header>
 
       <div className="shrink-0 border-b border-border p-2">
         <label htmlFor="feedback-draft" className="sr-only">
           New bug report or message
         </label>
-        <textarea
+        <TextField
+          as="textarea"
           id="feedback-draft"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Describe a bug, idea, or message for everyone…"
           rows={3}
-          className="w-full resize-none rounded-md border border-border bg-surface px-1.5 py-1 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
+          tone="surface"
+          className="resize-none"
         />
         <input
           ref={fileInputRef}
@@ -258,11 +263,13 @@ export default function Feedback({
           onChange={(e) => void onFileChange(e)}
         />
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
+            className="inline-flex items-center gap-1.5"
             onClick={onPickImageClick}
             disabled={isPickingImage || isSubmitting}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-1 py-0.5 text-sm text-muted transition hover:border-accent hover:text-accent disabled:opacity-50"
           >
             {isPickingImage ? (
               <Loader scale={0.45} />
@@ -270,7 +277,7 @@ export default function Feedback({
               <AddImageIcon className="h-4 w-4" aria-hidden />
             )}
             Add image
-          </button>
+          </Button>
           {pendingImage ? (
             <div className="relative inline-block">
               {/* eslint-disable-next-line @next/next/no-img-element -- local preview blob */}
@@ -279,26 +286,28 @@ export default function Feedback({
                 alt=""
                 className="h-16 max-w-[8rem] rounded-md border border-border object-cover"
               />
-              <button
+              <IconButton
                 type="button"
+                variant="bordered"
                 onClick={() => setPendingImage(null)}
-                className="absolute -right-1 -top-1 rounded-full border border-border bg-surface p-0 text-muted shadow hover:text-foreground"
+                className="absolute -right-1 -top-1 shadow"
                 aria-label="Remove image"
               >
                 <CloseIcon className="h-3.5 w-3.5" aria-hidden />
-              </button>
+              </IconButton>
             </div>
           ) : null}
 
           <div className="ml-auto flex justify-end">
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               onClick={() => void onSubmit()}
               disabled={!canSubmit || isSubmitting}
-              className="rounded-md bg-accent px-2 py-1 text-sm font-medium text-on-accent transition hover:opacity-90 disabled:opacity-40"
             >
               {isSubmitting ? "Sending…" : "Submit"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

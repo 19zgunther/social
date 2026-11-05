@@ -4,6 +4,7 @@ import type { MutableRefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import { HangUpIcon, VideoIcon } from "@/app/components/Icons";
 import BackButton from "@/app/components/utils/BackButton";
+import { Button } from "@/app/ui-components";
 import {
   createVideoCallController,
   type VideoCallController,
@@ -316,14 +317,16 @@ export default function VideoCall({ threadId, currentUserId, onBack }: VideoCall
       <div className="border-t border-border bg-surface px-3 py-2">
         <p className="text-xs text-muted">{renderStatusLabel()}</p>
         <div className="mt-2 flex items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
+            className="flex-1 rounded-full"
             onClick={onStartCall}
             disabled={status === "acquiring_media" || status === "connecting"}
-            className="flex-1 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-on-accent hover:brightness-110 disabled:opacity-60"
           >
             {status === "connected" ? "Reconnect" : "Start call"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

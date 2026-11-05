@@ -6,6 +6,7 @@ import {
   PUSH_PROMPT_DISMISSED_KEY,
   type EnsurePushSubscriptionResult,
 } from "@/app/lib/pushClient";
+import { Button } from "@/app/ui-components";
 
 function failureMessage(result: Extract<EnsurePushSubscriptionResult, { ok: false }>): string {
   switch (result.reason) {
@@ -117,23 +118,27 @@ export function AutoNotificationPrompt({
           </p>
         ) : null}
         <div className="mt-4 flex items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="md"
+            className="flex-1"
             onClick={() => {
               void onEnableNotifications();
             }}
             disabled={isEnablingNotifications}
-            className="flex-1 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
             {isEnablingNotifications ? "Enabling..." : "Enable notifications"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="md"
+            className="flex-1"
             onClick={onDismissNotificationsPrompt}
-            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-muted hover:text-foreground"
           >
             Not now
-          </button>
+          </Button>
         </div>
       </div>
     </div>

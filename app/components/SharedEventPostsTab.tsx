@@ -29,6 +29,7 @@ import { PostSection } from "@/app/components/PostSection";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import BackButton from "@/app/components/utils/BackButton";
+import { Button, IconButton, TextField } from "@/app/ui-components";
 import {
   prepareImageForUpload,
   prepareVideoForUpload,
@@ -877,14 +878,15 @@ export default function SharedEventPostsTab({
       >
         <div className="shared-event-hero-frost" aria-hidden />
         {item.is_creator ? (
-          <button
+          <IconButton
             type="button"
+            variant="ghost"
             aria-label="Shared event settings"
             onClick={() => onOpenSettings(item.id)}
-            className="absolute right-3 top-3 z-[1] rounded-full p-1.5 text-muted transition hover:bg-bg/40 hover:text-foreground"
+            className="absolute right-3 top-3 z-10 hover:bg-bg/40"
           >
             <SettingsIcon className="h-4 w-4" />
-          </button>
+          </IconButton>
         ) : null}
         <button
           type="button"
@@ -1015,15 +1017,13 @@ export default function SharedEventPostsTab({
           </div>
         ) : (
           <>
-            <label className="block space-y-1">
-              <span className="text-xs text-muted">Event title</span>
-              <input
-                value={createTitle}
-                onChange={(event) => setCreateTitle(event.target.value)}
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
-                placeholder="Weekend trip"
-              />
-            </label>
+            <TextField
+              label="Event title"
+              value={createTitle}
+              onChange={(event) => setCreateTitle(event.target.value)}
+              tone="surface"
+              placeholder="Weekend trip"
+            />
             <div className="overflow-hidden rounded-xl border border-border">
               <div className="flex gap-3 px-3 py-3">
                 <div className="flex w-3 shrink-0 flex-col items-center pt-1.5" aria-hidden>
@@ -1104,13 +1104,15 @@ export default function SharedEventPostsTab({
 
                     {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
 
-                    <button
+                    <Button
                       type="button"
+                      variant="outline"
+                      size="md"
+                      className="flex w-full items-center justify-center gap-2"
                       disabled={isSavingEditor || !createTitle.trim()}
                       onClick={() =>
                         void (isSettingsEditor ? onSettingsSubmit() : onCreateSubmit())
                       }
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent bg-surface py-3 text-sm font-semibold text-accent disabled:opacity-50"
                     >
                       {isSavingEditor ? (
                         <Loader scale={0.55} />
@@ -1118,7 +1120,7 @@ export default function SharedEventPostsTab({
                         <AddIcon className="h-4 w-4" />
                       )}
               {isSettingsEditor ? "Save" : "Create"}
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -1178,11 +1180,13 @@ export default function SharedEventPostsTab({
                     className="hidden"
                     onChange={(event) => void onPickContributeFiles(event)}
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="md"
+                    className="flex w-full items-center justify-center gap-2"
                     disabled={isContributing}
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-accent bg-surface py-3 text-sm font-semibold text-accent disabled:opacity-50"
                   >
                     {isContributing ? (
                       <Loader scale={0.55} />
@@ -1190,7 +1194,7 @@ export default function SharedEventPostsTab({
                       <AddImageIcon className="h-4 w-4" />
                     )}
                     Upload photos or videos
-                  </button>
+                  </Button>
                   <p className="text-[11px] text-muted">
                     Up to {MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR} photos or videos per person. No
                     previews.
@@ -1254,14 +1258,15 @@ export default function SharedEventPostsTab({
             />
           </button>
         </div>
-        <button
+        <IconButton
           type="button"
+          variant="bordered"
           onClick={onOpenCreate}
           aria-label="Create Shared Event"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-foreground transition hover:border-accent hover:text-accent"
+          className="h-9 w-9 shrink-0 text-foreground hover:border-accent hover:text-accent"
         >
           <AddIcon className="h-5 w-5" />
-        </button>
+        </IconButton>
       </header>
 
       <div
