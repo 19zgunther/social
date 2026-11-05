@@ -840,7 +840,7 @@ export default function Groups({
         ariaLabel="Create group"
         title="Create Group"
         closeDisabled={isCreatingThread}
-        rootClassName="z-[2200] items-start px-3"
+        rootClassName="z-[2200] items-start px-3 pt-10"
         panelClassName="flex h-[min(92vh,40rem)] max-w-lg flex-col overflow-hidden bg-bg shadow-xl"
       >
         <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pt-3 pb-4">
