@@ -241,8 +241,10 @@ export default function AnimatedModal({
         aria-label={ariaLabel}
         className={cn(
           isClosing ? "emoji-picker-panel-out" : "emoji-picker-panel-in",
-          "relative flex max-h-full w-full flex-col overflow-hidden rounded-2xl border border-border",
+          "relative flex w-full flex-col overflow-hidden rounded-2xl border border-border",
           panelClassName,
+          // Always win over caller max-heights so the keyboard-shrunk visual viewport can clamp the panel.
+          "max-h-full",
         )}
         onClick={(event) => event.stopPropagation()}
       >
