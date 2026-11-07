@@ -31,7 +31,6 @@ import {
   ApiError,
   ImageOverlayData,
   MessageData,
-  EmojiItem,
   SyncResponse,
   ThreadItem,
   ThreadMember,
@@ -41,7 +40,6 @@ import {
   ThreadSendResponse,
 } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
-import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
   CustomEmoji,
   customEmojiUuidFromToken,
@@ -252,7 +250,6 @@ export default function Thread({
     imageThreadId?: string | null;
     alt: string;
   } | null>(null);
-  const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const activeOptionsMessageIdRef = useRef<string | null>(null);
@@ -407,7 +404,6 @@ export default function Thread({
     setIsLoadingOlderMessages(false);
     setIsCameraModalOpen(false);
     setImageViewer(null);
-    setCustomEmojiByUuid({});
     setCollapsedReplyMessageIds([]);
 
     const loadThread = async () => {
@@ -520,39 +516,6 @@ export default function Thread({
       isCancelled = true;
     };
   }, [readThreadMessagesCache, writeThreadMessagesCache]);
-
-  const customEmojiUuidsInMessages = useMemo(() => {
-    const uuids = new Set<string>();
-    messages.forEach((message) => {
-      const uuid = customEmojiUuidFromToken(message.text);
-      if (uuid) {
-        uuids.add(uuid);
-      }
-    });
-    return Array.from(uuids);
-  }, [messages]);
-
-  useEffect(() => {
-    if (customEmojiUuidsInMessages.length === 0) {
-      setCustomEmojiByUuid({});
-      return;
-    }
-    let cancelled = false;
-    const resolveCustomEmojis = async () => {
-      try {
-        const merged = await resolveEmojisByUuid(customEmojiUuidsInMessages);
-        if (!cancelled) {
-          setCustomEmojiByUuid(merged);
-        }
-      } catch {
-        // Best effort; unresolved custom emoji falls back to token text.
-      }
-    };
-    void resolveCustomEmojis();
-    return () => {
-      cancelled = true;
-    };
-  }, [customEmojiUuidsInMessages]);
 
   const loadOlderMessages = async () => {
     if (
@@ -1282,7 +1245,6 @@ export default function Thread({
       >
         <ThreadMessageBubbleContent
           message={message}
-          customEmojiByUuid={customEmojiByUuid}
           messageImageOverlay={messageImageOverlay}
           imageInteraction="options"
           onOpenImageViewer={() => {
@@ -1353,7 +1315,6 @@ export default function Thread({
       >
         <ThreadMessageBubbleContent
           message={message}
-          customEmojiByUuid={customEmojiByUuid}
           messageImageOverlay={messageImageOverlay}
           imageInteraction="chat"
           onOpenImageViewer={() => {
@@ -1419,9 +1380,8 @@ export default function Thread({
           >
             {emojiOnlyChildren.map((childMessage) => {
               const childCustomEmojiUuid = customEmojiUuidFromToken(childMessage.text);
-              const childCustomEmoji = childCustomEmojiUuid ? customEmojiByUuid[childCustomEmojiUuid] : undefined;
-              if (childCustomEmoji) {
-                return <CustomEmoji key={childMessage.id} customEmoji={childCustomEmoji} />;
+              if (childCustomEmojiUuid) {
+                return <CustomEmoji key={childMessage.id} uuid={childCustomEmojiUuid} />;
               }
               return (
                 <span key={childMessage.id} className="text-base leading-none">

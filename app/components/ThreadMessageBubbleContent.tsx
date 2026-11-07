@@ -7,13 +7,12 @@ import {
   customEmojiUuidFromToken,
   CustomEmoji,
 } from "@/app/lib/customEmojiCanvas";
-import type { EmojiItem, ImageOverlayData, ThreadMessage } from "@/app/types/interfaces";
+import type { ImageOverlayData, ThreadMessage } from "@/app/types/interfaces";
 
 export type ThreadMessageBubbleImageInteraction = "chat" | "options";
 
 type ThreadMessageBubbleContentProps = {
   message: ThreadMessage;
-  customEmojiByUuid: Record<string, EmojiItem>;
   messageImageOverlay: ImageOverlayData | null;
   imageInteraction: ThreadMessageBubbleImageInteraction;
   onOpenImageViewer: () => void;
@@ -22,7 +21,6 @@ type ThreadMessageBubbleContentProps = {
 
 export function ThreadMessageBubbleContent({
   message,
-  customEmojiByUuid,
   messageImageOverlay,
   imageInteraction,
   onOpenImageViewer,
@@ -35,13 +33,12 @@ export function ThreadMessageBubbleContent({
   );
   const isImageOnly = hasImage && !hasText;
   const customEmojiUuid = customEmojiUuidFromToken(message.text);
-  const customEmoji = customEmojiUuid ? customEmojiByUuid[customEmojiUuid] : undefined;
 
   return (
     <>
       {!isImageOnly ? (
-        customEmoji ? (
-          <CustomEmoji key={message.id} customEmoji={customEmoji} />
+        customEmojiUuid ? (
+          <CustomEmoji key={message.id} uuid={customEmojiUuid} />
         ) : (
           <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
         )

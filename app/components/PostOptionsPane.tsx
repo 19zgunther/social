@@ -7,7 +7,6 @@ import { getPollViewerState } from "@/app/components/PollBlock";
 import { getTierListViewerState } from "@/app/components/TierListBlock";
 import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
-import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
   CustomEmoji,
   customEmojiUuidFromToken,
@@ -17,7 +16,6 @@ import { isEmojiOnlyText } from "@/app/lib/notification_text";
 import { collectPostMediaObjectIds } from "@/app/lib/postMedia";
 import {
   ApiError,
-  EmojiItem,
   FeedPostPollVotersOption,
   FeedPostPollVotersResponse,
   FeedPostTierListSubmissionsResponse,
@@ -35,41 +33,17 @@ type PostOptionsPaneProps = {
 
 function RenderReactionEmoji({
   value,
-  customEmojiByUuid,
   className,
 }: {
   value: string;
-  customEmojiByUuid: Record<string, EmojiItem>;
   className?: string;
 }) {
   const uuid = customEmojiUuidFromToken(value);
   if (!uuid) {
     return <span className={className ?? "text-2xl leading-none"}>{value}</span>;
   }
-  const customEmoji = customEmojiByUuid[uuid];
-  if (!customEmoji) {
-    return <span className={className ?? "text-2xl leading-none"}>?</span>;
-  }
-  return <CustomEmoji customEmoji={customEmoji} />;
+  return <CustomEmoji uuid={uuid} />;
 }
-
-const collectCustomEmojiUuids = (comments: Record<string, PostCommentNode> | undefined): string[] => {
-  const uuids = new Set<string>();
-  const walk = (nodes: Record<string, PostCommentNode> | undefined) => {
-    if (!nodes) {
-      return;
-    }
-    Object.values(nodes).forEach((comment) => {
-      const uuid = customEmojiUuidFromToken(comment.text);
-      if (uuid) {
-        uuids.add(uuid);
-      }
-      walk(comment.replies);
-    });
-  };
-  walk(comments);
-  return Array.from(uuids);
-};
 
 type ReactorEntry = {
   emoji: string;
@@ -166,7 +140,6 @@ export default function PostOptionsPane({
   swipeBackOverrideRef,
 }: PostOptionsPaneProps) {
   const { isPresented, isClosing, isActive, close: closeModal } = useAnimatedModal(true);
-  const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
   const [imageGrantById, setImageGrantById] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     if (post.image_id && post.image_access_grant) {
@@ -198,8 +171,6 @@ export default function PostOptionsPane({
   const isPollOwner = Boolean(currentUserId && currentUserId === post.created_by);
   const canViewPollVoters = Boolean(poll && (poll.is_closed || isPollOwner));
   const canViewTierListSubmissions = Boolean(tierList?.has_submitted);
-
-  const customEmojiUuids = useMemo(() => collectCustomEmojiUuids(comments), [comments]);
 
   useEffect(() => {
     setImageGrantById(() => {
@@ -260,29 +231,6 @@ export default function PostOptionsPane({
       cancelled = true;
     };
   }, [imageIds, post.created_by, post.id, post.image_access_grant, post.image_id]);
-
-  useEffect(() => {
-    if (customEmojiUuids.length === 0) {
-      setCustomEmojiByUuid({});
-      return;
-    }
-
-    let cancelled = false;
-    const resolveCustomEmojis = async () => {
-      try {
-        const merged = await resolveEmojisByUuid(customEmojiUuids);
-        if (!cancelled) {
-          setCustomEmojiByUuid(merged);
-        }
-      } catch {
-        // Ignore failures; custom emoji reaction falls back to token text.
-      }
-    };
-    void resolveCustomEmojis();
-    return () => {
-      cancelled = true;
-    };
-  }, [customEmojiUuids]);
 
   useEffect(() => {
     if (!canViewPollVoters) {
@@ -634,10 +582,7 @@ export default function PostOptionsPane({
                   className="contents"
                 >
                   <div className="flex h-8 w-10 items-center justify-center">
-                    <RenderReactionEmoji
-                      value={entry.emoji}
-                      customEmojiByUuid={customEmojiByUuid}
-                    />
+                    <RenderReactionEmoji value={entry.emoji} />
                   </div>
                   <div className="flex min-w-0 items-center gap-3">
                     <UserProfileImage
@@ -687,10 +632,7 @@ export default function PostOptionsPane({
                         className="contents"
                       >
                         <div className="flex h-8 w-10 items-center justify-center">
-                          <RenderReactionEmoji
-                            value={entry.emoji}
-                            customEmojiByUuid={customEmojiByUuid}
-                          />
+                          <RenderReactionEmoji value={entry.emoji} />
                         </div>
                         <div className="flex min-w-0 items-center gap-3">
                           <UserProfileImage

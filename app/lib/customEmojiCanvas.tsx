@@ -2,8 +2,17 @@
 
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
+import { getCachedCustomEmoji, subscribeCustomEmoji } from "@/app/lib/customEmojiCache";
 import { EmojiItem } from "../types/interfaces";
 
 export const CUSTOM_EMOJI_TOKEN_REGEX = /^\[\[(?:(?:emoji|ce):)?([a-f0-9-]{36})\]\]$/i;
@@ -235,15 +244,45 @@ function CustomEmojiPeekOverlay({
   );
 }
 
-export const CustomEmoji = ({
-  customEmoji,
-  onPointerDown,
-  enablePeek = true,
-}: {
-  customEmoji: EmojiItem;
+type CustomEmojiProps = {
   onPointerDown?: () => void;
   enablePeek?: boolean;
-}) => {
+} & (
+  | { customEmoji: EmojiItem; uuid?: never }
+  | { uuid: string; customEmoji?: never }
+);
+
+const getCustomEmojiServerSnapshot = (): EmojiItem | null => null;
+
+export const CustomEmoji = ({
+  customEmoji: customEmojiProp,
+  uuid,
+  onPointerDown,
+  enablePeek = true,
+}: CustomEmojiProps) => {
+  const shouldResolveByUuid = Boolean(uuid) && !customEmojiProp;
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      if (!shouldResolveByUuid || !uuid) {
+        return () => {};
+      }
+      return subscribeCustomEmoji(uuid, onStoreChange);
+    },
+    [shouldResolveByUuid, uuid],
+  );
+  const getSnapshot = useCallback((): EmojiItem | null => {
+    if (!shouldResolveByUuid || !uuid) {
+      return null;
+    }
+    return getCachedCustomEmoji(uuid) ?? null;
+  }, [shouldResolveByUuid, uuid]);
+  const resolvedFromStore = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getCustomEmojiServerSnapshot,
+  );
+  const customEmoji = customEmojiProp ?? resolvedFromStore;
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [peekSource, setPeekSource] = useState<PeekSource | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -251,6 +290,17 @@ export const CustomEmoji = ({
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  if (!customEmoji) {
+    return (
+      <span
+        className="inline-flex h-7 w-7 items-center justify-center text-sm leading-none text-muted animate-pulse"
+        aria-label="Loading custom emoji"
+      >
+        ?
+      </span>
+    );
+  }
 
   const handlePointerDown = () => {
     onPointerDown?.();

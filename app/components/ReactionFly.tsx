@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import {
   CustomEmoji,
   customEmojiUuidFromToken,
@@ -19,7 +18,7 @@ import {
   EMOJI_FLY_SIZE_RATIO,
 } from "@/app/lib/customEmojiCanvas";
 import { isEmojiOnlyText } from "@/app/lib/notification_text";
-import { EmojiItem, PostCommentNode } from "@/app/types/interfaces";
+import { PostCommentNode } from "@/app/types/interfaces";
 
 type ReactionFlyState = {
   id: number;
@@ -81,11 +80,9 @@ export function findNewEmojiReactionKey(
 
 export function RenderReactionEmoji({
   value,
-  customEmojiByUuid,
   fillContainer = false,
 }: {
   value: string;
-  customEmojiByUuid: Record<string, EmojiItem>;
   fillContainer?: boolean;
 }) {
   const uuid = customEmojiUuidFromToken(value);
@@ -96,33 +93,23 @@ export function RenderReactionEmoji({
       </span>
     );
   }
-  const customEmoji = customEmojiByUuid[uuid];
-  if (!customEmoji) {
-    return (
-      <span className={fillContainer ? "leading-none" : "text-xl leading-none"}>
-        ?
-      </span>
-    );
-  }
   if (fillContainer) {
     return (
-      <span className="flex h-full w-full items-center justify-center [&_canvas]:!h-full [&_canvas]:!w-full">
-        <CustomEmoji customEmoji={customEmoji} enablePeek={false} />
+      <span className="flex h-full w-full items-center justify-center [&_canvas]:!h-full [&_canvas]:!w-full [&_span]:!h-full [&_span]:!w-full">
+        <CustomEmoji uuid={uuid} enablePeek={false} />
       </span>
     );
   }
-  return <CustomEmoji customEmoji={customEmoji} />;
+  return <CustomEmoji uuid={uuid} />;
 }
 
 function ReactionFlyOverlay({
   emoji,
-  customEmojiByUuid,
   targetKey,
   reactionElByKeyRef,
   onComplete,
 }: {
   emoji: string;
-  customEmojiByUuid: Record<string, EmojiItem>;
   targetKey: string | null;
   reactionElByKeyRef: MutableRefObject<Record<string, HTMLElement | null>>;
   onComplete: () => void;
@@ -227,23 +214,13 @@ function ReactionFlyOverlay({
       }}
       aria-hidden
     >
-      <RenderReactionEmoji value={emoji} customEmojiByUuid={customEmojiByUuid} fillContainer />
+      <RenderReactionEmoji value={emoji} fillContainer />
     </div>,
     document.body,
   );
 }
 
-type UseReactionFlyArgs = {
-  customEmojiByUuid: Record<string, EmojiItem>;
-  setCustomEmojiByUuid: (
-    update: (previous: Record<string, EmojiItem>) => Record<string, EmojiItem>,
-  ) => void;
-};
-
-export function useReactionFly({
-  customEmojiByUuid,
-  setCustomEmojiByUuid,
-}: UseReactionFlyArgs): {
+export function useReactionFly(): {
   beginReactionFly: (emoji: string) => number;
   cancelReactionFly: (flyId: number) => void;
   setReactionFlyTarget: (flyId: number, targetKey: string | null) => void;
@@ -263,16 +240,6 @@ export function useReactionFly({
     const flyId = reactionFlyIdRef.current + 1;
     reactionFlyIdRef.current = flyId;
     setReactionFly({ id: flyId, emoji, targetKey: null });
-
-    const customUuid = customEmojiUuidFromToken(emoji);
-    if (customUuid && !customEmojiByUuid[customUuid]) {
-      void resolveEmojisByUuid([customUuid]).then((merged) => {
-        setCustomEmojiByUuid((previous) => ({ ...previous, ...merged }));
-      }).catch(() => {
-        // Ignore; overlay falls back to "?" until resolve succeeds elsewhere.
-      });
-    }
-
     return flyId;
   };
 
@@ -296,7 +263,6 @@ export function useReactionFly({
     <ReactionFlyOverlay
       key={reactionFly.id}
       emoji={reactionFly.emoji}
-      customEmojiByUuid={customEmojiByUuid}
       targetKey={reactionFly.targetKey}
       reactionElByKeyRef={reactionElByKeyRef}
       onComplete={() => {

@@ -13,10 +13,8 @@ import {
   RenderReactionEmoji,
   useReactionFly,
 } from "@/app/components/ReactionFly";
-import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
-import { customEmojiUuidFromToken } from "@/app/lib/customEmojiCanvas";
 import { isEmojiOnlyText } from "@/app/lib/notification_text";
-import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
+import { ApiError, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
 import { collectPostMediaObjectIds, getPostMediaSlides } from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { Button, IconButton, TextField } from "@/app/ui-components";
@@ -153,7 +151,6 @@ function PostSectionComponent({
   const [postTextDraft, setPostTextDraft] = useState(post.text);
   const [isSavingPostText, setIsSavingPostText] = useState(false);
   const [postTextStatusMessage, setPostTextStatusMessage] = useState("");
-  const [customEmojiByUuid, setCustomEmojiByUuid] = useState<Record<string, EmojiItem>>({});
   const {
     beginReactionFly,
     cancelReactionFly,
@@ -161,10 +158,7 @@ function PostSectionComponent({
     bindReactionEl,
     isFlyingReaction,
     reactionFlyOverlay,
-  } = useReactionFly({
-    customEmojiByUuid,
-    setCustomEmojiByUuid,
-  });
+  } = useReactionFly();
   const [imageViewer, setImageViewer] = useState<{
     imageId: string;
     imageAccessGrant: string | null;
@@ -204,23 +198,6 @@ function PostSectionComponent({
         })),
     [rootCommentEntries],
   );
-  const customEmojiUuidsInPostData = useMemo(() => {
-    const uuids = new Set<string>();
-    const walk = (comments: Record<string, PostCommentNode> | undefined) => {
-      if (!comments) {
-        return;
-      }
-      Object.values(comments).forEach((comment) => {
-        const uuid = customEmojiUuidFromToken(comment.text);
-        if (uuid) {
-          uuids.add(uuid);
-        }
-        walk(comment.replies);
-      });
-    };
-    walk(postData.comments);
-    return Array.from(uuids);
-  }, [postData.comments]);
   const mediaSlides = useMemo(() => {
     if (resolvedPreviewMedia && resolvedPreviewMedia.length > 0) {
       return resolvedPreviewMedia.map((item, index) => ({
@@ -332,30 +309,7 @@ function PostSectionComponent({
     setPostTextDraft(post.text);
     setPostTextStatusMessage("");
     setImageViewer(null);
-    setCustomEmojiByUuid({});
   }, [post.data, post.id, post.image_id, post.image_access_grant, post.text]);
-
-  useEffect(() => {
-    if (customEmojiUuidsInPostData.length === 0) {
-      setCustomEmojiByUuid({});
-      return;
-    }
-    let cancelled = false;
-    const resolveCustomEmojis = async () => {
-      try {
-        const merged = await resolveEmojisByUuid(customEmojiUuidsInPostData);
-        if (!cancelled) {
-          setCustomEmojiByUuid(merged);
-        }
-      } catch {
-        // Ignore failures; custom emoji reaction falls back to token text.
-      }
-    };
-    void resolveCustomEmojis();
-    return () => {
-      cancelled = true;
-    };
-  }, [customEmojiUuidsInPostData]);
 
   useEffect(() => {
     const fallbackLikeCount = Object.values(initialLikes).filter(Boolean).length;
@@ -748,10 +702,7 @@ function PostSectionComponent({
                   ref={bindReactionEl(reactionKey)}
                   className={isFlyingReaction(reactionKey) ? "opacity-0" : undefined}
                 >
-                  <RenderReactionEmoji
-                    value={childComment.text.trim()}
-                    customEmojiByUuid={customEmojiByUuid}
-                  />
+                  <RenderReactionEmoji value={childComment.text.trim()} />
                 </span>
               );
             })}
@@ -1149,10 +1100,7 @@ function PostSectionComponent({
                   ref={bindReactionEl(reaction.key)}
                   className={isFlyingReaction(reaction.key) ? "opacity-0" : undefined}
                 >
-                  <RenderReactionEmoji
-                    value={reaction.emoji}
-                    customEmojiByUuid={customEmojiByUuid}
-                  />
+                  <RenderReactionEmoji value={reaction.emoji} />
                 </span>
               ))}
             </div>

@@ -18,6 +18,30 @@ const inFlightResolveBatches = new Map<string, Promise<Record<string, EmojiItem>
 /** Coalesce identical list requests only; key must include full `client_known` (sorted for stability). */
 const inFlightListByKey = new Map<string, Promise<EmojisListResponse>>();
 
+/** In-memory map so mounted CustomEmoji components can read sync after a shared resolve. */
+const memoryEmojiByUuid = new Map<string, EmojiItem>();
+const subscribeListenersByUuid = new Map<string, Set<() => void>>();
+const pendingSubscribeUuids = new Set<string>();
+let pendingSubscribeFlush: Promise<void> | null = null;
+
+const notifyCustomEmojiSubscribers = (uuid: string) => {
+  const listeners = subscribeListenersByUuid.get(uuid);
+  if (!listeners) {
+    return;
+  }
+  listeners.forEach((listener) => {
+    listener();
+  });
+};
+
+const putEmojiInMemory = (emoji: EmojiItem) => {
+  if (!emoji.uuid || !emoji.data_b64) {
+    return;
+  }
+  memoryEmojiByUuid.set(emoji.uuid, emoji);
+  notifyCustomEmojiSubscribers(emoji.uuid);
+};
+
 const clientKnownRequestKey = (client_known: Array<{ uuid: string; updated_at: string }>): string =>
   JSON.stringify([...client_known].sort((a, b) => a.uuid.localeCompare(b.uuid)));
 
@@ -211,6 +235,9 @@ export const resolveEmojisByUuid = async (uuids: string[]): Promise<Record<strin
   }
 
   if (needNetwork.length === 0) {
+    for (const emoji of Object.values(fresh)) {
+      putEmojiInMemory(emoji);
+    }
     return fresh;
   }
 
@@ -241,6 +268,9 @@ export const resolveEmojisByUuid = async (uuids: string[]): Promise<Record<strin
         merged[uuid] = recordToItem(stale);
       }
     }
+  }
+  for (const emoji of Object.values(merged)) {
+    putEmojiInMemory(emoji);
   }
   return merged;
 };
@@ -292,12 +322,16 @@ export const loadAllCustomEmojis = async (): Promise<EmojiItem[]> => {
   const merged = await readAllCachedRecords();
   const items = merged.map(recordToItem);
   items.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  for (const item of items) {
+    putEmojiInMemory(item);
+  }
   return items;
 };
 
 /** After creating or updating an emoji via `/api/emoji-save`, call this so the next resolve/list skips the network. */
 export const putEmojiInCache = async (emoji: EmojiItem): Promise<void> => {
   await writeEmojisToCache([emoji]);
+  putEmojiInMemory(emoji);
 };
 
 export type CustomEmojiCacheStats = {
@@ -318,6 +352,10 @@ export const getCustomEmojiCacheStats = async (): Promise<CustomEmojiCacheStats>
 export const clearAllCachedCustomEmojis = async (): Promise<void> => {
   inFlightResolveBatches.clear();
   inFlightListByKey.clear();
+  memoryEmojiByUuid.clear();
+  pendingSubscribeUuids.clear();
+  subscribeListenersByUuid.clear();
+  pendingSubscribeFlush = null;
 
   if (typeof window === "undefined" || typeof window.indexedDB === "undefined") {
     return;
@@ -335,4 +373,83 @@ export const clearAllCachedCustomEmojis = async (): Promise<void> => {
   } catch {
     // Swallow errors so a cache clear request doesn't break user flows.
   }
+};
+
+const flushPendingSubscribeUuids = async () => {
+  const uuids = Array.from(pendingSubscribeUuids);
+  pendingSubscribeUuids.clear();
+  if (uuids.length === 0) {
+    return;
+  }
+  try {
+    const resolved = await resolveEmojisByUuid(uuids);
+    // Notify even when unresolved so subscribers stop waiting on a missing row.
+    for (const uuid of uuids) {
+      if (!resolved[uuid]) {
+        notifyCustomEmojiSubscribers(uuid);
+      }
+    }
+  } catch {
+    for (const uuid of uuids) {
+      notifyCustomEmojiSubscribers(uuid);
+    }
+  }
+};
+
+const schedulePendingSubscribeFlush = () => {
+  if (pendingSubscribeFlush) {
+    return;
+  }
+  pendingSubscribeFlush = Promise.resolve()
+    .then(() => flushPendingSubscribeUuids())
+    .finally(() => {
+      pendingSubscribeFlush = null;
+      if (pendingSubscribeUuids.size > 0) {
+        schedulePendingSubscribeFlush();
+      }
+    });
+};
+
+/** Sync read from the in-memory map populated by {@link subscribeCustomEmoji} / resolve. */
+export const getCachedCustomEmoji = (uuid: string): EmojiItem | undefined => {
+  const trimmed = uuid.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  return memoryEmojiByUuid.get(trimmed);
+};
+
+/**
+ * Register interest in a UUID. Coalesces many mounts into one microtask-batched
+ * {@link resolveEmojisByUuid}, then notifies listeners when the in-memory map updates.
+ * Returns an unsubscribe function.
+ */
+export const subscribeCustomEmoji = (uuid: string, listener: () => void): (() => void) => {
+  const trimmed = uuid.trim();
+  if (!trimmed) {
+    return () => {};
+  }
+
+  let listeners = subscribeListenersByUuid.get(trimmed);
+  if (!listeners) {
+    listeners = new Set();
+    subscribeListenersByUuid.set(trimmed, listeners);
+  }
+  listeners.add(listener);
+
+  if (!memoryEmojiByUuid.has(trimmed)) {
+    pendingSubscribeUuids.add(trimmed);
+    schedulePendingSubscribeFlush();
+  }
+
+  return () => {
+    const current = subscribeListenersByUuid.get(trimmed);
+    if (!current) {
+      return;
+    }
+    current.delete(listener);
+    if (current.size === 0) {
+      subscribeListenersByUuid.delete(trimmed);
+    }
+  };
 };
