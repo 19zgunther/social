@@ -1,59 +1,64 @@
-import { Prisma } from "@/app/generated/prisma/client";
-import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
-import { sanitizePostDataForViewer } from "@/app/lib/polls";
-import type {
-  PostData,
-  PostMediaItem,
-  SharedPostContributorItem,
-  SharedPostListItem,
-} from "@/app/types/interfaces";
+import type { Prisma } from "@/app/generated/prisma/client";
+import type { EventAlbumPhase, PostData, PostMediaItem } from "@/app/types/interfaces";
 
-export type SharedPostRowForSerialize = {
-  id: string;
-  created_at: Date;
-  created_by: string;
-  title: string;
-  text: string | null;
-  image_id: string | null;
-  data: Prisma.JsonValue | null;
-  close_at: Date;
-  release_at: Date;
-  users: {
-    username: string;
-    email: string | null;
-    profile_image_id: string | null;
-  };
-  shared_posts_contributors: Array<{
-    user_id: string;
-    invited_at: Date;
-    users_shared_posts_contributors_user_idTousers: {
-      username: string;
-      email: string | null;
-      profile_image_id: string | null;
-    };
-  }>;
+/**
+ * Event album helpers. The album lives on `thread_events.shared_post_data` (post-shaped:
+ * media / likes / comments) and is gated by `blind_reveal`, `close_at`, `release_at`.
+ */
+
+export type EventAlbumTiming = {
+  blind_reveal: boolean;
+  close_at: Date | null;
+  release_at: Date | null;
 };
 
 export const MAX_SHARED_POST_MEDIA_TOTAL = 100;
 export const MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR = 5;
 
-export type SharedPostPhase = "open" | "pending" | "released";
-
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export const getSharedPostPhase = (
-  closeAt: Date,
-  releaseAt: Date,
+/**
+ * Non-blind events are always "open". Blind events need both `close_at` and `release_at`;
+ * when either is missing the album is treated as "pending" (hidden, not contributable).
+ */
+export const getEventAlbumPhase = (
+  event: EventAlbumTiming,
   now: Date = new Date(),
-): SharedPostPhase => {
-  if (now < closeAt) {
+): EventAlbumPhase => {
+  if (!event.blind_reveal) {
     return "open";
   }
-  if (now < releaseAt) {
+  if (!event.close_at || !event.release_at) {
+    return "pending";
+  }
+  if (now < event.close_at) {
+    return "open";
+  }
+  if (now < event.release_at) {
     return "pending";
   }
   return "released";
+};
+
+/** Media / likes / comments are visible when the event is not blind, or once released. */
+export const isEventAlbumMediaVisible = (
+  event: EventAlbumTiming,
+  now: Date = new Date(),
+): boolean => !event.blind_reveal || getEventAlbumPhase(event, now) === "released";
+
+/** Contributions are allowed for non-blind events, or for blind events before close_at. */
+export const canContributeToEventAlbum = (
+  event: EventAlbumTiming,
+  now: Date = new Date(),
+): boolean => {
+  if (!event.blind_reveal) {
+    return true;
+  }
+  if (!event.close_at || !event.release_at) {
+    return false;
+  }
+  return getEventAlbumPhase(event, now) === "open";
 };
 
 export const validateSharedPostDates = (
@@ -74,7 +79,7 @@ export const validateSharedPostDates = (
   return { ok: true };
 };
 
-export const asSharedPostDataObject = (value: Prisma.JsonValue | null | undefined): PostData => {
+export const asEventSharedPostData = (value: Prisma.JsonValue | null | undefined): PostData => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
@@ -118,35 +123,6 @@ export const parseSharedPostMediaItems = (raw: unknown): PostMediaItem[] | null 
 export const countContributorMedia = (media: PostMediaItem[], userId: string): number =>
   media.filter((item) => item.owner_user_id === userId).length;
 
-/** Drop media owned by removed invitees and recompute primary image_id. */
-export const stripMediaForRemovedContributors = (
-  existingData: PostData,
-  removedUserIds: Set<string>,
-): { data: PostData; imageId: string | null } => {
-  if (removedUserIds.size === 0) {
-    const media = Array.isArray(existingData.media) ? existingData.media : [];
-    const first = media[0];
-    const imageId =
-      !first ? null : first.kind === "video" ? (first.poster_id ?? null) : first.id;
-    return { data: existingData, imageId };
-  }
-
-  const nextMedia = (Array.isArray(existingData.media) ? existingData.media : []).filter(
-    (item) => !item.owner_user_id || !removedUserIds.has(item.owner_user_id),
-  );
-  const first = nextMedia[0];
-  const imageId =
-    !first ? null : first.kind === "video" ? (first.poster_id ?? null) : first.id;
-
-  return {
-    imageId,
-    data: {
-      ...existingData,
-      media: nextMedia.length > 0 ? nextMedia : undefined,
-    },
-  };
-};
-
 export const appendSharedPostMedia = ({
   existingData,
   newMedia,
@@ -177,7 +153,7 @@ export const appendSharedPostMedia = ({
     return {
       ok: false,
       code: "media_limit",
-      message: `Shared posts can include at most ${MAX_SHARED_POST_MEDIA_TOTAL} photos or videos.`,
+      message: `Event albums can include at most ${MAX_SHARED_POST_MEDIA_TOTAL} photos or videos.`,
     };
   }
 
@@ -201,6 +177,30 @@ export const appendSharedPostMedia = ({
     data: {
       ...existingData,
       media: nextMedia,
+    },
+  };
+};
+
+/** Drop media owned by removed members and recompute the primary image id. */
+export const stripMediaForRemovedContributors = (
+  existingData: PostData,
+  removedUserIds: Set<string>,
+): { data: PostData; imageId: string | null } => {
+  const media = Array.isArray(existingData.media) ? existingData.media : [];
+  const nextMedia =
+    removedUserIds.size === 0
+      ? media
+      : media.filter((item) => !item.owner_user_id || !removedUserIds.has(item.owner_user_id));
+  const first = nextMedia[0];
+  const imageId = !first ? null : first.kind === "video" ? (first.poster_id ?? null) : first.id;
+  if (removedUserIds.size === 0) {
+    return { data: existingData, imageId };
+  }
+  return {
+    imageId,
+    data: {
+      ...existingData,
+      media: nextMedia.length > 0 ? nextMedia : undefined,
     },
   };
 };
@@ -239,142 +239,3 @@ export const findSharedMediaOwnerUserId = (
   }
   return null;
 };
-
-const tryMintGrant = (
-  imageId: string | null | undefined,
-  storageUserId: string,
-  viewerUserId: string,
-): string | null => {
-  if (!imageId) {
-    return null;
-  }
-  try {
-    return createMainBucketImageAccessGrant({
-      imageId,
-      storageUserId,
-      viewerUserId,
-    });
-  } catch (error) {
-    console.error("shared_post_image_grant_failed", imageId, error);
-    return null;
-  }
-};
-
-export const serializeSharedPostListItem = ({
-  row,
-  viewerUserId,
-  includeContributors = false,
-}: {
-  row: SharedPostRowForSerialize;
-  viewerUserId: string;
-  includeContributors?: boolean;
-}): SharedPostListItem => {
-  const phase = getSharedPostPhase(row.close_at, row.release_at);
-  const dataObject = asSharedPostDataObject(row.data);
-  const isReleased = phase === "released";
-  const likes = dataObject.likes ?? {};
-  const likeCount = Object.values(likes).filter(Boolean).length;
-  const isLikedByViewer = Boolean(likes[viewerUserId]);
-
-  const contributors: SharedPostContributorItem[] | undefined = includeContributors
-    ? row.shared_posts_contributors.map((contributor) => {
-        const contributorUser = contributor.users_shared_posts_contributors_user_idTousers;
-        return {
-          user_id: contributor.user_id,
-          username: contributorUser.username,
-          email: contributorUser.email,
-          invited_at: contributor.invited_at.toISOString(),
-          has_contributed: contributorHasUploaded(dataObject, contributor.user_id),
-          profile_image_id: contributorUser.profile_image_id,
-          profile_image_access_grant: tryMintGrant(
-            contributorUser.profile_image_id,
-            contributor.user_id,
-            viewerUserId,
-          ),
-        };
-      })
-    : undefined;
-
-  const othersContributedCount = row.shared_posts_contributors.filter(
-    (contributor) =>
-      contributor.user_id !== viewerUserId && contributorHasUploaded(dataObject, contributor.user_id),
-  ).length;
-  const viewerContributor = row.shared_posts_contributors.find(
-    (contributor) => contributor.user_id === viewerUserId,
-  );
-
-  return {
-    id: row.id,
-    created_at: row.created_at.toISOString(),
-    created_by: row.created_by,
-    title: row.title,
-    text: isReleased ? (row.text ?? "") : "",
-    close_at: row.close_at.toISOString(),
-    release_at: row.release_at.toISOString(),
-    phase,
-    contributor_count: row.shared_posts_contributors.length,
-    others_contributed_count: othersContributedCount,
-    viewer_has_contributed: contributorHasUploaded(dataObject, viewerUserId),
-    viewer_invited_at: viewerContributor ? viewerContributor.invited_at.toISOString() : null,
-    is_creator: row.created_by === viewerUserId,
-    image_id: isReleased ? row.image_id : null,
-    image_url: null,
-    image_access_grant: isReleased
-      ? tryMintGrant(
-          row.image_id,
-          findSharedMediaOwnerUserId(dataObject, row.image_id ?? "") ?? row.created_by,
-          viewerUserId,
-        )
-      : null,
-    data: isReleased
-      ? sanitizePostDataForViewer({
-          data: row.data,
-          viewerUserId,
-          authorUserId: row.created_by,
-        })
-      : stripSharedPostMediaForBlindView(dataObject),
-    like_count: isReleased ? likeCount : undefined,
-    is_liked_by_viewer: isReleased ? isLikedByViewer : undefined,
-    username: row.users.username,
-    email: row.users.email,
-    author_profile_image_id: row.users.profile_image_id,
-    author_profile_image_access_grant: tryMintGrant(
-      row.users.profile_image_id,
-      row.created_by,
-      viewerUserId,
-    ),
-    contributors,
-  };
-};
-
-export const sharedPostSelectForSerialize = {
-  id: true,
-  created_at: true,
-  created_by: true,
-  title: true,
-  text: true,
-  image_id: true,
-  data: true,
-  close_at: true,
-  release_at: true,
-  users: {
-    select: {
-      username: true,
-      email: true,
-      profile_image_id: true,
-    },
-  },
-  shared_posts_contributors: {
-    select: {
-      user_id: true,
-      invited_at: true,
-      users_shared_posts_contributors_user_idTousers: {
-        select: {
-          username: true,
-          email: true,
-          profile_image_id: true,
-        },
-      },
-    },
-  },
-} as const;

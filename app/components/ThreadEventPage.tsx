@@ -4,12 +4,28 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "
 import { CheckIcon, AddImageIcon, EditIcon, DeleteIcon, CloseIcon } from "@/app/components/Icons";
 import BackButton from "@/app/components/utils/BackButton";
 import CachedImage from "@/app/components/utils/CachedImage";
+import CachedVideo from "@/app/components/utils/CachedVideo";
+import {
+  prepareImageForUpload,
+  prepareVideoForUpload,
+  uploadPreparedImageToMainBucket,
+  uploadPreparedVideoToMainBucket,
+} from "@/app/components/utils/client_file_storage_utils";
+import {
+  canContributeToEventAlbum,
+  getEventAlbumPhase,
+  isEventAlbumMediaVisible,
+  MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR,
+} from "@/app/lib/sharedPosts";
 import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import type {
   ApiError,
+  EventContributeRequest,
+  EventPublishPostResponse,
   FriendSearchResponse,
+  PostMediaItem,
   ThreadEventBackgroundRemoveResponse,
   ThreadEventBackgroundSetResponse,
   ThreadEventItem,
@@ -77,6 +93,26 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 };
 
 const REFETCH_TTL_MS = 60_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_CLOSE_AFTER_DAYS = 3;
+const DEFAULT_RELEASE_AFTER_DAYS = 7;
+
+function formatAlbumInstant(iso: string | null): string {
+  if (!iso) {
+    return "";
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 type ThreadEventPageCacheEntry = {
   fetchedAt: number;
@@ -201,6 +237,14 @@ export default function ThreadEventPage({
   const [bgBusy, setBgBusy] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [albumBusy, setAlbumBusy] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [albumGrants, setAlbumGrants] = useState<Record<string, string | null>>({});
+  const [editingAlbum, setEditingAlbum] = useState(false);
+  const [blindDraft, setBlindDraft] = useState(false);
+  const [closeDraft, setCloseDraft] = useState("");
+  const [releaseDraft, setReleaseDraft] = useState("");
+  const albumInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setDeleteConfirm(false);
@@ -331,6 +375,9 @@ export default function ThreadEventPage({
     description?: string | null;
     starts_at?: string;
     ends_at?: string;
+    blind_reveal?: boolean;
+    close_at?: string;
+    release_at?: string;
   }) => {
     setFieldBusy(true);
     try {
@@ -342,6 +389,9 @@ export default function ThreadEventPage({
         description: fields.description !== undefined ? fields.description : local.description,
         starts_at: fields.starts_at ?? local.starts_at,
         ends_at: fields.ends_at ?? local.ends_at,
+        blind_reveal: fields.blind_reveal,
+        close_at: fields.close_at,
+        release_at: fields.release_at,
       });
       if (!response.ok) {
         onNotify?.(await readErrorMessage(response));
@@ -466,6 +516,178 @@ export default function ThreadEventPage({
       setDeleteConfirm(false);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const albumTiming = useMemo(
+    () => ({
+      blind_reveal: local.blind_reveal,
+      close_at: local.close_at ? new Date(local.close_at) : null,
+      release_at: local.release_at ? new Date(local.release_at) : null,
+    }),
+    [local.blind_reveal, local.close_at, local.release_at],
+  );
+  const albumPhase = getEventAlbumPhase(albumTiming);
+  const albumMediaVisible = isEventAlbumMediaVisible(albumTiming);
+  const albumCanContribute = canContributeToEventAlbum(albumTiming);
+  const albumMediaCount = local.album_media_count ?? 0;
+  const albumCloseLabel = formatAlbumInstant(local.close_at);
+  const albumReleaseLabel = formatAlbumInstant(local.release_at);
+  const albumStatusText = !local.blind_reveal
+    ? "Everyone in this event can add photos and videos."
+    : albumPhase === "open"
+      ? `Surprise album — uploads close ${albumCloseLabel}. Photos are revealed ${albumReleaseLabel}.`
+      : albumPhase === "released"
+        ? `Surprise album — revealed ${albumReleaseLabel}.`
+        : albumCloseLabel && albumReleaseLabel
+          ? `Surprise album — uploads closed. Photos are revealed ${albumReleaseLabel}.`
+          : "Surprise album — dates aren't set yet.";
+
+  const albumMedia = useMemo<PostMediaItem[]>(
+    () => (albumMediaVisible ? (local.shared_post_data?.media ?? []) : []),
+    [albumMediaVisible, local.shared_post_data],
+  );
+
+  const albumObjectIdsKey = useMemo(
+    () =>
+      albumMedia
+        .flatMap((item) => (item.kind === "video" && item.poster_id ? [item.id, item.poster_id] : [item.id]))
+        .join(","),
+    [albumMedia],
+  );
+
+  useEffect(() => {
+    if (!albumObjectIdsKey) {
+      return;
+    }
+    let cancelled = false;
+    const loadGrants = async () => {
+      try {
+        const response = await postJson("/api/image-access-grants", {
+          event_id: local.id,
+          image_ids: albumObjectIdsKey.split(","),
+        });
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as { grants_by_id?: Record<string, string | null> };
+        if (!cancelled) {
+          setAlbumGrants((previous) => ({ ...previous, ...payload.grants_by_id }));
+        }
+      } catch {
+        // Thumbnails simply stay as placeholders.
+      }
+    };
+    void loadGrants();
+    return () => {
+      cancelled = true;
+    };
+  }, [albumObjectIdsKey, local.id]);
+
+  const onAlbumFiles = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) {
+      return;
+    }
+    if (files.length > MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR) {
+      onNotify?.(`Choose up to ${MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR} photos or videos at a time.`);
+      return;
+    }
+    setAlbumBusy(true);
+    try {
+      const uploaded: PostMediaItem[] = [];
+      for (const file of files) {
+        if (file.type.startsWith("image/")) {
+          const preparedImage = await prepareImageForUpload(file);
+          const imageUpload = await uploadPreparedImageToMainBucket(preparedImage, postJson);
+          if (!imageUpload.image_id) {
+            throw new Error("Image upload failed.");
+          }
+          uploaded.push({ id: imageUpload.image_id, kind: "image", owner_user_id: currentUserId });
+          continue;
+        }
+        const preparedVideo = await prepareVideoForUpload(file);
+        const videoUpload = await uploadPreparedVideoToMainBucket(preparedVideo, postJson);
+        uploaded.push({
+          id: videoUpload.video_id,
+          kind: "video",
+          poster_id: videoUpload.poster_id,
+          owner_user_id: currentUserId,
+        });
+      }
+      const requestBody: EventContributeRequest = { event_id: local.id, media: uploaded };
+      const response = await postJson("/api/event-contribute", requestBody);
+      if (!response.ok) {
+        onNotify?.(await readErrorMessage(response));
+        return;
+      }
+      onNotify?.("Added to the album.");
+      await fetchEventPageData(true);
+    } catch (err) {
+      onNotify?.(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setAlbumBusy(false);
+    }
+  };
+
+  const onStartEditAlbum = () => {
+    setBlindDraft(local.blind_reveal);
+    setCloseDraft(
+      isoToEventLocalDatetime(local.close_at ?? new Date(Date.now() + DEFAULT_CLOSE_AFTER_DAYS * DAY_MS).toISOString()),
+    );
+    setReleaseDraft(
+      isoToEventLocalDatetime(
+        local.release_at ?? new Date(Date.now() + DEFAULT_RELEASE_AFTER_DAYS * DAY_MS).toISOString(),
+      ),
+    );
+    setEditingAlbum(true);
+  };
+
+  const onSaveAlbumSettings = () => {
+    if (!blindDraft) {
+      void patchEvent({ blind_reveal: false });
+      setEditingAlbum(false);
+      return;
+    }
+    if (!closeDraft || !releaseDraft) {
+      onNotify?.("Pick a close and release time.");
+      return;
+    }
+    const closeAt = new Date(closeDraft);
+    const releaseAt = new Date(releaseDraft);
+    if (releaseAt <= closeAt) {
+      onNotify?.("Release must be after close.");
+      return;
+    }
+    void patchEvent({
+      blind_reveal: true,
+      close_at: closeAt.toISOString(),
+      release_at: releaseAt.toISOString(),
+    });
+    setEditingAlbum(false);
+  };
+
+  const onPublishAlbumAsPost = async () => {
+    if (!canEdit || publishBusy || local.published_post_id) {
+      return;
+    }
+    setPublishBusy(true);
+    try {
+      const response = await postJson("/api/event-publish-post", { event_id: local.id });
+      if (!response.ok) {
+        onNotify?.(await readErrorMessage(response));
+        return;
+      }
+      const payload = (await response.json()) as EventPublishPostResponse;
+      setLocal(payload.event);
+      onEventUpdated(payload.event);
+      writePageCache(payload.event.id, members, payload.event);
+      onNotify?.("Published to the feed.");
+    } catch (err) {
+      onNotify?.(err instanceof Error ? err.message : "Failed to publish.");
+    } finally {
+      setPublishBusy(false);
     }
   };
 
@@ -947,6 +1169,168 @@ export default function ThreadEventPage({
                 );
               })}
             </div>
+            </div>
+
+            <div className={`${glassCard} relative z-0 p-4`}>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className={sectionLabel}>Photos</p>
+                {canEdit && !editingAlbum ? (
+                  <button
+                    type="button"
+                    className={iconBtn}
+                    onClick={onStartEditAlbum}
+                    aria-label="Edit album settings"
+                  >
+                    <EditIcon className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                ) : null}
+              </div>
+
+              {editingAlbum ? (
+                <div className="space-y-3">
+                  <label className={`flex cursor-pointer items-center gap-2 ${readableText}`}>
+                    <input
+                      type="checkbox"
+                      checked={blindDraft}
+                      disabled={fieldBusy}
+                      onChange={(ev) => setBlindDraft(ev.target.checked)}
+                      className="h-4 w-4 accent-white"
+                    />
+                    Surprise album (blind until release)
+                  </label>
+                  {blindDraft ? (
+                    <>
+                      <EventDateTimeSelect
+                        label="Uploads close"
+                        value={closeDraft}
+                        onChange={setCloseDraft}
+                        disabled={fieldBusy}
+                        className="shadow-[0_10px_40px_rgba(0,0,0,0.52)]"
+                      />
+                      <EventDateTimeSelect
+                        label="Album released"
+                        value={releaseDraft}
+                        onChange={setReleaseDraft}
+                        disabled={fieldBusy}
+                        className="shadow-[0_10px_40px_rgba(0,0,0,0.52)]"
+                      />
+                    </>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={fieldBusy}
+                      className={`flex-1 ${ghostActionBtn}`}
+                      onClick={() => setEditingAlbum(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={fieldBusy}
+                      className={`flex-1 ${primaryActionBtn} disabled:opacity-50`}
+                      onClick={onSaveAlbumSettings}
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className={readableText}>{albumStatusText}</p>
+                  <p className={`text-xs opacity-80 ${readableText}`}>
+                    {albumMediaCount === 1 ? "1 photo or video" : `${albumMediaCount} photos and videos`}
+                    {" · "}
+                    {local.viewer_has_contributed ? "You've contributed" : "You haven't contributed yet"}
+                  </p>
+
+                  {albumCanContribute ? (
+                    <>
+                      <input
+                        ref={albumInputRef}
+                        type="file"
+                        accept="image/*,video/*"
+                        multiple
+                        onChange={(ev) => {
+                          void onAlbumFiles(ev);
+                        }}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        disabled={albumBusy}
+                        onClick={() => albumInputRef.current?.click()}
+                        className={`flex w-full items-center justify-center gap-2 px-3 ${primaryActionBtn} disabled:opacity-50`}
+                      >
+                        <AddImageIcon className="h-4 w-4" aria-hidden />
+                        {albumBusy
+                          ? "Uploading…"
+                          : `Add photos or videos (up to ${MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR} each)`}
+                      </button>
+                    </>
+                  ) : null}
+
+                  {!albumMediaVisible ? (
+                    <p className={readableText}>Photos hidden until release.</p>
+                  ) : albumMedia.length === 0 ? (
+                    <p className={readableText}>No photos yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {albumMedia.map((item) => {
+                        const grant = albumGrants[item.id] ?? null;
+                        const posterGrant = item.poster_id ? (albumGrants[item.poster_id] ?? null) : null;
+                        return (
+                          <div
+                            key={item.id}
+                            className="aspect-square overflow-hidden rounded-lg border border-white/12 bg-bg/60"
+                          >
+                            {item.kind === "video" ? (
+                              grant || posterGrant ? (
+                                <CachedVideo
+                                  mediaId={item.id}
+                                  mediaAccessGrant={grant}
+                                  mediaStorageUserId={item.owner_user_id ?? null}
+                                  posterId={item.poster_id ?? null}
+                                  posterAccessGrant={posterGrant}
+                                  isActive
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : null
+                            ) : grant ? (
+                              <CachedImage
+                                imageId={item.id}
+                                imageAccessGrant={grant}
+                                imageStorageUserId={item.owner_user_id ?? null}
+                                alt="Event album"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {canEdit && albumMediaVisible && albumMediaCount > 0 ? (
+                    local.published_post_id ? (
+                      <p className={`text-xs opacity-80 ${readableText}`}>
+                        Album published to the feed.
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={publishBusy}
+                        onClick={() => {
+                          void onPublishAlbumAsPost();
+                        }}
+                        className={`flex w-full items-center justify-center gap-2 px-3 ${primaryActionBtn} disabled:opacity-50`}
+                      >
+                        {publishBusy ? "Publishing…" : "Publish album as post"}
+                      </button>
+                    )
+                  ) : null}
+                </div>
+              )}
             </div>
 
           {canDelete ? (

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { validateSharedPostDates } from "@/app/lib/sharedPosts";
 import {
   finalizeThreadEventItem,
   findThreadAccessibleByUser,
@@ -65,6 +66,9 @@ export async function POST(request: Request) {
       );
     }
 
+    const closeAtRaw = body.close_at?.trim();
+    const releaseAtRaw = body.release_at?.trim();
+
     const thread = await findThreadAccessibleByUser(threadId, authResult.user_id);
     if (!thread) {
       return NextResponse.json(
@@ -105,6 +109,50 @@ export async function POST(request: Request) {
       );
     }
 
+    const blindReveal = body.blind_reveal ?? existing.blind_reveal;
+    let closeAt = existing.close_at;
+    let releaseAt = existing.release_at;
+    if (body.close_at !== undefined) {
+      closeAt = closeAtRaw ? new Date(closeAtRaw) : null;
+    }
+    if (body.release_at !== undefined) {
+      releaseAt = releaseAtRaw ? new Date(releaseAtRaw) : null;
+    }
+    if (
+      (closeAt && Number.isNaN(closeAt.getTime())) ||
+      (releaseAt && Number.isNaN(releaseAt.getTime()))
+    ) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_dates",
+            message: "close_at and release_at must be valid dates.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+    if (blindReveal) {
+      if (!closeAt || !releaseAt) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "invalid_dates",
+              message: "close_at and release_at are required when blind_reveal is true.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      const datesOk = validateSharedPostDates(closeAt, releaseAt);
+      if (!datesOk.ok) {
+        return NextResponse.json(
+          { error: { code: datesOk.code, message: datesOk.message } },
+          { status: 400 },
+        );
+      }
+    }
+
     const row = await prisma.thread_events.update({
       where: { id: existing.id },
       data: {
@@ -114,6 +162,9 @@ export async function POST(request: Request) {
         starts_at: startsAt,
         ends_at: endsAt,
         updated_at: new Date(),
+        blind_reveal: blindReveal,
+        close_at: closeAt,
+        release_at: releaseAt,
       },
     });
 

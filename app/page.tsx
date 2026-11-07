@@ -5,7 +5,7 @@ import Feed from "@/app/components/Feed";
 import Groups from "@/app/components/Groups";
 import {
   NavFeedIcon,
-  NavSharedPostsIcon,
+  NavEventsIcon,
   NavFeedbackIcon,
   NavProfileIcon,
   NavGroupsIcon,
@@ -17,7 +17,7 @@ import {
   AuthUser,
   ThreadEventItem,
   ThreadItem,
-  // UserUpcomingEventListItem, // events tab hidden
+  UserUpcomingEventListItem,
 } from "@/app/types/interfaces";
 import {
   MOBILE_FRAME_STYLE,
@@ -32,13 +32,11 @@ import NavRowButton from "./components/utils/NavRowButton";
 import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
 import ThreadEventPage from "./components/ThreadEventPage";
-// import UpcomingEventsTab from "./components/UpcomingEventsTab"; // events tab hidden
+import UpcomingEventsTab from "./components/UpcomingEventsTab";
 import useSwipeBack from "./components/utils/useSwipeBack";
 import AnimatedModal, { useAnimatedModal } from "./components/utils/AnimatedModal";
-import useSharedEventPostsUnread from "./components/utils/useSharedEventPostsUnread";
 import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
-import SharedEventPostsTab from "./components/SharedEventPostsTab";
 import { UserSessionSyncProvider } from "./components/UserSessionSyncContext";
 import {
   DEFAULT_THEME,
@@ -50,11 +48,10 @@ const TAB_TO_BACK_BASE: { [key in AppTab]: { forward: AppTab | null; back: AppTa
   thread_event: { forward: null, back: "thread_settings" },
   thread_settings: { forward: null, back: "thread" },
   thread: { forward: null, back: "groups" },
-  groups: { forward: "shared_event_posts", back: "feed" },
-  events: { forward: "profile", back: "groups" }, // hidden — kept for AppTab compat
-  shared_event_posts: { forward: "profile", back: "groups" },
+  groups: { forward: "events", back: "feed" },
+  events: { forward: "profile", back: "groups" },
   feed: { forward: "groups", back: null },
-  profile: { forward: null, back: "shared_event_posts" },
+  profile: { forward: null, back: "events" },
   feedback: { forward: "profile_settings", back: "profile" },
   profile_settings: { forward: null, back: "profile" },
   other_user_profile: { forward: null, back: "profile" },
@@ -69,10 +66,6 @@ export default function Home() {
   const [pendingDeepLinkThreadId, setPendingDeepLinkThreadId] = useState<string | null>(null);
   const [groupsUnreadCount, setGroupsUnreadCount] = useState(0);
   const [profileIncomingRequestCount, setProfileIncomingRequestCount] = useState(0);
-  const sharedEventPostsUnread = useSharedEventPostsUnread({
-    userId: authUser?.user_id ?? null,
-    isTabActive: activeTab === "shared_event_posts",
-  });
   const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
   const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
   const [threadEventFocus, setThreadEventFocus] = useState<ThreadEventItem | null>(null);
@@ -355,7 +348,6 @@ export default function Home() {
     feed: DEFAULT_TAB,
     groups: DEFAULT_TAB,
     events: DEFAULT_TAB,
-    shared_event_posts: DEFAULT_TAB,
     thread: DEFAULT_TAB,
     thread_settings: DEFAULT_TAB,
     thread_event: DEFAULT_TAB,
@@ -378,10 +370,20 @@ export default function Home() {
   }
   onForwardRef.current = () => { if (forward) {setActiveTab(forward);} }
 
+  const onOpenUpcomingEvent = (item: UserUpcomingEventListItem) => {
+    setSelectedThread({
+      ...item.thread,
+      event_background_image_id: item.event.background_image_id,
+      event_background_image_access_grant: item.event.background_image_access_grant ?? null,
+    });
+    setThreadEventFocus(item.event);
+    setThreadEventReturnTab("events");
+    setActiveTab("thread_event");
+  };
+
   const feedStyle = TAB_TO_STYLE["feed"];
   const groupsStyle = TAB_TO_STYLE["groups"];
-  // const eventsStyle = TAB_TO_STYLE["events"]; // events tab hidden
-  const sharedEventPostsStyle = TAB_TO_STYLE["shared_event_posts"];
+  const eventsStyle = TAB_TO_STYLE["events"];
   const threadStyle = TAB_TO_STYLE["thread"];
   const threadSettingsStyle = TAB_TO_STYLE["thread_settings"];
   const threadEventStyle = TAB_TO_STYLE["thread_event"];
@@ -431,36 +433,6 @@ export default function Home() {
           onTouchMove={onTouchMove}
           onTouchCancel={onTouchCancel}
         >
-          {/* events tab hidden
-          <div className="absolute h-full w-full" style={eventsStyle}>
-            <UpcomingEventsTab
-              currentUserId={authUser.user_id}
-              isActive={activeTab === "events"}
-              refreshNonce={eventsRefreshNonce}
-              onOpenEvent={(item: UserUpcomingEventListItem) => {
-                setSelectedThread({
-                  ...item.thread,
-                  event_background_image_id: item.event.background_image_id,
-                  event_background_image_access_grant: item.event.background_image_access_grant ?? null,
-                });
-                setThreadEventFocus(item.event);
-                setThreadEventReturnTab("events");
-                setActiveTab("thread_event");
-              }}
-              onEventCreated={(item: UserUpcomingEventListItem) => {
-                setSelectedThread({
-                  ...item.thread,
-                  event_background_image_id: item.event.background_image_id,
-                  event_background_image_access_grant: item.event.background_image_access_grant ?? null,
-                });
-                setThreadEventFocus(item.event);
-                setThreadEventReturnTab("events");
-                setActiveTab("thread_event");
-              }}
-            />
-          </div>
-          */}
-
           <div className="absolute w-full h-full" style={groupsStyle}>
             <Groups
               currentUserId={authUser.user_id}
@@ -486,10 +458,13 @@ export default function Home() {
             />
           </div>
 
-          <div className="absolute w-full h-full" style={sharedEventPostsStyle}>
-            <SharedEventPostsTab
+          <div className="absolute w-full h-full" style={eventsStyle}>
+            <UpcomingEventsTab
               currentUserId={authUser.user_id}
-              isActive={activeTab === "shared_event_posts"}
+              isActive={activeTab === "events"}
+              refreshNonce={eventsRefreshNonce}
+              onOpenEvent={onOpenUpcomingEvent}
+              onEventCreated={onOpenUpcomingEvent}
             />
           </div>
 
@@ -649,19 +624,11 @@ export default function Home() {
               onClick={() => setActiveTab("groups")}
             />
             <NavRowButton
-              icon={<NavSharedPostsIcon active={activeTab === "shared_event_posts"} />}
-              active={activeTab === "shared_event_posts"}
-              showCircle={sharedEventPostsUnread}
-              onClick={() => setActiveTab("shared_event_posts")}
-            />
-            {/* events tab hidden — import NavEventsIcon from Icons when restoring
-            <NavRowButton
               icon={<NavEventsIcon active={activeTab === "events"} />}
               active={activeTab === "events"}
               showCircle={false}
               onClick={() => setActiveTab("events")}
             />
-            */}
             <NavRowButton
               icon={<NavProfileIcon active={activeTab === "profile"} />}
               active={activeTab === "profile"}

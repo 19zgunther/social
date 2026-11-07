@@ -3,15 +3,16 @@ import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import {
-  asSharedPostDataObject,
+  asEventSharedPostData,
   findSharedMediaOwnerUserId,
-  getSharedPostPhase,
+  isEventAlbumMediaVisible,
 } from "@/app/lib/sharedPosts";
+import { findThreadEventForMember } from "@/app/lib/threadEvents";
 
 type RequestBody = {
   image_ids?: string[];
   owner_user_id?: string;
-  shared_post_id?: string;
+  event_id?: string;
 };
 
 async function viewerMayAccessOwnerMedia(viewerId: string, ownerUserId: string): Promise<boolean> {
@@ -47,38 +48,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const sharedPostId = body.shared_post_id?.trim() ?? "";
-    if (sharedPostId) {
-      const membership = await prisma.shared_posts_contributors.findFirst({
-        where: {
-          shared_post_id: sharedPostId,
-          user_id: authResult.user_id,
-        },
-        select: { id: true },
-      });
-      if (!membership) {
+    const eventId = body.event_id?.trim() ?? "";
+    if (eventId) {
+      const event = await findThreadEventForMember(eventId, authResult.user_id);
+      if (!event) {
         return NextResponse.json(
-          { error: { code: "forbidden", message: "Cannot load images for this shared post." } },
+          { error: { code: "forbidden", message: "Cannot load images for this event." } },
+          { status: 403 },
+        );
+      }
+      if (!isEventAlbumMediaVisible(event)) {
+        return NextResponse.json(
+          { error: { code: "forbidden", message: "Event media is not available yet." } },
           { status: 403 },
         );
       }
 
-      const sharedPost = await prisma.shared_posts.findFirst({
-        where: { id: sharedPostId },
-        select: {
-          close_at: true,
-          release_at: true,
-          data: true,
-        },
-      });
-      if (!sharedPost || getSharedPostPhase(sharedPost.close_at, sharedPost.release_at) !== "released") {
-        return NextResponse.json(
-          { error: { code: "forbidden", message: "Shared post media is not available yet." } },
-          { status: 403 },
-        );
-      }
-
-      const dataObject = asSharedPostDataObject(sharedPost.data);
+      const dataObject = asEventSharedPostData(event.shared_post_data);
       const grantsById: Record<string, string | null> = {};
       for (const imageId of imageIds) {
         const storageUserId = findSharedMediaOwnerUserId(dataObject, imageId);

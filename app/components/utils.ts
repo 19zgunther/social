@@ -4,8 +4,7 @@ type Mode = "login" | "signup";
 type AppTab =
     | "feed"
     | "groups"
-    | "events" // hidden from nav — tab UI commented out in page.tsx
-    | "shared_event_posts"
+    | "events"
     | "profile"
     | "feedback"
     | "thread"
@@ -35,11 +34,13 @@ const parseDeepLinkFromLocation = (): {
     let tab: AppTab | null =
         tabParam === "feed" ||
             tabParam === "groups" ||
-            // tabParam === "events" || // events tab hidden
-            tabParam === "shared_event_posts" ||
+            tabParam === "events" ||
+            tabParam === "shared_event_posts" || // legacy deep link → events
             tabParam === "profile" ||
             tabParam === "feedback"
-            ? tabParam
+            ? tabParam === "shared_event_posts"
+                ? "events"
+                : tabParam
             : null;
     if (openCreatePost) {
         tab = "profile";

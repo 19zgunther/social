@@ -5,10 +5,6 @@ import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { visiblePostsWhereForViewer } from "@/app/lib/postVisibility";
 import { sanitizePostDataForViewer } from "@/app/lib/polls";
 import {
-  asSharedPostDataObject,
-  findSharedMediaOwnerUserId,
-} from "@/app/lib/sharedPosts";
-import {
   FeedPostsListRequest,
   FeedPostsListResponse,
   PostData,
@@ -73,172 +69,79 @@ export async function POST(request: Request) {
       ),
     );
 
-    const now = new Date();
-    const [postsDesc, sharedDesc] = await Promise.all([
-      prisma.posts.findMany({
-        where: {
-          AND: [
-            visiblePostsWhereForViewer(authResult.user_id, friendUserIds),
-            ...(cursorAt ? [{ created_at: { lt: cursorAt } }] : []),
-          ],
-        },
-        orderBy: [{ created_at: "desc" }, { id: "desc" }],
-        take: PAGE_SIZE + 1,
-        select: {
-          id: true,
-          created_at: true,
-          created_by: true,
-          image_id: true,
-          text: true,
-          data: true,
-          users: {
-            select: {
-              username: true,
-              email: true,
-              profile_image_id: true,
-              bots_bots_user_idTousers: {
-                select: { id: true, owner_id: true },
-                take: 1,
-              },
+    const postsDesc = await prisma.posts.findMany({
+      where: {
+        AND: [
+          visiblePostsWhereForViewer(authResult.user_id, friendUserIds),
+          ...(cursorAt ? [{ created_at: { lt: cursorAt } }] : []),
+        ],
+      },
+      orderBy: [{ created_at: "desc" }, { id: "desc" }],
+      take: PAGE_SIZE + 1,
+      select: {
+        id: true,
+        created_at: true,
+        created_by: true,
+        image_id: true,
+        text: true,
+        data: true,
+        users: {
+          select: {
+            username: true,
+            email: true,
+            profile_image_id: true,
+            bots_bots_user_idTousers: {
+              select: { id: true, owner_id: true },
+              take: 1,
             },
           },
         },
-      }),
-      prisma.shared_posts.findMany({
-        where: {
-          AND: [
-            { release_at: { lte: now } },
-            ...(cursorAt ? [{ release_at: { lt: cursorAt } }] : []),
-            {
-              shared_posts_contributors: {
-                some: { user_id: authResult.user_id },
-              },
-            },
-          ],
-        },
-        orderBy: [{ release_at: "desc" }, { id: "desc" }],
-        take: PAGE_SIZE + 1,
-        select: {
-          id: true,
-          created_by: true,
-          title: true,
-          text: true,
-          image_id: true,
-          data: true,
-          close_at: true,
-          release_at: true,
-          users: {
-            select: {
-              username: true,
-              email: true,
-              profile_image_id: true,
-              bots_bots_user_idTousers: {
-                select: { id: true, owner_id: true },
-                take: 1,
-              },
-            },
-          },
-        },
-      }),
-    ]);
+      },
+    });
 
-    const merged: Array<{ sortAt: Date; item: PostItem }> = [
-      ...postsDesc.map((post) => {
-        const likesInfo = getLikesInfo(post.data, authResult.user_id);
-        return {
-          sortAt: post.created_at,
-          item: {
-            kind: "post" as const,
-            id: post.id,
-            created_at: post.created_at.toISOString(),
-            created_by: post.created_by,
-            image_id: post.image_id,
-            image_url: null,
-            image_access_grant: mintGrant(post.image_id, post.created_by, authResult.user_id),
-            text: post.text ?? "",
-            data: sanitizePostDataForViewer({
-              data: post.data,
-              viewerUserId: authResult.user_id,
-              authorUserId: post.created_by,
-            }),
-            like_count: likesInfo.likeCount,
-            is_liked_by_viewer: likesInfo.isLikedByViewer,
-            username: post.users.username,
-            email: post.users.email,
-            is_bot: post.users.bots_bots_user_idTousers.length > 0,
-            viewer_can_delete:
-              post.created_by === authResult.user_id ||
-              post.users.bots_bots_user_idTousers.some(
-                (bot) => bot.owner_id === authResult.user_id,
-              ),
-            author_profile_image_id: post.users.profile_image_id,
-            author_profile_image_url: null,
-            author_profile_image_access_grant: mintGrant(
-              post.users.profile_image_id,
-              post.created_by,
-              authResult.user_id,
-            ),
-          },
-        };
-      }),
-      ...sharedDesc.map((shared) => {
-        const likesInfo = getLikesInfo(shared.data, authResult.user_id);
-        const imageOwner =
-          findSharedMediaOwnerUserId(asSharedPostDataObject(shared.data), shared.image_id ?? "") ??
-          shared.created_by;
-        return {
-          sortAt: shared.release_at,
-          item: {
-            kind: "shared_event" as const,
-            id: shared.id,
-            shared_post_id: shared.id,
-            title: shared.title,
-            close_at: shared.close_at.toISOString(),
-            release_at: shared.release_at.toISOString(),
-            created_at: shared.release_at.toISOString(),
-            created_by: shared.created_by,
-            image_id: shared.image_id,
-            image_url: null,
-            image_access_grant: mintGrant(shared.image_id, imageOwner, authResult.user_id),
-            text: shared.text ?? "",
-            data: sanitizePostDataForViewer({
-              data: shared.data,
-              viewerUserId: authResult.user_id,
-              authorUserId: shared.created_by,
-            }),
-            like_count: likesInfo.likeCount,
-            is_liked_by_viewer: likesInfo.isLikedByViewer,
-            username: shared.users.username,
-            email: shared.users.email,
-            is_bot: shared.users.bots_bots_user_idTousers.length > 0,
-            viewer_can_delete:
-              shared.created_by === authResult.user_id ||
-              shared.users.bots_bots_user_idTousers.some(
-                (bot) => bot.owner_id === authResult.user_id,
-              ),
-            author_profile_image_id: shared.users.profile_image_id,
-            author_profile_image_url: null,
-            author_profile_image_access_grant: mintGrant(
-              shared.users.profile_image_id,
-              shared.created_by,
-              authResult.user_id,
-            ),
-          },
-        };
-      }),
-    ];
-
-    merged.sort((a, b) => b.sortAt.getTime() - a.sortAt.getTime());
-    const hasMore = merged.length > PAGE_SIZE;
-    const paged = merged.slice(0, PAGE_SIZE);
+    const hasMore = postsDesc.length > PAGE_SIZE;
+    const paged = postsDesc.slice(0, PAGE_SIZE);
     const last = paged[paged.length - 1] ?? null;
+
+    const posts: PostItem[] = paged.map((post) => {
+      const likesInfo = getLikesInfo(post.data, authResult.user_id);
+      return {
+        id: post.id,
+        created_at: post.created_at.toISOString(),
+        created_by: post.created_by,
+        image_id: post.image_id,
+        image_url: null,
+        image_access_grant: mintGrant(post.image_id, post.created_by, authResult.user_id),
+        text: post.text ?? "",
+        data: sanitizePostDataForViewer({
+          data: post.data,
+          viewerUserId: authResult.user_id,
+          authorUserId: post.created_by,
+        }),
+        like_count: likesInfo.likeCount,
+        is_liked_by_viewer: likesInfo.isLikedByViewer,
+        username: post.users.username,
+        email: post.users.email,
+        is_bot: post.users.bots_bots_user_idTousers.length > 0,
+        viewer_can_delete:
+          post.created_by === authResult.user_id ||
+          post.users.bots_bots_user_idTousers.some((bot) => bot.owner_id === authResult.user_id),
+        author_profile_image_id: post.users.profile_image_id,
+        author_profile_image_url: null,
+        author_profile_image_access_grant: mintGrant(
+          post.users.profile_image_id,
+          post.created_by,
+          authResult.user_id,
+        ),
+      };
+    });
 
     const payload: FeedPostsListResponse = {
       viewer_user_id: authResult.user_id,
       has_more: hasMore,
-      next_cursor: last ? last.sortAt.toISOString() : null,
-      next_cursor_post_id: last?.item.id ?? null,
-      posts: paged.map((row) => row.item),
+      next_cursor: last ? last.created_at.toISOString() : null,
+      next_cursor_post_id: last?.id ?? null,
+      posts,
     };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

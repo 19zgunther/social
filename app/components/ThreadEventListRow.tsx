@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
 import type { ThreadEventItem, ThreadEventRsvpStatus } from "@/app/types/interfaces";
 
@@ -11,8 +13,22 @@ type ThreadEventListRowProps = {
   metaLine?: string;
 };
 
-function countGoing(usersStatusMap: Record<string, ThreadEventRsvpStatus>): number {
-  return Object.values(usersStatusMap).filter((s) => s === "going").length;
+const MAX_VISIBLE_GOING_AVATARS = 5;
+const GOING_AVATAR_SIZE_PX = 26;
+
+function goingUserIds(
+  usersStatusMap: Record<string, ThreadEventRsvpStatus>,
+  currentUserId: string,
+): string[] {
+  const ids = Object.entries(usersStatusMap)
+    .filter(([, status]) => status === "going")
+    .map(([userId]) => userId);
+  ids.sort((a, b) => {
+    if (a === currentUserId) return -1;
+    if (b === currentUserId) return 1;
+    return a.localeCompare(b);
+  });
+  return ids;
 }
 
 function viewerRsvpLabel(
@@ -38,7 +54,13 @@ export default function ThreadEventListRow({
   onOpen,
   metaLine,
 }: ThreadEventListRowProps) {
-  const goingCount = countGoing(event.users_status_map);
+  const goingIds = useMemo(
+    () => goingUserIds(event.users_status_map, currentUserId),
+    [event.users_status_map, currentUserId],
+  );
+  const goingCount = goingIds.length;
+  const visibleGoingIds = goingIds.slice(0, MAX_VISIBLE_GOING_AVATARS);
+  const overflowGoing = goingCount - visibleGoingIds.length;
   const youLabel = viewerRsvpLabel(currentUserId, event.users_status_map);
 
   return (
@@ -80,15 +102,51 @@ export default function ThreadEventListRow({
               {metaLine}
             </p>
           ) : null}
-          <p className="mt-1 truncate text-[11px] font-medium leading-snug text-foreground/90 [text-shadow:0_2px_8px_rgba(0,0,0,0.88)]">
-            You: {youLabel}
-            <span className="text-foreground/70"> · </span>
-            {goingCount === 0
-              ? "No one going yet"
-              : goingCount === 1
-                ? "1 person going"
-                : `${goingCount} people going`}
-          </p>
+          <div className="mt-1.5 flex min-w-0 items-center gap-2">
+            {goingCount > 0 ? (
+              <div className="flex shrink-0 items-center" aria-label={`${goingCount} going`}>
+                {visibleGoingIds.map((userId, index) => (
+                  <div
+                    key={userId}
+                    className="relative rounded-full ring-2 ring-black/55"
+                    style={{
+                      marginLeft: index === 0 ? 0 : -8,
+                      zIndex: visibleGoingIds.length - index,
+                    }}
+                  >
+                    <UserProfileImage
+                      userId={userId}
+                      sizePx={GOING_AVATAR_SIZE_PX}
+                      alt="Going"
+                      className="pointer-events-none"
+                    />
+                  </div>
+                ))}
+                {overflowGoing > 0 ? (
+                  <div
+                    className="relative flex items-center justify-center rounded-full bg-bg/85 text-[10px] font-semibold text-foreground ring-2 ring-black/55 [text-shadow:none]"
+                    style={{
+                      width: GOING_AVATAR_SIZE_PX,
+                      height: GOING_AVATAR_SIZE_PX,
+                      marginLeft: -8,
+                      zIndex: 0,
+                    }}
+                  >
+                    +{overflowGoing}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <p className="min-w-0 truncate text-[11px] font-medium leading-snug text-foreground/90 [text-shadow:0_2px_8px_rgba(0,0,0,0.88)]">
+              You: {youLabel}
+              <span className="text-foreground/70"> · </span>
+              {goingCount === 0
+                ? "No one going yet"
+                : goingCount === 1
+                  ? "1 going"
+                  : `${goingCount} going`}
+            </p>
+          </div>
         </div>
       </div>
     </button>

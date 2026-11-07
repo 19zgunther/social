@@ -372,8 +372,6 @@ function PostSectionComponent({
     setIsLikedByViewer(Boolean(post.is_liked_by_viewer));
   }, [initialLikes, post.is_liked_by_viewer, post.like_count]);
 
-  const isSharedEvent = post.kind === "shared_event";
-  const sharedPostId = post.shared_post_id ?? (isSharedEvent ? post.id : null);
   const storageUserIdForSlide = (ownerUserId?: string): string =>
     ownerUserId ?? post.created_by;
   const viewerImages = imageSlides.map(({ slide }) => ({
@@ -401,17 +399,10 @@ function PostSectionComponent({
       const response = await fetch("/api/image-access-grants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          sharedPostId
-            ? {
-                image_ids: missingIds,
-                shared_post_id: sharedPostId,
-              }
-            : {
-                image_ids: missingIds,
-                owner_user_id: post.created_by,
-              },
-        ),
+        body: JSON.stringify({
+          image_ids: missingIds,
+          owner_user_id: post.created_by,
+        }),
       });
       if (!response.ok) {
         return;
@@ -468,20 +459,13 @@ function PostSectionComponent({
     setIsUpdatingLike(true);
 
     try {
-      const response = await fetch(isSharedEvent ? "/api/shared-post-like" : "/api/feed-post-like", {
+      const response = await fetch("/api/feed-post-like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          isSharedEvent
-            ? {
-                shared_post_id: sharedPostId,
-                like: nextLikedState,
-              }
-            : {
-                post_id: post.id,
-                like: nextLikedState,
-              },
-        ),
+        body: JSON.stringify({
+          post_id: post.id,
+          like: nextLikedState,
+        }),
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as ApiError;
@@ -528,26 +512,15 @@ function PostSectionComponent({
     const previousComments = postData.comments;
     setIsSubmittingComment(true);
     try {
-      const response = await fetch(
-        isSharedEvent ? "/api/shared-post-comment" : "/api/feed-post-comment",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            isSharedEvent
-              ? {
-                  shared_post_id: sharedPostId,
-                  parent_path: parentPath,
-                  message,
-                }
-              : {
-                  post_id: post.id,
-                  parent_path: parentPath,
-                  message,
-                },
-          ),
-        },
-      );
+      const response = await fetch("/api/feed-post-comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          post_id: post.id,
+          parent_path: parentPath,
+          message,
+        }),
+      });
       if (!response.ok) {
         if (reactionFlyId !== undefined) {
           cancelReactionFly(reactionFlyId);
@@ -607,10 +580,7 @@ function PostSectionComponent({
 
   const [aboutToDeleteCommentPath, setAboutToDeleteCommentPath] = useState<string | null>(null);
   const canEditPostText =
-    !isPreview &&
-    !isSharedEvent &&
-    Boolean(currentUserId) &&
-    post.created_by === currentUserId;
+    !isPreview && Boolean(currentUserId) && post.created_by === currentUserId;
 
   const onSavePostText = async () => {
     if (!canEditPostText || isSavingPostText) {
@@ -668,24 +638,14 @@ function PostSectionComponent({
 
     setIsDeletingCommentPath(pathKey);
     try {
-      const response = await fetch(
-        isSharedEvent ? "/api/shared-post-comment" : "/api/feed-post-comment",
-        {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            isSharedEvent
-              ? {
-                  shared_post_id: sharedPostId,
-                  comment_path: commentPath,
-                }
-              : {
-                  post_id: post.id,
-                  comment_path: commentPath,
-                },
-          ),
-        },
-      );
+      const response = await fetch("/api/feed-post-comment", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          post_id: post.id,
+          comment_path: commentPath,
+        }),
+      });
       if (!response.ok) {
         return;
       }
@@ -906,9 +866,6 @@ function PostSectionComponent({
                 </span>
               ) : null}
             </div>
-            {post.title ? (
-              <p className="truncate text-[11px] text-accent">{post.title}</p>
-            ) : null}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <button

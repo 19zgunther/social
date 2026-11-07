@@ -6,30 +6,28 @@ import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import {
   appendSharedPostMedia,
-  asSharedPostDataObject,
+  asEventSharedPostData,
+  canContributeToEventAlbum,
   countContributorMedia,
-  getSharedPostPhase,
   parseSharedPostMediaItems,
 } from "@/app/lib/sharedPosts";
-import type {
-  SharedPostContributeRequest,
-  SharedPostContributeResponse,
-} from "@/app/types/interfaces";
+import { findThreadEventForMember } from "@/app/lib/threadEvents";
+import type { EventContributeRequest, EventContributeResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
   if (authResult.error) {
-    console.error("shared_post_contribute_auth_failed", authResult.error);
+    console.error("event_contribute_auth_failed", authResult.error);
     return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
 
   try {
-    const body = (await request.json()) as SharedPostContributeRequest;
-    const sharedPostId = body.shared_post_id?.trim() ?? "";
+    const body = (await request.json()) as EventContributeRequest;
+    const eventId = body.event_id?.trim() ?? "";
     const parsedMedia = parseSharedPostMediaItems(body.media);
-    if (!sharedPostId) {
+    if (!eventId) {
       return NextResponse.json(
-        { error: { code: "invalid_request", message: "shared_post_id is required." } },
+        { error: { code: "invalid_request", message: "event_id is required." } },
         { status: 400 },
       );
     }
@@ -45,41 +43,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const membership = await prisma.shared_posts_contributors.findFirst({
-      where: {
-        shared_post_id: sharedPostId,
-        user_id: authResult.user_id,
-      },
-      select: { id: true },
-    });
-    if (!membership) {
-      return NextResponse.json(
-        { error: { code: "not_allowed", message: "You are not invited to this shared post." } },
-        { status: 403 },
-      );
-    }
-
-    const existing = await prisma.shared_posts.findFirst({
-      where: { id: sharedPostId },
-      select: {
-        id: true,
-        title: true,
-        close_at: true,
-        release_at: true,
-        data: true,
-        image_id: true,
-        shared_posts_contributors: {
-          select: { user_id: true },
-        },
-      },
-    });
+    const existing = await findThreadEventForMember(eventId, authResult.user_id);
     if (!existing) {
       return NextResponse.json(
-        { error: { code: "not_found", message: "Shared post not found." } },
+        { error: { code: "not_found", message: "Event not found or inaccessible." } },
         { status: 404 },
       );
     }
-    if (getSharedPostPhase(existing.close_at, existing.release_at) !== "open") {
+    if (!canContributeToEventAlbum(existing)) {
       return NextResponse.json(
         {
           error: {
@@ -91,9 +62,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const existingData = asSharedPostDataObject(existing.data);
     const appended = appendSharedPostMedia({
-      existingData,
+      existingData: asEventSharedPostData(existing.shared_post_data),
       newMedia: parsedMedia,
       contributorUserId: authResult.user_id,
     });
@@ -104,19 +74,20 @@ export async function POST(request: Request) {
       );
     }
 
-    await prisma.shared_posts.update({
-      where: { id: sharedPostId },
+    await prisma.thread_events.update({
+      where: { id: existing.id },
       data: {
-        data: appended.data as Prisma.InputJsonValue,
-        image_id: existing.image_id ?? appended.imageId,
+        shared_post_data: appended.data as Prisma.InputJsonValue,
+        updated_at: new Date(),
       },
     });
 
-    const recipientUserIds = existing.shared_posts_contributors
-      .map((contributor) => contributor.user_id)
-      .filter((userId) => userId !== authResult.user_id);
+    const thread = existing.threads_thread_events_thread_idTothreads;
+    const recipientUserIds = Array.from(
+      new Set([thread.owner, ...thread.user_thread_access.map((access) => access.user_id)]),
+    ).filter((userId) => userId !== authResult.user_id);
     if (recipientUserIds.length > 0) {
-      const eventTitle = sanitizeNotificationText(existing.title) || "a shared event";
+      const eventTitle = sanitizeNotificationText(existing.name) || "an event";
       const mediaCount = parsedMedia.length;
       const allVideos = parsedMedia.every((item) => item.kind === "video");
       const mediaLabel =
@@ -132,29 +103,23 @@ export async function POST(request: Request) {
         payload: {
           title: eventTitle,
           body: `${authResult.username} added ${mediaLabel} to ${eventTitle}.`,
-          url: "/?tab=shared_event_posts",
+          url: "/?tab=events",
         },
       }).catch((error) => {
-        console.error("shared_post_contribute_push_dispatch_failed", error);
+        console.error("event_contribute_push_dispatch_failed", error);
       });
     }
 
-    const contributedCount = countContributorMedia(appended.data.media ?? [], authResult.user_id);
-    const payload: SharedPostContributeResponse = {
+    const payload: EventContributeResponse = {
       ok: true,
-      contributed_count: contributedCount,
+      contributed_count: countContributorMedia(appended.data.media ?? [], authResult.user_id),
     };
-    // Blind contribute: never return media.
+    // Never return media: blind events must not leak contributions.
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
-    console.error("shared_post_contribute_failed", error);
+    console.error("event_contribute_failed", error);
     return NextResponse.json(
-      {
-        error: {
-          code: "shared_post_contribute_failed",
-          message: "Failed to contribute to shared post.",
-        },
-      },
+      { error: { code: "event_contribute_failed", message: "Failed to contribute to event." } },
       { status: 500 },
     );
   }

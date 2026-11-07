@@ -138,8 +138,6 @@ export type PostData = {
   tier_list?: TierListData | TierListViewerState;
 };
 
-export type FeedPostKind = "post" | "shared_event";
-
 export type PostItem = {
   id: string;
   created_at: string;
@@ -163,13 +161,6 @@ export type PostItem = {
   /** Legacy; always null from list/create APIs. */
   author_profile_image_url?: string | null;
   author_profile_image_access_grant?: string | null;
-  /** Defaults to "post" when omitted (legacy feed/cache items). */
-  kind?: FeedPostKind;
-  /** Present when kind is "shared_event". */
-  title?: string;
-  shared_post_id?: string;
-  close_at?: string;
-  release_at?: string;
 };
 
 export type ImageOverlayData = {
@@ -313,7 +304,7 @@ export type SignupRequest = { username?: string; email?: string; password?: stri
 export type SignupResponse = { token: string; user: AuthUser };
 
 export type FeedPostsListRequest = {
-  /** ISO timestamp of the last item's sort time (`created_at` / `release_at`). */
+  /** ISO timestamp of the last item's `created_at`. */
   cursor?: string;
   /** @deprecated Prefer `cursor`. */
   cursor_post_id?: string;
@@ -326,111 +317,24 @@ export type FeedPostsListResponse = {
   next_cursor_post_id: string | null;
 };
 
-export type SharedPostPhase = "open" | "pending" | "released";
+export type EventAlbumPhase = "open" | "pending" | "released";
 
-export type SharedPostContributorItem = {
-  user_id: string;
-  username: string;
-  email: string | null;
-  invited_at: string;
-  has_contributed: boolean;
-  profile_image_id?: string | null;
-  profile_image_access_grant?: string | null;
-};
-
-export type SharedPostListItem = {
-  id: string;
-  created_at: string;
-  created_by: string;
-  title: string;
-  text: string;
-  close_at: string;
-  release_at: string;
-  phase: SharedPostPhase;
-  contributor_count: number;
-  others_contributed_count: number;
-  viewer_has_contributed: boolean;
-  viewer_invited_at: string | null;
-  is_creator: boolean;
-  /** Only populated when phase is "released". */
-  image_id: string | null;
-  image_url: string | null;
-  image_access_grant?: string | null;
-  data: PostData | null;
-  like_count?: number;
-  is_liked_by_viewer?: boolean;
-  username: string;
-  email: string | null;
-  author_profile_image_id?: string | null;
-  author_profile_image_access_grant?: string | null;
-  contributors?: SharedPostContributorItem[];
-};
-
-export type SharedPostCreateRequest = {
-  title?: string;
-  text?: string;
-  close_at?: string;
-  release_at?: string;
-  invitee_user_ids?: string[];
-};
-export type SharedPostCreateResponse = { shared_post: SharedPostListItem };
-
-export type SharedPostUpdateRequest = {
-  shared_post_id?: string;
-  title?: string;
-  text?: string;
-  close_at?: string;
-  release_at?: string;
-  invitee_user_ids?: string[];
-};
-export type SharedPostUpdateResponse = { shared_post: SharedPostListItem };
-
-export type SharedPostsListRequest = {
-  /** Defaults to open + pending. Pass "released" to include released posts. */
-  phases?: SharedPostPhase[];
-};
-
-export type SharedPostsListResponse = {
-  open: SharedPostListItem[];
-  pending: SharedPostListItem[];
-  released: SharedPostListItem[];
-};
-
-export type SharedPostGetRequest = { shared_post_id?: string };
-export type SharedPostGetResponse = { shared_post: SharedPostListItem };
-
-export type SharedPostInviteRequest = {
-  shared_post_id?: string;
-  invitee_user_ids?: string[];
-};
-export type SharedPostInviteResponse = { shared_post: SharedPostListItem };
-
-export type SharedPostContributeRequest = {
-  shared_post_id?: string;
+export type EventContributeRequest = {
+  event_id?: string;
   media?: PostMediaItem[];
 };
-export type SharedPostContributeResponse = {
+export type EventContributeResponse = {
   ok: true;
   contributed_count: number;
 };
 
-export type SharedPostLikeRequest = {
-  shared_post_id?: string;
-  like?: boolean;
+export type EventPublishPostRequest = {
+  event_id?: string;
 };
-export type SharedPostLikeResponse = {
-  data: PostData | null;
-  like_count: number;
-  is_liked_by_viewer: boolean;
+export type EventPublishPostResponse = {
+  post: PostItem;
+  event: ThreadEventItem;
 };
-
-export type SharedPostCommentRequest = {
-  shared_post_id?: string;
-  parent_path?: string[];
-  message?: string;
-  comment_path?: string[];
-};
-export type SharedPostCommentResponse = { data: PostData | null };
 
 export type ProfilePostsListRequest = { cursor_post_id?: string };
 export type ProfilePostsListResponse = {
@@ -602,6 +506,20 @@ export type ThreadEventItem = {
   background_image_id: string | null;
   background_image_url: string | null;
   background_image_access_grant?: string | null;
+  /** When true, album media is hidden until `release_at`; contributions close at `close_at`. */
+  blind_reveal: boolean;
+  close_at: string | null;
+  release_at: string | null;
+  /** Album media payload. Media is omitted while blind and unreleased. */
+  shared_post_data?: PostData | null;
+  /** Blind events: open / pending / released. Non-blind events are always "open". */
+  album_phase?: EventAlbumPhase;
+  /** Total media items in the album (available even while media is hidden). */
+  album_media_count?: number;
+  /** True when the viewer has contributed at least one media item. */
+  viewer_has_contributed?: boolean;
+  /** Feed post created when the event album is published; null until then. */
+  published_post_id: string | null;
 };
 
 export type ThreadEventsListRequest = { thread_id?: string };
@@ -637,6 +555,14 @@ export type EventCreateRequest = {
   starts_at?: string;
   /** ISO; optional — defaults to one hour after starts. */
   ends_at?: string;
+  /** Hide album media until release_at. Requires close_at and release_at. */
+  blind_reveal?: boolean;
+  /** ISO; required when blind_reveal is true. */
+  close_at?: string;
+  /** ISO; required when blind_reveal is true. */
+  release_at?: string;
+  /** Accepted friends to add to the event thread. */
+  invitee_user_ids?: string[];
 };
 export type EventCreateResponse = {
   thread: ThreadItem;
@@ -651,6 +577,12 @@ export type ThreadEventUpdateRequest = {
   description?: string;
   starts_at?: string;
   ends_at?: string;
+  /** Hide album media until release_at. Requires close_at and release_at. */
+  blind_reveal?: boolean;
+  /** ISO; required when blind_reveal is true. */
+  close_at?: string;
+  /** ISO; required when blind_reveal is true. */
+  release_at?: string;
 };
 export type ThreadEventUpdateResponse = { event: ThreadEventItem };
 

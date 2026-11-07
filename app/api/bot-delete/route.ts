@@ -58,12 +58,6 @@ export async function POST(request: Request) {
         },
       });
 
-      await tx.shared_posts_contributors.deleteMany({
-        where: {
-          OR: [{ user_id: botUserId }, { invited_by: botUserId }],
-        },
-      });
-
       await tx.bot_logs.deleteMany({
         where: { bot_id: botId },
       });
