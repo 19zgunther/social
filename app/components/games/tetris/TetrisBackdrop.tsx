@@ -141,8 +141,6 @@ export default function TetrisBackdrop({
     let restartAt: number | null = null;
     const isMenu = variant === "menu";
 
-    const snap = TetrisEngine.createSnapshotBuffer();
-
     const paint = () => {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
@@ -151,8 +149,7 @@ export default function TetrisBackdrop({
       if (cssW <= 0 || cssH <= 0) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const layout = computeTetrisLayout(cssW, cssH, "backdrop");
-      engine.writeSnapshotInto(snap);
-      renderTetris(ctx, layout, snap, {
+      renderTetris(ctx, layout, engine, {
         backdrop: !isMenu,
         hideHud: true,
       });

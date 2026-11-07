@@ -3,7 +3,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { CloseIcon } from "@/app/components/Icons";
 import type { GameScoreScope, GameScoresLeaderboardResponse } from "@/app/types/interfaces";
-import { TetrisEngine, type TetrisSnapshot } from "./tetrisEngine";
+import { TetrisEngine } from "./tetrisEngine";
 import {
   computeTetrisLayout,
   renderTetris,
@@ -32,10 +32,27 @@ type GameOverInfo = {
   personalBestRank: number | null;
 };
 
+function gameOverInfoFromEngine(
+  engine: TetrisEngine,
+  ranks?: {
+    runRank: number | null;
+    personalBest: number | null;
+    personalBestRank: number | null;
+  },
+): GameOverInfo {
+  return {
+    score: engine.score,
+    level: engine.level,
+    lines: engine.lines,
+    runRank: ranks?.runRank ?? null,
+    personalBest: ranks?.personalBest ?? null,
+    personalBestRank: ranks?.personalBestRank ?? null,
+  };
+}
+
 export default function TetrisGame({ onExit }: TetrisGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<TetrisEngine | null>(null);
-  const snapRef = useRef<TetrisSnapshot>(TetrisEngine.createSnapshotBuffer());
   const keysRef = useRef<Set<string>>(new Set());
   const softDropTouchRef = useRef(false);
   /** After a piece locks while soft-dropping, ignore hold until release. */
@@ -43,8 +60,6 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   const touchLeftRef = useRef(false);
   const touchRightRef = useRef(false);
   const runRecordedRef = useRef(false);
-  /** Prevents RAF + hard-drop from double-entering game-over handling. */
-  const gameOverHandledRef = useRef(false);
   const lastTsRef = useRef<number | null>(null);
   const rafRef = useRef(0);
   const dasRef = useRef<{ key: string | null; charged: boolean; acc: number }>({
@@ -90,14 +105,10 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const layout = computeTetrisLayout(cssW, cssH);
     syncPlayLayout(layout);
-    if (screenRef.current === "title") {
-      renderTetris(ctx, layout, null);
-      return;
-    }
-    const engine = engineRef.current;
-    if (engine) engine.writeSnapshotInto(snapRef.current);
-    const dimmed = screenRef.current !== "playing";
-    renderTetris(ctx, layout, engine ? snapRef.current : null, { dimmed });
+    const engine = screenRef.current === "title" ? null : engineRef.current;
+    renderTetris(ctx, layout, engine, {
+      dimmed: screenRef.current !== "playing" && screenRef.current !== "title",
+    });
   });
 
   const stopLoop = useEffectEvent(() => {
@@ -110,58 +121,31 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   /** Persist the current run once (quit / restart / game over / unmount). */
   const recordCurrentRun = useEffectEvent(async (): Promise<GameOverInfo | null> => {
     const engine = engineRef.current;
-    if (!engine || engine.score <= 0 || runRecordedRef.current) {
-      if (!engine) return null;
-      return {
-        score: engine.score,
-        level: engine.level,
-        lines: engine.lines,
-        runRank: null,
-        personalBest: null,
-        personalBestRank: null,
-      };
+    if (!engine) return null;
+    if (engine.score <= 0 || runRecordedRef.current) {
+      return gameOverInfoFromEngine(engine);
     }
     runRecordedRef.current = true;
-    const snapshot = {
-      score: engine.score,
-      level: engine.level,
-      lines: engine.lines,
-    };
-    const result = await submitTetrisScore(snapshot.score);
-    if (!result) {
-      return {
-        ...snapshot,
-        runRank: null,
-        personalBest: null,
-        personalBestRank: null,
-      };
-    }
-    return {
-      ...snapshot,
+    const result = await submitTetrisScore(engine.score);
+    if (!result) return gameOverInfoFromEngine(engine);
+    return gameOverInfoFromEngine(engine, {
       runRank: result.run_rank,
       personalBest: result.personal_best,
       personalBestRank: result.personal_best_rank,
-    };
+    });
   });
 
   const handleGameOver = useEffectEvent(() => {
-    if (gameOverHandledRef.current) return;
-    gameOverHandledRef.current = true;
+    // Flip screenRef sync so RAF / hard-drop cannot re-enter during score submit.
+    if (screenRef.current !== "playing") return;
+    screenRef.current = "gameover";
     stopLoop();
     void (async () => {
       const recorded = await recordCurrentRun();
       const engine = engineRef.current;
-      setGameOverInfo(
-        recorded ?? {
-          score: engine?.score ?? 0,
-          level: engine?.level ?? 1,
-          lines: engine?.lines ?? 0,
-          runRank: null,
-          personalBest: null,
-          personalBestRank: null,
-        },
-      );
-      setMenuScreen("gameover");
+      setGameOverInfo(recorded ?? (engine ? gameOverInfoFromEngine(engine) : null));
+      setScreen("gameover");
+      paint();
     })();
   });
 
@@ -224,6 +208,7 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     if (rafRef.current) return;
     if (document.hidden || screenRef.current !== "playing") return;
     lastTsRef.current = null;
+    paint();
     rafRef.current = requestAnimationFrame(tick);
   });
 
@@ -249,20 +234,17 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     const engine = new TetrisEngine();
     engine.startNewGame();
     engineRef.current = engine;
-    engine.writeSnapshotInto(snapRef.current);
     softDropTouchRef.current = false;
     softDropNeedsReleaseRef.current = false;
     touchLeftRef.current = false;
     touchRightRef.current = false;
     runRecordedRef.current = false;
-    gameOverHandledRef.current = false;
     keysRef.current.clear();
     dasRef.current = { key: null, charged: false, acc: 0 };
     lastTsRef.current = null;
     setGameOverInfo(null);
     setConfirmRestart(false);
     setMenuScreen("playing");
-    paint();
   });
 
   const quitToTitle = useEffectEvent(() => {

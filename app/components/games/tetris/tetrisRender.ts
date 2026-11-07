@@ -4,10 +4,11 @@ import {
   CLEAR_FLASH_MS,
   CLEAR_FLASH_PERIOD_MS,
   HIDDEN_ROWS,
+  NEXT_COUNT,
+  TetrisEngine,
   getPieceCells,
   getPieceColor,
   type PieceType,
-  type TetrisSnapshot,
 } from "./tetrisEngine";
 
 export type TetrisLayout = {
@@ -163,10 +164,11 @@ export function syncCanvasBackingStore(
   return { cssW, cssH };
 }
 
+/** Paint from the live engine (sync) — no board snapshot copy. */
 export function renderTetris(
   ctx: CanvasRenderingContext2D,
   layout: TetrisLayout,
-  snap: TetrisSnapshot | null,
+  engine: TetrisEngine | null,
   opts?: { dimmed?: boolean; backdrop?: boolean; hideHud?: boolean },
 ): void {
   const { canvasW, canvasH, playX, playY, cell, playW, playH } = layout;
@@ -175,37 +177,22 @@ export function renderTetris(
   ctx.clearRect(0, 0, canvasW, canvasH);
 
   if (!backdrop) {
-    // Solid fill — avoid createLinearGradient every frame (Safari canvas memory pressure).
     ctx.fillStyle = "#0b1220";
     ctx.fillRect(0, 0, canvasW, canvasH);
-
-    // Subtle vignette dots
-    ctx.fillStyle = "rgba(255,255,255,0.03)";
-    for (let i = 0; i < 40; i += 1) {
-      const x = ((i * 97) % canvasW);
-      const y = ((i * 53) % canvasH);
-      ctx.beginPath();
-      ctx.arc(x, y, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
   }
 
   // Menu background only (title/copy live in the React overlay)
-  if (!snap) {
-    return;
-  }
+  if (!engine) return;
 
   if (!hideHud) {
-    // HUD text
     ctx.textAlign = "left";
     ctx.fillStyle = "#e2e8f0";
     ctx.font = `700 ${Math.max(14, Math.floor(cell * 0.7))}px system-ui, sans-serif`;
-    ctx.fillText(`SCORE  ${snap.score}`, 16, 28);
+    ctx.fillText(`SCORE  ${engine.score}`, 16, 28);
     ctx.font = `600 ${Math.max(12, Math.floor(cell * 0.55))}px system-ui, sans-serif`;
     ctx.fillStyle = "#94a3b8";
-    ctx.fillText(`LVL ${snap.level}   LINES ${snap.lines}`, 16, 50);
+    ctx.fillText(`LVL ${engine.level}   LINES ${engine.lines}`, 16, 50);
 
-    // Hold / Next labels
     const miniCell = Math.max(8, Math.floor(cell * 0.55));
     const boxW = miniCell * 5;
     const boxH = miniCell * 3.2;
@@ -228,22 +215,22 @@ export function renderTetris(
 
     drawMiniPiece(
       ctx,
-      snap.hold,
+      engine.hold,
       holdX + boxW / 2,
       holdY + boxH / 2 + 4,
       miniCell,
-      !snap.canHold,
+      !engine.canHold,
     );
 
-    snap.next.forEach((type, i) => {
+    for (let i = 0; i < NEXT_COUNT && i < engine.nextQueue.length; i += 1) {
       drawMiniPiece(
         ctx,
-        type,
+        engine.nextQueue[i]!,
         nextX + boxW / 2,
         nextY + 28 + i * (miniCell * 2.6) + miniCell,
         miniCell,
       );
-    });
+    }
   }
 
   // Playfield frame
@@ -274,17 +261,16 @@ export function renderTetris(
   }
 
   // Locked cells
-  const clearing = new Set(snap.clearingRows);
-  const flash = snap.phase === "clearing";
-  const clearElapsed = Math.max(0, CLEAR_FLASH_MS - snap.clearFlashMs);
-  // Alternate white / black every half-period (period ≈ 300ms).
+  const clearing = engine.clearingRows;
+  const flash = engine.phase === "clearing";
+  const clearElapsed = Math.max(0, CLEAR_FLASH_MS - engine.clearFlashRemaining);
   const clearFlashWhite =
     Math.floor(clearElapsed / (CLEAR_FLASH_PERIOD_MS / 2)) % 2 === 0;
   for (let y = HIDDEN_ROWS; y < HIDDEN_ROWS + BOARD_ROWS; y += 1) {
     for (let x = 0; x < BOARD_COLS; x += 1) {
-      const cellType = snap.board[y]![x];
+      const cellType = engine.board[y]![x];
       if (!cellType) continue;
-      const isClearing = clearing.has(y);
+      const isClearing = clearing.includes(y);
       if (flash && isClearing) {
         drawCell(ctx, layout, x, y, clearFlashWhite ? "#ffffff" : "#050505", 1);
       } else {
@@ -294,17 +280,15 @@ export function renderTetris(
   }
 
   // Ghost + active
-  if (snap.active && snap.phase !== "clearing") {
-    const ghostPiece = { ...snap.active, y: snap.ghostY };
-    for (const [y, x] of getPieceCells(ghostPiece.type, ghostPiece.rotation).map(
-      ([dy, dx]) => [ghostPiece.y + dy, ghostPiece.x + dx] as [number, number],
-    )) {
-      drawCell(ctx, layout, x, y, getPieceColor(snap.active.type), 0.35, true);
+  const active = engine.active;
+  if (active && engine.phase !== "clearing") {
+    const ghostY = engine.ghostY();
+    const color = getPieceColor(active.type);
+    for (const [dy, dx] of getPieceCells(active.type, active.rotation)) {
+      drawCell(ctx, layout, active.x + dx, ghostY + dy, color, 0.35, true);
     }
-    for (const [y, x] of getPieceCells(snap.active.type, snap.active.rotation).map(
-      ([dy, dx]) => [snap.active!.y + dy, snap.active!.x + dx] as [number, number],
-    )) {
-      drawCell(ctx, layout, x, y, getPieceColor(snap.active.type));
+    for (const [dy, dx] of getPieceCells(active.type, active.rotation)) {
+      drawCell(ctx, layout, active.x + dx, active.y + dy, color);
     }
   }
 
