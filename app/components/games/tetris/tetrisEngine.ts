@@ -253,21 +253,69 @@ export class TetrisEngine {
     return ghost.y;
   }
 
-  snapshot(): TetrisSnapshot {
+  /** Allocate a reusable snapshot buffer for the render loop (avoids per-frame alloc). */
+  static createSnapshotBuffer(): TetrisSnapshot {
     return {
-      board: this.board.map((row) => [...row]),
-      active: this.active ? { ...this.active } : null,
-      ghostY: this.ghostY(),
-      hold: this.hold,
-      canHold: this.canHold,
-      next: this.nextQueue.slice(0, NEXT_COUNT),
-      score: this.score,
-      level: this.level,
-      lines: this.lines,
-      phase: this.phase,
-      clearingRows: [...this.clearingRows],
-      clearFlashMs: this.clearFlashRemaining,
+      board: emptyBoard(),
+      active: null,
+      ghostY: 0,
+      hold: null,
+      canHold: true,
+      next: [],
+      score: 0,
+      level: 1,
+      lines: 0,
+      phase: "playing",
+      clearingRows: [],
+      clearFlashMs: 0,
     };
+  }
+
+  /**
+   * Copy current state into a preallocated snapshot (no new board arrays).
+   * Use this from the RAF loop instead of {@link snapshot}.
+   */
+  writeSnapshotInto(target: TetrisSnapshot): TetrisSnapshot {
+    for (let y = 0; y < TOTAL_ROWS; y += 1) {
+      const src = this.board[y]!;
+      const dst = target.board[y]!;
+      for (let x = 0; x < BOARD_COLS; x += 1) {
+        dst[x] = src[x]!;
+      }
+    }
+    if (this.active) {
+      if (!target.active) {
+        target.active = { type: this.active.type, rotation: this.active.rotation, x: this.active.x, y: this.active.y };
+      } else {
+        target.active.type = this.active.type;
+        target.active.rotation = this.active.rotation;
+        target.active.x = this.active.x;
+        target.active.y = this.active.y;
+      }
+    } else {
+      target.active = null;
+    }
+    target.ghostY = this.ghostY();
+    target.hold = this.hold;
+    target.canHold = this.canHold;
+    target.next.length = 0;
+    for (let i = 0; i < NEXT_COUNT && i < this.nextQueue.length; i += 1) {
+      target.next.push(this.nextQueue[i]!);
+    }
+    target.score = this.score;
+    target.level = this.level;
+    target.lines = this.lines;
+    target.phase = this.phase;
+    target.clearingRows.length = 0;
+    for (let i = 0; i < this.clearingRows.length; i += 1) {
+      target.clearingRows.push(this.clearingRows[i]!);
+    }
+    target.clearFlashMs = this.clearFlashRemaining;
+    return target;
+  }
+
+  snapshot(): TetrisSnapshot {
+    return this.writeSnapshotInto(TetrisEngine.createSnapshotBuffer());
   }
 
   private tryMove(dx: number, dy: number): boolean {

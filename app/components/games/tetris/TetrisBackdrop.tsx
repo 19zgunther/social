@@ -9,7 +9,7 @@ import {
   type Cell,
   type PieceType,
 } from "./tetrisEngine";
-import { computeTetrisLayout, renderTetris } from "./tetrisRender";
+import { computeTetrisLayout, renderTetris, syncCanvasBackingStore } from "./tetrisRender";
 
 type Placement = { rotation: number; x: number };
 
@@ -141,20 +141,18 @@ export default function TetrisBackdrop({
     let restartAt: number | null = null;
     const isMenu = variant === "menu";
 
+    const snap = TetrisEngine.createSnapshotBuffer();
+
     const paint = () => {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       const dpr = window.devicePixelRatio || 1;
-      const cssW = canvas.clientWidth;
-      const cssH = canvas.clientHeight;
+      const { cssW, cssH } = syncCanvasBackingStore(canvas, dpr);
       if (cssW <= 0 || cssH <= 0) return;
-      if (canvas.width !== Math.floor(cssW * dpr) || canvas.height !== Math.floor(cssH * dpr)) {
-        canvas.width = Math.floor(cssW * dpr);
-        canvas.height = Math.floor(cssH * dpr);
-      }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const layout = computeTetrisLayout(cssW, cssH, "backdrop");
-      renderTetris(ctx, layout, engine.snapshot(), {
+      engine.writeSnapshotInto(snap);
+      renderTetris(ctx, layout, snap, {
         backdrop: !isMenu,
         hideHud: true,
       });
@@ -194,8 +192,19 @@ export default function TetrisBackdrop({
       target = null;
     };
 
+    const stopLoop = () => {
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    };
+
     const loop = (ts: number) => {
-      raf = requestAnimationFrame(loop);
+      raf = 0;
+      if (document.hidden) {
+        lastTs = ts;
+        return;
+      }
       const last = lastTs ?? ts;
       const dt = Math.min(40, ts - last);
       lastTs = ts;
@@ -208,6 +217,7 @@ export default function TetrisBackdrop({
           restartAt = null;
         }
         paint();
+        raf = requestAnimationFrame(loop);
         return;
       }
 
@@ -220,15 +230,32 @@ export default function TetrisBackdrop({
       }
 
       paint();
+      raf = requestAnimationFrame(loop);
     };
 
-    raf = requestAnimationFrame(loop);
+    const ensureLoop = () => {
+      if (raf || document.hidden) return;
+      lastTs = null;
+      raf = requestAnimationFrame(loop);
+    };
+
+    ensureLoop();
     const onResize = () => paint();
+    const onVisibility = () => {
+      if (document.hidden) {
+        stopLoop();
+        lastTs = null;
+      } else {
+        ensureLoop();
+      }
+    };
     window.addEventListener("resize", onResize);
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
-      cancelAnimationFrame(raf);
+      stopLoop();
       window.removeEventListener("resize", onResize);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [variant]);
 

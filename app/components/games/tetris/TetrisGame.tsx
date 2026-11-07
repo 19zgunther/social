@@ -4,7 +4,12 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { CloseIcon } from "@/app/components/Icons";
 import type { GameScoreScope, GameScoresLeaderboardResponse } from "@/app/types/interfaces";
 import { TetrisEngine, type TetrisSnapshot } from "./tetrisEngine";
-import { computeTetrisLayout, renderTetris, type TetrisLayout } from "./tetrisRender";
+import {
+  computeTetrisLayout,
+  renderTetris,
+  syncCanvasBackingStore,
+  type TetrisLayout,
+} from "./tetrisRender";
 import {
   clearLegacyLocalTetrisScores,
   fetchTetrisLeaderboard,
@@ -30,7 +35,7 @@ type GameOverInfo = {
 export default function TetrisGame({ onExit }: TetrisGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<TetrisEngine | null>(null);
-  const snapRef = useRef<TetrisSnapshot | null>(null);
+  const snapRef = useRef<TetrisSnapshot>(TetrisEngine.createSnapshotBuffer());
   const keysRef = useRef<Set<string>>(new Set());
   const softDropTouchRef = useRef(false);
   /** After a piece locks while soft-dropping, ignore hold until release. */
@@ -38,7 +43,10 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   const touchLeftRef = useRef(false);
   const touchRightRef = useRef(false);
   const runRecordedRef = useRef(false);
+  /** Prevents RAF + hard-drop from double-entering game-over handling. */
+  const gameOverHandledRef = useRef(false);
   const lastTsRef = useRef<number | null>(null);
+  const rafRef = useRef(0);
   const dasRef = useRef<{ key: string | null; charged: boolean; acc: number }>({
     key: null,
     charged: false,
@@ -53,11 +61,6 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [playLayout, setPlayLayout] = useState<TetrisLayout | null>(null);
   const playLayoutRef = useRef<TetrisLayout | null>(null);
-
-  const setMenuScreen = (next: MenuScreen) => {
-    screenRef.current = next;
-    setScreen(next);
-  };
 
   const syncPlayLayout = useEffectEvent((layout: TetrisLayout) => {
     const prev = playLayoutRef.current;
@@ -82,12 +85,8 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const dpr = window.devicePixelRatio || 1;
-    const cssW = canvas.clientWidth;
-    const cssH = canvas.clientHeight;
-    if (canvas.width !== Math.floor(cssW * dpr) || canvas.height !== Math.floor(cssH * dpr)) {
-      canvas.width = Math.floor(cssW * dpr);
-      canvas.height = Math.floor(cssH * dpr);
-    }
+    const { cssW, cssH } = syncCanvasBackingStore(canvas, dpr);
+    if (cssW <= 0 || cssH <= 0) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const layout = computeTetrisLayout(cssW, cssH);
     syncPlayLayout(layout);
@@ -95,8 +94,17 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
       renderTetris(ctx, layout, null);
       return;
     }
+    const engine = engineRef.current;
+    if (engine) engine.writeSnapshotInto(snapRef.current);
     const dimmed = screenRef.current !== "playing";
-    renderTetris(ctx, layout, snapRef.current, { dimmed });
+    renderTetris(ctx, layout, engine ? snapRef.current : null, { dimmed });
+  });
+
+  const stopLoop = useEffectEvent(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    }
   });
 
   /** Persist the current run once (quit / restart / game over / unmount). */
@@ -136,33 +144,10 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     };
   });
 
-  const loadLeaderboard = useEffectEvent(async (scope: GameScoreScope) => {
-    setLeaderboardLoading(true);
-    const board = await fetchTetrisLeaderboard(scope);
-    setLeaderboard(board);
-    setLeaderboardLoading(false);
-  });
-
-  const startGame = useEffectEvent(() => {
-    const engine = new TetrisEngine();
-    engine.startNewGame();
-    engineRef.current = engine;
-    snapRef.current = engine.snapshot();
-    softDropTouchRef.current = false;
-    softDropNeedsReleaseRef.current = false;
-    touchLeftRef.current = false;
-    touchRightRef.current = false;
-    runRecordedRef.current = false;
-    keysRef.current.clear();
-    dasRef.current = { key: null, charged: false, acc: 0 };
-    lastTsRef.current = null;
-    setGameOverInfo(null);
-    setConfirmRestart(false);
-    setMenuScreen("playing");
-    paint();
-  });
-
   const handleGameOver = useEffectEvent(() => {
+    if (gameOverHandledRef.current) return;
+    gameOverHandledRef.current = true;
+    stopLoop();
     void (async () => {
       const recorded = await recordCurrentRun();
       const engine = engineRef.current;
@@ -178,6 +163,106 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
       );
       setMenuScreen("gameover");
     })();
+  });
+
+  const tick = useEffectEvent((ts: number) => {
+    rafRef.current = 0;
+    if (document.hidden || screenRef.current !== "playing") {
+      lastTsRef.current = ts;
+      paint();
+      return;
+    }
+    const engine = engineRef.current;
+    if (!engine) return;
+    const last = lastTsRef.current ?? ts;
+    const dt = Math.min(50, ts - last);
+    lastTsRef.current = ts;
+
+    // DAS / ARR for left-right hold (keyboard + touch)
+    const keys = keysRef.current;
+    const left =
+      touchLeftRef.current || keys.has("ArrowLeft") || keys.has("KeyA");
+    const right =
+      touchRightRef.current || keys.has("ArrowRight") || keys.has("KeyD");
+    const horizontal = left && !right ? "left" : right && !left ? "right" : null;
+    if (!horizontal) {
+      dasRef.current = { key: null, charged: false, acc: 0 };
+    } else if (dasRef.current.key !== horizontal) {
+      dasRef.current = { key: horizontal, charged: false, acc: 0 };
+      if (horizontal === "left") engine.moveLeft();
+      else engine.moveRight();
+    } else {
+      dasRef.current.acc += dt;
+      const delay = dasRef.current.charged ? 50 : 170;
+      if (dasRef.current.acc >= delay) {
+        dasRef.current.acc = 0;
+        dasRef.current.charged = true;
+        if (horizontal === "left") engine.moveLeft();
+        else engine.moveRight();
+      }
+    }
+
+    const softHeld =
+      softDropTouchRef.current || keys.has("ArrowDown") || keys.has("KeyS");
+    const softDropping = softHeld && !softDropNeedsReleaseRef.current;
+    const becameOver = engine.update(dt, softDropping);
+    if (softDropping && engine.justLocked) {
+      softDropNeedsReleaseRef.current = true;
+      softDropTouchRef.current = false;
+      keysRef.current.delete("ArrowDown");
+      keysRef.current.delete("KeyS");
+    }
+    paint();
+    if (becameOver || engine.phase === "gameover") {
+      handleGameOver();
+      return;
+    }
+    rafRef.current = requestAnimationFrame(tick);
+  });
+
+  const ensureLoop = useEffectEvent(() => {
+    if (rafRef.current) return;
+    if (document.hidden || screenRef.current !== "playing") return;
+    lastTsRef.current = null;
+    rafRef.current = requestAnimationFrame(tick);
+  });
+
+  const setMenuScreen = (next: MenuScreen) => {
+    screenRef.current = next;
+    setScreen(next);
+    if (next === "playing") {
+      ensureLoop();
+    } else {
+      stopLoop();
+      paint();
+    }
+  };
+
+  const loadLeaderboard = useEffectEvent(async (scope: GameScoreScope) => {
+    setLeaderboardLoading(true);
+    const board = await fetchTetrisLeaderboard(scope);
+    setLeaderboard(board);
+    setLeaderboardLoading(false);
+  });
+
+  const startGame = useEffectEvent(() => {
+    const engine = new TetrisEngine();
+    engine.startNewGame();
+    engineRef.current = engine;
+    engine.writeSnapshotInto(snapRef.current);
+    softDropTouchRef.current = false;
+    softDropNeedsReleaseRef.current = false;
+    touchLeftRef.current = false;
+    touchRightRef.current = false;
+    runRecordedRef.current = false;
+    gameOverHandledRef.current = false;
+    keysRef.current.clear();
+    dasRef.current = { key: null, charged: false, acc: 0 };
+    lastTsRef.current = null;
+    setGameOverInfo(null);
+    setConfirmRestart(false);
+    setMenuScreen("playing");
+    paint();
   });
 
   const quitToTitle = useEffectEvent(() => {
@@ -200,6 +285,7 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   // If the fullscreen shell unmounts mid-run (e.g. leave Games tab), still save.
   useEffect(() => {
     return () => {
+      stopLoop();
       const engine = engineRef.current;
       const scr = screenRef.current;
       if (
@@ -215,62 +301,18 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   }, []);
 
   useEffect(() => {
-    let raf = 0;
-    const loop = (ts: number) => {
-      raf = requestAnimationFrame(loop);
-      if (screenRef.current !== "playing") {
-        lastTsRef.current = ts;
-        paint();
-        return;
-      }
-      const engine = engineRef.current;
-      if (!engine) return;
-      const last = lastTsRef.current ?? ts;
-      const dt = Math.min(50, ts - last);
-      lastTsRef.current = ts;
-
-      // DAS / ARR for left-right hold (keyboard + touch)
-      const keys = keysRef.current;
-      const left =
-        touchLeftRef.current || keys.has("ArrowLeft") || keys.has("KeyA");
-      const right =
-        touchRightRef.current || keys.has("ArrowRight") || keys.has("KeyD");
-      const horizontal = left && !right ? "left" : right && !left ? "right" : null;
-      if (!horizontal) {
-        dasRef.current = { key: null, charged: false, acc: 0 };
-      } else if (dasRef.current.key !== horizontal) {
-        dasRef.current = { key: horizontal, charged: false, acc: 0 };
-        if (horizontal === "left") engine.moveLeft();
-        else engine.moveRight();
+    const onVisibility = () => {
+      if (document.hidden) {
+        stopLoop();
+        lastTsRef.current = null;
+      } else if (screenRef.current === "playing") {
+        ensureLoop();
       } else {
-        dasRef.current.acc += dt;
-        const delay = dasRef.current.charged ? 50 : 170;
-        if (dasRef.current.acc >= delay) {
-          dasRef.current.acc = 0;
-          dasRef.current.charged = true;
-          if (horizontal === "left") engine.moveLeft();
-          else engine.moveRight();
-        }
-      }
-
-      const softHeld =
-        softDropTouchRef.current || keys.has("ArrowDown") || keys.has("KeyS");
-      const softDropping = softHeld && !softDropNeedsReleaseRef.current;
-      const becameOver = engine.update(dt, softDropping);
-      if (softDropping && engine.justLocked) {
-        softDropNeedsReleaseRef.current = true;
-        softDropTouchRef.current = false;
-        keysRef.current.delete("ArrowDown");
-        keysRef.current.delete("KeyS");
-      }
-      snapRef.current = engine.snapshot();
-      paint();
-      if (becameOver || engine.phase === "gameover") {
-        handleGameOver();
+        paint();
       }
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
   useEffect(() => {
@@ -294,12 +336,12 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
           case "ArrowUp":
           case "KeyX":
             engine.rotate(1);
-            snapRef.current = engine.snapshot();
+            paint();
             e.preventDefault();
             break;
           case "KeyZ":
             engine.rotate(-1);
-            snapRef.current = engine.snapshot();
+            paint();
             e.preventDefault();
             break;
           case "Space":
@@ -308,13 +350,13 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
             keysRef.current.delete("ArrowDown");
             keysRef.current.delete("KeyS");
             engine.hardDrop();
-            snapRef.current = engine.snapshot();
+            paint();
             if (engine.phase === "gameover") handleGameOver();
             e.preventDefault();
             break;
           case "KeyC":
             engine.holdPiece();
-            snapRef.current = engine.snapshot();
+            paint();
             e.preventDefault();
             break;
           case "KeyP":
@@ -398,11 +440,11 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
         touchLeftRef.current = false;
         touchRightRef.current = false;
         setMenuScreen("paused");
-        break;
+        return;
       default:
         break;
     }
-    snapRef.current = engine.snapshot();
+    paint();
     if (engine.phase === "gameover") handleGameOver();
   };
 

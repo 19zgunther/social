@@ -143,6 +143,26 @@ function drawMiniPiece(
   ctx.restore();
 }
 
+/**
+ * Sync canvas backing-store size to CSS × DPR.
+ * Ignores 1px jitter (mobile browser chrome) to avoid GPU buffer realloc thrash.
+ */
+export function syncCanvasBackingStore(
+  canvas: HTMLCanvasElement,
+  dpr: number,
+): { cssW: number; cssH: number } {
+  const cssW = canvas.clientWidth;
+  const cssH = canvas.clientHeight;
+  if (cssW <= 0 || cssH <= 0) return { cssW, cssH };
+  const nextW = Math.floor(cssW * dpr);
+  const nextH = Math.floor(cssH * dpr);
+  if (Math.abs(canvas.width - nextW) >= 2 || Math.abs(canvas.height - nextH) >= 2) {
+    canvas.width = nextW;
+    canvas.height = nextH;
+  }
+  return { cssW, cssH };
+}
+
 export function renderTetris(
   ctx: CanvasRenderingContext2D,
   layout: TetrisLayout,
@@ -155,11 +175,8 @@ export function renderTetris(
   ctx.clearRect(0, 0, canvasW, canvasH);
 
   if (!backdrop) {
-    // Background
-    const bg = ctx.createLinearGradient(0, 0, 0, canvasH);
-    bg.addColorStop(0, "#0b1220");
-    bg.addColorStop(1, "#111827");
-    ctx.fillStyle = bg;
+    // Solid fill — avoid createLinearGradient every frame (Safari canvas memory pressure).
+    ctx.fillStyle = "#0b1220";
     ctx.fillRect(0, 0, canvasW, canvasH);
 
     // Subtle vignette dots
