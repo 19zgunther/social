@@ -5,6 +5,7 @@ import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { buildCompatFieldsFromMedia } from "@/app/lib/postMedia";
+import { resolvePostAudience } from "@/app/lib/postVisibility";
 import { sanitizePostDataForViewer } from "@/app/lib/polls";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import {
@@ -14,7 +15,6 @@ import {
 import {
   finalizeThreadEventItem,
   findThreadEventForMember,
-  userCanAdminThreadEvent,
 } from "@/app/lib/threadEvents";
 import type {
   EventPublishPostRequest,
@@ -22,6 +22,25 @@ import type {
   PostData,
   PostItem,
 } from "@/app/types/interfaces";
+
+const POST_PUSH_PREVIEW_MAX_LENGTH = 120;
+
+const getAlbumPushPreviewText = (caption: string, hasVideo: boolean, hasImage: boolean): string => {
+  const sanitizedText = sanitizeNotificationText(caption);
+  if (sanitizedText) {
+    return sanitizedText.slice(0, POST_PUSH_PREVIEW_MAX_LENGTH);
+  }
+  if (hasVideo && hasImage) {
+    return "Shared photos and video";
+  }
+  if (hasVideo) {
+    return "Shared a video";
+  }
+  if (hasImage) {
+    return "Shared a photo";
+  }
+  return "Shared a new post";
+};
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -48,16 +67,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const thread = existing.threads_thread_events_thread_idTothreads;
-    if (
-      !userCanAdminThreadEvent({
-        userId: authResult.user_id,
-        threadOwnerId: thread.owner,
-        eventCreatedBy: existing.created_by,
-      })
-    ) {
+    if (existing.created_by !== authResult.user_id) {
       return NextResponse.json(
-        { error: { code: "forbidden", message: "Only the event creator or thread owner can publish." } },
+        { error: { code: "forbidden", message: "Only the event owner can publish." } },
         { status: 403 },
       );
     }
@@ -90,17 +102,20 @@ export async function POST(request: Request) {
       );
     }
 
+    const resolved = await resolvePostAudience({
+      authorUserId: authResult.user_id,
+      audience: { mode: "permanent" },
+    });
+    if ("error" in resolved) {
+      return NextResponse.json({ error: resolved.error }, { status: 400 });
+    }
+    const friendViewerIds = resolved.audience.viewerIds;
+
     const compat = buildCompatFieldsFromMedia(media);
     const postData: PostData = {
       media,
       ...(compat.other_image_ids.length > 0 ? { other_image_ids: compat.other_image_ids } : {}),
     };
-
-    const memberIds = new Set<string>([thread.owner]);
-    for (const row of thread.user_thread_access) {
-      memberIds.add(row.user_id);
-    }
-    const viewerIds = Array.from(memberIds).filter((id) => id !== authResult.user_id);
 
     const caption =
       [existing.name.trim(), existing.description?.trim()].filter(Boolean).join("\n\n") || existing.name;
@@ -112,7 +127,7 @@ export async function POST(request: Request) {
           created_by: authResult.user_id,
           image_id: compat.image_id,
           text: caption,
-          permanent: false,
+          permanent: true,
           data: postData as Prisma.InputJsonValue,
         },
         select: {
@@ -125,16 +140,6 @@ export async function POST(request: Request) {
         },
       });
 
-      if (viewerIds.length > 0) {
-        await tx.user_post_access.createMany({
-          data: viewerIds.map((viewerId) => ({
-            post_id: createdPost.id,
-            viewer_id: viewerId,
-            created_at: createdAt,
-          })),
-        });
-      }
-
       const updatedEvent = await tx.thread_events.update({
         where: { id: existing.id },
         data: {
@@ -146,13 +151,15 @@ export async function POST(request: Request) {
       return { post: createdPost, event: updatedEvent };
     });
 
-    if (viewerIds.length > 0) {
-      const title = sanitizeNotificationText(existing.name) || "an event";
+    const recipientUserIds = friendViewerIds.filter((id) => id !== authResult.user_id);
+    if (recipientUserIds.length > 0) {
+      const hasVideo = media.some((item) => item.kind === "video");
+      const hasImage = media.some((item) => item.kind === "image") || Boolean(post.image_id);
       void sendPushToUsers({
-        recipientUserIds: viewerIds,
+        recipientUserIds,
         payload: {
-          title: `${authResult.username} shared ${title}`,
-          body: "New photos from the event are in your feed.",
+          title: `${authResult.username} make a post`,
+          body: getAlbumPushPreviewText(caption, hasVideo, hasImage),
           url: "/?tab=feed",
         },
       }).catch((error) => {
@@ -160,9 +167,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const coverOwner =
-      media[0]?.owner_user_id?.trim() ||
-      post.created_by;
+    const coverOwner = media[0]?.owner_user_id?.trim() || post.created_by;
 
     let imageAccessGrant: string | null = null;
     if (post.image_id) {

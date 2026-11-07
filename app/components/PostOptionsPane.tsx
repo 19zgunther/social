@@ -243,7 +243,7 @@ export default function PostOptionsPane({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             image_ids: missingImageIds,
-            owner_user_id: post.created_by,
+            post_id: post.id,
           }),
         });
         if (!response.ok || cancelled) {

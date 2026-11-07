@@ -5,6 +5,10 @@ import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { visiblePostsWhereForViewer } from "@/app/lib/postVisibility";
 import { sanitizePostDataForViewer } from "@/app/lib/polls";
 import {
+  asEventSharedPostData,
+  findSharedMediaOwnerUserId,
+} from "@/app/lib/sharedPosts";
+import {
   FeedPostsListRequest,
   FeedPostsListResponse,
   PostData,
@@ -105,13 +109,16 @@ export async function POST(request: Request) {
 
     const posts: PostItem[] = paged.map((post) => {
       const likesInfo = getLikesInfo(post.data, authResult.user_id);
+      const coverOwner =
+        findSharedMediaOwnerUserId(asEventSharedPostData(post.data), post.image_id ?? "") ??
+        post.created_by;
       return {
         id: post.id,
         created_at: post.created_at.toISOString(),
         created_by: post.created_by,
         image_id: post.image_id,
         image_url: null,
-        image_access_grant: mintGrant(post.image_id, post.created_by, authResult.user_id),
+        image_access_grant: mintGrant(post.image_id, coverOwner, authResult.user_id),
         text: post.text ?? "",
         data: sanitizePostDataForViewer({
           data: post.data,

@@ -668,8 +668,10 @@ export default function ThreadEventPage({
     setEditingAlbum(false);
   };
 
+  const canPublishAlbum = currentUserId === local.created_by;
+
   const onPublishAlbumAsPost = async () => {
-    if (!canEdit || publishBusy || local.published_post_id) {
+    if (!canPublishAlbum || publishBusy || local.published_post_id) {
       return;
     }
     setPublishBusy(true);
@@ -1311,7 +1313,7 @@ export default function ThreadEventPage({
                     </div>
                   )}
 
-                  {canEdit && albumMediaVisible && albumMediaCount > 0 ? (
+                  {canPublishAlbum && albumMediaVisible && albumMediaCount > 0 ? (
                     local.published_post_id ? (
                       <p className={`text-xs opacity-80 ${readableText}`}>
                         Album published to the feed.

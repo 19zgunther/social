@@ -401,7 +401,7 @@ function PostSectionComponent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           image_ids: missingIds,
-          owner_user_id: post.created_by,
+          post_id: post.id,
         }),
       });
       if (!response.ok) {

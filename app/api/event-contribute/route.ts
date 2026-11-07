@@ -14,6 +14,17 @@ import {
 import { findThreadEventForMember } from "@/app/lib/threadEvents";
 import type { EventContributeRequest, EventContributeResponse } from "@/app/types/interfaces";
 
+class ContributeFailureError extends Error {
+  status: number;
+  payload: { error: { code: string; message: string } };
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.status = status;
+    this.payload = { error: { code, message } };
+  }
+}
+
 export async function POST(request: Request) {
   const authResult = authCheck(request);
   if (authResult.error) {
@@ -62,24 +73,51 @@ export async function POST(request: Request) {
       );
     }
 
-    const appended = appendSharedPostMedia({
-      existingData: asEventSharedPostData(existing.shared_post_data),
-      newMedia: parsedMedia,
-      contributorUserId: authResult.user_id,
-    });
-    if (!appended.ok) {
-      return NextResponse.json(
-        { error: { code: appended.code, message: appended.message } },
-        { status: 400 },
-      );
-    }
+    const contributedCount = await prisma.$transaction(async (tx) => {
+      const lockedRows = await tx.$queryRaw<
+        Array<{
+          id: string;
+          shared_post_data: Prisma.JsonValue | null;
+          blind_reveal: boolean;
+          close_at: Date | null;
+          release_at: Date | null;
+        }>
+      >`
+        SELECT id, shared_post_data, blind_reveal, close_at, release_at
+        FROM thread_events
+        WHERE id = ${existing.id}::uuid
+        FOR UPDATE
+      `;
+      const locked = lockedRows[0];
+      if (!locked) {
+        throw new ContributeFailureError(404, "not_found", "Event not found or inaccessible.");
+      }
+      if (!canContributeToEventAlbum(locked)) {
+        throw new ContributeFailureError(
+          400,
+          "closed",
+          "Contributions are only allowed before the close date.",
+        );
+      }
 
-    await prisma.thread_events.update({
-      where: { id: existing.id },
-      data: {
-        shared_post_data: appended.data as Prisma.InputJsonValue,
-        updated_at: new Date(),
-      },
+      const appended = appendSharedPostMedia({
+        existingData: asEventSharedPostData(locked.shared_post_data),
+        newMedia: parsedMedia,
+        contributorUserId: authResult.user_id,
+      });
+      if (!appended.ok) {
+        throw new ContributeFailureError(400, appended.code, appended.message);
+      }
+
+      await tx.thread_events.update({
+        where: { id: locked.id },
+        data: {
+          shared_post_data: appended.data as Prisma.InputJsonValue,
+          updated_at: new Date(),
+        },
+      });
+
+      return countContributorMedia(appended.data.media ?? [], authResult.user_id);
     });
 
     const thread = existing.threads_thread_events_thread_idTothreads;
@@ -112,11 +150,14 @@ export async function POST(request: Request) {
 
     const payload: EventContributeResponse = {
       ok: true,
-      contributed_count: countContributorMedia(appended.data.media ?? [], authResult.user_id),
+      contributed_count: contributedCount,
     };
     // Never return media: blind events must not leak contributions.
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
+    if (error instanceof ContributeFailureError) {
+      return NextResponse.json(error.payload, { status: error.status });
+    }
     console.error("event_contribute_failed", error);
     return NextResponse.json(
       { error: { code: "event_contribute_failed", message: "Failed to contribute to event." } },
