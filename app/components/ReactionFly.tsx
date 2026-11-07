@@ -18,22 +18,13 @@ import {
   EMOJI_FLY_HOLD_MS,
   EMOJI_FLY_SIZE_RATIO,
 } from "@/app/lib/customEmojiCanvas";
+import { isEmojiOnlyText } from "@/app/lib/notification_text";
 import { EmojiItem, PostCommentNode } from "@/app/types/interfaces";
-const EMOJI_ONLY_COMMENT_REGEX = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
-const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
 
 type ReactionFlyState = {
   id: number;
   emoji: string;
   targetKey: string | null;
-};
-
-const isEmojiOnlyComment = (value: string): boolean => {
-  const trimmed = value.trim();
-  return (
-    (Boolean(trimmed) && EMOJI_ONLY_COMMENT_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed))
-    || customEmojiUuidFromToken(trimmed) !== null
-  );
 };
 
 const getCommentAtPath = (
@@ -81,7 +72,7 @@ export function findNewEmojiReactionKey(
     if (timestamp in previousReplies) {
       continue;
     }
-    if (comment.text.trim() === trimmedEmoji && isEmojiOnlyComment(comment.text)) {
+    if (comment.text.trim() === trimmedEmoji && isEmojiOnlyText(comment.text)) {
       return [...parentPath, timestamp].join(pathSeparator);
     }
   }

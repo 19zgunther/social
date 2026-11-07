@@ -3,7 +3,7 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
-import { sanitizeNotificationText } from "@/app/lib/notification_text";
+import { isEmojiOnlyText, sanitizeNotificationText } from "@/app/lib/notification_text";
 import { canViewerAccessPost } from "@/app/lib/postVisibility";
 import { sanitizePostDataForViewer } from "@/app/lib/polls";
 
@@ -197,19 +197,18 @@ export async function POST(request: Request) {
     const notificationRecipientUserId =
       parentPath.length === 0 ? updated.created_by : replyTargetAuthorUserId;
     if (notificationRecipientUserId && notificationRecipientUserId !== authResult.user_id) {
+      const isReaction = isEmojiOnlyText(message);
       const sanitizedMessage = sanitizeNotificationText(message);
-      const previewSource = sanitizedMessage || "Sent a reply";
+      const previewSource = sanitizedMessage || (isReaction ? "Reacted" : "Sent a reply");
       const previewText =
         previewSource.length > 80 ? `${previewSource.slice(0, 77)}...` : previewSource;
-      const body =
-        parentPath.length === 0
-          ? `${authResult.username} replied to your post: ${previewText}`
-          : `${authResult.username} replied to your comment: ${previewText}`;
+      const actionVerb = isReaction ? "reacted to" : "replied to";
+      const targetLabel = parentPath.length === 0 ? "your post" : "your comment";
       sendPushToUsers({
         recipientUserIds: [notificationRecipientUserId],
         payload: {
-          title: "New reply",
-          body,
+          title: isReaction ? "New reaction" : "New reply",
+          body: `${authResult.username} ${actionVerb} ${targetLabel}: ${previewText}`,
           url: "/?tab=feed",
         },
       }).catch((error) => {

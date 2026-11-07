@@ -15,6 +15,7 @@ import {
 } from "@/app/components/ReactionFly";
 import { resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import { customEmojiUuidFromToken } from "@/app/lib/customEmojiCanvas";
+import { isEmojiOnlyText } from "@/app/lib/notification_text";
 import { ApiError, EmojiItem, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
 import { collectPostMediaObjectIds, getPostMediaSlides } from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
@@ -56,8 +57,6 @@ type PostSectionProps = {
 const COMMENT_PATH_SEPARATOR = ">";
 const CONGRATS_BALLOON_REVEAL_MS = 5000;
 const CONGRATS_BALLOON_CENTER_ROOT_MARGIN = "-35% 0px -35% 0px";
-const EMOJI_ONLY_COMMENT_REGEX = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
-const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
 const parsePostDate = (value: string): Date | null => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -84,14 +83,6 @@ const formatPostDateExpanded = (value: string): string => {
     hour: "numeric",
     minute: "2-digit",
   });
-};
-
-const isEmojiOnlyComment = (value: string): boolean => {
-  const trimmed = value.trim();
-  return (
-    (Boolean(trimmed) && EMOJI_ONLY_COMMENT_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed))
-    || customEmojiUuidFromToken(trimmed) !== null
-  );
 };
 
 const getCommentAtPath = (
@@ -200,13 +191,13 @@ function PostSectionComponent({
     [postData.comments],
   );
   const rootTextCommentEntries = useMemo(
-    () => rootCommentEntries.filter(([, comment]) => !isEmojiOnlyComment(comment.text)),
+    () => rootCommentEntries.filter(([, comment]) => !isEmojiOnlyText(comment.text)),
     [rootCommentEntries],
   );
   const rootEmojiReactions = useMemo(
     () =>
       rootCommentEntries
-        .filter(([, comment]) => isEmojiOnlyComment(comment.text))
+        .filter(([, comment]) => isEmojiOnlyText(comment.text))
         .map(([timestamp, comment]) => ({
           key: timestamp,
           emoji: comment.text.trim(),
@@ -702,10 +693,10 @@ function PostSectionComponent({
     const pathKey = path.join(COMMENT_PATH_SEPARATOR);
     const allReplyEntries = Object.entries(comment.replies ?? {}).sort(([a], [b]) => (a > b ? 1 : -1));
     const emojiReplyEntries = allReplyEntries.filter(([, childComment]) =>
-      isEmojiOnlyComment(childComment.text),
+      isEmojiOnlyText(childComment.text),
     );
     const threadedReplyEntries = allReplyEntries.filter(([, childComment]) =>
-      !isEmojiOnlyComment(childComment.text),
+      !isEmojiOnlyText(childComment.text),
     );
     const hasThreadedReplies = threadedReplyEntries.length > 0;
     const isExpanded = expandedReplyPaths.includes(pathKey);

@@ -46,6 +46,7 @@ import {
   CustomEmoji,
   customEmojiUuidFromToken,
 } from "@/app/lib/customEmojiCanvas";
+import { isEmojiOnlyText } from "@/app/lib/notification_text";
 import {
   deleteThreadReplyCollapsed,
   readThreadReplyCollapsedSet,
@@ -75,9 +76,6 @@ const MESSAGE_LONG_PRESS_TO_REPLY_MS = 500;
 const MESSAGE_OPTIONS_QUICK_EMOJIS = ["❤️", "👍", "😄", "😂", "❓", "‼️"] as const;
 /** Portal stack: below EmojiPicker (2000). */
 const MESSAGE_OPTIONS_OVERLAY_Z = 1950;
-const EMOJI_ONLY_MESSAGE_REGEX =
-  /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
-const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
 const THREAD_MESSAGES_CACHE_KEY_PREFIX = "thread_messages_v1_";
 const TIMESTAMP_REVEAL_MAX_PX = 68;
 const TIMESTAMP_REVEAL_SETTLE_MS = 180;
@@ -185,14 +183,6 @@ const threadMessageHasRenderableImage = (message: ThreadMessage): boolean =>
     message.image_id &&
       (message.image_url || (message.image_access_grant && message.created_by)),
   );
-
-const isEmojiOnlyMessage = (value: string): boolean => {
-  const trimmed = value.trim();
-  return (
-    (Boolean(trimmed) && EMOJI_ONLY_MESSAGE_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed))
-    || customEmojiUuidFromToken(trimmed) !== null
-  );
-};
 
 const clampOverlayYRatio = (value: number): number => {
   if (Number.isNaN(value)) {
@@ -1332,8 +1322,8 @@ export default function Thread({
     }
 
     const children = childMessagesByParentId.get(message.id) ?? [];
-    const emojiOnlyChildren = children.filter((childMessage) => isEmojiOnlyMessage(childMessage.text));
-    const threadedChildren = children.filter((childMessage) => !isEmojiOnlyMessage(childMessage.text));
+    const emojiOnlyChildren = children.filter((childMessage) => isEmojiOnlyText(childMessage.text));
+    const threadedChildren = children.filter((childMessage) => !isEmojiOnlyText(childMessage.text));
     const isRepliesSubtreeExpanded = !collapsedReplyIdSet.has(message.id);
     const isReplyTargetMessage = replyTargetMessageId === message.id;
 

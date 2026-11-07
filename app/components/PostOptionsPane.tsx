@@ -13,6 +13,7 @@ import {
   customEmojiUuidFromToken,
 } from "@/app/lib/customEmojiCanvas";
 import { downloadImageBlobWithExtension, getImageBlob } from "@/app/lib/imageCache";
+import { isEmojiOnlyText } from "@/app/lib/notification_text";
 import { collectPostMediaObjectIds } from "@/app/lib/postMedia";
 import {
   ApiError,
@@ -30,17 +31,6 @@ type PostOptionsPaneProps = {
   currentUserId?: string | null;
   onViewUserProfile?: (userId: string) => void;
   swipeBackOverrideRef: MutableRefObject<(() => void) | null>;
-};
-
-const EMOJI_ONLY_COMMENT_REGEX = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s)+$/u;
-const HAS_EMOJI_REGEX = /\p{Extended_Pictographic}/u;
-
-const isEmojiOnlyComment = (value: string): boolean => {
-  const trimmed = value.trim();
-  return (
-    (Boolean(trimmed) && EMOJI_ONLY_COMMENT_REGEX.test(trimmed) && HAS_EMOJI_REGEX.test(trimmed))
-    || customEmojiUuidFromToken(trimmed) !== null
-  );
 };
 
 function RenderReactionEmoji({
@@ -126,7 +116,7 @@ const collectReactions = (
     }
     Object.entries(nodes).forEach(([timestamp, comment]) => {
       const path = [...pathPrefix, timestamp];
-      const isReaction = isEmojiOnlyComment(comment.text);
+      const isReaction = isEmojiOnlyText(comment.text);
       if (isReaction) {
         const reactor: ReactorEntry = {
           emoji: comment.text.trim(),
