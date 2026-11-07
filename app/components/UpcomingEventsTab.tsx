@@ -1,16 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDownIcon, RefreshIcon } from "@/app/components/Icons";
-import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import EventEditorModal from "@/app/components/EventEditorModal";
+import { NewEventIcon, RefreshIcon, SearchIcon } from "@/app/components/Icons";
+import Loader from "@/app/components/Loader";
 import ThreadEventListRow from "@/app/components/ThreadEventListRow";
-import { Button } from "@/app/ui-components";
+import { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import type {
-  AcceptedFriend,
   ApiError,
-  EventCreateRequest,
-  EventCreateResponse,
-  FriendRequestsListResponse,
   UserUpcomingEventListItem,
   UserUpcomingEventsResponse,
 } from "@/app/types/interfaces";
@@ -22,6 +19,13 @@ type UpcomingEventsTabProps = {
   onOpenEvent: (item: UserUpcomingEventListItem) => void;
   onEventCreated: (item: UserUpcomingEventListItem) => void;
 };
+
+function formatCompactEventTime(date: Date): string {
+  const hour12 = date.getHours() % 12 || 12;
+  const minutes = date.getMinutes();
+  const suffix = date.getHours() < 12 ? "am" : "pm";
+  return minutes === 0 ? `${hour12}${suffix}` : `${hour12}:${String(minutes).padStart(2, "0")}${suffix}`;
+}
 
 function formatEventRangeShort(startsAtIso: string, endsAtIso: string): string {
   try {
@@ -35,21 +39,43 @@ function formatEventRangeShort(startsAtIso: string, endsAtIso: string): string {
       month: "short",
       day: "numeric",
     };
-    const timeOpts: Intl.DateTimeFormatOptions = {
-      hour: "numeric",
-      minute: "2-digit",
-    };
     const sameDay = start.toDateString() === end.toDateString();
     const datePart = start.toLocaleString(undefined, dateOpts);
-    const startT = start.toLocaleString(undefined, timeOpts);
-    const endT = end.toLocaleString(undefined, timeOpts);
+    const startT = formatCompactEventTime(start);
+    const endT = formatCompactEventTime(end);
     if (sameDay) {
-      return `${datePart} · ${startT} – ${endT}`;
+      return `${datePart} from ${startT} to ${endT}`;
     }
-    return `${start.toLocaleString(undefined, { ...dateOpts, ...timeOpts })} → ${end.toLocaleString(undefined, { ...dateOpts, ...timeOpts })}`;
+    const endDatePart = end.toLocaleString(undefined, dateOpts);
+    return `${datePart} ${startT} → ${endDatePart} ${endT}`;
   } catch {
     return "";
   }
+}
+
+function startsAtMs(item: UserUpcomingEventListItem): number {
+  const ms = new Date(item.event.starts_at).getTime();
+  return Number.isNaN(ms) ? Number.POSITIVE_INFINITY : ms;
+}
+
+function insertUpcomingByStartsAt(
+  items: UserUpcomingEventListItem[],
+  createdItem: UserUpcomingEventListItem,
+): UserUpcomingEventListItem[] {
+  const next = [...items, createdItem];
+  next.sort((a, b) => startsAtMs(a) - startsAtMs(b));
+  return next;
+}
+
+function itemMatchesSearch(item: UserUpcomingEventListItem, query: string): boolean {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) {
+    return true;
+  }
+  return (
+    item.event.name.toLowerCase().includes(trimmed) ||
+    item.thread.name.toLowerCase().includes(trimmed)
+  );
 }
 
 const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
@@ -70,13 +96,6 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 };
 
 const REFETCH_TTL_MS = 60_000;
-const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_CLOSE_AFTER_DAYS = 3;
-const DEFAULT_RELEASE_AFTER_DAYS = 7;
-
-/** Local `YYYY-MM-DDTHH:mm` for now + N days. */
-const localDatetimeInDays = (days: number): string =>
-  isoToEventLocalDatetime(new Date(Date.now() + days * DAY_MS).toISOString());
 
 type UpcomingTabCacheEntry = {
   fetchedAt: number;
@@ -111,21 +130,16 @@ export default function UpcomingEventsTab({
   const [items, setItems] = useState<UserUpcomingEventListItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [createName, setCreateName] = useState("");
-  const [createError, setCreateError] = useState("");
-  const [showCreateOptions, setShowCreateOptions] = useState(false);
-  const [startsDraft, setStartsDraft] = useState("");
-  const [endsDraft, setEndsDraft] = useState("");
-  const [blindReveal, setBlindReveal] = useState(false);
-  const [closeDraft, setCloseDraft] = useState("");
-  const [releaseDraft, setReleaseDraft] = useState("");
-  const [friends, setFriends] = useState<AcceptedFriend[]>([]);
-  const [friendsLoading, setFriendsLoading] = useState(false);
-  const [friendsLoaded, setFriendsLoaded] = useState(false);
-  const [inviteeIds, setInviteeIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState("");
   const itemsRef = useRef<UserUpcomingEventListItem[]>([]);
+  const {
+    isPresented: isCreatePresented,
+    isClosing: isCreateClosing,
+    isActive: isCreateActive,
+    open: openCreateModal,
+    close: closeCreateModal,
+  } = useAnimatedModal();
 
   useEffect(() => {
     itemsRef.current = items;
@@ -189,289 +203,120 @@ export default function UpcomingEventsTab({
     void fetchUpcoming(true);
   }, [refreshNonce, fetchUpcoming]);
 
-  const loadFriends = useCallback(async () => {
-    setFriendsLoading(true);
-    try {
-      const response = await postWithAuth("/api/friend-requests-list", {});
-      if (!response.ok) {
-        setCreateError(await readErrorMessage(response));
-        return;
-      }
-      const payload = (await response.json()) as FriendRequestsListResponse;
-      setFriends(payload.accepted_friends);
-      setFriendsLoaded(true);
-    } catch (e) {
-      setCreateError(e instanceof Error ? e.message : "Failed to load friends.");
-    } finally {
-      setFriendsLoading(false);
-    }
-  }, []);
-
-  const onToggleCreateOptions = () => {
-    const next = !showCreateOptions;
-    setShowCreateOptions(next);
-    if (next && !friendsLoaded && !friendsLoading) {
-      void loadFriends();
-    }
+  const onSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.target.value);
   };
 
-  const onToggleBlindReveal = (checked: boolean) => {
-    setBlindReveal(checked);
-    if (checked) {
-      setCloseDraft((previous) => previous || localDatetimeInDays(DEFAULT_CLOSE_AFTER_DAYS));
-      setReleaseDraft((previous) => previous || localDatetimeInDays(DEFAULT_RELEASE_AFTER_DAYS));
-    }
+  const onRefreshClick = () => {
+    void fetchUpcoming(true);
   };
 
-  const onToggleInvitee = (userId: string) => {
-    setInviteeIds((previous) =>
-      previous.includes(userId) ? previous.filter((id) => id !== userId) : [...previous, userId],
-    );
+  const onEventCreatedFromModal = (createdItem: UserUpcomingEventListItem) => {
+    const nextItems = insertUpcomingByStartsAt(itemsRef.current, createdItem);
+    setItems(nextItems);
+    writeUpcomingTabCache(nextItems);
+    onEventCreated(createdItem);
   };
 
-  const resetCreateForm = () => {
-    setCreateName("");
-    setShowCreateOptions(false);
-    setStartsDraft("");
-    setEndsDraft("");
-    setBlindReveal(false);
-    setCloseDraft("");
-    setReleaseDraft("");
-    setInviteeIds([]);
-  };
-
-  const onCreateEvent = async () => {
-    const name = createName.trim();
-    if (!name || isCreating) {
-      return;
-    }
-
-    const requestBody: EventCreateRequest = { name };
-    if (startsDraft || endsDraft) {
-      if (!startsDraft || !endsDraft) {
-        setCreateError("Set both a start and an end, or leave both empty.");
-        return;
-      }
-      const startsAt = new Date(startsDraft);
-      const endsAt = new Date(endsDraft);
-      if (endsAt <= startsAt) {
-        setCreateError("End must be after start.");
-        return;
-      }
-      requestBody.starts_at = startsAt.toISOString();
-      requestBody.ends_at = endsAt.toISOString();
-    }
-    if (blindReveal) {
-      if (!closeDraft || !releaseDraft) {
-        setCreateError("Pick a close and release time for the surprise album.");
-        return;
-      }
-      const closeAt = new Date(closeDraft);
-      const releaseAt = new Date(releaseDraft);
-      if (releaseAt <= closeAt) {
-        setCreateError("Release must be after close.");
-        return;
-      }
-      requestBody.blind_reveal = true;
-      requestBody.close_at = closeAt.toISOString();
-      requestBody.release_at = releaseAt.toISOString();
-    }
-    if (inviteeIds.length > 0) {
-      requestBody.invitee_user_ids = inviteeIds;
-    }
-
-    setIsCreating(true);
-    setCreateError("");
-    try {
-      const response = await postWithAuth("/api/event-create", requestBody);
-      if (!response.ok) {
-        setCreateError(await readErrorMessage(response));
-        return;
-      }
-      const payload = (await response.json()) as EventCreateResponse;
-      const createdItem: UserUpcomingEventListItem = {
-        thread: payload.thread,
-        event: payload.event,
-      };
-      setItems((previous) => [createdItem, ...previous]);
-      writeUpcomingTabCache([createdItem, ...itemsRef.current]);
-      resetCreateForm();
-      onEventCreated(createdItem);
-    } catch (e) {
-      setCreateError(e instanceof Error ? e.message : "Failed to create event.");
-    } finally {
-      setIsCreating(false);
-    }
-  };
+  const filteredItems = items.filter((item) => itemMatchesSearch(item, searchQuery));
+  const hasSearchQuery = searchQuery.trim().length > 0;
+  const showEmptyCreateBlock = !isLoading && !error && items.length === 0;
+  const showNoMatches =
+    !isLoading && !error && items.length > 0 && filteredItems.length === 0 && hasSearchQuery;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-black">
-      <header className="shrink-0 border-b border-white/10 px-3 py-3">
-        <div className="flex items-center gap-2">
-          <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-white">Upcoming events</h1>
-          <button
-            type="button"
-            disabled={refreshBusy}
-            onClick={() => {
-              void fetchUpcoming(true);
-            }}
-            className="shrink-0 rounded-lg border border-white/20 p-1.5 text-muted transition hover:border-white/35 hover:text-white disabled:opacity-50"
-            aria-label="Refresh events"
-          >
-            <RefreshIcon className={`h-4 w-4 ${refreshBusy ? "animate-spin" : ""}`} aria-hidden />
-          </button>
-        </div>
-        <p className="mt-0.5 text-xs text-muted">Across all your groups</p>
-        <div className="mt-3 flex items-center gap-2">
-          <input
-            type="text"
-            value={createName}
-            onChange={(event) => {
-              setCreateName(event.target.value);
-              if (createError) {
-                setCreateError("");
-              }
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void onCreateEvent();
-              }
-            }}
-            placeholder="Event name"
-            className="min-w-0 flex-1 rounded-lg border border-white/20 bg-black px-3 py-2 text-sm text-white outline-none focus:border-white/45"
-          />
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            className="shrink-0"
-            disabled={isCreating || !createName.trim()}
-            onClick={() => {
-              void onCreateEvent();
-            }}
-          >
-            {isCreating ? "Creating..." : "Create"}
-          </Button>
-        </div>
-        <button
-          type="button"
-          onClick={onToggleCreateOptions}
-          className="mt-2 flex items-center gap-1 text-xs text-muted transition hover:text-white"
-          aria-expanded={showCreateOptions}
-        >
-          <ChevronDownIcon
-            className={`h-3.5 w-3.5 transition-transform ${showCreateOptions ? "rotate-180" : ""}`}
-            aria-hidden
-          />
-          {showCreateOptions ? "Hide options" : "More options"}
-        </button>
-        {showCreateOptions ? (
-          <div className="mt-2 max-h-[50vh] space-y-3 overflow-y-auto overscroll-contain rounded-lg border border-white/10 bg-black p-2.5">
-            <div className="space-y-2">
-              <EventDateTimeSelect
-                variant="inline"
-                label="Starts (optional)"
-                value={startsDraft}
-                onChange={setStartsDraft}
-                disabled={isCreating}
-              />
-              <EventDateTimeSelect
-                variant="inline"
-                label="Ends (optional)"
-                value={endsDraft}
-                onChange={setEndsDraft}
-                disabled={isCreating}
-              />
-              <p className="text-[11px] text-muted">Leave empty to start now for one hour.</p>
-            </div>
-
-            <div className="space-y-2 border-t border-white/10 pt-3">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-white">
-                <input
-                  type="checkbox"
-                  checked={blindReveal}
-                  disabled={isCreating}
-                  onChange={(event) => onToggleBlindReveal(event.target.checked)}
-                  className="h-4 w-4 accent-white"
-                />
-                Surprise album (blind until release)
-              </label>
-              {blindReveal ? (
-                <div className="space-y-2">
-                  <EventDateTimeSelect
-                    variant="inline"
-                    label="Uploads close"
-                    value={closeDraft}
-                    onChange={setCloseDraft}
-                    disabled={isCreating}
-                  />
-                  <EventDateTimeSelect
-                    variant="inline"
-                    label="Album released"
-                    value={releaseDraft}
-                    onChange={setReleaseDraft}
-                    disabled={isCreating}
-                  />
-                </div>
-              ) : null}
-            </div>
-
-            <div className="space-y-2 border-t border-white/10 pt-3">
-              <p className="text-xs font-medium text-muted">
-                Invite friends{inviteeIds.length > 0 ? ` (${inviteeIds.length})` : ""}
-              </p>
-              {friendsLoading ? <p className="text-xs text-muted">Loading friends…</p> : null}
-              {!friendsLoading && friendsLoaded && friends.length === 0 ? (
-                <p className="text-xs text-muted">No friends to invite yet.</p>
-              ) : null}
-              <ul className="max-h-40 space-y-1 overflow-y-auto overscroll-contain">
-                {friends.map((friend) => (
-                  <li key={friend.user_id}>
-                    <label className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm text-white hover:bg-white/5">
-                      <input
-                        type="checkbox"
-                        checked={inviteeIds.includes(friend.user_id)}
-                        disabled={isCreating}
-                        onChange={() => onToggleInvitee(friend.user_id)}
-                        className="h-4 w-4 accent-white"
-                      />
-                      <span className="min-w-0 flex-1 truncate">{friend.username}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </div>
+    <div className="flex h-full min-h-0 flex-col space-y-3 bg-bg px-2">
+      <div>
+        <header className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-foreground">Events</h1>
+            {isLoading || refreshBusy ? (
+              <Loader scale={0.55} className="shrink-0" />
+            ) : (
+              <button
+                type="button"
+                onClick={onRefreshClick}
+                className="rounded-md p-0.5 text-muted transition hover:text-foreground"
+                aria-label="Refresh events"
+              >
+                <RefreshIcon className="h-5 w-5 shrink-0" aria-hidden />
+              </button>
+            )}
           </div>
-        ) : null}
-        {createError ? <p className="mt-1 text-xs text-muted">{createError}</p> : null}
-      </header>
+          <button type="button" onClick={openCreateModal} aria-label="Create event">
+            <NewEventIcon className="h-6 w-6 text-accent" aria-hidden />
+          </button>
+        </header>
+      </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-black">
+      <div className="relative mx-2">
+        <SearchIcon
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+          aria-hidden
+        />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={onSearchChange}
+          placeholder="Search"
+          className="w-full rounded-xl border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted focus:border-muted"
+          aria-label="Search events"
+        />
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {isLoading ? (
           <p className="px-3 py-4 text-sm text-muted">Loading…</p>
         ) : null}
         {error && !isLoading ? <p className="px-3 py-3 text-sm text-muted">{error}</p> : null}
-        {!isLoading && !error && items.length === 0 ? (
-          <p className="px-3 py-4 text-sm text-muted">No upcoming events.</p>
+
+        {showEmptyCreateBlock ? (
+          <div className="px-3 pb-4 pt-1">
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="create-post-rgb-border flex min-h-[40vw] w-full flex-col items-center justify-center gap-2 rounded-2xl px-4 py-10 font-semibold shadow-sm"
+            >
+              <span className="create-post-rgb-text text-3xl leading-none" aria-hidden>
+                +
+              </span>
+              <span className="create-post-rgb-text text-base">Create a new event</span>
+            </button>
+          </div>
         ) : null}
 
-        <div className="flex flex-col gap-3 px-3 pb-4 pt-2">
-          {items.map(({ thread, event }) => {
-            const when = formatEventRangeShort(event.starts_at, event.ends_at);
-            const metaLine = when ? `${thread.name} · ${when}` : thread.name;
-            return (
-              <ThreadEventListRow
-                key={event.id}
-                event={event}
-                currentUserId={currentUserId}
-                metaLine={metaLine}
-                onOpen={() => onOpenEvent({ thread, event })}
-              />
-            );
-          })}
-        </div>
+        {showNoMatches ? (
+          <p className="px-3 py-4 text-sm text-muted">No matching events.</p>
+        ) : null}
+
+        {!showEmptyCreateBlock ? (
+          <div className="flex flex-col gap-3 px-3 pb-4 pt-1">
+            {filteredItems.map(({ thread, event }) => {
+              const when = formatEventRangeShort(event.starts_at, event.ends_at);
+              const metaLine = when ? `${thread.name} · ${when}` : thread.name;
+              return (
+                <ThreadEventListRow
+                  key={event.id}
+                  event={event}
+                  currentUserId={currentUserId}
+                  metaLine={metaLine}
+                  onOpen={() => onOpenEvent({ thread, event })}
+                />
+              );
+            })}
+          </div>
+        ) : null}
       </div>
+
+      <EventEditorModal
+        isPresented={isCreatePresented}
+        isClosing={isCreateClosing}
+        isActive={isCreateActive}
+        onClose={closeCreateModal}
+        mode="create"
+        currentUserId={currentUserId}
+        onCreated={onEventCreatedFromModal}
+      />
     </div>
   );
 }

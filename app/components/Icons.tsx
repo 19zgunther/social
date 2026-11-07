@@ -8,6 +8,7 @@ import {
   Brush,
   Bug,
   Calendar,
+  CalendarPlus,
   Camera,
   Check,
   ChevronDown,
@@ -187,6 +188,8 @@ export function WaxSealIcon({ className }: { className?: string }) {
 }
 /** Date picker */
 export const CalendarIcon = Calendar;
+/** Create a new event */
+export const NewEventIcon = CalendarPlus;
 /** Time picker */
 export const ClockIcon = Clock;
 /** Video call / video media */

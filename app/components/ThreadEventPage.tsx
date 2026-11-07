@@ -1,7 +1,8 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckIcon, AddImageIcon, EditIcon, DeleteIcon, CloseIcon } from "@/app/components/Icons";
+import EventEditorModal from "@/app/components/EventEditorModal";
+import { AddImageIcon, EditIcon } from "@/app/components/Icons";
 import BackButton from "@/app/components/utils/BackButton";
 import CachedImage from "@/app/components/utils/CachedImage";
 import CachedVideo from "@/app/components/utils/CachedVideo";
@@ -11,27 +12,22 @@ import {
   uploadPreparedImageToMainBucket,
   uploadPreparedVideoToMainBucket,
 } from "@/app/components/utils/client_file_storage_utils";
+import { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import {
   canContributeToEventAlbum,
   getEventAlbumPhase,
   isEventAlbumMediaVisible,
   MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR,
 } from "@/app/lib/sharedPosts";
-import EventDateTimeSelect, { isoToEventLocalDatetime } from "@/app/components/EventDateTimeSelect";
 import UserProfileImage from "@/app/components/UserProfileImage";
-import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import type {
   ApiError,
   EventContributeRequest,
   EventPublishPostResponse,
-  FriendSearchResponse,
   PostMediaItem,
-  ThreadEventBackgroundRemoveResponse,
-  ThreadEventBackgroundSetResponse,
   ThreadEventItem,
   ThreadEventRsvpResponse,
   ThreadEventRsvpStatus,
-  ThreadEventUpdateResponse,
   ThreadEventsListResponse,
   ThreadItem,
   ThreadMember,
@@ -55,6 +51,13 @@ const RSVP_OPTIONS: { status: ThreadEventRsvpStatus; label: string }[] = [
   { status: "not_going", label: "Not Going" },
 ];
 
+function formatCompactEventTime(date: Date): string {
+  const hour12 = date.getHours() % 12 || 12;
+  const minutes = date.getMinutes();
+  const suffix = date.getHours() < 12 ? "am" : "pm";
+  return minutes === 0 ? `${hour12}${suffix}` : `${hour12}:${String(minutes).padStart(2, "0")}${suffix}`;
+}
+
 function formatEventRange(startsAtIso: string, endsAtIso: string): string {
   try {
     const start = new Date(startsAtIso);
@@ -62,14 +65,18 @@ function formatEventRange(startsAtIso: string, endsAtIso: string): string {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       return "";
     }
-    const opts: Intl.DateTimeFormatOptions = {
+    const dateOpts: Intl.DateTimeFormatOptions = {
       weekday: "short",
       month: "short",
       day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
     };
-    return `${start.toLocaleString(undefined, opts)} → ${end.toLocaleString(undefined, opts)}`;
+    const sameDay = start.toDateString() === end.toDateString();
+    const startT = formatCompactEventTime(start);
+    const endT = formatCompactEventTime(end);
+    if (sameDay) {
+      return `${start.toLocaleString(undefined, dateOpts)} from ${startT} to ${endT}`;
+    }
+    return `${start.toLocaleString(undefined, dateOpts)} ${startT} → ${end.toLocaleString(undefined, dateOpts)} ${endT}`;
   } catch {
     return "";
   }
@@ -93,9 +100,6 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 };
 
 const REFETCH_TTL_MS = 60_000;
-const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_CLOSE_AFTER_DAYS = 3;
-const DEFAULT_RELEASE_AFTER_DAYS = 7;
 
 function formatAlbumInstant(iso: string | null): string {
   if (!iso) {
@@ -145,20 +149,11 @@ const glassCard =
 const iconBtn =
   "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/24 bg-bg/58 text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.55),0_2px_8px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-bg/76 hover:shadow-[0_8px_28px_rgba(0,0,0,0.58)]";
 
-const sectionLabel =
-  "text-[11px] font-semibold uppercase tracking-wide text-foreground/92 [text-shadow:0_2px_10px_rgba(0,0,0,0.95),0_1px_3px_rgba(0,0,0,0.9)]";
-
 const readableText =
   "text-sm text-foreground [text-shadow:0_2px_8px_rgba(0,0,0,0.92),0_1px_3px_rgba(0,0,0,0.88)]";
 
 const titleDisplay =
   "text-xl font-bold leading-snug text-foreground [text-shadow:0_3px_18px_rgba(0,0,0,0.96),0_2px_6px_rgba(0,0,0,0.9)]";
-
-const fieldGlass =
-  "border-white/18 bg-bg/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_6px_24px_rgba(0,0,0,0.42)] backdrop-blur-xl";
-
-const ghostActionBtn =
-  "rounded-xl border border-white/20 bg-bg/52 py-2 text-xs font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.48)] backdrop-blur-xl [text-shadow:0_2px_8px_rgba(0,0,0,0.88)] transition hover:bg-bg/64";
 
 const primaryActionBtn =
   "rounded-xl border border-white/25 bg-accent/92 py-2 text-xs font-semibold text-on-accent shadow-[0_8px_28px_color-mix(in_srgb,var(--accent)_50%,transparent),0_4px_16px_rgba(0,0,0,0.4)] backdrop-blur-xl [text-shadow:0_1px_3px_rgba(0,0,0,0.45)] transition hover:bg-accent";
@@ -203,6 +198,58 @@ function rosterEntriesForStatus(
     .sort((a, b) => a.username.localeCompare(b.username, undefined, { sensitivity: "base" }));
 }
 
+function undecidedRosterEntries(
+  members: ThreadMember[],
+  statusMap: Record<string, ThreadEventRsvpStatus>,
+): RosterEntry[] {
+  return members
+    .filter((member) => {
+      const status = statusMap[member.user_id];
+      return status === undefined || status === "maybe";
+    })
+    .map((member) => ({
+      userId: member.user_id,
+      username: member.username,
+    }))
+    .sort((a, b) => a.username.localeCompare(b.username, undefined, { sensitivity: "base" }));
+}
+
+function EventPeopleList({
+  title,
+  entries,
+  emptyText,
+  loading,
+}: {
+  title: string;
+  entries: RosterEntry[];
+  emptyText: string;
+  loading: boolean;
+}) {
+  return (
+    <div className="space-y-2.5">
+      <p className="text-sm font-semibold text-foreground [text-shadow:0_2px_10px_rgba(0,0,0,0.92)]">
+        {title} ({entries.length})
+      </p>
+      {loading ? (
+        <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
+      ) : entries.length === 0 ? (
+        <p className={`text-sm opacity-80 ${readableText}`}>{emptyText}</p>
+      ) : (
+        <ul className="space-y-2">
+          {entries.map((entry) => (
+            <li key={entry.userId} className="flex items-center gap-3">
+              <UserProfileImage userId={entry.userId} sizePx={40} alt={entry.username} />
+              <span className={`min-w-0 flex-1 truncate text-sm font-medium ${readableText}`}>
+                {entry.username}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function ThreadEventPage({
   thread,
   event: eventProp,
@@ -220,42 +267,23 @@ export default function ThreadEventPage({
 
   const canEdit =
     currentUserId === local.created_by || currentUserId === thread.owner_user_id;
-  const canDelete = canEdit;
-  const canAddMembers = currentUserId === thread.owner_user_id;
+  const canInvite = currentUserId === thread.owner_user_id;
 
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState("");
-  const [editingDescription, setEditingDescription] = useState(false);
-  const [descriptionDraft, setDescriptionDraft] = useState("");
-  const [editingLocation, setEditingLocation] = useState(false);
-  const [locationDraft, setLocationDraft] = useState("");
-  const [editingSchedule, setEditingSchedule] = useState(false);
-  const [startsDraft, setStartsDraft] = useState("");
-  const [endsDraft, setEndsDraft] = useState("");
-  const [fieldBusy, setFieldBusy] = useState(false);
   const [rsvpBusy, setRsvpBusy] = useState(false);
-  const [bgBusy, setBgBusy] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [albumBusy, setAlbumBusy] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
   const [albumGrants, setAlbumGrants] = useState<Record<string, string | null>>({});
-  const [editingAlbum, setEditingAlbum] = useState(false);
-  const [blindDraft, setBlindDraft] = useState(false);
-  const [closeDraft, setCloseDraft] = useState("");
-  const [releaseDraft, setReleaseDraft] = useState("");
   const albumInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    setDeleteConfirm(false);
-  }, [eventProp.id]);
+  const {
+    isPresented: isEditPresented,
+    isClosing: isEditClosing,
+    isActive: isEditActive,
+    open: openEditModal,
+    close: closeEditModal,
+  } = useAnimatedModal();
 
   const [members, setMembers] = useState<ThreadMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
-  const [isUpdatingMembers, setIsUpdatingMembers] = useState(false);
-  const [memberIdentifier, setMemberIdentifier] = useState("");
-  const [memberFormError, setMemberFormError] = useState("");
-  const bgInputRef = useRef<HTMLInputElement | null>(null);
   const membersRef = useRef<ThreadMember[]>([]);
   const localRef = useRef<ThreadEventItem>(eventProp);
   const onEventUpdatedRef = useRef(onEventUpdated);
@@ -340,73 +368,37 @@ export default function ThreadEventPage({
   }, [eventProp.id, thread.id, fetchEventPageData]);
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.user_id, m])), [members]);
-
-  const searchThreadMemberOptions = useCallback(async (query: string): Promise<UserSearchOption[]> => {
-    const response = await postJson("/api/friend-search", { query });
-    if (!response.ok) {
-      return [];
-    }
-    const payload = (await response.json()) as FriendSearchResponse;
-    return payload.users.map((user) => ({
-      id: user.id,
-      username: user.username,
-      email: user.email,
-    }));
-  }, []);
+  const existingMemberUserIds = useMemo(() => members.map((m) => m.user_id), [members]);
 
   const goingEntries = useMemo(
     () => rosterEntriesForStatus(local.users_status_map, "going", memberById),
     [local.users_status_map, memberById],
   );
 
-  const commitmentIssuesEntries = useMemo(
-    () => rosterEntriesForStatus(local.users_status_map, "maybe", memberById),
-    [local.users_status_map, memberById],
+  const undecidedEntries = useMemo(
+    () => undecidedRosterEntries(members, local.users_status_map),
+    [members, local.users_status_map],
   );
 
-  const lameEntries = useMemo(
+  const missingOutEntries = useMemo(
     () => rosterEntriesForStatus(local.users_status_map, "not_going", memberById),
     [local.users_status_map, memberById],
   );
 
-  const patchEvent = async (fields: {
-    name?: string;
-    location?: string | null;
-    description?: string | null;
-    starts_at?: string;
-    ends_at?: string;
-    blind_reveal?: boolean;
-    close_at?: string;
-    release_at?: string;
-  }) => {
-    setFieldBusy(true);
-    try {
-      const response = await postJson("/api/thread-event-update", {
-        thread_id: local.thread_id,
-        event_id: local.id,
-        name: fields.name ?? local.name,
-        location: fields.location !== undefined ? fields.location : local.location,
-        description: fields.description !== undefined ? fields.description : local.description,
-        starts_at: fields.starts_at ?? local.starts_at,
-        ends_at: fields.ends_at ?? local.ends_at,
-        blind_reveal: fields.blind_reveal,
-        close_at: fields.close_at,
-        release_at: fields.release_at,
-      });
-      if (!response.ok) {
-        onNotify?.(await readErrorMessage(response));
-        return;
-      }
-      const payload = (await response.json()) as ThreadEventUpdateResponse;
-      setLocal(payload.event);
-      onEventUpdated(payload.event);
-      writePageCache(payload.event.id, membersRef.current, payload.event);
-      onNotify?.("Saved.");
-    } catch (e) {
-      onNotify?.(e instanceof Error ? e.message : "Save failed.");
-    } finally {
-      setFieldBusy(false);
-    }
+  const onEventSavedFromModal = (updated: ThreadEventItem) => {
+    setLocal(updated);
+    onEventUpdated(updated);
+    writePageCache(updated.id, membersRef.current, updated);
+    onNotify?.("Saved.");
+  };
+
+  const onEventDeletedFromModal = (deletedEventId: string) => {
+    threadEventPageCache.delete(deletedEventId);
+    onEventDeleted(deletedEventId);
+  };
+
+  const onMembersAddedFromModal = () => {
+    void fetchEventPageData(true);
   };
 
   const onRsvp = async (status: ThreadEventRsvpStatus) => {
@@ -429,93 +421,6 @@ export default function ThreadEventPage({
       onNotify?.(e instanceof Error ? e.message : "RSVP failed.");
     } finally {
       setRsvpBusy(false);
-    }
-  };
-
-  const onBackgroundFile = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file?.type.startsWith("image/")) {
-      onNotify?.("Choose an image file.");
-      return;
-    }
-    setBgBusy(true);
-    try {
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = String(reader.result ?? "");
-          const part = dataUrl.split(",")[1];
-          if (!part) reject(new Error("Read failed"));
-          else resolve(part);
-        };
-        reader.onerror = () => reject(new Error("Read failed"));
-        reader.readAsDataURL(file);
-      });
-      const response = await postJson("/api/thread-event-background-set", {
-        thread_id: local.thread_id,
-        event_id: local.id,
-        image_base64_data: base64Data,
-        image_mime_type: file.type,
-      });
-      if (!response.ok) {
-        onNotify?.(await readErrorMessage(response));
-        return;
-      }
-      const payload = (await response.json()) as ThreadEventBackgroundSetResponse;
-      setLocal(payload.event);
-      onEventUpdated(payload.event);
-      writePageCache(payload.event.id, membersRef.current, payload.event);
-    } catch (err) {
-      onNotify?.(err instanceof Error ? err.message : "Upload failed.");
-    } finally {
-      setBgBusy(false);
-    }
-  };
-
-  const removeBackground = async () => {
-    if (!local.background_image_id) return;
-    setBgBusy(true);
-    try {
-      const response = await postJson("/api/thread-event-background-remove", {
-        thread_id: local.thread_id,
-        event_id: local.id,
-      });
-      if (!response.ok) {
-        onNotify?.(await readErrorMessage(response));
-        return;
-      }
-      const payload = (await response.json()) as ThreadEventBackgroundRemoveResponse;
-      setLocal(payload.event);
-      onEventUpdated(payload.event);
-      writePageCache(payload.event.id, membersRef.current, payload.event);
-    } catch (err) {
-      onNotify?.(err instanceof Error ? err.message : "Remove failed.");
-    } finally {
-      setBgBusy(false);
-    }
-  };
-
-  const performDelete = async () => {
-    setIsDeleting(true);
-    try {
-      const response = await postJson("/api/thread-event-delete", {
-        thread_id: local.thread_id,
-        event_id: local.id,
-      });
-      if (!response.ok) {
-        onNotify?.(await readErrorMessage(response));
-        setDeleteConfirm(false);
-        return;
-      }
-      const payload = (await response.json()) as { deleted_event_id: string };
-      threadEventPageCache.delete(local.id);
-      onEventDeleted(payload.deleted_event_id);
-    } catch (err) {
-      onNotify?.(err instanceof Error ? err.message : "Delete failed.");
-      setDeleteConfirm(false);
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -631,43 +536,6 @@ export default function ThreadEventPage({
     }
   };
 
-  const onStartEditAlbum = () => {
-    setBlindDraft(local.blind_reveal);
-    setCloseDraft(
-      isoToEventLocalDatetime(local.close_at ?? new Date(Date.now() + DEFAULT_CLOSE_AFTER_DAYS * DAY_MS).toISOString()),
-    );
-    setReleaseDraft(
-      isoToEventLocalDatetime(
-        local.release_at ?? new Date(Date.now() + DEFAULT_RELEASE_AFTER_DAYS * DAY_MS).toISOString(),
-      ),
-    );
-    setEditingAlbum(true);
-  };
-
-  const onSaveAlbumSettings = () => {
-    if (!blindDraft) {
-      void patchEvent({ blind_reveal: false });
-      setEditingAlbum(false);
-      return;
-    }
-    if (!closeDraft || !releaseDraft) {
-      onNotify?.("Pick a close and release time.");
-      return;
-    }
-    const closeAt = new Date(closeDraft);
-    const releaseAt = new Date(releaseDraft);
-    if (releaseAt <= closeAt) {
-      onNotify?.("Release must be after close.");
-      return;
-    }
-    void patchEvent({
-      blind_reveal: true,
-      close_at: closeAt.toISOString(),
-      release_at: releaseAt.toISOString(),
-    });
-    setEditingAlbum(false);
-  };
-
   const canPublishAlbum = currentUserId === local.created_by;
 
   const onPublishAlbumAsPost = async () => {
@@ -690,38 +558,6 @@ export default function ThreadEventPage({
       onNotify?.(err instanceof Error ? err.message : "Failed to publish.");
     } finally {
       setPublishBusy(false);
-    }
-  };
-
-  const onAddMember = async () => {
-    if (!canAddMembers || !memberIdentifier.trim() || isUpdatingMembers) {
-      return;
-    }
-    setIsUpdatingMembers(true);
-    setMemberFormError("");
-    try {
-      const response = await postJson("/api/thread-member-add", {
-        thread_id: thread.id,
-        event_id: local.id,
-        identifier: memberIdentifier,
-      });
-      if (!response.ok) {
-        setMemberFormError(await readErrorMessage(response));
-        return;
-      }
-      const payload = (await response.json()) as { member: ThreadMember };
-      setMembers((previousMembers) => {
-        const exists = previousMembers.some((member) => member.user_id === payload.member.user_id);
-        if (exists) {
-          return previousMembers;
-        }
-        return [...previousMembers, payload.member];
-      });
-      setMemberIdentifier("");
-    } catch (error) {
-      setMemberFormError(error instanceof Error ? error.message : "Failed to add member.");
-    } finally {
-      setIsUpdatingMembers(false);
     }
   };
 
@@ -770,614 +606,205 @@ export default function ThreadEventPage({
               </button>
             ) : null}
             {canEdit ? (
-              <>
-                <input
-                  ref={bgInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={(ev) => {
-                    void onBackgroundFile(ev);
-                  }}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  disabled={bgBusy}
-                  onClick={() => bgInputRef.current?.click()}
-                  className={iconBtn}
-                  aria-label="Add or change background image"
-                >
-                  <AddImageIcon className="h-3.5 w-3.5" aria-hidden />
-                </button>
-                {local.background_image_id ? (
-                  <button
-                    type="button"
-                    disabled={bgBusy}
-                    onClick={() => {
-                      void removeBackground();
-                    }}
-                    className={iconBtn}
-                    aria-label="Remove background image"
-                  >
-                    <DeleteIcon className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                ) : null}
-              </>
+              <button
+                type="button"
+                onClick={openEditModal}
+                className={iconBtn}
+                aria-label="Edit event"
+              >
+                <EditIcon className="h-3.5 w-3.5" aria-hidden />
+              </button>
             ) : null}
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y">
           <div className="space-y-4 px-3 py-4">
-            <div className={`${glassCard} relative z-20 p-4`}>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <p className={sectionLabel}>Name</p>
-                {canEdit && !editingTitle ? (
-                  <button
-                    type="button"
-                    className={iconBtn}
-                    onClick={() => {
-                      setTitleDraft(local.name);
-                      setEditingTitle(true);
-                    }}
-                    aria-label="Edit name"
-                  >
-                    <EditIcon className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                ) : null}
-              </div>
-              {editingTitle ? (
-                <div className="flex items-start gap-2">
-                  <input
-                    type="text"
-                    value={titleDraft}
-                    onChange={(ev) => setTitleDraft(ev.target.value)}
-                    disabled={fieldBusy}
-                    className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-lg font-semibold text-foreground outline-none focus:border-muted ${fieldGlass}`}
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    disabled={fieldBusy || !titleDraft.trim()}
-                    className={iconBtn}
-                    onClick={() => {
-                      void patchEvent({ name: titleDraft.trim() });
-                      setEditingTitle(false);
-                    }}
-                    aria-label="Save name"
-                  >
-                    <CheckIcon className="h-4 w-4 text-accent" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={fieldBusy}
-                    className={iconBtn}
-                    onClick={() => setEditingTitle(false)}
-                    aria-label="Cancel"
-                  >
-                    <CloseIcon className="h-4 w-4" aria-hidden />
-                  </button>
-                </div>
-              ) : (
-                <h1 className={titleDisplay}>{local.name}</h1>
-              )}
-
-              <div className="mt-4 border-t border-white/10 pt-4">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <p className={sectionLabel}>When</p>
-              {canEdit && !editingSchedule ? (
-                <button
-                  type="button"
-                  className={iconBtn}
-                  onClick={() => {
-                    setStartsDraft(isoToEventLocalDatetime(local.starts_at));
-                    setEndsDraft(isoToEventLocalDatetime(local.ends_at));
-                    setEditingSchedule(true);
-                  }}
-                  aria-label="Edit schedule"
-                >
-                  <EditIcon className="h-3.5 w-3.5" aria-hidden />
-                </button>
+            <div className={`${glassCard} relative z-20 space-y-2 p-4`}>
+              <h1 className={titleDisplay}>{local.name}</h1>
+              <p className={`opacity-90 ${readableText}`}>
+                {formatEventRange(local.starts_at, local.ends_at)}
+              </p>
+              {local.location ? (
+                <p className={`opacity-90 ${readableText}`}>{local.location}</p>
+              ) : null}
+              {local.description ? (
+                <p className={`whitespace-pre-wrap pt-1 opacity-95 ${readableText}`}>
+                  {local.description}
+                </p>
               ) : null}
             </div>
-            {editingSchedule ? (
+
+            <div className={`${glassCard} relative z-0 p-4`}>
+              <div className="flex gap-2">
+                {RSVP_OPTIONS.map(({ status, label }) => {
+                  const isSelected = myStatus === status;
+                  const dim = myStatus !== undefined && !isSelected;
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      disabled={rsvpBusy}
+                      onClick={() => {
+                        void onRsvp(status);
+                      }}
+                      className={`${rsvpBtnBase} ${
+                        isSelected ? rsvpBtnSelected[status] : rsvpBtnIdle
+                      } ${dim ? "opacity-[0.42]" : ""}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className={`${glassCard} relative z-0 space-y-5 p-4`}>
+              <EventPeopleList
+                title="Who's Going"
+                entries={goingEntries}
+                emptyText="Nobody's marked going yet."
+                loading={membersLoading}
+              />
+              <EventPeopleList
+                title="Who Hasn't Decided"
+                entries={undecidedEntries}
+                emptyText="Everyone's picked a side."
+                loading={membersLoading}
+              />
+              <EventPeopleList
+                title="Who's Missing Out"
+                entries={missingOutEntries}
+                emptyText="Nobody's sitting this one out."
+                loading={membersLoading}
+              />
+            </div>
+
+            <div className={`${glassCard} relative z-0 p-4`}>
+              <p className="mb-2 text-sm font-semibold text-foreground [text-shadow:0_2px_10px_rgba(0,0,0,0.92)]">
+                Photos and videos
+              </p>
               <div className="space-y-3">
-                <EventDateTimeSelect
-                  label="Starts"
-                  value={startsDraft}
-                  onChange={setStartsDraft}
-                  disabled={fieldBusy}
-                  className="shadow-[0_10px_40px_rgba(0,0,0,0.52)]"
-                />
-                <EventDateTimeSelect
-                  label="Ends"
-                  value={endsDraft}
-                  onChange={setEndsDraft}
-                  disabled={fieldBusy}
-                  className="shadow-[0_10px_40px_rgba(0,0,0,0.52)]"
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={fieldBusy}
-                    className={`flex-1 ${ghostActionBtn}`}
-                    onClick={() => setEditingSchedule(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={fieldBusy}
-                    className={`flex-1 ${primaryActionBtn} disabled:opacity-50`}
-                    onClick={() => {
-                      if (!startsDraft || !endsDraft) {
-                        onNotify?.("Pick start and end.");
-                        return;
-                      }
-                      void patchEvent({
-                        starts_at: new Date(startsDraft).toISOString(),
-                        ends_at: new Date(endsDraft).toISOString(),
-                      });
-                      setEditingSchedule(false);
-                    }}
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className={readableText}>{formatEventRange(local.starts_at, local.ends_at)}</p>
-            )}
-              </div>
+                <p className={`text-xs opacity-80 ${readableText}`}>
+                  {albumStatusText}
+                  {" · "}
+                  {albumMediaCount === 1
+                    ? "1 photo or video"
+                    : `${albumMediaCount} photos and videos`}
+                  {" · "}
+                  {local.viewer_has_contributed
+                    ? "You've contributed"
+                    : "You haven't contributed yet"}
+                </p>
 
-              <div className="mt-4 border-t border-white/10 pt-4">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <p className={sectionLabel}>Where</p>
-              {canEdit && !editingLocation ? (
-                <button
-                  type="button"
-                  className={iconBtn}
-                  onClick={() => {
-                    setLocationDraft(local.location ?? "");
-                    setEditingLocation(true);
-                  }}
-                  aria-label="Edit location"
-                >
-                  <EditIcon className="h-3.5 w-3.5" aria-hidden />
-                </button>
-              ) : null}
-            </div>
-            {editingLocation ? (
-              <div className="flex items-start gap-2">
-                <input
-                  type="text"
-                  value={locationDraft}
-                  onChange={(ev) => setLocationDraft(ev.target.value)}
-                  disabled={fieldBusy}
-                  placeholder="Location"
-                  className={`min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-muted ${fieldGlass}`}
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  disabled={fieldBusy}
-                  className={iconBtn}
-                  onClick={() => {
-                    void patchEvent({ location: locationDraft.trim() || null });
-                    setEditingLocation(false);
-                  }}
-                  aria-label="Save location"
-                >
-                  <CheckIcon className="h-4 w-4 text-accent drop-shadow-md" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  disabled={fieldBusy}
-                  className={iconBtn}
-                  onClick={() => setEditingLocation(false)}
-                  aria-label="Cancel"
-                >
-                  <CloseIcon className="h-4 w-4" aria-hidden />
-                </button>
-              </div>
-            ) : (
-              <p className={readableText}>{local.location ?? "—"}</p>
-            )}
-              </div>
-
-              <div className="mt-4 border-t border-white/10 pt-4">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <p className={sectionLabel}>Details</p>
-              {canEdit && !editingDescription ? (
-                <button
-                  type="button"
-                  className={iconBtn}
-                  onClick={() => {
-                    setDescriptionDraft(local.description ?? "");
-                    setEditingDescription(true);
-                  }}
-                  aria-label="Edit description"
-                >
-                  <EditIcon className="h-3.5 w-3.5" aria-hidden />
-                </button>
-              ) : null}
-            </div>
-            {editingDescription ? (
-              <div className="space-y-2">
-                <textarea
-                  value={descriptionDraft}
-                  onChange={(ev) => setDescriptionDraft(ev.target.value)}
-                  disabled={fieldBusy}
-                  rows={4}
-                  className={`w-full resize-none rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-muted ${fieldGlass}`}
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={fieldBusy}
-                    className={`flex-1 ${ghostActionBtn}`}
-                    onClick={() => setEditingDescription(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={fieldBusy}
-                    className={`flex-1 ${primaryActionBtn} disabled:opacity-50`}
-                    onClick={() => {
-                      void patchEvent({ description: descriptionDraft.trim() || null });
-                      setEditingDescription(false);
-                    }}
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className={`whitespace-pre-wrap ${readableText}`}>{local.description ?? "—"}</p>
-            )}
-              </div>
-            </div>
-
-            {canAddMembers ? (
-              <div className={`${glassCard} relative z-40 p-4`}>
-                <p className={`mb-2 ${sectionLabel}`}>Add people</p>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void onAddMember();
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="flex-1">
-                    <UserSearch
-                      value={memberIdentifier}
-                      onValueChange={(value) => {
-                        setMemberIdentifier(value);
-                        if (memberFormError) {
-                          setMemberFormError("");
-                        }
-                      }}
-                      onSelect={(option) => {
-                        setMemberIdentifier(option.username);
-                        if (memberFormError) {
-                          setMemberFormError("");
-                        }
-                      }}
-                      searchUsers={searchThreadMemberOptions}
-                      placeholder="Username or email"
-                      inputClassName={`w-full rounded-xl border px-3 py-2 text-sm text-foreground outline-none focus:border-muted ${fieldGlass}`}
-                      dropdownClassName="z-[10000] max-h-[40vh]"
-                    />
-                    {memberFormError ? <p className={`mt-1 text-xs ${readableText}`}>{memberFormError}</p> : null}
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isUpdatingMembers}
-                    className={`${ghostActionBtn} px-3`}
-                  >
-                    {isUpdatingMembers ? "Adding..." : "Add"}
-                  </button>
-                </form>
-              </div>
-            ) : null}
-
-            <div className={`${glassCard} relative z-0 p-4`}>
-              <p className={`mb-2 ${sectionLabel}`}>Who&apos;s Going</p>
-              {membersLoading ? (
-                <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
-              ) : goingEntries.length === 0 ? (
-                <p className={readableText}>Nobody&apos;s marked going yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {goingEntries.map((entry) => (
-                    <li key={entry.userId} className="flex items-center gap-2.5">
-                      <UserProfileImage
-                        userId={entry.userId}
-                        sizePx={36}
-                        alt={entry.username}
-                      />
-                      <span className={`min-w-0 flex-1 truncate ${readableText}`}>{entry.username}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className={`${glassCard} relative z-0 p-4`}>
-              <p className={`mb-2 ${sectionLabel}`}>Who hasn&apos;t decided yet</p>
-              {membersLoading ? (
-                <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
-              ) : commitmentIssuesEntries.length === 0 ? (
-                <p className={readableText}>No maybes — everyone&apos;s picked a side.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {commitmentIssuesEntries.map((entry) => (
-                    <li key={entry.userId} className="flex items-center gap-2.5">
-                      <UserProfileImage
-                        userId={entry.userId}
-                        sizePx={36}
-                        alt={entry.username}
-                      />
-                      <span className={`min-w-0 flex-1 truncate ${readableText}`}>{entry.username}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className={`${glassCard} relative z-0 p-4`}>
-              <p className={`mb-2 ${sectionLabel}`}>Who&apos;s missing out</p>
-              {membersLoading ? (
-                <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
-              ) : lameEntries.length === 0 ? (
-                <p className={readableText}>Nobody&apos;s bailed. Respect.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {lameEntries.map((entry) => (
-                    <li key={entry.userId} className="flex items-center gap-2.5">
-                      <UserProfileImage
-                        userId={entry.userId}
-                        sizePx={36}
-                        alt={entry.username}
-                      />
-                      <span className={`min-w-0 flex-1 truncate ${readableText}`}>{entry.username}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className={`${glassCard} relative z-0 p-4`}>
-            <p className={`mb-2 ${sectionLabel}`}>Your RSVP</p>
-            <div className="flex gap-2">
-              {RSVP_OPTIONS.map(({ status, label }) => {
-                const isSelected = myStatus === status;
-                const dim = myStatus !== undefined && !isSelected;
-                return (
-                  <button
-                    key={status}
-                    type="button"
-                    disabled={rsvpBusy}
-                    onClick={() => {
-                      void onRsvp(status);
-                    }}
-                    className={`${rsvpBtnBase} ${
-                      isSelected ? rsvpBtnSelected[status] : rsvpBtnIdle
-                    } ${dim ? "opacity-[0.42]" : ""}`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-            </div>
-
-            <div className={`${glassCard} relative z-0 p-4`}>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <p className={sectionLabel}>Photos</p>
-                {canEdit && !editingAlbum ? (
-                  <button
-                    type="button"
-                    className={iconBtn}
-                    onClick={onStartEditAlbum}
-                    aria-label="Edit album settings"
-                  >
-                    <EditIcon className="h-3.5 w-3.5" aria-hidden />
-                  </button>
-                ) : null}
-              </div>
-
-              {editingAlbum ? (
-                <div className="space-y-3">
-                  <label className={`flex cursor-pointer items-center gap-2 ${readableText}`}>
+                {albumCanContribute ? (
+                  <>
                     <input
-                      type="checkbox"
-                      checked={blindDraft}
-                      disabled={fieldBusy}
-                      onChange={(ev) => setBlindDraft(ev.target.checked)}
-                      className="h-4 w-4 accent-white"
+                      ref={albumInputRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      multiple
+                      onChange={(ev) => {
+                        void onAlbumFiles(ev);
+                      }}
+                      className="hidden"
                     />
-                    Surprise album (blind until release)
-                  </label>
-                  {blindDraft ? (
-                    <>
-                      <EventDateTimeSelect
-                        label="Uploads close"
-                        value={closeDraft}
-                        onChange={setCloseDraft}
-                        disabled={fieldBusy}
-                        className="shadow-[0_10px_40px_rgba(0,0,0,0.52)]"
-                      />
-                      <EventDateTimeSelect
-                        label="Album released"
-                        value={releaseDraft}
-                        onChange={setReleaseDraft}
-                        disabled={fieldBusy}
-                        className="shadow-[0_10px_40px_rgba(0,0,0,0.52)]"
-                      />
-                    </>
-                  ) : null}
-                  <div className="flex gap-2">
                     <button
                       type="button"
-                      disabled={fieldBusy}
-                      className={`flex-1 ${ghostActionBtn}`}
-                      onClick={() => setEditingAlbum(false)}
+                      disabled={albumBusy}
+                      onClick={() => albumInputRef.current?.click()}
+                      className={`flex w-full items-center justify-center gap-2 px-3 ${primaryActionBtn} disabled:opacity-50`}
                     >
-                      Cancel
+                      <AddImageIcon className="h-4 w-4" aria-hidden />
+                      {albumBusy
+                        ? "Uploading…"
+                        : `Add photos or videos (up to ${MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR} each)`}
                     </button>
-                    <button
-                      type="button"
-                      disabled={fieldBusy}
-                      className={`flex-1 ${primaryActionBtn} disabled:opacity-50`}
-                      onClick={onSaveAlbumSettings}
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className={readableText}>{albumStatusText}</p>
-                  <p className={`text-xs opacity-80 ${readableText}`}>
-                    {albumMediaCount === 1 ? "1 photo or video" : `${albumMediaCount} photos and videos`}
-                    {" · "}
-                    {local.viewer_has_contributed ? "You've contributed" : "You haven't contributed yet"}
-                  </p>
+                  </>
+                ) : null}
 
-                  {albumCanContribute ? (
-                    <>
-                      <input
-                        ref={albumInputRef}
-                        type="file"
-                        accept="image/*,video/*"
-                        multiple
-                        onChange={(ev) => {
-                          void onAlbumFiles(ev);
-                        }}
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        disabled={albumBusy}
-                        onClick={() => albumInputRef.current?.click()}
-                        className={`flex w-full items-center justify-center gap-2 px-3 ${primaryActionBtn} disabled:opacity-50`}
-                      >
-                        <AddImageIcon className="h-4 w-4" aria-hidden />
-                        {albumBusy
-                          ? "Uploading…"
-                          : `Add photos or videos (up to ${MAX_SHARED_POST_MEDIA_PER_CONTRIBUTOR} each)`}
-                      </button>
-                    </>
-                  ) : null}
-
-                  {!albumMediaVisible ? (
-                    <p className={readableText}>Photos hidden until release.</p>
-                  ) : albumMedia.length === 0 ? (
-                    <p className={readableText}>No photos yet.</p>
-                  ) : (
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {albumMedia.map((item) => {
-                        const grant = albumGrants[item.id] ?? null;
-                        const posterGrant = item.poster_id ? (albumGrants[item.poster_id] ?? null) : null;
-                        return (
-                          <div
-                            key={item.id}
-                            className="aspect-square overflow-hidden rounded-lg border border-white/12 bg-bg/60"
-                          >
-                            {item.kind === "video" ? (
-                              grant || posterGrant ? (
-                                <CachedVideo
-                                  mediaId={item.id}
-                                  mediaAccessGrant={grant}
-                                  mediaStorageUserId={item.owner_user_id ?? null}
-                                  posterId={item.poster_id ?? null}
-                                  posterAccessGrant={posterGrant}
-                                  isActive
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : null
-                            ) : grant ? (
-                              <CachedImage
-                                imageId={item.id}
-                                imageAccessGrant={grant}
-                                imageStorageUserId={item.owner_user_id ?? null}
-                                alt="Event album"
+                {!albumMediaVisible ? (
+                  <p className={readableText}>Photos hidden until release.</p>
+                ) : albumMedia.length === 0 ? (
+                  <p className={readableText}>No photos yet.</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {albumMedia.map((item) => {
+                      const grant = albumGrants[item.id] ?? null;
+                      const posterGrant = item.poster_id
+                        ? (albumGrants[item.poster_id] ?? null)
+                        : null;
+                      return (
+                        <div
+                          key={item.id}
+                          className="aspect-square overflow-hidden rounded-lg border border-white/12 bg-bg/60"
+                        >
+                          {item.kind === "video" ? (
+                            grant || posterGrant ? (
+                              <CachedVideo
+                                mediaId={item.id}
+                                mediaAccessGrant={grant}
+                                mediaStorageUserId={item.owner_user_id ?? null}
+                                posterId={item.poster_id ?? null}
+                                posterAccessGrant={posterGrant}
+                                isActive
                                 className="h-full w-full object-cover"
                               />
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {canPublishAlbum && albumMediaVisible && albumMediaCount > 0 ? (
-                    local.published_post_id ? (
-                      <p className={`text-xs opacity-80 ${readableText}`}>
-                        Album published to the feed.
-                      </p>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={publishBusy}
-                        onClick={() => {
-                          void onPublishAlbumAsPost();
-                        }}
-                        className={`flex w-full items-center justify-center gap-2 px-3 ${primaryActionBtn} disabled:opacity-50`}
-                      >
-                        {publishBusy ? "Publishing…" : "Publish album as post"}
-                      </button>
-                    )
-                  ) : null}
-                </div>
-              )}
-            </div>
-
-          {canDelete ? (
-            <div className={`${glassCard} relative z-0 p-4`}>
-              {!deleteConfirm ? (
-                <button
-                  type="button"
-                  disabled={isDeleting}
-                  onClick={() => setDeleteConfirm(true)}
-                  className="w-full rounded-xl border border-white/15 bg-bg/50 px-3 py-2.5 text-xs font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.45)] backdrop-blur-xl transition hover:bg-bg/60 disabled:opacity-50 [text-shadow:0_2px_8px_rgba(0,0,0,0.85)]"
-                >
-                  Delete event
-                </button>
-              ) : (
-                <div className="space-y-3">
-                  <p className={readableText}>
-                    Delete this event for everyone? RSVPs and details will be removed. This can&apos;t be undone.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={isDeleting}
-                      onClick={() => setDeleteConfirm(false)}
-                      className={`flex-1 ${ghostActionBtn}`}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isDeleting}
-                      onClick={() => {
-                        void performDelete();
-                      }}
-                      className="flex-1 rounded-xl border border-danger/55 bg-danger/20 py-2 text-xs font-semibold text-danger shadow-[0_6px_22px_rgba(0,0,0,0.45)] backdrop-blur-xl transition hover:bg-danger/25 disabled:opacity-50 [text-shadow:0_1px_4px_rgba(0,0,0,0.75)]"
-                    >
-                      {isDeleting ? "Deleting…" : "Delete"}
-                    </button>
+                            ) : null
+                          ) : grant ? (
+                            <CachedImage
+                              imageId={item.id}
+                              imageAccessGrant={grant}
+                              imageStorageUserId={item.owner_user_id ?? null}
+                              alt="Event album"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-              )}
+                )}
+
+                {canPublishAlbum && albumMediaVisible && albumMediaCount > 0 ? (
+                  local.published_post_id ? (
+                    <p className={`text-xs opacity-80 ${readableText}`}>
+                      Album published to the feed.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={publishBusy}
+                      onClick={() => {
+                        void onPublishAlbumAsPost();
+                      }}
+                      className={`flex w-full items-center justify-center gap-2 px-3 ${primaryActionBtn} disabled:opacity-50`}
+                    >
+                      {publishBusy ? "Publishing…" : "Publish album as post"}
+                    </button>
+                  )
+                ) : null}
+              </div>
             </div>
-          ) : null}
-        </div>
+
+          </div>
         </div>
       </div>
+
+      <EventEditorModal
+        isPresented={isEditPresented}
+        isClosing={isEditClosing}
+        isActive={isEditActive}
+        onClose={closeEditModal}
+        mode="edit"
+        currentUserId={currentUserId}
+        event={local}
+        canInvite={canInvite}
+        existingMemberUserIds={existingMemberUserIds}
+        onUpdated={onEventSavedFromModal}
+        onDeleted={onEventDeletedFromModal}
+        onMembersAdded={onMembersAddedFromModal}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { uploadThreadImageToMainBucket } from "@/app/api/server_file_storage_utils";
+import { isDefaultEventImageKey, readDefaultEventImage } from "@/app/lib/defaultEventImages";
 import {
   finalizeThreadEventItem,
   findThreadAccessibleByUser,
@@ -21,15 +22,72 @@ export async function POST(request: Request) {
     const body = (await request.json()) as ThreadEventBackgroundSetRequest;
     const threadId = body.thread_id?.trim();
     const eventId = body.event_id?.trim();
-    const imageBase64Data = body.image_base64_data?.trim();
-    const imageMimeType = body.image_mime_type?.trim();
+    const defaultBackgroundKey = body.default_background_key?.trim() ?? "";
+    const imageBase64Data = body.image_base64_data?.trim() ?? "";
+    const imageMimeType = body.image_mime_type?.trim() ?? "";
 
-    if (!threadId || !eventId || !imageBase64Data || !imageMimeType) {
+    if (!threadId || !eventId) {
       return NextResponse.json(
         {
           error: {
             code: "invalid_request",
-            message: "thread_id, event_id, image_base64_data and image_mime_type are required.",
+            message: "thread_id and event_id are required.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+
+    let backgroundBase64: string;
+    let backgroundMime: string;
+    if (defaultBackgroundKey) {
+      if (!(await isDefaultEventImageKey(defaultBackgroundKey))) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "invalid_default_background",
+              message: "Unknown default background image.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      try {
+        const loaded = await readDefaultEventImage(defaultBackgroundKey);
+        backgroundBase64 = loaded.base64Data;
+        backgroundMime = loaded.mimeType;
+      } catch (error) {
+        console.error("thread_event_background_set_default_read_failed", error);
+        return NextResponse.json(
+          {
+            error: {
+              code: "default_background_unavailable",
+              message: "Could not load the selected default background.",
+            },
+          },
+          { status: 500 },
+        );
+      }
+    } else if (imageBase64Data && imageMimeType) {
+      if (!imageMimeType.startsWith("image/")) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "invalid_request",
+              message: "image_mime_type must be an image type.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      backgroundBase64 = imageBase64Data;
+      backgroundMime = imageMimeType;
+    } else {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_request",
+            message: "Choose a default background or upload an image.",
           },
         },
         { status: 400 },
@@ -80,8 +138,8 @@ export async function POST(request: Request) {
     await uploadThreadImageToMainBucket({
       threadId: thread.id,
       imageId,
-      base64Data: imageBase64Data,
-      mimeType: imageMimeType,
+      base64Data: backgroundBase64,
+      mimeType: backgroundMime,
     });
 
     const row = await prisma.thread_events.update({

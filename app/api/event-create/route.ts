@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { authCheck } from "@/app/api/auth_utils";
+import { uploadThreadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import { prisma } from "@/app/lib/prisma";
 import { loadAcceptedFriendIds } from "@/app/lib/acceptedFriendIds";
+import { isDefaultEventImageKey, readDefaultEventImage } from "@/app/lib/defaultEventImages";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import { validateSharedPostDates } from "@/app/lib/sharedPosts";
@@ -22,10 +25,69 @@ export async function POST(request: Request) {
     const description = body.description?.trim() || null;
     const startsAtRaw = body.starts_at?.trim();
     const endsAtRaw = body.ends_at?.trim();
+    const defaultBackgroundKey = body.default_background_key?.trim() ?? "";
+    const imageBase64Data = body.image_base64_data?.trim() ?? "";
+    const imageMimeType = body.image_mime_type?.trim() ?? "";
 
     if (!name) {
       return NextResponse.json(
         { error: { code: "invalid_request", message: "name is required." } },
+        { status: 400 },
+      );
+    }
+
+    let backgroundBase64: string;
+    let backgroundMime: string;
+    if (defaultBackgroundKey) {
+      if (!(await isDefaultEventImageKey(defaultBackgroundKey))) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "invalid_default_background",
+              message: "Unknown default background image.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      try {
+        const loaded = await readDefaultEventImage(defaultBackgroundKey);
+        backgroundBase64 = loaded.base64Data;
+        backgroundMime = loaded.mimeType;
+      } catch (error) {
+        console.error("event_create_default_background_read_failed", error);
+        return NextResponse.json(
+          {
+            error: {
+              code: "default_background_unavailable",
+              message: "Could not load the selected default background.",
+            },
+          },
+          { status: 500 },
+        );
+      }
+    } else if (imageBase64Data && imageMimeType) {
+      if (!imageMimeType.startsWith("image/")) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "invalid_request",
+              message: "image_mime_type must be an image type.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+      backgroundBase64 = imageBase64Data;
+      backgroundMime = imageMimeType;
+    } else {
+      return NextResponse.json(
+        {
+          error: {
+            code: "background_required",
+            message: "A background image is required. Choose a default or upload your own.",
+          },
+        },
         { status: 400 },
       );
     }
@@ -110,8 +172,10 @@ export async function POST(request: Request) {
     }
 
     const createdAt = new Date();
-    const created = await prisma.$transaction(async (tx) => {
-      const thread = await tx.threads.create({
+    const backgroundImageId = randomUUID();
+
+    const thread = await prisma.$transaction(async (tx) => {
+      const createdThread = await tx.threads.create({
         data: {
           owner: authResult.user_id,
           name,
@@ -126,7 +190,7 @@ export async function POST(request: Request) {
 
       await tx.user_thread_access.create({
         data: {
-          thread_id: thread.id,
+          thread_id: createdThread.id,
           user_id: authResult.user_id,
           created_at: createdAt,
         },
@@ -135,14 +199,41 @@ export async function POST(request: Request) {
       if (inviteeUserIds.length > 0) {
         await tx.user_thread_access.createMany({
           data: inviteeUserIds.map((userId) => ({
-            thread_id: thread.id,
+            thread_id: createdThread.id,
             user_id: userId,
             created_at: createdAt,
           })),
         });
       }
 
-      const event = await tx.thread_events.create({
+      return createdThread;
+    });
+
+    try {
+      await uploadThreadImageToMainBucket({
+        threadId: thread.id,
+        imageId: backgroundImageId,
+        base64Data: backgroundBase64,
+        mimeType: backgroundMime,
+      });
+    } catch (error) {
+      console.error("event_create_background_upload_failed", error);
+      await prisma.threads.delete({ where: { id: thread.id } }).catch((cleanupError) => {
+        console.error("event_create_thread_cleanup_failed", cleanupError);
+      });
+      return NextResponse.json(
+        {
+          error: {
+            code: "background_upload_failed",
+            message: "Failed to upload event background image.",
+          },
+        },
+        { status: 500 },
+      );
+    }
+
+    const event = await prisma.$transaction(async (tx) => {
+      const createdEvent = await tx.thread_events.create({
         data: {
           thread_id: thread.id,
           created_by: authResult.user_id,
@@ -156,42 +247,46 @@ export async function POST(request: Request) {
           blind_reveal: blindReveal,
           close_at: closeAt,
           release_at: releaseAt,
+          background_image_id: backgroundImageId,
         },
       });
 
       await tx.threads.update({
         where: { id: thread.id },
-        data: { created_by_event: event.id },
+        data: { created_by_event: createdEvent.id },
       });
 
-      return { thread, event };
+      return createdEvent;
     });
 
     if (inviteeUserIds.length > 0) {
       const eventTitle = sanitizeNotificationText(name) || "an event";
-      void sendPushToUsers({
-        recipientUserIds: inviteeUserIds,
-        payload: {
-          title: `Added to ${eventTitle}`,
-          body: `${authResult.username} added you to ${eventTitle}.`,
-          url: "/?tab=events",
-        },
-      }).catch((error) => {
+      try {
+        await sendPushToUsers({
+          recipientUserIds: inviteeUserIds,
+          payload: {
+            title: `Added to ${eventTitle}`,
+            body: `${authResult.username} added you to ${eventTitle}.`,
+            url: "/?tab=events",
+            thread_id: thread.id,
+          },
+        });
+      } catch (error) {
         console.error("event_create_push_dispatch_failed", error);
-      });
+      }
     }
 
     const payload: EventCreateResponse = {
       thread: {
-        id: created.thread.id,
-        name: created.thread.name,
-        created_at: created.thread.created_at.toISOString(),
-        owner_user_id: created.thread.owner,
+        id: thread.id,
+        name: thread.name,
+        created_at: thread.created_at.toISOString(),
+        owner_user_id: thread.owner,
         owner_username: authResult.username,
         image_id: null,
         image_url: null,
       },
-      event: await finalizeThreadEventItem(created.event, authResult.user_id),
+      event: await finalizeThreadEventItem(event, authResult.user_id),
     };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

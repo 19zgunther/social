@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
+import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import {
   findThreadAccessibleByUser,
@@ -8,7 +9,21 @@ import {
   finalizeThreadEventItem,
   parseUsersStatusMap,
 } from "@/app/lib/threadEvents";
-import type { ThreadEventRsvpRequest, ThreadEventRsvpResponse } from "@/app/types/interfaces";
+import type {
+  ThreadEventRsvpRequest,
+  ThreadEventRsvpResponse,
+  ThreadEventRsvpStatus,
+} from "@/app/types/interfaces";
+
+function rsvpStatusPhrase(status: ThreadEventRsvpStatus): string {
+  if (status === "going") {
+    return "can go";
+  }
+  if (status === "maybe") {
+    return "might go";
+  }
+  return "cannot go";
+}
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -46,7 +61,7 @@ export async function POST(request: Request) {
 
     const existing = await prisma.thread_events.findFirst({
       where: { id: eventId, thread_id: thread.id },
-      select: { id: true, users_status_map: true },
+      select: { id: true, users_status_map: true, created_by: true, name: true },
     });
 
     if (!existing) {
@@ -56,7 +71,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const nextMap = { ...parseUsersStatusMap(existing.users_status_map) };
+    const previousMap = parseUsersStatusMap(existing.users_status_map);
+    const previousStatus = previousMap[authResult.user_id];
+    const statusChanged = previousStatus !== status;
+
+    const nextMap = { ...previousMap };
     nextMap[authResult.user_id] = status;
 
     const row = await prisma.thread_events.update({
@@ -64,21 +83,23 @@ export async function POST(request: Request) {
       data: { users_status_map: nextMap, updated_at: new Date() },
     });
 
-    const ownerUserId = thread.owner;
-    if (ownerUserId !== authResult.user_id) {
-      const statusLabel =
-        status === "going" ? "Going" : status === "maybe" ? "Maybe" : "Not Going";
-      void sendPushToUsers({
-        recipientUserIds: [ownerUserId],
-        payload: {
-          title: `${authResult.username} RSVP'd`,
-          body: `${authResult.username} is ${statusLabel} for ${row.name}.`,
-          url: "/?tab=events",
-          thread_id: thread.id,
-        },
-      }).catch((error) => {
+    const ownerUserId = existing.created_by;
+    if (statusChanged && ownerUserId !== authResult.user_id) {
+      const eventTitle = sanitizeNotificationText(row.name) || "an event";
+      const phrase = rsvpStatusPhrase(status);
+      try {
+        await sendPushToUsers({
+          recipientUserIds: [ownerUserId],
+          payload: {
+            title: eventTitle,
+            body: `${authResult.username} ${phrase} to ${eventTitle}.`,
+            url: "/?tab=events",
+            thread_id: thread.id,
+          },
+        });
+      } catch (error) {
         console.error("thread_event_rsvp_push_dispatch_failed", error);
-      });
+      }
     }
 
     const event = await finalizeThreadEventItem(row, authResult.user_id);

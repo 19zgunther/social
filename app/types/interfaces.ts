@@ -563,6 +563,14 @@ export type EventCreateRequest = {
   release_at?: string;
   /** Accepted friends to add to the event thread. */
   invitee_user_ids?: string[];
+  /**
+   * Bundled default background key (e.g. `hike_1`).
+   * Required unless `image_base64_data` + `image_mime_type` are provided.
+   */
+  default_background_key?: string;
+  /** Custom background upload. Required with mime type unless `default_background_key` is set. */
+  image_base64_data?: string;
+  image_mime_type?: string;
 };
 export type EventCreateResponse = {
   thread: ThreadItem;
@@ -589,6 +597,8 @@ export type ThreadEventUpdateResponse = { event: ThreadEventItem };
 export type ThreadEventBackgroundSetRequest = {
   thread_id?: string;
   event_id?: string;
+  /** Bundled default background key (e.g. `hike_1`). */
+  default_background_key?: string;
   image_base64_data?: string;
   image_mime_type?: string;
 };

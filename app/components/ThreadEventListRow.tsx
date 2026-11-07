@@ -67,9 +67,7 @@ export default function ThreadEventListRow({
     <button
       type="button"
       onClick={onOpen}
-      className={`relative w-full min-h-[3rem] overflow-hidden rounded-xl border border-border/60 text-left shadow-sm shadow-black/20 touch-manipulation active:opacity-90 ${
-        metaLine ? "h-[18vh] max-h-[18vh]" : "h-[15vh] max-h-[15vh]"
-      }`}
+      className="relative aspect-[5/4] w-full min-h-[3rem] overflow-hidden rounded-xl border border-border/60 text-left shadow-sm shadow-black/20 touch-manipulation active:opacity-90"
     >
       {event.background_image_id &&
       (event.background_image_url || event.background_image_access_grant) ? (
