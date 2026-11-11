@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { authCheck } from "@/app/api/auth_utils";
+import { notifyDevelopers } from "@/app/lib/developerUserIds";
+import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { prisma } from "@/app/lib/prisma";
 import {
   getSignedMainBucketImageUrl,
@@ -14,6 +16,7 @@ type Body = {
 };
 
 const MAX_LEN = 8000;
+const FEEDBACK_PUSH_PREVIEW_LEN = 120;
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -87,6 +90,21 @@ export async function POST(request: Request) {
         console.error("feedback_create_image_sign_failed", authResult.user_id, error);
       }
     }
+
+    // Notify developers about new feedback.
+    const sanitizedText = sanitizeNotificationText(row.text);
+    const previewSource =
+      sanitizedText || (row.image_id ? "Submitted feedback with an image" : "Submitted feedback");
+    const previewText =
+      previewSource.length > FEEDBACK_PUSH_PREVIEW_LEN
+        ? `${previewSource.slice(0, FEEDBACK_PUSH_PREVIEW_LEN - 3)}...`
+        : previewSource;
+    notifyDevelopers({
+      title: `New feedback from ${authResult.username}`,
+      body: previewText,
+      url: "/?tab=feedback",
+      excludeUserId: authResult.user_id,
+    });
 
     return NextResponse.json(
       {

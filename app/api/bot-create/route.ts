@@ -7,6 +7,7 @@ import {
   MAX_BOTS_PER_USER,
   toBotDetail,
 } from "@/app/lib/bots/botHelpers";
+import { notifyDevelopers } from "@/app/lib/developerUserIds";
 import { prisma } from "@/app/lib/prisma";
 import { BotCreateRequest, BotCreateResponse } from "@/app/types/interfaces";
 
@@ -107,6 +108,14 @@ export async function POST(request: Request) {
       });
 
       return createdBot;
+    });
+
+    // Notify developers about new bot
+    notifyDevelopers({
+      title: "New bot created",
+      body: `${authResult.username} created bot @${username}.`,
+      url: "/?tab=profile",
+      excludeUserId: authResult.user_id,
     });
 
     const payload: BotCreateResponse = {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
 import { hashPassword, mintUserToken } from "@/app/api/auth_utils";
+import { notifyDevelopers } from "@/app/lib/developerUserIds";
+import { prisma } from "@/app/lib/prisma";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
 import { SignupRequest, SignupResponse } from "@/app/types/interfaces";
 
@@ -74,6 +75,14 @@ export async function POST(request: Request) {
         console.error("signup_profile_image_sign_failed", createdUser.id, error);
       }
     }
+
+    // Notify developers about new account creation.
+    notifyDevelopers({
+      title: "New account created",
+      body: `${createdUser.username} (${createdUser.email}) signed up.`,
+      url: "/?tab=profile",
+      excludeUserId: createdUser.id,
+    });
 
     const payload: SignupResponse = {
       token,
