@@ -525,6 +525,11 @@ export type ThreadEventItem = {
 export type ThreadEventsListRequest = { thread_id?: string };
 export type ThreadEventsListResponse = { events: ThreadEventItem[] };
 
+export type UserUpcomingEventsRequest = {
+  /** When true, return ended events (newest first) instead of upcoming. */
+  past?: boolean;
+};
+
 export type UserUpcomingEventsResponse = {
   items: UserUpcomingEventListItem[];
 };

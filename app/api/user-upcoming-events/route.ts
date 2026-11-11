@@ -3,7 +3,11 @@ import { authCheck } from "@/app/api/auth_utils";
 import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import { finalizeThreadEventItem, type ThreadEventRow } from "@/app/lib/threadEvents";
-import type { ThreadItem, UserUpcomingEventsResponse } from "@/app/types/interfaces";
+import type {
+  ThreadItem,
+  UserUpcomingEventsRequest,
+  UserUpcomingEventsResponse,
+} from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -15,7 +19,8 @@ export async function POST(request: Request) {
   const userId = authResult.user_id;
 
   try {
-    void (await request.json().catch(() => ({})));
+    const body = (await request.json().catch(() => ({}))) as UserUpcomingEventsRequest;
+    const past = body.past === true;
 
     const now = new Date();
     const accessibleThreads = await prisma.threads.findMany({
@@ -41,10 +46,10 @@ export async function POST(request: Request) {
 
     const rows = await prisma.thread_events.findMany({
       where: {
-        ends_at: { gt: now },
+        ends_at: past ? { lte: now } : { gt: now },
         thread_id: { in: threadIds },
       },
-      orderBy: { starts_at: "asc" },
+      orderBy: { starts_at: past ? "desc" : "asc" },
     });
 
     const items: UserUpcomingEventsResponse["items"] = [];
@@ -93,7 +98,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("user_upcoming_events_failed", error);
     return NextResponse.json(
-      { error: { code: "user_upcoming_events_failed", message: "Failed to load upcoming events." } },
+      { error: { code: "user_upcoming_events_failed", message: "Failed to load events." } },
       { status: 500 },
     );
   }

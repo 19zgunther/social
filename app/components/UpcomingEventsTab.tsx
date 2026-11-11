@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import EventEditorModal from "@/app/components/EventEditorModal";
-import { NewEventIcon, RefreshIcon, SearchIcon } from "@/app/components/Icons";
+import { ChevronDownIcon, ChevronRightIcon, NewEventIcon, RefreshIcon, SearchIcon } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
 import ThreadEventListRow from "@/app/components/ThreadEventListRow";
 import { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
@@ -104,20 +104,24 @@ type UpcomingTabCacheEntry = {
 
 /** One global list per session (all groups). */
 let upcomingEventsTabCache: UpcomingTabCacheEntry | null = null;
+let pastEventsTabCache: UpcomingTabCacheEntry | null = null;
 
-function readFreshUpcomingTabCache(): UserUpcomingEventListItem[] | null {
-  if (!upcomingEventsTabCache) {
+function readFreshCache(cache: UpcomingTabCacheEntry | null): UserUpcomingEventListItem[] | null {
+  if (!cache) {
     return null;
   }
-  if (Date.now() - upcomingEventsTabCache.fetchedAt >= REFETCH_TTL_MS) {
-    upcomingEventsTabCache = null;
+  if (Date.now() - cache.fetchedAt >= REFETCH_TTL_MS) {
     return null;
   }
-  return upcomingEventsTabCache.items;
+  return cache.items;
 }
 
 function writeUpcomingTabCache(items: UserUpcomingEventListItem[]) {
   upcomingEventsTabCache = { fetchedAt: Date.now(), items };
+}
+
+function writePastTabCache(items: UserUpcomingEventListItem[]) {
+  pastEventsTabCache = { fetchedAt: Date.now(), items };
 }
 
 export default function UpcomingEventsTab({
@@ -132,7 +136,13 @@ export default function UpcomingEventsTab({
   const [refreshBusy, setRefreshBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState("");
+  const [pastOpen, setPastOpen] = useState(false);
+  const [pastItems, setPastItems] = useState<UserUpcomingEventListItem[]>([]);
+  const [pastLoading, setPastLoading] = useState(false);
+  const [pastError, setPastError] = useState("");
+  const [pastLoaded, setPastLoaded] = useState(false);
   const itemsRef = useRef<UserUpcomingEventListItem[]>([]);
+  const pastOpenRef = useRef(false);
   const {
     isPresented: isCreatePresented,
     isClosing: isCreateClosing,
@@ -145,9 +155,13 @@ export default function UpcomingEventsTab({
     itemsRef.current = items;
   }, [items]);
 
+  useEffect(() => {
+    pastOpenRef.current = pastOpen;
+  }, [pastOpen]);
+
   const fetchUpcoming = useCallback(async (force: boolean) => {
     if (!force) {
-      const cached = readFreshUpcomingTabCache();
+      const cached = readFreshCache(upcomingEventsTabCache);
       if (cached) {
         setItems(cached);
         setError("");
@@ -180,6 +194,41 @@ export default function UpcomingEventsTab({
     }
   }, []);
 
+  const fetchPast = useCallback(async (force: boolean) => {
+    if (!force) {
+      const cached = readFreshCache(pastEventsTabCache);
+      if (cached) {
+        setPastItems(cached);
+        setPastError("");
+        setPastLoaded(true);
+        setPastLoading(false);
+        return;
+      }
+    }
+
+    setPastLoading(true);
+    setPastError("");
+    try {
+      const response = await postWithAuth("/api/user-upcoming-events", { past: true });
+      if (!response.ok) {
+        setPastError(await readErrorMessage(response));
+        setPastItems([]);
+        setPastLoaded(true);
+        return;
+      }
+      const payload = (await response.json()) as UserUpcomingEventsResponse;
+      setPastItems(payload.items);
+      writePastTabCache(payload.items);
+      setPastLoaded(true);
+    } catch (e) {
+      setPastError(e instanceof Error ? e.message : "Failed to load old events.");
+      setPastItems([]);
+      setPastLoaded(true);
+    } finally {
+      setPastLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void fetchUpcoming(false);
   }, [fetchUpcoming]);
@@ -193,15 +242,25 @@ export default function UpcomingEventsTab({
     if (wasInactiveRef.current) {
       wasInactiveRef.current = false;
       void fetchUpcoming(false);
+      if (pastOpenRef.current) {
+        void fetchPast(false);
+      }
     }
-  }, [isActive, fetchUpcoming]);
+  }, [isActive, fetchUpcoming, fetchPast]);
 
   useEffect(() => {
     if (refreshNonce <= 0) {
       return;
     }
     void fetchUpcoming(true);
-  }, [refreshNonce, fetchUpcoming]);
+    if (pastOpenRef.current) {
+      void fetchPast(true);
+    } else {
+      pastEventsTabCache = null;
+      setPastLoaded(false);
+      setPastItems([]);
+    }
+  }, [refreshNonce, fetchUpcoming, fetchPast]);
 
   const onSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
@@ -209,6 +268,21 @@ export default function UpcomingEventsTab({
 
   const onRefreshClick = () => {
     void fetchUpcoming(true);
+    if (pastOpen) {
+      void fetchPast(true);
+    } else {
+      pastEventsTabCache = null;
+      setPastLoaded(false);
+      setPastItems([]);
+    }
+  };
+
+  const onTogglePast = () => {
+    const nextOpen = !pastOpen;
+    setPastOpen(nextOpen);
+    if (nextOpen && !pastLoaded) {
+      void fetchPast(false);
+    }
   };
 
   const onEventCreatedFromModal = (createdItem: UserUpcomingEventListItem) => {
@@ -219,6 +293,7 @@ export default function UpcomingEventsTab({
   };
 
   const filteredItems = items.filter((item) => itemMatchesSearch(item, searchQuery));
+  const filteredPastItems = pastItems.filter((item) => itemMatchesSearch(item, searchQuery));
   const hasSearchQuery = searchQuery.trim().length > 0;
   const showEmptyCreateBlock = !isLoading && !error && items.length === 0;
   const showNoMatches =
@@ -290,7 +365,7 @@ export default function UpcomingEventsTab({
         ) : null}
 
         {!showEmptyCreateBlock ? (
-          <div className="flex flex-col gap-3 px-3 pb-4 pt-1">
+          <div className="flex flex-col gap-3 px-3 pb-2 pt-1">
             {filteredItems.map(({ thread, event }) => {
               const when = formatEventRangeShort(event.starts_at, event.ends_at);
               const metaLine = when ? `${thread.name} · ${when}` : thread.name;
@@ -304,6 +379,53 @@ export default function UpcomingEventsTab({
                 />
               );
             })}
+          </div>
+        ) : null}
+
+        {!isLoading ? (
+          <div className="px-3 pb-4 pt-2">
+            <button
+              type="button"
+              onClick={onTogglePast}
+              className="flex w-full items-center gap-1.5 rounded-lg px-1 py-2 text-left text-sm font-medium text-muted transition hover:text-foreground"
+              aria-expanded={pastOpen}
+            >
+              {pastOpen ? (
+                <ChevronDownIcon className="h-4 w-4 shrink-0" aria-hidden />
+              ) : (
+                <ChevronRightIcon className="h-4 w-4 shrink-0" aria-hidden />
+              )}
+              See old events
+            </button>
+
+            {pastOpen ? (
+              <div className="mt-1 space-y-3">
+                {pastLoading ? <p className="px-1 py-2 text-sm text-muted">Loading old events…</p> : null}
+                {pastError && !pastLoading ? (
+                  <p className="px-1 py-2 text-sm text-muted">{pastError}</p>
+                ) : null}
+                {!pastLoading && !pastError && pastLoaded && filteredPastItems.length === 0 ? (
+                  <p className="px-1 py-2 text-sm text-muted">
+                    {hasSearchQuery ? "No matching old events." : "No old events yet."}
+                  </p>
+                ) : null}
+                {!pastLoading && !pastError
+                  ? filteredPastItems.map(({ thread, event }) => {
+                      const when = formatEventRangeShort(event.starts_at, event.ends_at);
+                      const metaLine = when ? `${thread.name} · ${when}` : thread.name;
+                      return (
+                        <ThreadEventListRow
+                          key={`past-${event.id}`}
+                          event={event}
+                          currentUserId={currentUserId}
+                          metaLine={metaLine}
+                          onOpen={() => onOpenEvent({ thread, event })}
+                        />
+                      );
+                    })
+                  : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import EventDateTimeSelect, {
   defaultCreateEventSchedule,
   EventScheduleFields,
+  eventLocalDatetimeToDate,
   isoToEventLocalDatetime,
   scheduleModeForRange,
   type EventScheduleMode,
@@ -99,8 +100,8 @@ export default function EventEditorModal({
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
-  const [startsDraft, setStartsDraft] = useState("");
-  const [endsDraft, setEndsDraft] = useState("");
+  const [startsDraft, setStartsDraft] = useState(() => defaultCreateEventSchedule().startsAt);
+  const [endsDraft, setEndsDraft] = useState(() => defaultCreateEventSchedule().endsAt);
   const [scheduleMode, setScheduleMode] = useState<EventScheduleMode>("single_day");
   const [blindReveal, setBlindReveal] = useState(false);
   const [closeDraft, setCloseDraft] = useState("");
@@ -176,6 +177,13 @@ export default function EventEditorModal({
     setInviteSearchQuery("");
     setDeleteConfirm(false);
     setError("");
+
+    return () => {
+      // Strict Mode re-runs effects; clear so create defaults re-apply.
+      if (initKeyRef.current === initKey) {
+        initKeyRef.current = null;
+      }
+    };
   }, [isPresented, mode, event]);
 
   useEffect(() => {
@@ -400,9 +408,9 @@ export default function EventEditorModal({
           setError("Pick a day and time for the event.");
           return;
         }
-        const startsAt = new Date(startsDraft);
-        const endsAt = new Date(endsDraft);
-        if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+        const startsAt = eventLocalDatetimeToDate(startsDraft);
+        const endsAt = eventLocalDatetimeToDate(endsDraft);
+        if (!startsAt || !endsAt) {
           setError("Invalid start or end time.");
           return;
         }
@@ -417,8 +425,12 @@ export default function EventEditorModal({
             setError("Pick a close and release time for the surprise album.");
             return;
           }
-          const closeAt = new Date(closeDraft);
-          const releaseAt = new Date(releaseDraft);
+          const closeAt = eventLocalDatetimeToDate(closeDraft);
+          const releaseAt = eventLocalDatetimeToDate(releaseDraft);
+          if (!closeAt || !releaseAt) {
+            setError("Invalid close or release time.");
+            return;
+          }
           if (releaseAt <= closeAt) {
             setError("Release must be after close.");
             return;
@@ -450,8 +462,12 @@ export default function EventEditorModal({
         setError("Set both a start and an end.");
         return;
       }
-      const startsAt = new Date(startsDraft);
-      const endsAt = new Date(endsDraft);
+      const startsAt = eventLocalDatetimeToDate(startsDraft);
+      const endsAt = eventLocalDatetimeToDate(endsDraft);
+      if (!startsAt || !endsAt) {
+        setError("Invalid start or end time.");
+        return;
+      }
       if (endsAt <= startsAt) {
         setError("End must be after start.");
         return;
@@ -472,8 +488,12 @@ export default function EventEditorModal({
           setError("Pick a close and release time for the surprise album.");
           return;
         }
-        const closeAt = new Date(closeDraft);
-        const releaseAt = new Date(releaseDraft);
+        const closeAt = eventLocalDatetimeToDate(closeDraft);
+        const releaseAt = eventLocalDatetimeToDate(releaseDraft);
+        if (!closeAt || !releaseAt) {
+          setError("Invalid close or release time.");
+          return;
+        }
         if (releaseAt <= closeAt) {
           setError("Release must be after close.");
           return;

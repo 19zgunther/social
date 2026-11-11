@@ -92,27 +92,30 @@ export async function POST(request: Request) {
       );
     }
 
-    let startsAt: Date;
-    let endsAt: Date;
-    if (startsAtRaw && endsAtRaw) {
-      startsAt = new Date(startsAtRaw);
-      endsAt = new Date(endsAtRaw);
-      if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
-        return NextResponse.json(
-          { error: { code: "invalid_request", message: "Invalid start or end time." } },
-          { status: 400 },
-        );
-      }
-      if (endsAt <= startsAt) {
-        return NextResponse.json(
-          { error: { code: "invalid_request", message: "ends_at must be after starts_at." } },
-          { status: 400 },
-        );
-      }
-    } else {
-      const now = new Date();
-      startsAt = now;
-      endsAt = new Date(now.getTime() + 60 * 60 * 1000);
+    if (!startsAtRaw || !endsAtRaw) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "invalid_request",
+            message: "starts_at and ends_at are required.",
+          },
+        },
+        { status: 400 },
+      );
+    }
+    const startsAt = new Date(startsAtRaw);
+    const endsAt = new Date(endsAtRaw);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+      return NextResponse.json(
+        { error: { code: "invalid_request", message: "Invalid start or end time." } },
+        { status: 400 },
+      );
+    }
+    if (endsAt <= startsAt) {
+      return NextResponse.json(
+        { error: { code: "invalid_request", message: "ends_at must be after starts_at." } },
+        { status: 400 },
+      );
     }
 
     const blindReveal = body.blind_reveal === true;

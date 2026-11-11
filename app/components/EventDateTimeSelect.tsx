@@ -20,6 +20,29 @@ export function isoToEventLocalDatetime(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/**
+ * Parse `YYYY-MM-DDTHH:mm` as a *local* Date.
+ * Avoid `new Date(value)` — some engines treat bare ISO datetimes as UTC.
+ */
+export function eventLocalDatetimeToDate(value: string): Date | null {
+  const match = value
+    .trim()
+    .match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) {
+    return null;
+  }
+  const date = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+    Number(match[6] ?? 0),
+    0,
+  );
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -344,9 +367,13 @@ export function EventScheduleFields({
     if (mode !== "single_day") {
       return;
     }
-    const date = dayValue || todayLocalDateString();
-    const nextStartsAt = joinLocalDatetime(date, clampedFromTime);
-    const nextEndsAt = joinLocalDatetime(date, toTime);
+    // Don't invent "today" when empty — that raced create defaults and could
+    // save a same-day 7–9pm range that is already over after evening hours.
+    if (!dayValue) {
+      return;
+    }
+    const nextStartsAt = joinLocalDatetime(dayValue, clampedFromTime);
+    const nextEndsAt = joinLocalDatetime(dayValue, toTime);
     if (nextStartsAt !== startsAt || nextEndsAt !== endsAt) {
       onStartsAtChange(nextStartsAt);
       onEndsAtChange(nextEndsAt);
