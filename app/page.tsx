@@ -323,6 +323,18 @@ export default function Home() {
   const { onTouchStart, onTouchEnd, onTouchMove, onTouchCancel, swipingBackPercent, swipingForwardPercent } =
     useSwipeBack({ onBack: onBackRef.current, onForward: onForwardRef.current });
 
+  const onThreadBack = useCallback(() => {
+    if (threadReturnTab === "thread_event" && threadEventFocus) {
+      setActiveTab("thread_event");
+      return;
+    }
+    if (threadReturnTab === "other_user_profile") {
+      setActiveTab("other_user_profile");
+      return;
+    }
+    setSelectedThread(null);
+    setActiveTab("groups");
+  }, [threadEventFocus, threadReturnTab]);
 
   // Early return for loading state if session is still being checked.
   if (isCheckingSession) {
@@ -382,19 +394,6 @@ export default function Home() {
     setThreadEventReturnTab("events");
     setActiveTab("thread_event");
   };
-
-  const onThreadBack = useCallback(() => {
-    if (threadReturnTab === "thread_event" && threadEventFocus) {
-      setActiveTab("thread_event");
-      return;
-    }
-    if (threadReturnTab === "other_user_profile") {
-      setActiveTab("other_user_profile");
-      return;
-    }
-    setSelectedThread(null);
-    setActiveTab("groups");
-  }, [threadEventFocus, threadReturnTab]);
 
   const feedStyle = TAB_TO_STYLE["feed"];
   const groupsStyle = TAB_TO_STYLE["groups"];
