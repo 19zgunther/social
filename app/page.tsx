@@ -383,6 +383,19 @@ export default function Home() {
     setActiveTab("thread_event");
   };
 
+  const onThreadBack = useCallback(() => {
+    if (threadReturnTab === "thread_event" && threadEventFocus) {
+      setActiveTab("thread_event");
+      return;
+    }
+    if (threadReturnTab === "other_user_profile") {
+      setActiveTab("other_user_profile");
+      return;
+    }
+    setSelectedThread(null);
+    setActiveTab("groups");
+  }, [threadEventFocus, threadReturnTab]);
+
   const feedStyle = TAB_TO_STYLE["feed"];
   const groupsStyle = TAB_TO_STYLE["groups"];
   const eventsStyle = TAB_TO_STYLE["events"];
@@ -477,22 +490,12 @@ export default function Home() {
 
           {selectedThread && <div className="absolute w-full h-full" style={threadStyle}>
             <Thread
+              key={selectedThread.id}
               selectedThread={selectedThread}
               setSelectedThread={setSelectedThread}
               currentUserId={authUser.user_id}
               currentUsername={authUser.username}
-              onBack={() => {
-                if (threadReturnTab === "thread_event" && threadEventFocus) {
-                  setActiveTab("thread_event");
-                  return;
-                }
-                if (threadReturnTab === "other_user_profile") {
-                  setActiveTab("other_user_profile");
-                  return;
-                }
-                setSelectedThread(null);
-                setActiveTab("groups");
-              }}
+              onBack={onThreadBack}
               setThreadSettingsOpen={() => { setActiveTab("thread_settings") }}
             />
           </div>}
