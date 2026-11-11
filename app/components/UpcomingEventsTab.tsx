@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import CreateEventButton from "@/app/components/CreateEventButton";
 import EventEditorModal from "@/app/components/EventEditorModal";
 import { ChevronDownIcon, ChevronRightIcon, NewEventIcon, RefreshIcon, SearchIcon } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
@@ -347,16 +348,7 @@ export default function UpcomingEventsTab({
 
         {showEmptyCreateBlock ? (
           <div className="px-3 pb-4 pt-1">
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="create-post-rgb-border flex min-h-[40vw] w-full flex-col items-center justify-center gap-2 rounded-2xl px-4 py-10 font-semibold shadow-sm"
-            >
-              <span className="create-post-rgb-text text-3xl leading-none" aria-hidden>
-                +
-              </span>
-              <span className="create-post-rgb-text text-base">Create a new event</span>
-            </button>
+            <CreateEventButton onClick={openCreateModal} />
           </div>
         ) : null}
 

@@ -1554,7 +1554,7 @@ export default function Thread({
         </div>
       ) : null}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b border-border bg-surface px-3 py-3">
+      <div className="flex items-center justify-between border-b border-border bg-surface px-3 pb-3 pt-[calc(2rem+0.75rem)]">
         <BackButton onBack={onBack} />
         <div
           className="min-w-0 text-center flex items-center gap-2"

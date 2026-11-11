@@ -588,7 +588,7 @@ export default function ThreadEventPage({
       </div>
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-        <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-white/14 bg-surface/70 px-3 py-3 shadow-[0_8px_36px_rgba(0,0,0,0.48)] backdrop-blur-[28px] backdrop-saturate-150">
+        <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-white/14 bg-surface/70 px-3 pb-3 pt-[calc(2rem+0.75rem)] shadow-[0_8px_36px_rgba(0,0,0,0.48)] backdrop-blur-[28px] backdrop-saturate-150">
           <div className="flex min-w-0 items-center gap-1 justify-self-start">
             <BackButton onBack={onBack} />
           </div>

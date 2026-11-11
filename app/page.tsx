@@ -419,7 +419,12 @@ export default function Home() {
   );
 
   return (
-    <main style={APP_VIEWPORT_STYLE} className="flex w-screen justify-center p-0 pt-[2rem]">
+    <main
+      style={APP_VIEWPORT_STYLE}
+      className={`flex w-screen justify-center p-0 ${
+        activeTab === "thread" || activeTab === "thread_event" ? "pt-0" : "pt-[2rem]"
+      }`}
+    >
       <UserSessionSyncProvider currentUserId={authUser.user_id}>
       <section
         style={MOBILE_FRAME_STYLE}

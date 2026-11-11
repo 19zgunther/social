@@ -9,7 +9,7 @@ import EventDateTimeSelect, {
   scheduleModeForRange,
   type EventScheduleMode,
 } from "@/app/components/EventDateTimeSelect";
-import { AddImageIcon, CloseIcon } from "@/app/components/Icons";
+import { AddImageIcon, CloseIcon, DeleteIcon } from "@/app/components/Icons";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import UserSearch, { type UserSearchOption } from "@/app/components/UserSearch";
 import AnimatedModal from "@/app/components/utils/AnimatedModal";
@@ -582,15 +582,39 @@ export default function EventEditorModal({
       <div className="relative flex h-full min-h-0 w-full flex-col bg-bg">
         <header className="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-3">
           <h2 className="text-base font-semibold text-foreground">{title}</h2>
-          <IconButton
-            type="button"
-            variant="ghost"
-            onClick={onClose}
-            disabled={busy}
-            aria-label="Close"
-          >
-            <CloseIcon className="h-5 w-5" />
-          </IconButton>
+          <div className="flex items-center gap-1">
+            {mode === "edit" ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  if (deleteConfirm) {
+                    void onDelete();
+                    return;
+                  }
+                  setDeleteConfirm(true);
+                }}
+                aria-label={deleteConfirm ? "Confirm delete event" : "Delete event"}
+                className={`flex items-center gap-1.5 rounded-full px-2 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+                  deleteConfirm
+                    ? "bg-danger/15 text-danger"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                <DeleteIcon className="h-5 w-5" />
+                {deleteConfirm ? (isDeleting ? "Deleting…" : "Confirm Delete") : null}
+              </button>
+            ) : null}
+            <IconButton
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              disabled={busy}
+              aria-label="Close"
+            >
+              <CloseIcon className="h-5 w-5" />
+            </IconButton>
+          </div>
         </header>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 pb-3">
@@ -807,7 +831,7 @@ export default function EventEditorModal({
                   ))}
                 </div>
               ) : null}
-              <div className="h-56 min-h-0">
+              <div className="min-h-[50vh] h-[50vh]">
                 <UserSearch
                   variant="panel"
                   value={inviteSearchQuery}
@@ -819,48 +843,6 @@ export default function EventEditorModal({
                   noResultsText="No matching users."
                 />
               </div>
-            </div>
-          ) : null}
-
-          {mode === "edit" ? (
-            <div className="space-y-2 border-t border-border pt-3">
-              {!deleteConfirm ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => setDeleteConfirm(true)}
-                  className="w-full rounded-xl border border-danger/40 bg-danger/10 px-3 py-2.5 text-xs font-semibold text-danger transition hover:bg-danger/15 disabled:opacity-50"
-                >
-                  Delete event
-                </button>
-              ) : (
-                <div className="space-y-3 rounded-xl border border-danger/35 bg-danger/10 p-3">
-                  <p className="text-xs text-foreground">
-                    Delete this event for everyone? RSVPs and details will be removed. This
-                    can&apos;t be undone.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setDeleteConfirm(false)}
-                      className="flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-xs font-semibold text-foreground transition hover:border-muted disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        void onDelete();
-                      }}
-                      className="flex-1 rounded-xl border border-danger/55 bg-danger/20 px-3 py-2 text-xs font-semibold text-danger transition hover:bg-danger/25 disabled:opacity-50"
-                    >
-                      {isDeleting ? "Deleting…" : "Delete"}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           ) : null}
 
