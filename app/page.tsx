@@ -34,6 +34,7 @@ import ThreadSettings from "./components/ThreadSettings";
 import ThreadEventPage from "./components/ThreadEventPage";
 import UpcomingEventsTab from "./components/UpcomingEventsTab";
 import useSwipeBack from "./components/utils/useSwipeBack";
+import { useDevActiveTabPersistence } from "./components/utils/useDevActiveTabPersistence";
 import AnimatedModal, { useAnimatedModal } from "./components/utils/AnimatedModal";
 import CreatePostTab from "./components/CreatePostTab";
 import Feedback from "./components/Feedback";
@@ -62,6 +63,7 @@ export default function Home() {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("feed");
+  useDevActiveTabPersistence(activeTab, setActiveTab);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [pendingDeepLinkThreadId, setPendingDeepLinkThreadId] = useState<string | null>(null);
   const [groupsUnreadCount, setGroupsUnreadCount] = useState(0);
