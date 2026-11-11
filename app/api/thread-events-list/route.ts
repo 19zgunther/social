@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-import { finalizeThreadEventItem, findThreadAccessibleByUser } from "@/app/lib/threadEvents";
+import {
+  finalizeThreadEventItem,
+  findThreadAccessibleByUser,
+  loadCohostUserIdsByEventId,
+} from "@/app/lib/threadEvents";
 import type { ThreadEventsListRequest, ThreadEventsListResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -39,8 +43,11 @@ export async function POST(request: Request) {
       orderBy: { starts_at: "asc" },
     });
 
+    const cohostsByEventId = await loadCohostUserIdsByEventId(rows.map((row) => row.id));
     const events = await Promise.all(
-      rows.map((row) => finalizeThreadEventItem(row, authResult.user_id)),
+      rows.map((row) =>
+        finalizeThreadEventItem(row, authResult.user_id, cohostsByEventId.get(row.id) ?? []),
+      ),
     );
     const payload: ThreadEventsListResponse = { events };
     return NextResponse.json(payload, { status: 200 });

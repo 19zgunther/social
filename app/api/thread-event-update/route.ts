@@ -6,6 +6,7 @@ import {
   finalizeThreadEventItem,
   findThreadAccessibleByUser,
   userCanAdminThreadEvent,
+  userIsEventCohost,
 } from "@/app/lib/threadEvents";
 import type { ThreadEventUpdateRequest, ThreadEventUpdateResponse } from "@/app/types/interfaces";
 
@@ -91,18 +92,20 @@ export async function POST(request: Request) {
       );
     }
 
+    const isCohost = await userIsEventCohost(existing.id, authResult.user_id);
     if (
       !userCanAdminThreadEvent({
         userId: authResult.user_id,
         threadOwnerId: thread.owner,
         eventCreatedBy: existing.created_by,
+        isCohost,
       })
     ) {
       return NextResponse.json(
         {
           error: {
             code: "forbidden",
-            message: "Only the event creator or thread owner can edit this event.",
+            message: "Only the event owner or a co-host can edit this event.",
           },
         },
         { status: 403 },

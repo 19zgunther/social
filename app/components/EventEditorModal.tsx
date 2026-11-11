@@ -12,9 +12,10 @@ import EventDateTimeSelect, {
 import { AddImageIcon, CloseIcon, DeleteIcon } from "@/app/components/Icons";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import UserSearch, { type UserSearchOption } from "@/app/components/UserSearch";
-import AnimatedModal from "@/app/components/utils/AnimatedModal";
+import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
+import DestructiveConfirmAnimatedModal from "@/app/components/utils/DestructiveConfirmAnimatedModal";
 import { Button, IconButton } from "@/app/ui-components";
 import type {
   ApiError,
@@ -23,10 +24,13 @@ import type {
   FriendSearchResponse,
   ThreadEventBackgroundSetRequest,
   ThreadEventBackgroundSetResponse,
+  ThreadEventCohostAddResponse,
+  ThreadEventCohostRemoveResponse,
   ThreadEventDeleteResponse,
   ThreadEventItem,
   ThreadEventUpdateRequest,
   ThreadEventUpdateResponse,
+  ThreadMember,
   UserUpcomingEventListItem,
 } from "@/app/types/interfaces";
 
@@ -73,8 +77,12 @@ type EventEditorModalProps = {
   currentUserId: string;
   /** Required when mode is "edit". */
   event?: ThreadEventItem;
-  /** Owner-only invite UI in edit mode. */
+  /** Admin invite UI in edit mode (owner / thread owner / co-host). */
   canInvite?: boolean;
+  /** Delete is owner / thread owner only — not co-hosts. */
+  canDelete?: boolean;
+  /** Thread members (edit mode) for co-host labels and picker. */
+  members?: ThreadMember[];
   existingMemberUserIds?: string[];
   onCreated?: (item: UserUpcomingEventListItem) => void;
   onUpdated?: (event: ThreadEventItem) => void;
@@ -91,6 +99,8 @@ export default function EventEditorModal({
   currentUserId,
   event,
   canInvite = false,
+  canDelete = false,
+  members = [],
   existingMemberUserIds = [],
   onCreated,
   onUpdated,
@@ -108,6 +118,18 @@ export default function EventEditorModal({
   const [releaseDraft, setReleaseDraft] = useState("");
   const [selectedInvitees, setSelectedInvitees] = useState<UserSearchOption[]>([]);
   const [inviteSearchQuery, setInviteSearchQuery] = useState("");
+  const [cohostSearchQuery, setCohostSearchQuery] = useState("");
+  const [cohostBusyUserId, setCohostBusyUserId] = useState<string | null>(null);
+  const [pendingCohostRemoval, setPendingCohostRemoval] = useState<{
+    userId: string;
+    username: string;
+  } | null>(null);
+  const {
+    isPresented: isCohostConfirmPresented,
+    isClosing: isCohostConfirmClosing,
+    open: openCohostConfirm,
+    close: closeCohostConfirm,
+  } = useAnimatedModal();
   const [background, setBackground] = useState<BackgroundSelection | null>(null);
   const [defaultBackgrounds, setDefaultBackgrounds] = useState<DefaultBackgroundOption[]>([]);
   const [defaultBackgroundsLoading, setDefaultBackgroundsLoading] = useState(false);
@@ -125,7 +147,16 @@ export default function EventEditorModal({
   );
 
   const showInviteSection = mode === "create" || canInvite;
-  const busy = isSaving || isDeleting;
+  const showCohostSection = mode === "edit" && canInvite && Boolean(event);
+  const cohostUserIds = event?.cohost_user_ids ?? [];
+  const busy = isSaving || isDeleting || cohostBusyUserId !== null;
+  const memberById = useMemo(() => {
+    const map = new Map<string, ThreadMember>();
+    for (const member of members) {
+      map.set(member.user_id, member);
+    }
+    return map;
+  }, [members]);
 
   useEffect(() => {
     if (!isPresented) {
@@ -175,6 +206,9 @@ export default function EventEditorModal({
     }
     setSelectedInvitees([]);
     setInviteSearchQuery("");
+    setCohostSearchQuery("");
+    setCohostBusyUserId(null);
+    setPendingCohostRemoval(null);
     setDeleteConfirm(false);
     setError("");
 
@@ -302,6 +336,116 @@ export default function EventEditorModal({
 
   const onRemoveInvitee = (userId: string) => {
     setSelectedInvitees((previous) => previous.filter((member) => member.id !== userId));
+  };
+
+  const searchCohostCandidates = useCallback(
+    async (query: string): Promise<UserSearchOption[]> => {
+      if (!event) {
+        return [];
+      }
+      const blocked = new Set<string>([event.created_by, ...cohostUserIds, currentUserId]);
+      try {
+        const response = await postWithAuth("/api/friend-search", {
+          query: query.trim() || undefined,
+        });
+        if (!response.ok) {
+          return [];
+        }
+        const payload = (await response.json()) as FriendSearchResponse;
+        return payload.users
+          .filter(
+            (user) =>
+              !blocked.has(user.id) && user.relation?.accepted === true,
+          )
+          .map((user) => ({
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            hint: existingMemberIdSet.has(user.id) ? "Member" : "Friends",
+            friendshipStatus: "friends" as const,
+          }));
+      } catch {
+        return [];
+      }
+    },
+    [cohostUserIds, currentUserId, event, existingMemberIdSet],
+  );
+
+  const onAddCohost = async (option: UserSearchOption) => {
+    if (!event || cohostBusyUserId || option.id === currentUserId) {
+      return;
+    }
+    setCohostBusyUserId(option.id);
+    setError("");
+    try {
+      const response = await postWithAuth("/api/thread-event-cohost-add", {
+        thread_id: event.thread_id,
+        event_id: event.id,
+        user_id: option.id,
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+      const payload = (await response.json()) as ThreadEventCohostAddResponse;
+      onUpdated?.(payload.event);
+      onMembersAdded?.();
+      setCohostSearchQuery("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add co-host.");
+    } finally {
+      setCohostBusyUserId(null);
+    }
+  };
+
+  const onRequestRemoveCohost = (userId: string, username: string) => {
+    if (!event || cohostBusyUserId || userId === currentUserId) {
+      return;
+    }
+    setPendingCohostRemoval({ userId, username });
+    openCohostConfirm();
+  };
+
+  const onCancelRemoveCohost = () => {
+    closeCohostConfirm({
+      onClosed: () => {
+        setPendingCohostRemoval(null);
+      },
+    });
+  };
+
+  const onConfirmRemoveCohost = async () => {
+    if (!event || !pendingCohostRemoval || cohostBusyUserId) {
+      return;
+    }
+    const { userId } = pendingCohostRemoval;
+    setCohostBusyUserId(userId);
+    setError("");
+    try {
+      const response = await postWithAuth("/api/thread-event-cohost-remove", {
+        thread_id: event.thread_id,
+        event_id: event.id,
+        user_id: userId,
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+      const payload = (await response.json()) as ThreadEventCohostRemoveResponse;
+      onUpdated?.(payload.event);
+      closeCohostConfirm({
+        onClosed: () => {
+          setPendingCohostRemoval(null);
+        },
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove co-host.");
+      closeCohostConfirm({
+        onClosed: () => {
+          setPendingCohostRemoval(null);
+        },
+      });
+    } finally {
+      setCohostBusyUserId(null);
+    }
   };
 
   const onNameChange = (eventChange: ChangeEvent<HTMLInputElement>) => {
@@ -583,7 +727,7 @@ export default function EventEditorModal({
         <header className="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-3">
           <h2 className="text-base font-semibold text-foreground">{title}</h2>
           <div className="flex items-center gap-1">
-            {mode === "edit" ? (
+            {mode === "edit" && canDelete ? (
               <button
                 type="button"
                 disabled={busy}
@@ -797,6 +941,61 @@ export default function EventEditorModal({
             ) : null}
           </div>
 
+          {showCohostSection && event ? (
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="text-xs font-medium text-muted">Co-hosts</p>
+              {cohostUserIds.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {cohostUserIds.map((userId) => {
+                    const member = memberById.get(userId);
+                    const label = member?.username ?? "Co-host";
+                    const canRemoveThisCohost = userId !== currentUserId;
+                    return (
+                      <div
+                        key={userId}
+                        className="flex items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1 pr-1.5"
+                      >
+                        <UserProfileImage
+                          userId={userId}
+                          sizePx={24}
+                          alt={`${label} profile`}
+                        />
+                        <span className="max-w-[8rem] truncate text-xs font-medium text-foreground">
+                          {label}
+                        </span>
+                        {canRemoveThisCohost ? (
+                          <IconButton
+                            type="button"
+                            variant="ghost"
+                            className="h-6 w-6 shrink-0"
+                            disabled={busy}
+                            aria-label={`Remove co-host ${label}`}
+                            onClick={() => onRequestRemoveCohost(userId, label)}
+                          >
+                            <CloseIcon className="h-3.5 w-3.5" />
+                          </IconButton>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted">No co-hosts yet.</p>
+              )}
+              <UserSearch
+                variant="dropdown"
+                value={cohostSearchQuery}
+                onValueChange={setCohostSearchQuery}
+                onSelect={(option) => {
+                  void onAddCohost(option);
+                }}
+                searchUsers={searchCohostCandidates}
+                placeholder="Add a co-host…"
+                disabled={busy}
+              />
+            </div>
+          ) : null}
+
           {showInviteSection ? (
             <div className="space-y-2 border-t border-border pt-3">
               <p className="text-xs font-medium text-muted">
@@ -863,6 +1062,26 @@ export default function EventEditorModal({
           </Button>
         </div>
       </div>
+
+      <DestructiveConfirmAnimatedModal
+        isPresented={isCohostConfirmPresented}
+        isClosing={isCohostConfirmClosing}
+        onClose={onCancelRemoveCohost}
+        onConfirm={() => {
+          void onConfirmRemoveCohost();
+        }}
+        title="Remove co-host"
+        busy={cohostBusyUserId !== null}
+        message={
+          <>
+            Remove{" "}
+            <span className="font-semibold">
+              {pendingCohostRemoval?.username ?? "this person"}
+            </span>{" "}
+            as a co-host? They’ll lose edit access for this event.
+          </>
+        }
+      />
     </AnimatedModal>
   );
 }

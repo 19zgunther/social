@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-import { findThreadAccessibleByUser } from "@/app/lib/threadEvents";
+import { userCanDeleteThreadEvent } from "@/app/lib/threadEvents";
 import type { ThreadEventDeleteRequest, ThreadEventDeleteResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -53,14 +53,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const isCreator = event.created_by === authResult.user_id;
-    const isThreadOwner = thread.owner === authResult.user_id;
-    if (!isCreator && !isThreadOwner) {
+    if (
+      !userCanDeleteThreadEvent({
+        userId: authResult.user_id,
+        threadOwnerId: thread.owner,
+        eventCreatedBy: event.created_by,
+      })
+    ) {
       return NextResponse.json(
         {
           error: {
             code: "forbidden",
-            message: "Only the event creator or thread owner can delete this event.",
+            message: "Only the event owner or thread owner can delete this event.",
           },
         },
         { status: 403 },
@@ -68,6 +72,10 @@ export async function POST(request: Request) {
     }
 
     await prisma.$transaction(async (tx) => {
+      await tx.user_thread_event_role.deleteMany({
+        where: { thread_event_id: event.id },
+      });
+
       await tx.threads.updateMany({
         where: {
           created_by_event: event.id,

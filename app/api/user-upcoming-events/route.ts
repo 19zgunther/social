@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
-import { finalizeThreadEventItem, type ThreadEventRow } from "@/app/lib/threadEvents";
+import {
+  finalizeThreadEventItem,
+  loadCohostUserIdsByEventId,
+  type ThreadEventRow,
+} from "@/app/lib/threadEvents";
 import type {
   ThreadItem,
   UserUpcomingEventsRequest,
@@ -52,6 +56,7 @@ export async function POST(request: Request) {
       orderBy: { starts_at: past ? "desc" : "asc" },
     });
 
+    const cohostsByEventId = await loadCohostUserIdsByEventId(rows.map((row) => row.id));
     const items: UserUpcomingEventsResponse["items"] = [];
 
     for (const row of rows) {
@@ -59,7 +64,11 @@ export async function POST(request: Request) {
       if (!tr) {
         continue;
       }
-      const event = await finalizeThreadEventItem(row as ThreadEventRow, userId);
+      const event = await finalizeThreadEventItem(
+        row as ThreadEventRow,
+        userId,
+        cohostsByEventId.get(row.id) ?? [],
+      );
 
       const participantCount = new Set([tr.owner, ...tr.user_thread_access.map((a) => a.user_id)]).size;
 

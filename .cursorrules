@@ -10,5 +10,8 @@
 - import and export all icons through Icons.tsx (For consistent icon usage throughout the app)
 - Also define every custom icon in this file as well
 
+# Theme Components
+- Prio making reusable components so styling is consistent and we don't have to reinvent the wheel for each button/input/dropdown/modal
+
 # How To Review Code:
 - If a user asks you to 'review', first read REVIEW.md

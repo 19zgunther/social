@@ -4,6 +4,7 @@ import { prisma } from "@/app/lib/prisma";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import {
+  eventHostRecipientUserIds,
   findThreadAccessibleByUser,
   isValidRsvpStatus,
   finalizeThreadEventItem,
@@ -83,22 +84,25 @@ export async function POST(request: Request) {
       data: { users_status_map: nextMap, updated_at: new Date() },
     });
 
-    const ownerUserId = existing.created_by;
-    if (statusChanged && ownerUserId !== authResult.user_id) {
-      const eventTitle = sanitizeNotificationText(row.name) || "an event";
-      const phrase = rsvpStatusPhrase(status);
-      try {
-        await sendPushToUsers({
-          recipientUserIds: [ownerUserId],
-          payload: {
-            title: eventTitle,
-            body: `${authResult.username} ${phrase} to ${eventTitle}.`,
-            url: "/?tab=events",
-            thread_id: thread.id,
-          },
-        });
-      } catch (error) {
-        console.error("thread_event_rsvp_push_dispatch_failed", error);
+    if (statusChanged) {
+      const hostIds = await eventHostRecipientUserIds(existing.id, existing.created_by);
+      const recipientUserIds = hostIds.filter((userId) => userId !== authResult.user_id);
+      if (recipientUserIds.length > 0) {
+        const eventTitle = sanitizeNotificationText(row.name) || "an event";
+        const phrase = rsvpStatusPhrase(status);
+        try {
+          await sendPushToUsers({
+            recipientUserIds,
+            payload: {
+              title: eventTitle,
+              body: `${authResult.username} ${phrase} to ${eventTitle}.`,
+              url: "/?tab=events",
+              thread_id: thread.id,
+            },
+          });
+        } catch (error) {
+          console.error("thread_event_rsvp_push_dispatch_failed", error);
+        }
       }
     }
 

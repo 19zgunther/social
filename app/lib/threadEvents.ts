@@ -12,6 +12,8 @@ import type { PostData, ThreadEventItem, ThreadEventRsvpStatus } from "@/app/typ
 
 const RSVP_VALUES: ThreadEventRsvpStatus[] = ["going", "maybe", "not_going"];
 
+export const THREAD_EVENT_ROLE_COHOST = "cohost";
+
 export function isValidRsvpStatus(value: unknown): value is ThreadEventRsvpStatus {
   return typeof value === "string" && RSVP_VALUES.includes(value as ThreadEventRsvpStatus);
 }
@@ -65,7 +67,11 @@ export function serializeEventAlbumData(row: ThreadEventRow, _viewerUserId: stri
   return media && media.length > 0 ? { media } : {};
 }
 
-export function toThreadEventItem(row: ThreadEventRow, viewerUserId: string): ThreadEventItem {
+export function toThreadEventItem(
+  row: ThreadEventRow,
+  viewerUserId: string,
+  cohostUserIds: string[] = [],
+): ThreadEventItem {
   const album = asEventSharedPostData(row.shared_post_data);
   return {
     id: row.id,
@@ -77,6 +83,7 @@ export function toThreadEventItem(row: ThreadEventRow, viewerUserId: string): Th
     location: row.location,
     description: row.description,
     users_status_map: parseUsersStatusMap(row.users_status_map),
+    cohost_user_ids: cohostUserIds,
     starts_at: row.starts_at.toISOString(),
     ends_at: row.ends_at.toISOString(),
     background_image_id: row.background_image_id,
@@ -92,11 +99,73 @@ export function toThreadEventItem(row: ThreadEventRow, viewerUserId: string): Th
   };
 }
 
+export async function loadCohostUserIds(eventId: string): Promise<string[]> {
+  const rows = await prisma.user_thread_event_role.findMany({
+    where: {
+      thread_event_id: eventId,
+      role: THREAD_EVENT_ROLE_COHOST,
+    },
+    select: { user_id: true },
+  });
+  return rows.map((row) => row.user_id);
+}
+
+export async function loadCohostUserIdsByEventId(
+  eventIds: string[],
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (eventIds.length === 0) {
+    return map;
+  }
+  for (const eventId of eventIds) {
+    map.set(eventId, []);
+  }
+  const rows = await prisma.user_thread_event_role.findMany({
+    where: {
+      thread_event_id: { in: eventIds },
+      role: THREAD_EVENT_ROLE_COHOST,
+    },
+    select: { thread_event_id: true, user_id: true },
+  });
+  for (const row of rows) {
+    const list = map.get(row.thread_event_id);
+    if (list) {
+      list.push(row.user_id);
+    } else {
+      map.set(row.thread_event_id, [row.user_id]);
+    }
+  }
+  return map;
+}
+
+/** Owner + cohosts who should receive host-style notifications (e.g. RSVP). */
+export async function eventHostRecipientUserIds(
+  eventId: string,
+  createdBy: string,
+): Promise<string[]> {
+  const cohosts = await loadCohostUserIds(eventId);
+  return Array.from(new Set([createdBy, ...cohosts]));
+}
+
+export async function userIsEventCohost(eventId: string, userId: string): Promise<boolean> {
+  const row = await prisma.user_thread_event_role.findFirst({
+    where: {
+      thread_event_id: eventId,
+      user_id: userId,
+      role: THREAD_EVENT_ROLE_COHOST,
+    },
+    select: { id: true },
+  });
+  return Boolean(row);
+}
+
 export async function finalizeThreadEventItem(
   row: ThreadEventRow,
   viewerUserId: string,
+  cohostUserIds?: string[],
 ): Promise<ThreadEventItem> {
-  const base = toThreadEventItem(row, viewerUserId);
+  const hosts = cohostUserIds ?? (await loadCohostUserIds(row.id));
+  const base = toThreadEventItem(row, viewerUserId, hosts);
   if (!row.background_image_id) {
     return base;
   }
@@ -124,6 +193,19 @@ export async function findThreadAccessibleByUser(threadId: string, userId: strin
 }
 
 export function userCanAdminThreadEvent(input: {
+  userId: string;
+  threadOwnerId: string;
+  eventCreatedBy: string;
+  isCohost?: boolean;
+}): boolean {
+  return (
+    input.userId === input.eventCreatedBy ||
+    input.userId === input.threadOwnerId ||
+    input.isCohost === true
+  );
+}
+
+export function userCanDeleteThreadEvent(input: {
   userId: string;
   threadOwnerId: string;
   eventCreatedBy: string;

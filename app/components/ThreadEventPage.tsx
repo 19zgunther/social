@@ -1,8 +1,16 @@
 "use client";
 
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import EventEditorModal from "@/app/components/EventEditorModal";
-import { AddImageIcon, EditIcon } from "@/app/components/Icons";
+import { AddImageIcon, EditIcon, MessageIcon } from "@/app/components/Icons";
 import BackButton from "@/app/components/utils/BackButton";
 import CachedImage from "@/app/components/utils/CachedImage";
 import CachedVideo from "@/app/components/utils/CachedVideo";
@@ -147,7 +155,7 @@ const glassCard =
   "rounded-2xl border border-white/14 bg-surface/50 shadow-[0_10px_44px_rgba(0,0,0,0.48),0_3px_16px_rgba(0,0,0,0.32)] backdrop-blur-[28px] backdrop-saturate-[1.4]";
 
 const iconBtn =
-  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/24 bg-bg/58 text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.55),0_2px_8px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-bg/76 hover:shadow-[0_8px_28px_rgba(0,0,0,0.58)]";
+  "flex h-9 w-9 shrink-0 items-center justify-center bg-transparent text-foreground [filter:drop-shadow(0_2px_6px_rgba(0,0,0,0.85))] transition hover:opacity-80";
 
 const readableText =
   "text-sm text-foreground [text-shadow:0_2px_8px_rgba(0,0,0,0.92),0_1px_3px_rgba(0,0,0,0.88)]";
@@ -219,17 +227,22 @@ function EventPeopleList({
   entries,
   emptyText,
   loading,
+  headerRight,
 }: {
   title: string;
   entries: RosterEntry[];
   emptyText: string;
   loading: boolean;
+  headerRight?: ReactNode;
 }) {
   return (
     <div className="space-y-2.5">
-      <p className="text-sm font-semibold text-foreground [text-shadow:0_2px_10px_rgba(0,0,0,0.92)]">
-        {title} ({entries.length})
-      </p>
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 text-sm font-semibold text-foreground [text-shadow:0_2px_10px_rgba(0,0,0,0.92)]">
+          {title} ({entries.length})
+        </p>
+        {headerRight}
+      </div>
       {loading ? (
         <p className={`text-sm opacity-75 ${readableText}`}>Loading…</p>
       ) : entries.length === 0 ? (
@@ -265,11 +278,21 @@ export default function ThreadEventPage({
     setLocal(eventProp);
   }, [eventProp]);
 
+  const isCohost = (local.cohost_user_ids ?? []).includes(currentUserId);
   const canEdit =
+    currentUserId === local.created_by ||
+    currentUserId === thread.owner_user_id ||
+    isCohost;
+  const canInvite = canEdit;
+  const canDelete =
     currentUserId === local.created_by || currentUserId === thread.owner_user_id;
-  const canInvite = currentUserId === thread.owner_user_id;
 
   const [rsvpBusy, setRsvpBusy] = useState(false);
+  const [rsvpEditing, setRsvpEditing] = useState(false);
+
+  useEffect(() => {
+    setRsvpEditing(false);
+  }, [eventProp.id]);
   const [albumBusy, setAlbumBusy] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
   const [albumGrants, setAlbumGrants] = useState<Record<string, string | null>>({});
@@ -417,12 +440,17 @@ export default function ThreadEventPage({
       setLocal(payload.event);
       onEventUpdated(payload.event);
       writePageCache(payload.event.id, membersRef.current, payload.event);
+      if (status === "going") {
+        setRsvpEditing(false);
+      }
     } catch (e) {
       onNotify?.(e instanceof Error ? e.message : "RSVP failed.");
     } finally {
       setRsvpBusy(false);
     }
   };
+
+  const showRsvpRow = myStatus !== "going" || rsvpEditing;
 
   const albumTiming = useMemo(
     () => ({
@@ -536,7 +564,7 @@ export default function ThreadEventPage({
     }
   };
 
-  const canPublishAlbum = currentUserId === local.created_by;
+  const canPublishAlbum = canEdit;
 
   const onPublishAlbumAsPost = async () => {
     if (!canPublishAlbum || publishBusy || local.published_post_id) {
@@ -600,9 +628,10 @@ export default function ThreadEventPage({
               <button
                 type="button"
                 onClick={onOpenThread}
-                className="rounded-lg border border-white/24 bg-bg/58 px-2 py-1 text-[11px] font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.55),0_2px_8px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-bg/76"
+                className={iconBtn}
+                aria-label="Open thread"
               >
-                Open Thread
+                <MessageIcon className="h-[18px] w-[18px]" aria-hidden />
               </button>
             ) : null}
             {canEdit ? (
@@ -612,7 +641,7 @@ export default function ThreadEventPage({
                 className={iconBtn}
                 aria-label="Edit event"
               >
-                <EditIcon className="h-3.5 w-3.5" aria-hidden />
+                <EditIcon className="h-[18px] w-[18px]" aria-hidden />
               </button>
             ) : null}
           </div>
@@ -635,29 +664,31 @@ export default function ThreadEventPage({
               ) : null}
             </div>
 
-            <div className={`${glassCard} relative z-0 p-4`}>
-              <div className="flex gap-2">
-                {RSVP_OPTIONS.map(({ status, label }) => {
-                  const isSelected = myStatus === status;
-                  const dim = myStatus !== undefined && !isSelected;
-                  return (
-                    <button
-                      key={status}
-                      type="button"
-                      disabled={rsvpBusy}
-                      onClick={() => {
-                        void onRsvp(status);
-                      }}
-                      className={`${rsvpBtnBase} ${
-                        isSelected ? rsvpBtnSelected[status] : rsvpBtnIdle
-                      } ${dim ? "opacity-[0.42]" : ""}`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+            {showRsvpRow ? (
+              <div className={`${glassCard} relative z-0 p-4`}>
+                <div className="flex gap-2">
+                  {RSVP_OPTIONS.map(({ status, label }) => {
+                    const isSelected = myStatus === status;
+                    const dim = myStatus !== undefined && !isSelected;
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        disabled={rsvpBusy}
+                        onClick={() => {
+                          void onRsvp(status);
+                        }}
+                        className={`${rsvpBtnBase} ${
+                          isSelected ? rsvpBtnSelected[status] : rsvpBtnIdle
+                        } ${dim ? "opacity-[0.42]" : ""}`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <div className={`${glassCard} relative z-0 space-y-5 p-4`}>
               <EventPeopleList
@@ -665,6 +696,17 @@ export default function ThreadEventPage({
                 entries={goingEntries}
                 emptyText="Nobody's marked going yet."
                 loading={membersLoading}
+                headerRight={
+                  myStatus === "going" && !rsvpEditing ? (
+                    <button
+                      type="button"
+                      onClick={() => setRsvpEditing(true)}
+                      className="shrink-0 flex items-center gap-1 opacity-70 rounded-lg border border-white/24 px-2 py-1 text-[11px] font-semibold text-foreground shadow-[0_6px_22px_rgba(0,0,0,0.55),0_2px_8px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:bg-bg/76"
+                    >
+                      <EditIcon className="h-[12px] w-[12px]" aria-hidden /> Edit RSVP
+                    </button>
+                  ) : null
+                }
               />
               <EventPeopleList
                 title="Who Hasn't Decided"
@@ -800,6 +842,8 @@ export default function ThreadEventPage({
         currentUserId={currentUserId}
         event={local}
         canInvite={canInvite}
+        canDelete={canDelete}
+        members={members}
         existingMemberUserIds={existingMemberUserIds}
         onUpdated={onEventSavedFromModal}
         onDeleted={onEventDeletedFromModal}

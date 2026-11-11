@@ -15,6 +15,8 @@ import {
 import {
   finalizeThreadEventItem,
   findThreadEventForMember,
+  userCanAdminThreadEvent,
+  userIsEventCohost,
 } from "@/app/lib/threadEvents";
 import type {
   EventPublishPostRequest,
@@ -67,9 +69,23 @@ export async function POST(request: Request) {
       );
     }
 
-    if (existing.created_by !== authResult.user_id) {
+    const threadOwnerId = existing.threads_thread_events_thread_idTothreads.owner;
+    const isCohost = await userIsEventCohost(existing.id, authResult.user_id);
+    if (
+      !userCanAdminThreadEvent({
+        userId: authResult.user_id,
+        threadOwnerId,
+        eventCreatedBy: existing.created_by,
+        isCohost,
+      })
+    ) {
       return NextResponse.json(
-        { error: { code: "forbidden", message: "Only the event owner can publish." } },
+        {
+          error: {
+            code: "forbidden",
+            message: "Only the event owner or a co-host can publish.",
+          },
+        },
         { status: 403 },
       );
     }

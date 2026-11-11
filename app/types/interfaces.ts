@@ -501,6 +501,8 @@ export type ThreadEventItem = {
   location: string | null;
   description: string | null;
   users_status_map: Record<string, ThreadEventRsvpStatus>;
+  /** User ids with the `cohost` role on this event (not including created_by). */
+  cohost_user_ids: string[];
   starts_at: string;
   ends_at: string;
   background_image_id: string | null;
@@ -521,6 +523,20 @@ export type ThreadEventItem = {
   /** Feed post created when the event album is published; null until then. */
   published_post_id: string | null;
 };
+
+export type ThreadEventCohostAddRequest = {
+  thread_id?: string;
+  event_id?: string;
+  user_id?: string;
+};
+export type ThreadEventCohostAddResponse = { event: ThreadEventItem };
+
+export type ThreadEventCohostRemoveRequest = {
+  thread_id?: string;
+  event_id?: string;
+  user_id?: string;
+};
+export type ThreadEventCohostRemoveResponse = { event: ThreadEventItem };
 
 export type ThreadEventsListRequest = { thread_id?: string };
 export type ThreadEventsListResponse = { events: ThreadEventItem[] };
@@ -602,18 +618,14 @@ export type ThreadEventUpdateResponse = { event: ThreadEventItem };
 export type ThreadEventBackgroundSetRequest = {
   thread_id?: string;
   event_id?: string;
+  /** When true, clears the background (`background_image_id = null`). */
+  clear?: boolean;
   /** Bundled default background key (e.g. `hike_1`). */
   default_background_key?: string;
   image_base64_data?: string;
   image_mime_type?: string;
 };
 export type ThreadEventBackgroundSetResponse = { event: ThreadEventItem };
-
-export type ThreadEventBackgroundRemoveRequest = {
-  thread_id?: string;
-  event_id?: string;
-};
-export type ThreadEventBackgroundRemoveResponse = { event: ThreadEventItem };
 
 export type ThreadEventRsvpRequest = {
   thread_id?: string;

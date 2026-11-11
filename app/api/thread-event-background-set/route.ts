@@ -8,6 +8,7 @@ import {
   finalizeThreadEventItem,
   findThreadAccessibleByUser,
   userCanAdminThreadEvent,
+  userIsEventCohost,
 } from "@/app/lib/threadEvents";
 import type { ThreadEventBackgroundSetRequest, ThreadEventBackgroundSetResponse } from "@/app/types/interfaces";
 
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as ThreadEventBackgroundSetRequest;
     const threadId = body.thread_id?.trim();
     const eventId = body.event_id?.trim();
+    const clear = body.clear === true;
     const defaultBackgroundKey = body.default_background_key?.trim() ?? "";
     const imageBase64Data = body.image_base64_data?.trim() ?? "";
     const imageMimeType = body.image_mime_type?.trim() ?? "";
@@ -38,9 +40,21 @@ export async function POST(request: Request) {
       );
     }
 
-    let backgroundBase64: string;
-    let backgroundMime: string;
-    if (defaultBackgroundKey) {
+    let backgroundBase64: string | null = null;
+    let backgroundMime: string | null = null;
+    if (clear) {
+      if (defaultBackgroundKey || imageBase64Data || imageMimeType) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "invalid_request",
+              message: "Do not send an image when clear is true.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+    } else if (defaultBackgroundKey) {
       if (!(await isDefaultEventImageKey(defaultBackgroundKey))) {
         return NextResponse.json(
           {
@@ -87,7 +101,7 @@ export async function POST(request: Request) {
         {
           error: {
             code: "invalid_request",
-            message: "Choose a default background or upload an image.",
+            message: "Choose a default background, upload an image, or set clear to true.",
           },
         },
         { status: 400 },
@@ -116,35 +130,40 @@ export async function POST(request: Request) {
       );
     }
 
+    const isCohost = await userIsEventCohost(existing.id, authResult.user_id);
     if (
       !userCanAdminThreadEvent({
         userId: authResult.user_id,
         threadOwnerId: thread.owner,
         eventCreatedBy: existing.created_by,
+        isCohost,
       })
     ) {
       return NextResponse.json(
         {
           error: {
             code: "forbidden",
-            message: "Only the event creator or thread owner can change the background.",
+            message: "Only the event owner or a co-host can change the background.",
           },
         },
         { status: 403 },
       );
     }
 
-    const imageId = randomUUID();
-    await uploadThreadImageToMainBucket({
-      threadId: thread.id,
-      imageId,
-      base64Data: backgroundBase64,
-      mimeType: backgroundMime,
-    });
+    let backgroundImageId: string | null = null;
+    if (!clear && backgroundBase64 && backgroundMime) {
+      backgroundImageId = randomUUID();
+      await uploadThreadImageToMainBucket({
+        threadId: thread.id,
+        imageId: backgroundImageId,
+        base64Data: backgroundBase64,
+        mimeType: backgroundMime,
+      });
+    }
 
     const row = await prisma.thread_events.update({
       where: { id: existing.id },
-      data: { background_image_id: imageId, updated_at: new Date() },
+      data: { background_image_id: backgroundImageId, updated_at: new Date() },
     });
 
     const event = await finalizeThreadEventItem(row, authResult.user_id);

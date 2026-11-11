@@ -5,7 +5,9 @@ import { DeleteIcon, PinIcon } from "@/app/components/Icons";
 import ThreadAvatar from "@/app/components/ThreadAvatar";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import ThreadPictureEditor from "@/app/components/ThreadPictureEditor";
+import { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import BackButton from "@/app/components/utils/BackButton";
+import DestructiveConfirmAnimatedModal from "@/app/components/utils/DestructiveConfirmAnimatedModal";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import { Button, IconButton, TextField } from "@/app/ui-components";
 import {
@@ -69,7 +71,16 @@ export default function ThreadSettings({
   const [localName, setLocalName] = useState(thread.name);
   const [isEditingName, setIsEditingName] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
-  const [confirmedRemoveMember, setConfirmedRemoveMember] = useState<string | null>(null);
+  const [pendingMemberRemoval, setPendingMemberRemoval] = useState<{
+    userId: string;
+    username: string;
+  } | null>(null);
+  const {
+    isPresented: isRemoveMemberConfirmPresented,
+    isClosing: isRemoveMemberConfirmClosing,
+    open: openRemoveMemberConfirm,
+    close: closeRemoveMemberConfirm,
+  } = useAnimatedModal();
   const [confirmDeleteThread, setConfirmDeleteThread] = useState(false);
   const [isDeletingThread, setIsDeletingThread] = useState(false);
   const [sendingFriendUserId, setSendingFriendUserId] = useState<string | null>(null);
@@ -123,7 +134,7 @@ export default function ThreadSettings({
 
   useEffect(() => {
     setConfirmDeleteThread(false);
-    setConfirmedRemoveMember(null);
+    setPendingMemberRemoval(null);
     setIsEditingName(false);
   }, [thread.id]);
 
@@ -235,11 +246,27 @@ export default function ThreadSettings({
     }
   };
 
-  const onRemoveMember = async (userId: string) => {
-    if (confirmedRemoveMember !== userId) {
-      setConfirmedRemoveMember(userId);
+  const onRequestRemoveMember = (userId: string, username: string) => {
+    if (isUpdatingMembers) {
       return;
     }
+    setPendingMemberRemoval({ userId, username });
+    openRemoveMemberConfirm();
+  };
+
+  const onCancelRemoveMember = () => {
+    closeRemoveMemberConfirm({
+      onClosed: () => {
+        setPendingMemberRemoval(null);
+      },
+    });
+  };
+
+  const onConfirmRemoveMember = async () => {
+    if (!pendingMemberRemoval || isUpdatingMembers) {
+      return;
+    }
+    const { userId } = pendingMemberRemoval;
     setIsUpdatingMembers(true);
     setStatusMessage("");
 
@@ -250,16 +277,30 @@ export default function ThreadSettings({
       });
       if (!response.ok) {
         setStatusMessage(await readErrorMessage(response));
+        closeRemoveMemberConfirm({
+          onClosed: () => {
+            setPendingMemberRemoval(null);
+          },
+        });
         return;
       }
       setMembers((previousMembers) =>
         previousMembers.filter((member) => member.user_id !== userId),
       );
+      closeRemoveMemberConfirm({
+        onClosed: () => {
+          setPendingMemberRemoval(null);
+        },
+      });
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to remove member.");
+      closeRemoveMemberConfirm({
+        onClosed: () => {
+          setPendingMemberRemoval(null);
+        },
+      });
     } finally {
       setIsUpdatingMembers(false);
-      setConfirmedRemoveMember(null);
     }
   };
 
@@ -585,17 +626,13 @@ export default function ThreadSettings({
                     {!member.is_owner ? (
                       <IconButton
                         type="button"
-                        variant={confirmedRemoveMember === member.user_id ? "danger" : "ghost"}
-                        onClick={() => {
-                          void onRemoveMember(member.user_id);
-                        }}
+                        variant="ghost"
+                        onClick={() =>
+                          onRequestRemoveMember(member.user_id, member.username)
+                        }
                         disabled={isUpdatingMembers}
                         className="h-8 w-8 shrink-0"
-                        aria-label={
-                          confirmedRemoveMember === member.user_id
-                            ? "Tap again to confirm remove from group"
-                            : `Remove ${member.username} from group`
-                        }
+                        aria-label={`Remove ${member.username} from group`}
                       >
                         <DeleteIcon className="h-4 w-4" aria-hidden />
                       </IconButton>
@@ -649,6 +686,28 @@ export default function ThreadSettings({
       {statusMessage ? (
         <p className="px-3 py-2 text-xs text-muted">{statusMessage}</p>
       ) : null}
+
+      <DestructiveConfirmAnimatedModal
+        isPresented={isRemoveMemberConfirmPresented}
+        isClosing={isRemoveMemberConfirmClosing}
+        onClose={onCancelRemoveMember}
+        onConfirm={() => {
+          void onConfirmRemoveMember();
+        }}
+        title="Remove member"
+        busy={isUpdatingMembers}
+        message={
+          <>
+            Remove{" "}
+            <span className="font-semibold">
+              {pendingMemberRemoval?.username ?? "this person"}
+            </span>{" "}
+            from{" "}
+            <span className="font-semibold">{thread.name || "this thread"}</span>? They’ll
+            lose access.
+          </>
+        }
+      />
     </div>
   );
 }

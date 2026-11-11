@@ -3,6 +3,7 @@ import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { threadMemberFriendshipStatusForPair } from "@/app/lib/threadMemberFriendship";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
+import { userCanAdminThreadEvent, userIsEventCohost } from "@/app/lib/threadEvents";
 
 type ThreadMemberAddBody = {
   thread_id?: string;
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
         select: {
           id: true,
           name: true,
+          created_by: true,
         },
       });
       if (!event) {
@@ -82,9 +84,22 @@ export async function POST(request: Request) {
           { status: 404 },
         );
       }
-      if (thread.owner !== authResult.user_id) {
+      const isCohost = await userIsEventCohost(event.id, authResult.user_id);
+      if (
+        !userCanAdminThreadEvent({
+          userId: authResult.user_id,
+          threadOwnerId: thread.owner,
+          eventCreatedBy: event.created_by,
+          isCohost,
+        })
+      ) {
         return NextResponse.json(
-          { error: { code: "forbidden", message: "Only the event owner can add users." } },
+          {
+            error: {
+              code: "forbidden",
+              message: "Only the event owner or a co-host can add users.",
+            },
+          },
           { status: 403 },
         );
       }
