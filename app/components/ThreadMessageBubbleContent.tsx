@@ -7,6 +7,7 @@ import {
   customEmojiUuidFromToken,
   CustomEmoji,
 } from "@/app/lib/customEmojiCanvas";
+import { isEmojiOnlyText } from "@/app/lib/notification_text";
 import type { ImageOverlayData, ThreadMessage } from "@/app/types/interfaces";
 
 export type ThreadMessageBubbleImageInteraction = "chat" | "options";
@@ -32,13 +33,22 @@ export function ThreadMessageBubbleContent({
       (message.image_url || (message.image_access_grant && message.created_by)),
   );
   const isImageOnly = hasImage && !hasText;
+  const isEmojiOnly = !hasImage && isEmojiOnlyText(message.text);
   const customEmojiUuid = customEmojiUuidFromToken(message.text);
 
   return (
     <>
       {!isImageOnly ? (
         customEmojiUuid ? (
-          <CustomEmoji key={message.id} uuid={customEmojiUuid} />
+          <CustomEmoji
+            key={message.id}
+            uuid={customEmojiUuid}
+            sizeClassName={isEmojiOnly ? "h-14 w-14" : "h-7 w-7"}
+          />
+        ) : isEmojiOnly ? (
+          <p className="break-words whitespace-pre-wrap text-[1.75rem] leading-none [-webkit-touch-callout:none]">
+            {message.text.trim()}
+          </p>
         ) : (
           <p className="break-words whitespace-pre-wrap [-webkit-touch-callout:none]">{linkifyHttpsText(message.text)}</p>
         )
@@ -86,18 +96,21 @@ export function threadMessageBubbleShellClassName(
   isImageOnly: boolean,
   depth: number,
   touchMode: "chat" | "static",
+  isEmojiOnly = false,
 ): string {
   const base =
     touchMode === "chat"
       ? "relative max-w-[85%] touch-pan-y select-none [-webkit-touch-callout:none] text-sm"
       : "relative max-w-[85%] select-none text-sm";
-  const shape = isImageOnly
-    ? `${isOwnMessage ? "ml-auto" : ""}`
-    : `rounded-2xl px-3 py-1.5 shadow-sm ${isOwnMessage
-      ? "ml-auto rounded-br-sm bg-accent text-on-accent"
-      : "rounded-bl-sm bg-surface text-foreground"
-    }`;
-  const thread = depth > 0 ? "ml-5 border-l border-border/60" : "";
+  const shape = isEmojiOnly
+    ? `w-fit ${isOwnMessage ? "ml-auto" : "mr-auto"}`
+    : isImageOnly
+      ? `${isOwnMessage ? "ml-auto" : ""}`
+      : `rounded-2xl px-3 py-1.5 shadow-sm ${isOwnMessage
+        ? "ml-auto rounded-br-sm bg-accent text-on-accent"
+        : "rounded-bl-sm bg-surface text-foreground"
+      }`;
+  const thread = depth > 0 && !isEmojiOnly ? "ml-5 border-l border-border/60" : "";
   return `${base} ${shape} ${thread}`;
 }
 

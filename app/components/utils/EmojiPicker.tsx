@@ -190,6 +190,10 @@ type EmojiPickerProps = {
   buttonClassName?: string;
   buttonSmileIconClassName?: string;
   disabled?: boolean;
+  /** Hide the smile trigger button (modal can still open via openRequestId). */
+  hideTrigger?: boolean;
+  /** Increment to open the picker from outside (e.g. attach menu). */
+  openRequestId?: number;
   /** Fires when the full-screen emoji picker opens or closes (for host UI like overlays). */
   onOpenChange?: (open: boolean) => void;
 };
@@ -203,6 +207,8 @@ export default function EmojiPicker({
   buttonSmileIconClassName,
   onOpenChange,
   disabled = false,
+  hideTrigger = false,
+  openRequestId,
 }: EmojiPickerProps) {
   const {
     isPresented,
@@ -430,6 +436,13 @@ export default function EmojiPicker({
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
 
+  useEffect(() => {
+    if (openRequestId === undefined || openRequestId <= 0 || disabled) {
+      return;
+    }
+    openPicker();
+  }, [disabled, openPicker, openRequestId]);
+
   const handleSelectEmoji = (emoji: string) => {
     try {
       onSelectEmoji(emoji);
@@ -448,22 +461,24 @@ export default function EmojiPicker({
 
   return (
     <div className={DONT_SWIPE_TABS_CLASSNAME + " " + (className ?? "")}>
-      <button
-        type="button"
-        onClick={() => {
-          if (isOpen) {
-            closePicker();
-          } else {
-            openPicker();
-          }
-        }}
-        className={`rounded-lg border border-border px-2 py-1 text-muted transition hover:text-foreground ${buttonClassName ?? ""}`}
-        style={{ transform: "translateY(-2px)" }} // fuck it now it looks good
-        aria-label="Add emoji"
-        disabled={disabled}
-      >
-        <EmojiIcon className={`h-4 w-4 ${buttonSmileIconClassName ?? ""}`} />
-      </button>
+      {!hideTrigger ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (isOpen) {
+              closePicker();
+            } else {
+              openPicker();
+            }
+          }}
+          className={`rounded-lg border border-border px-2 py-1 text-muted transition hover:text-foreground ${buttonClassName ?? ""}`}
+          style={{ transform: "translateY(-2px)" }} // fuck it now it looks good
+          aria-label="Add emoji"
+          disabled={disabled}
+        >
+          <EmojiIcon className={`h-4 w-4 ${buttonSmileIconClassName ?? ""}`} />
+        </button>
+      ) : null}
 
       <AnimatedModal
         isPresented={isPresented}

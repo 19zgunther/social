@@ -247,6 +247,8 @@ function CustomEmojiPeekOverlay({
 type CustomEmojiProps = {
   onPointerDown?: () => void;
   enablePeek?: boolean;
+  /** Tailwind size classes for the rendered canvas. Defaults to `h-7 w-7`. */
+  sizeClassName?: string;
 } & (
   | { customEmoji: EmojiItem; uuid?: never }
   | { uuid: string; customEmoji?: never }
@@ -259,6 +261,7 @@ export const CustomEmoji = ({
   uuid,
   onPointerDown,
   enablePeek = true,
+  sizeClassName = "h-7 w-7",
 }: CustomEmojiProps) => {
   const shouldResolveByUuid = Boolean(uuid) && !customEmojiProp;
   const subscribe = useCallback(
@@ -294,7 +297,7 @@ export const CustomEmoji = ({
   if (!customEmoji) {
     return (
       <span
-        className="inline-flex h-7 w-7 items-center justify-center text-sm leading-none text-muted animate-pulse"
+        className={`inline-flex items-center justify-center text-sm leading-none text-muted animate-pulse ${sizeClassName}`}
         aria-label="Loading custom emoji"
       >
         ?
@@ -331,7 +334,7 @@ export const CustomEmoji = ({
           }
         }}
         onPointerDown={handlePointerDown}
-        className={`h-7 w-7 rounded-md [image-rendering:pixelated] ${peekSource ? "opacity-0" : ""}`}
+        className={`${sizeClassName} rounded-md [image-rendering:pixelated] ${peekSource ? "opacity-0" : ""}`}
         title={customEmoji.name}
       />
       {isMounted && peekSource ? (

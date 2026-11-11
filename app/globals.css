@@ -1647,12 +1647,28 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   animation: create-post-preview-in 0.28s ease-out both;
 }
 
+@keyframes attach-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.attach-menu-in {
+  animation: attach-menu-in 0.18s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .emoji-picker-backdrop-in,
   .emoji-picker-backdrop-out,
   .emoji-picker-panel-in,
   .emoji-picker-panel-out,
-  .create-post-preview-in {
+  .create-post-preview-in,
+  .attach-menu-in {
     animation: none;
   }
 }

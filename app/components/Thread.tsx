@@ -14,8 +14,9 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { CameraIcon, VideoIcon } from "@/app/components/Icons";
+import { VideoIcon } from "@/app/components/Icons";
 import CameraModal from "@/app/components/Camera";
+import ThreadComposerAttachMenu from "@/app/components/ThreadComposerAttachMenu";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
@@ -236,6 +237,7 @@ export default function Thread({
   const [statusMessage, setStatusMessage] = useState("");
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [cameraInitialFile, setCameraInitialFile] = useState<File | null>(null);
   const isFollowingBottomRef = useRef(true);
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
   const [replyTargetMessageId, setReplyTargetMessageId] = useState<string | null>(null);
@@ -403,6 +405,7 @@ export default function Thread({
     setOldestLoadedMessageId(null);
     setIsLoadingOlderMessages(false);
     setIsCameraModalOpen(false);
+    setCameraInitialFile(null);
     setImageViewer(null);
     setCollapsedReplyMessageIds([]);
 
@@ -933,11 +936,33 @@ export default function Thread({
     }
   };
 
-  const openCameraModal = () => {
+  const openCameraModal = (initialFile: File | null = null) => {
     if (editTargetMessageId) {
       return;
     }
+    setCameraInitialFile(initialFile);
     setIsCameraModalOpen(true);
+  };
+
+  const closeCameraModal = () => {
+    setIsCameraModalOpen(false);
+    setCameraInitialFile(null);
+  };
+
+  const onSendComposerEmoji = async (emoji: string) => {
+    if (!emoji.trim()) {
+      return;
+    }
+
+    try {
+      await sendThreadMessage({
+        text: emoji,
+        replyToMessageId: replyTargetMessageId ?? undefined,
+        clearDraftOnSuccess: false,
+      });
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to send emoji.");
+    }
   };
 
   const onSendPhotoFromCamera = async (payload: {
@@ -1236,11 +1261,12 @@ export default function Thread({
     const hasText = message.text.trim().length > 0;
     const hasImage = threadMessageHasRenderableImage(message);
     const isImageOnly = hasImage && !hasText;
+    const isEmojiOnly = !hasImage && isEmojiOnlyText(message.text);
     const messageImageOverlay = toImageOverlayData(message.data);
 
     return (
       <div
-        className={threadMessageBubbleShellClassName(isOwnMessage, isImageOnly, depth, "static")}
+        className={threadMessageBubbleShellClassName(isOwnMessage, isImageOnly, depth, "static", isEmojiOnly)}
         style={threadMessageBubbleShellStyle(depth)}
       >
         <ThreadMessageBubbleContent
@@ -1274,6 +1300,7 @@ export default function Thread({
     const hasText = message.text.trim().length > 0;
     const hasImage = threadMessageHasRenderableImage(message);
     const isImageOnly = hasImage && !hasText;
+    const isEmojiOnly = !hasImage && isEmojiOnlyText(message.text);
     const messageImageOverlay = toImageOverlayData(message.data);
     const showDateSeparator = options?.showDateSeparator === true;
     const showSenderName = !isOwnMessage && depth === 0 && options?.showSenderName === true;
@@ -1310,7 +1337,7 @@ export default function Thread({
           setReplyTargetMessageId(message.id);
           setEditTargetMessageId(null);
         }}
-        className={threadMessageBubbleShellClassName(isOwnMessage, isImageOnly, depth, "chat")}
+        className={threadMessageBubbleShellClassName(isOwnMessage, isImageOnly, depth, "chat", isEmojiOnly)}
         style={threadMessageBubbleShellStyle(depth)}
       >
         <ThreadMessageBubbleContent
@@ -1454,12 +1481,23 @@ export default function Thread({
   }
 
   const messageComposerForm = (
-    <form onSubmit={onSendMessage} className="mx-2 mb-2 mt-1 flex items-end gap-2">
+    <form onSubmit={onSendMessage} className="relative mx-2 mb-2 mt-1 flex items-end gap-2">
+      <ThreadComposerAttachMenu
+        disabled={Boolean(editTargetMessageId || activeOptionsMessageId)}
+        onTakePhoto={() => {
+          openCameraModal(null);
+        }}
+        onUploadPhoto={(file) => {
+          openCameraModal(file);
+        }}
+        onSendEmoji={(emoji) => {
+          void onSendComposerEmoji(emoji);
+        }}
+      />
       <textarea
         ref={composerTextareaRef}
         rows={1}
-        className={`min-h-10 resize-none overflow-hidden rounded-2xl border border-border bg-surface px-4 py-2 text-sm leading-normal text-foreground break-words outline-none focus:border-muted transition-[border-color] duration-200 ${isComposerExpanded ? "flex-1" : "w-1/2"
-          }`}
+        className="min-h-10 flex-1 resize-none overflow-hidden rounded-2xl border border-border bg-surface px-4 py-2 text-sm leading-normal text-foreground break-words outline-none focus:border-muted transition-[border-color] duration-200"
         placeholder={
           editTargetMessageId
             ? "Edit message..."
@@ -1488,23 +1526,7 @@ export default function Thread({
         }}
       />
 
-      {!isComposerExpanded ? (
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="flex-1 rounded-full py-3"
-            onClick={() => {
-              openCameraModal();
-            }}
-            disabled={Boolean(editTargetMessageId)}
-            aria-label="Take photo"
-          >
-            <CameraIcon className="mx-auto h-4 w-4" />
-          </Button>
-        </>
-      ) : (
+      {isComposerExpanded ? (
         <Button
           type="submit"
           variant="primary"
@@ -1514,7 +1536,7 @@ export default function Thread({
         >
           {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}
         </Button>
-      )}
+      ) : null}
     </form>
   );
 
@@ -1768,9 +1790,10 @@ export default function Thread({
 
       <CameraModal
         isOpen={isCameraModalOpen}
-        onClose={() => setIsCameraModalOpen(false)}
+        onClose={closeCameraModal}
         onSendPhoto={onSendPhotoFromCamera}
         isSending={isSendingMessage}
+        initialFile={cameraInitialFile}
       />
 
       {activeOptionsMessage && activeOptionsMessageId
@@ -1788,11 +1811,11 @@ export default function Thread({
                 aria-label="Message options"
                 className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden"
               >
-                {/** Upper half: emoji, held message, and actions — separate cards with gaps so blur shows through. */}
-                <div className="flex max-h-[min(52vh,100%)] min-h-0 w-full flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden px-4 py-4">
-                  <div className="flex w-full max-w-lg flex-col gap-0">
-                    {/** Emojis row */}
-                    <div className="w-full max-w-lg overflow-x-auto overflow-y-hidden [scrollbar-width:thin]">
+                {/** Emoji + message + actions stay on-screen; only the held bubble scrolls when tall. */}
+                <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden px-4 pt-4">
+                  <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col">
+                    {/** Emojis row — pinned */}
+                    <div className="w-full shrink-0 overflow-x-auto overflow-y-hidden [scrollbar-width:thin]">
                       <div className="mx-auto flex w-max flex-nowrap items-center justify-center gap-2 py-0.5">
                         {MESSAGE_OPTIONS_QUICK_EMOJIS.map((emoji) => (
                           <button
@@ -1816,8 +1839,8 @@ export default function Thread({
                       </div>
                     </div>
 
-                    {/** Held message bubble */}
-                    <div className="border-none bg-transparent px-3 py-3 shadow-lg">
+                    {/** Held message bubble — scrolls if taller than remaining space */}
+                    <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
                       <div
                         className={`flex w-full ${activeOptionsMessage.created_by === currentUserId ? "justify-end" : "justify-start"}`}
                       >
@@ -1825,8 +1848,8 @@ export default function Thread({
                       </div>
                     </div>
 
-                    {/** Actions row */}
-                    <div className="flex flex-col gap-1 mt-4 rounded-2xl border border-border bg-surface px-2 py-2 shadow-lg">
+                    {/** Actions row — pinned above composer */}
+                    <div className="mb-3 flex shrink-0 flex-col gap-1 rounded-2xl border border-border bg-surface px-2 py-2 shadow-lg">
                       {activeOptionsMessage.created_by === currentUserId ? (
                         <button
                           type="button"

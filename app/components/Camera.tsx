@@ -1,7 +1,9 @@
 "use client";
 
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ShutterIcon, RotateIcon, SendIcon, UndoIcon, CloseIcon } from "@/app/components/Icons";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
 
 type CameraFacingMode = "environment" | "user";
 
@@ -14,6 +16,8 @@ type CameraProps = {
     overlayYRatio: number;
   }) => Promise<void>;
   isSending: boolean;
+  /** When opening, seed the preview/send UI with this file instead of starting live capture. */
+  initialFile?: File | null;
   /** Override stacking (e.g. `z-[2300]` when opening above another full-screen overlay). */
   surfaceClassName?: string;
 };
@@ -25,8 +29,10 @@ export default function Camera({
   onClose,
   onSendPhoto,
   isSending,
+  initialFile = null,
   surfaceClassName,
 }: CameraProps) {
+  const [mounted, setMounted] = useState(false);
   const [isStartingCamera, setIsStartingCamera] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraErrorMessage, setCameraErrorMessage] = useState("");
@@ -44,6 +50,11 @@ export default function Camera({
   const overlayTextInputRef = useRef<HTMLInputElement | null>(null);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
+  const appliedInitialFileRef = useRef<File | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     try {
@@ -140,6 +151,7 @@ export default function Camera({
 
   useEffect(() => {
     if (!isOpen) {
+      appliedInitialFileRef.current = null;
       stopCameraStream();
       setCapturedPhotoFile(null);
       setCapturedPhotoPreviewUrl(null);
@@ -153,6 +165,11 @@ export default function Camera({
     }
 
     if (capturedPhotoFile) {
+      return;
+    }
+
+    // Wait for initialFile seeding before starting live capture.
+    if (initialFile && appliedInitialFileRef.current !== initialFile) {
       return;
     }
 
@@ -174,7 +191,31 @@ export default function Camera({
       cancelled = true;
       stopCameraStream();
     };
-  }, [cameraFacingMode, capturedPhotoFile, isOpen, startCameraStream, stopCameraStream]);
+  }, [cameraFacingMode, capturedPhotoFile, initialFile, isOpen, startCameraStream, stopCameraStream]);
+
+  useEffect(() => {
+    if (!isOpen || !initialFile) {
+      return;
+    }
+    if (appliedInitialFileRef.current === initialFile) {
+      return;
+    }
+
+    appliedInitialFileRef.current = initialFile;
+    stopCameraStream();
+    setCapturedPhotoFile(initialFile);
+    setCapturedPhotoPreviewUrl((previousUrl) => {
+      if (previousUrl) {
+        URL.revokeObjectURL(previousUrl);
+      }
+      return URL.createObjectURL(initialFile);
+    });
+    setOverlayText("");
+    setOverlayYRatio(0.5);
+    setIsOverlayVisible(false);
+    setIsOverlayTextEditing(false);
+    setCameraErrorMessage("");
+  }, [initialFile, isOpen, stopCameraStream]);
 
   const onFlipCamera = async () => {
     if (isStartingCamera) {
@@ -329,12 +370,17 @@ export default function Camera({
     };
   }, [capturedPhotoPreviewUrl]);
 
-  if (!isOpen) {
+  if (!mounted || !isOpen) {
     return null;
   }
 
-  return (
-    <div className={`fixed inset-0 flex flex-col bg-black ${surfaceClassName ?? "z-50"}`}>
+  return createPortal(
+    <div
+      className={`${DONT_SWIPE_TABS_CLASSNAME} fixed inset-0 flex flex-col bg-black ${surfaceClassName ?? "z-[2200]"}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Camera"
+    >
       <input
         ref={fileInputRef}
         type="file"
@@ -504,6 +550,7 @@ export default function Camera({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
