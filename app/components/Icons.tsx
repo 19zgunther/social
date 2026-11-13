@@ -18,6 +18,7 @@ import {
   CircleUserRound,
   Clock,
   Contrast,
+  Copy,
   Crop,
   Droplets,
   Eraser,
@@ -79,6 +80,8 @@ export const CheckIcon = Check;
 export const AddIcon = Plus;
 /** Edit content */
 export const EditIcon = Pencil;
+/** Copy to clipboard */
+export const CopyIcon = Copy;
 /** Delete / remove */
 export const DeleteIcon = Trash2;
 /** Reload / refresh data */

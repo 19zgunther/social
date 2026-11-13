@@ -14,7 +14,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { VideoIcon } from "@/app/components/Icons";
+import { CopyIcon, EditIcon, VideoIcon } from "@/app/components/Icons";
 import CameraModal from "@/app/components/Camera";
 import ThreadComposerAttachMenu from "@/app/components/ThreadComposerAttachMenu";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
@@ -1811,49 +1811,51 @@ export default function Thread({
                 aria-label="Message options"
                 className="pointer-events-auto flex min-h-0 flex-1 flex-col overflow-hidden"
               >
-                {/** Emoji + message + actions stay on-screen; only the held bubble scrolls when tall. */}
-                <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden px-4 pt-4">
+                {/** Reactions + message centered when short; top stays on-screen when tall. */}
+                <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden px-4 pt-[max(1rem,env(safe-area-inset-top))]">
                   <div className="mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col">
-                    {/** Emojis row — pinned */}
-                    <div className="w-full shrink-0 overflow-x-auto overflow-y-hidden [scrollbar-width:thin]">
-                      <div className="mx-auto flex w-max flex-nowrap items-center justify-center gap-2 py-0.5">
-                        {MESSAGE_OPTIONS_QUICK_EMOJIS.map((emoji) => (
-                          <button
-                            key={emoji}
-                            type="button"
-                            className="flex h-7 w-7 shrink-0 items-center justify-center text-xl bg-transparent border-none"
-                            aria-label={`React with ${emoji}`}
-                            onClick={() => { onSendEmojiReply(activeOptionsMessage.id, emoji); }}
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                        <EmojiPicker
-                          onSelectEmoji={(emoji) => {
-                            void onSendEmojiReply(activeOptionsMessage.id, emoji);
-                          }}
-                          className="shrink-0"
-                          buttonClassName="flex h-11 w-11 shrink-0 items-center justify-center bg-transparent border-none"
-                          buttonSmileIconClassName="h-5 w-5"
-                        />
-                      </div>
-                    </div>
+                    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
+                      <div className="my-auto w-full">
+                        <div className="w-full overflow-x-auto overflow-y-hidden [scrollbar-width:thin]">
+                          <div className="mx-auto flex w-max flex-nowrap items-center justify-center gap-2 py-0.5">
+                            {MESSAGE_OPTIONS_QUICK_EMOJIS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                className="flex h-7 w-7 shrink-0 items-center justify-center text-xl bg-transparent border-none"
+                                aria-label={`React with ${emoji}`}
+                                onClick={() => { onSendEmojiReply(activeOptionsMessage.id, emoji); }}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                            <EmojiPicker
+                              onSelectEmoji={(emoji) => {
+                                void onSendEmojiReply(activeOptionsMessage.id, emoji);
+                              }}
+                              className="shrink-0"
+                              buttonClassName="flex h-11 w-11 shrink-0 items-center justify-center bg-transparent border-none"
+                              buttonSmileIconClassName="h-5 w-5"
+                            />
+                          </div>
+                        </div>
 
-                    {/** Held message bubble — scrolls if taller than remaining space */}
-                    <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
-                      <div
-                        className={`flex w-full ${activeOptionsMessage.created_by === currentUserId ? "justify-end" : "justify-start"}`}
-                      >
-                        {renderOptionsTargetBubble(activeOptionsMessage, activeOptionsTargetDepth)}
+                        <div className="px-3 py-2">
+                          <div
+                            className={`flex w-full ${activeOptionsMessage.created_by === currentUserId ? "justify-end" : "justify-start"}`}
+                          >
+                            {renderOptionsTargetBubble(activeOptionsMessage, activeOptionsTargetDepth)}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
                     {/** Actions row — pinned above composer */}
-                    <div className="mb-3 flex shrink-0 flex-col gap-1 rounded-2xl border border-border bg-surface px-2 py-2 shadow-lg">
+                    <div className="mb-3 flex shrink-0 flex-col gap-1 px-2 py-2 shadow-lg">
                       {activeOptionsMessage.created_by === currentUserId ? (
                         <button
                           type="button"
-                          className="w-full border-b border-border px-4 py-1 text-left text-sm font-medium text-foreground"
+                          className="flex w-full items-center gap-3 px-4 py-1 text-left text-sm font-medium text-foreground"
                           onClick={() => {
                             setMessageDraft(activeOptionsMessage.text);
                             setEditTargetMessageId(activeOptionsMessage.id);
@@ -1867,14 +1869,16 @@ export default function Thread({
                             });
                           }}
                         >
+                          <EditIcon className="h-4 w-4 shrink-0 text-muted" aria-hidden />
                           Edit message
                         </button>
                       ) : null}
                       <button
                         type="button"
-                        className="w-full border-none border-border px-4 py-1 text-left text-sm font-medium text-foreground"
+                        className="flex w-full items-center gap-3 border-none px-4 py-1 text-left text-sm font-medium text-foreground"
                         onClick={() => { copyActiveOptionsMessage(activeOptionsMessage); }}
                       >
+                        <CopyIcon className="h-4 w-4 shrink-0 text-muted" aria-hidden />
                         Copy
                       </button>
                     </div>
