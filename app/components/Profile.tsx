@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState, type MutableRefObject, type ReactNode
 import {
   BotIcon,
   CheckIcon,
-  UserPlaceholderIcon,
   MessageIcon,
   PlayIcon,
   SettingsIcon,
@@ -117,40 +116,29 @@ function ProfilePictureRow({
               className="shrink-0 cursor-pointer rounded-full"
               aria-label="Edit profile picture"
             >
-              {showProfilePhoto ? (
-                <UserProfileImage
-                  userId={profileUserId}
-                  sizePx={64}
-                  alt="Profile picture"
-                  signedUrl={localProfileImageUrl}
-                  imageAccessGrant={localProfileImageAccessGrant ?? null}
-                  imageStorageUserId={profileUserId}
-                  imageId={localProfileImageId}
-                />
-              ) : (
-                <div className="flex h-16 w-16 flex-col items-center justify-center rounded-full border border-border bg-surface p-2 text-xs">
-                  <UserPlaceholderIcon className="h-10 w-10 text-muted" />
-                  <p className="text-muted">Click to add</p>
-                </div>
-              )}
+              <UserProfileImage
+                userId={profileUserId}
+                sizePx={64}
+                alt="Profile picture"
+                username={username}
+                signedUrl={showProfilePhoto ? localProfileImageUrl : null}
+                imageAccessGrant={showProfilePhoto ? (localProfileImageAccessGrant ?? null) : null}
+                imageStorageUserId={profileUserId}
+                imageId={showProfilePhoto ? localProfileImageId : null}
+              />
             </button>
           ) : (
             <div className="shrink-0">
-              {showProfilePhoto ? (
-                <UserProfileImage
-                  userId={profileUserId}
-                  sizePx={64}
-                  alt="Profile picture"
-                  signedUrl={localProfileImageUrl}
-                  imageAccessGrant={localProfileImageAccessGrant ?? null}
-                  imageStorageUserId={profileUserId}
-                  imageId={localProfileImageId}
-                />
-              ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-surface p-2">
-                  <UserPlaceholderIcon className="h-14 w-14 text-muted" />
-                </div>
-              )}
+              <UserProfileImage
+                userId={profileUserId}
+                sizePx={64}
+                alt="Profile picture"
+                username={username}
+                signedUrl={showProfilePhoto ? localProfileImageUrl : null}
+                imageAccessGrant={showProfilePhoto ? (localProfileImageAccessGrant ?? null) : null}
+                imageStorageUserId={profileUserId}
+                imageId={showProfilePhoto ? localProfileImageId : null}
+              />
             </div>
           )}
           <div className="min-w-0 flex-1 overflow-hidden">

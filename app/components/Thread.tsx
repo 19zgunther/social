@@ -1383,6 +1383,7 @@ export default function Thread({
                   userId={message.created_by}
                   sizePx={MESSAGE_AVATAR_SIZE_PX}
                   alt={`${message.username} profile`}
+                  username={message.username}
                 />
               ) : null}
             </div>

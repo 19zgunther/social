@@ -579,6 +579,7 @@ export default function PostGroupsTab({
                     userId={friend.user_id}
                     sizePx={50}
                     alt={`${friend.username} profile`}
+                    username={friend.username}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{friend.username}</p>
@@ -629,6 +630,7 @@ export default function PostGroupsTab({
                     userId={friend.user_id}
                     sizePx={50}
                     alt={`${friend.username} profile`}
+                    username={friend.username}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{friend.username}</p>

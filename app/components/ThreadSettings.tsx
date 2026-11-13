@@ -586,6 +586,7 @@ export default function ThreadSettings({
                       userId={member.user_id}
                       sizePx={40}
                       alt={`${member.username} profile`}
+                      username={member.username}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-foreground">

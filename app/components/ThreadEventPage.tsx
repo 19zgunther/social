@@ -251,7 +251,12 @@ function EventPeopleList({
         <ul className="space-y-2">
           {entries.map((entry) => (
             <li key={entry.userId} className="flex items-center gap-3">
-              <UserProfileImage userId={entry.userId} sizePx={40} alt={entry.username} />
+              <UserProfileImage
+                userId={entry.userId}
+                sizePx={40}
+                alt={entry.username}
+                username={entry.username}
+              />
               <span className={`min-w-0 flex-1 truncate text-sm font-medium ${readableText}`}>
                 {entry.username}
               </span>

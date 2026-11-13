@@ -141,6 +141,7 @@ export default function ProfileFriendsTab({
                       userId={requestRow.requesting_user_id}
                       sizePx={50}
                       alt={`${requestRow.username} profile`}
+                      username={requestRow.username}
                     />
                     <div className="min-w-0 flex-1 text-left">
                       <p className="truncate text-sm font-medium text-foreground">
@@ -197,6 +198,7 @@ export default function ProfileFriendsTab({
                   userId={friend.user_id}
                   sizePx={50}
                   alt={`${friend.username} profile`}
+                  username={friend.username}
                 />
                 <div className="min-w-0 flex-1 text-left">
                   <p className="truncate text-sm font-medium text-foreground">{friend.username}</p>
@@ -224,6 +226,7 @@ export default function ProfileFriendsTab({
                   userId={row.other_user_id}
                   sizePx={50}
                   alt={`${row.username} profile`}
+                  username={row.username}
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">{row.username}</p>

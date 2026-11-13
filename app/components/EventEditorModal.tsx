@@ -959,6 +959,7 @@ export default function EventEditorModal({
                           userId={userId}
                           sizePx={24}
                           alt={`${label} profile`}
+                          username={label}
                         />
                         <span className="max-w-[8rem] truncate text-xs font-medium text-foreground">
                           {label}
@@ -1012,6 +1013,7 @@ export default function EventEditorModal({
                         userId={member.id}
                         sizePx={24}
                         alt={`${member.username} profile`}
+                        username={member.username}
                       />
                       <span className="max-w-[8rem] truncate text-xs font-medium text-foreground">
                         {member.username}

@@ -667,6 +667,7 @@ function PostSectionComponent({
               userId={comment.user_id}
               sizePx={24}
               alt={`${comment.username || comment.user_id} profile`}
+              username={comment.username || comment.user_id}
               onClick={() => onViewUserProfile?.(comment.user_id)}
             />
             <span className="shrink-0 font-semibold text-foreground/90">{comment.username || comment.user_id}</span>
@@ -779,6 +780,7 @@ function PostSectionComponent({
             userId={post.created_by}
             sizePx={40}
             alt={`${post.username} profile`}
+            username={post.username}
             signedUrl={post.author_profile_image_url ?? null}
             imageAccessGrant={post.author_profile_image_access_grant ?? null}
             imageStorageUserId={post.created_by}

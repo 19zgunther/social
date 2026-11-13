@@ -470,6 +470,7 @@ export default function PostOptionsPane({
                               userId={voter.user_id}
                               sizePx={32}
                               alt={`${voter.username} profile`}
+                              username={voter.username}
                             />
                             {onViewUserProfile ? (
                               <button
@@ -519,6 +520,7 @@ export default function PostOptionsPane({
                         userId={submission.user_id}
                         sizePx={32}
                         alt={`${submission.username} profile`}
+                        username={submission.username}
                       />
                       {onViewUserProfile ? (
                         <button
@@ -579,6 +581,7 @@ export default function PostOptionsPane({
                       userId={entry.userId}
                       sizePx={32}
                       alt={`${entry.username} profile`}
+                      username={entry.username}
                     />
                     {onViewUserProfile ? (
                       <button
@@ -629,6 +632,7 @@ export default function PostOptionsPane({
                             userId={entry.userId}
                             sizePx={32}
                             alt={`${entry.username} profile`}
+                            username={entry.username}
                           />
                           {onViewUserProfile ? (
                             <button

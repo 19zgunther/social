@@ -898,6 +898,7 @@ export default function Messages({
                     userId={member.id}
                     sizePx={24}
                     alt={`${member.username} profile`}
+                    username={member.username}
                   />
                   <span className="max-w-[8rem] truncate text-xs font-medium text-foreground">
                     {member.username}
@@ -1102,6 +1103,7 @@ export default function Messages({
                     userId={friend.id}
                     sizePx={48}
                     alt={`${friend.username} profile`}
+                    username={friend.username}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-base font-semibold text-foreground">
