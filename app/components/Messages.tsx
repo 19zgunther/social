@@ -13,18 +13,12 @@ import {
   ApiError,
   FriendSearchResponse,
   MessagesListResponse,
-  ImageOverlayData,
-  MessageData,
   ThreadItem,
 } from "@/app/types/interfaces";
-import ImageViewerModal from "@/app/components/ImageViewerModal";
-import CameraModal from "@/app/components/Camera";
-import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import ThreadAvatar from "@/app/components/ThreadAvatar";
 import {
   CloseIcon,
-  ForwardIcon,
   NewChatIcon,
   RefreshIcon,
   SearchIcon,
@@ -86,33 +80,6 @@ const postWithAuth = async (path: string, body: unknown): Promise<Response> => {
   });
 };
 
-const clampOverlayYRatio = (value: number): number => {
-  if (Number.isNaN(value)) {
-    return 0.5;
-  }
-  return Math.min(0.9, Math.max(0.1, value));
-};
-
-const formatThreadListTime = (iso: string | null | undefined): string => {
-  if (!iso) {
-    return "";
-  }
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) {
-    return "";
-  }
-  const now = new Date();
-  if (parsed.toDateString() === now.toDateString()) {
-    return parsed.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  }
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (parsed.toDateString() === yesterday.toDateString()) {
-    return "Yesterday";
-  }
-  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-};
-
 export default function Messages({
   currentUserId,
   onThreadRead,
@@ -144,20 +111,6 @@ export default function Messages({
     close: closeCreateChatModal,
     dismiss: dismissCreateChatModal,
   } = useAnimatedModal();
-  const [messagesPhotoViewer, setMessagesPhotoViewer] = useState<{
-    threadId: string;
-    signedUrl: string | null;
-    imageId: string | null;
-    imageAccessGrant: string | null;
-    imageStorageUserId: string | null;
-    imageOverlay: ImageOverlayData | null;
-    replyToMessageId: string;
-  } | null>(null);
-  const [replyCamera, setReplyCamera] = useState<{
-    threadId: string;
-    replyToMessageId: string;
-  } | null>(null);
-  const [isReplyCameraSending, setIsReplyCameraSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFriendSuggestions, setSearchFriendSuggestions] = useState<UserSearchOption[]>([]);
   const [isLoadingSearchFriends, setIsLoadingSearchFriends] = useState(false);
@@ -772,82 +725,6 @@ export default function Messages({
     };
   }, [optionsMenu]);
 
-  const onLastMessagePreviewClick = useCallback(
-    (thread: ThreadItem) => {
-      markThreadRead(thread);
-      const preview = thread.last_photo_preview;
-      if (!preview) {
-        return;
-      }
-      if (
-        preview.image_id &&
-        (preview.image_url ||
-          (preview.image_access_grant && preview.image_storage_user_id))
-      ) {
-        setMessagesPhotoViewer({
-          threadId: thread.id,
-          signedUrl: preview.image_url,
-          imageId: preview.image_id,
-          imageAccessGrant: preview.image_access_grant ?? null,
-          imageStorageUserId: preview.image_storage_user_id ?? null,
-          imageOverlay: preview.image_overlay,
-          replyToMessageId: preview.message_id,
-        });
-        return;
-      }
-      setReplyCamera({ threadId: thread.id, replyToMessageId: preview.message_id });
-    },
-    [markThreadRead],
-  );
-
-  const onSendPhotoReply = async (payload: {
-    file: File;
-    overlayText: string;
-    overlayYRatio: number;
-  }) => {
-    if (!replyCamera) {
-      return;
-    }
-    const { threadId, replyToMessageId } = replyCamera;
-    setIsReplyCameraSending(true);
-    setStatusMessage("");
-    try {
-      const prepared = await prepareImageForUpload(payload.file);
-      const trimmedOverlay = payload.overlayText.trim();
-      const messageData: MessageData | undefined =
-        trimmedOverlay.length > 0
-          ? {
-              image_overlay: {
-                text: trimmedOverlay,
-                y_ratio: clampOverlayYRatio(payload.overlayYRatio),
-              },
-            }
-          : undefined;
-
-      const response = await postWithAuth("/api/thread-send", {
-        thread_id: threadId,
-        text: "",
-        reply_to_message_id: replyToMessageId,
-        image_base64_data: prepared.base64Data,
-        image_mime_type: prepared.mimeType,
-        ...(messageData ? { message_data: messageData } : {}),
-      });
-
-      if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
-        return;
-      }
-
-      await response.json();
-      setReplyCamera(null);
-      void refreshMessagesListSilent();
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to send photo.");
-    } finally {
-      setIsReplyCameraSending(false);
-    }
-  };
-
   useEffect(() => {
     if (!deepLinkThreadId || isLoadingThreads || selectedThread) {
       return;
@@ -1101,7 +978,6 @@ export default function Messages({
               }
               onOpenThread(nextThread);
             }}
-            onLastMessagePreviewClick={onLastMessagePreviewClick}
             onLongPressStart={(target) => startPinLongPress(thread.id, target)}
             onLongPressCancel={cancelPinLongPress}
             onOpenPinActions={(target) => openOptionsMenu(thread.id, target)}
@@ -1179,36 +1055,6 @@ export default function Messages({
           void setThreadPinned(optionsMenuThread, pinned);
         }}
       />
-
-      <ImageViewerModal
-        open={messagesPhotoViewer !== null}
-        onClose={() => {
-          setMessagesPhotoViewer(null);
-        }}
-        signedUrl={messagesPhotoViewer?.signedUrl ?? null}
-        imageId={messagesPhotoViewer?.imageId ?? null}
-        imageAccessGrant={messagesPhotoViewer?.imageAccessGrant ?? null}
-        imageStorageUserId={messagesPhotoViewer?.imageStorageUserId ?? null}
-        imageOverlay={messagesPhotoViewer?.imageOverlay ?? null}
-        onReply={() => {
-          if (!messagesPhotoViewer) {
-            return;
-          }
-          const { threadId, replyToMessageId } = messagesPhotoViewer;
-          setMessagesPhotoViewer(null);
-          setReplyCamera({ threadId, replyToMessageId });
-        }}
-      />
-
-      <CameraModal
-        isOpen={replyCamera !== null}
-        onClose={() => {
-          setReplyCamera(null);
-        }}
-        onSendPhoto={onSendPhotoReply}
-        isSending={isReplyCameraSending}
-        surfaceClassName="z-[2300]"
-      />
     </div>
   );
 }
@@ -1219,7 +1065,6 @@ function MessageThreadRow({
   currentUserId,
   unreadThreadIds,
   onOpenThread,
-  onLastMessagePreviewClick,
   onLongPressStart,
   onLongPressCancel,
   onOpenPinActions,
@@ -1228,24 +1073,11 @@ function MessageThreadRow({
   currentUserId: string;
   unreadThreadIds: Set<string>;
   onOpenThread: (thread: ThreadItem) => void;
-  onLastMessagePreviewClick: (thread: ThreadItem) => void;
   onLongPressStart: (target: HTMLElement) => void;
   onLongPressCancel: () => void;
   onOpenPinActions: (target: HTMLElement) => void;
 }) {
-  const preview = thread.last_photo_preview;
-  const listTime = formatThreadListTime(thread.last_message_at);
-  const hasPhotoPreview = Boolean(
-    preview?.image_id &&
-      (preview?.image_url ||
-        (preview?.image_access_grant && preview?.image_storage_user_id)),
-  );
   const isUnread = unreadThreadIds.has(thread.id);
-  const showSelfLastArrow =
-    !preview &&
-    !isUnread &&
-    thread.last_message_at &&
-    thread.last_message_from_self === true;
 
   return (
     <div
@@ -1277,7 +1109,7 @@ function MessageThreadRow({
         : "bg-bg hover:bg-surface/20"
         }`}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex min-h-[4.125rem] items-center gap-3">
         <ThreadAvatar
           sizePx={48}
           threadId={thread.id}
@@ -1289,61 +1121,23 @@ function MessageThreadRow({
           alt={`${thread.name} photo`}
         />
 
-        <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <p className="truncate text-base font-semibold text-foreground">
-                {thread.name}
-              </p>
-              {isUnread ? (
-                <span
-                  aria-label="Unread messages"
-                  className="h-2 w-2 flex-shrink-0 rounded-full bg-accent"
-                />
-              ) : null}
-            </div>
-            {thread.is_direct ? null : <p className="mt-0.5 truncate text-sm text-muted">
-              Members: {thread.participant_count ?? 1}
-            </p>}
-          </div>
-
-          <div className="flex flex-col flex-shrink-0 items-end gap-1 pt-0.5">
-            {preview ? (
-              <button
-                type="button"
-                aria-label={
-                  hasPhotoPreview ? "View last photo message" : "Reply with photo to last message"
-                }
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onLastMessagePreviewClick(thread);
-                }}
-                className={`h-8 w-8 flex-shrink-0 rounded-md ${
-                  isUnread
-                    ? hasPhotoPreview
-                      ? "bg-danger-fill shadow-sm ring-1 ring-danger/40"
-                      : "bg-accent shadow-sm ring-1 ring-accent/40"
-                    : hasPhotoPreview
-                      ? "border-2 border-danger/70 bg-transparent"
-                      : "border-2 border-accent/70 bg-transparent"
-                }`}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-base font-semibold leading-6 text-foreground">
+              {thread.name}
+            </p>
+            {isUnread ? (
+              <span
+                aria-label="Unread messages"
+                className="h-2 w-2 flex-shrink-0 rounded-full bg-accent"
               />
-            ) : showSelfLastArrow ? (
-              <button
-                type="button"
-                aria-label="Open thread"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenThread(thread);
-                }}
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border-2 border-muted/80 bg-transparent text-muted"
-              >
-                <ForwardIcon className="h-4 w-4" aria-hidden />
-              </button>
             ) : null}
-
-            {listTime ? <span className="text-xs text-muted">{listTime}</span> : null}
           </div>
+          {thread.last_message_preview ? (
+            <p className="mt-0.5 h-10 line-clamp-2 text-sm leading-5 text-muted">
+              {thread.last_message_preview}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

@@ -90,7 +90,6 @@ export async function POST(request: Request) {
           created_at: createdThread.created_at,
           owner_user_id: createdThread.owner,
           owner_username: authResult.username,
-          participant_count: memberUserIds.length,
           member_user_ids: memberUserIds,
           member_usernames: memberUsernames,
           user_pinned_thread: false,

@@ -57,7 +57,6 @@ function toThreadItemPayload(input: {
     created_at: thread.created_at.toISOString(),
     owner_user_id: thread.owner,
     owner_username: thread.users.username,
-    participant_count: memberUserIds.length,
     member_user_ids: memberUserIds,
     member_usernames: [],
     user_pinned_thread: false,
@@ -65,9 +64,6 @@ function toThreadItemPayload(input: {
     image_id: thread.image_id,
     image_url: null,
     image_access_grant,
-    last_message_at: null,
-    last_message_from_self: false,
-    last_photo_preview: null,
   };
 }
 

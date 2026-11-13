@@ -209,18 +209,6 @@ export type ImageOverlayData = {
   y_ratio: number;
 };
 
-/** Latest incoming message from someone else when it is the most recent in the thread (Messages list: tap for preview or photo reply). */
-export type ThreadLastPhotoPreview = {
-  message_id: string;
-  image_id: string | null;
-  image_url: string | null;
-  /** Main-bucket grant for message photo; use with `image_storage_user_id`. */
-  image_access_grant?: string | null;
-  /** `thread_messages.created_by` — storage owner for the message image. */
-  image_storage_user_id?: string | null;
-  image_overlay: ImageOverlayData | null;
-};
-
 export type ThreadItem = {
   id: string;
   name: string;
@@ -229,7 +217,6 @@ export type ThreadItem = {
   owner_username: string;
   /** True when this is a 1:1 direct message thread. */
   is_direct?: boolean;
-  participant_count?: number;
   /** Member user ids for avatar collage when the thread has no group photo. */
   member_user_ids?: string[];
   /** Member usernames for Messages search. */
@@ -240,12 +227,8 @@ export type ThreadItem = {
   image_url?: string | null;
   /** Thread-scoped grant for `image_id`; resolve with `imageThreadId` = this thread's `id`. */
   image_access_grant?: string | null;
-  /** ISO time of the chronologically latest message in the thread, if any. */
-  last_message_at?: string | null;
-  /** True when `last_message_at` refers to a message you sent (Messages list affordance). */
-  last_message_from_self?: boolean;
-  /** Present when the latest message is from someone else: image (tap to preview) or text-only (tap to reply with a photo). */
-  last_photo_preview?: ThreadLastPhotoPreview | null;
+  /** Short preview of the latest message text (or photo fallback) for the Messages list. */
+  last_message_preview?: string | null;
   /** Present when this thread was created by an event with a background image. */
   event_background_image_id?: string | null;
   /** Thread-scoped grant for the event background image; resolve with `imageThreadId` = this thread's `id`. */

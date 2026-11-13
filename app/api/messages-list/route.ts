@@ -1,55 +1,41 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
-import {
-  createMainBucketImageAccessGrant,
-  createThreadBucketImageAccessGrant,
-} from "@/app/api/image_access_grant";
+import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { isEmojiOnlyText, sanitizeNotificationText } from "@/app/lib/notification_text";
 import { prisma } from "@/app/lib/prisma";
 import { directPeerUsernameFromMembers } from "@/app/lib/threadDirect";
-import {
-  MessagesListResponse,
-  ImageOverlayData,
-  ThreadItem,
-} from "@/app/types/interfaces";
+import { MessagesListResponse } from "@/app/types/interfaces";
 
 type MessageRow = {
   id: string;
   parent_id: string | null;
   created_at: Date;
-  created_by: string;
   text: string | null;
   image_id: string | null;
-  data: unknown;
 };
 
-const clampOverlayYRatio = (value: number): number => {
-  if (Number.isNaN(value)) {
-    return 0.5;
-  }
-  return Math.min(0.9, Math.max(0.1, value));
-};
+const LAST_MESSAGE_PREVIEW_MAX_CHARS = 160;
 
-const parseImageOverlayFromMessageData = (data: unknown): ImageOverlayData | null => {
-  if (!data || typeof data !== "object") {
+const buildLastMessagePreview = (latest: MessageRow | undefined): string | null => {
+  if (!latest) {
     return null;
   }
-  const record = data as Record<string, unknown>;
-  const overlay = record.image_overlay;
-  if (!overlay || typeof overlay !== "object") {
-    return null;
+  const rawText = latest.text?.trim() ?? "";
+  if (rawText && isEmojiOnlyText(rawText)) {
+    // Unicode emoji can show as-is; custom-emoji tokens sanitize to empty.
+    return sanitizeNotificationText(rawText) || "Reacted";
   }
-  const o = overlay as Record<string, unknown>;
-  if (typeof o.text !== "string" || typeof o.y_ratio !== "number") {
-    return null;
+  const textPreview = sanitizeNotificationText(latest.text);
+  if (textPreview) {
+    if (textPreview.length <= LAST_MESSAGE_PREVIEW_MAX_CHARS) {
+      return textPreview;
+    }
+    return `${textPreview.slice(0, LAST_MESSAGE_PREVIEW_MAX_CHARS).trimEnd()}…`;
   }
-  const trimmedText = o.text.trim();
-  if (!trimmedText) {
-    return null;
+  if (latest.image_id) {
+    return "Sent a photo";
   }
-  return {
-    text: trimmedText,
-    y_ratio: clampOverlayYRatio(o.y_ratio),
-  };
+  return null;
 };
 
 async function loadLatestMessageByThreadId(
@@ -70,10 +56,8 @@ async function loadLatestMessageByThreadId(
       id: true,
       parent_id: true,
       created_at: true,
-      created_by: true,
       text: true,
       image_id: true,
-      data: true,
     },
   });
 
@@ -102,10 +86,8 @@ async function loadLatestMessageByThreadId(
         id: true,
         parent_id: true,
         created_at: true,
-        created_by: true,
         text: true,
         image_id: true,
-        data: true,
       },
     });
 
@@ -218,12 +200,7 @@ export async function POST(request: Request) {
     const payload: MessagesListResponse = {
       threads: threads.map((thread) => {
         const latest = latestByThreadId.get(thread.id);
-        const last_message_at = latest ? latest.created_at.toISOString() : null;
-        const last_message_from_self = Boolean(
-          latest && latest.created_by === authResult.user_id,
-        );
-
-        let last_photo_preview: ThreadItem["last_photo_preview"] = null;
+        const last_message_preview = buildLastMessagePreview(latest);
         const memberUserIds = [
           ...new Set([
             thread.owner,
@@ -238,7 +215,6 @@ export async function POST(request: Request) {
             ].filter((name) => Boolean(name?.trim())),
           ),
         ];
-        const participantCount = memberUserIds.length;
         const viewerAccess = thread.user_thread_access.find(
           (access) => access.user_id === authResult.user_id,
         );
@@ -247,35 +223,6 @@ export async function POST(request: Request) {
           thread.is_direct === true
             ? directPeerUsernameFromMembers(thread, authResult.user_id) ?? thread.name
             : thread.name;
-        if (latest && latest.created_by !== authResult.user_id) {
-          if (latest.image_id) {
-            try {
-              const previewGrant = createMainBucketImageAccessGrant({
-                imageId: latest.image_id,
-                storageUserId: latest.created_by,
-                viewerUserId: authResult.user_id,
-              });
-              const overlay = parseImageOverlayFromMessageData(latest.data);
-              last_photo_preview = {
-                message_id: latest.id,
-                image_id: latest.image_id,
-                image_url: null,
-                image_access_grant: previewGrant,
-                image_storage_user_id: latest.created_by,
-                image_overlay: overlay,
-              };
-            } catch (error) {
-              console.error("messages_list_last_photo_grant_failed", thread.id, error);
-            }
-          } else if (latest.text?.trim()) {
-            last_photo_preview = {
-              message_id: latest.id,
-              image_id: null,
-              image_url: null,
-              image_overlay: null,
-            };
-          }
-        }
 
         return {
           id: thread.id,
@@ -284,16 +231,13 @@ export async function POST(request: Request) {
           owner_user_id: thread.owner,
           owner_username: thread.users.username,
           is_direct: thread.is_direct === true,
-          participant_count: participantCount,
           member_user_ids: memberUserIds,
           member_usernames: memberUsernames,
           user_pinned_thread,
           image_id: thread.image_id,
           image_url: null,
           image_access_grant: imageAccessGrantByThreadId.get(thread.id) ?? null,
-          last_message_at,
-          last_message_from_self,
-          last_photo_preview,
+          last_message_preview,
         };
       }),
     };

@@ -497,7 +497,6 @@ export default function Thread({
             return {
               ...previousThread,
               member_user_ids: membersPayload.members.map((member) => member.user_id),
-              participant_count: membersPayload.members.length,
             };
           });
         }

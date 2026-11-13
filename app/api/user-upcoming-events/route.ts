@@ -70,8 +70,6 @@ export async function POST(request: Request) {
         cohostsByEventId.get(row.id) ?? [],
       );
 
-      const participantCount = new Set([tr.owner, ...tr.user_thread_access.map((a) => a.user_id)]).size;
-
       let image_access_grant: string | null = null;
       if (tr.image_id) {
         try {
@@ -91,12 +89,9 @@ export async function POST(request: Request) {
         created_at: tr.created_at.toISOString(),
         owner_user_id: tr.owner,
         owner_username: tr.users.username,
-        participant_count: participantCount,
         image_id: tr.image_id,
         image_url: null,
         image_access_grant,
-        last_message_at: null,
-        last_photo_preview: null,
       };
 
       items.push({ thread, event });
