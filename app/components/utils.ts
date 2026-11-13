@@ -3,7 +3,7 @@ import { CSSProperties } from "react";
 type Mode = "login" | "signup";
 type AppTab =
     | "feed"
-    | "groups"
+    | "messages"
     | "events"
     | "profile"
     | "feedback"
@@ -33,20 +33,23 @@ const parseDeepLinkFromLocation = (): {
     const openCreatePost = tabParam === "create_post";
     let tab: AppTab | null =
         tabParam === "feed" ||
-            tabParam === "groups" ||
+            tabParam === "messages" ||
+            tabParam === "groups" || // legacy deep link → messages
             tabParam === "events" ||
             tabParam === "shared_event_posts" || // legacy deep link → events
             tabParam === "profile" ||
             tabParam === "feedback"
             ? tabParam === "shared_event_posts"
                 ? "events"
-                : tabParam
+                : tabParam === "groups"
+                    ? "messages"
+                    : tabParam
             : null;
     if (openCreatePost) {
         tab = "profile";
     }
     if (!tab && threadIdParam) {
-        tab = "groups";
+        tab = "messages";
     }
 
     return {

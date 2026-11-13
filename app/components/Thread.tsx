@@ -1594,7 +1594,7 @@ export default function Thread({
                   imageId: selectedThread.image_id ?? null,
                   imageAccessGrant: selectedThread.image_access_grant ?? null,
                   imageThreadId: selectedThread.id,
-                  alt: "Group photo",
+                  alt: "Chat photo",
                 });
               }}
             >
@@ -1610,7 +1610,7 @@ export default function Thread({
                     : selectedThread.member_user_ids
                 }
                 currentUserId={currentUserId}
-                alt="Group photo"
+                alt="Chat photo"
               />
             </button>
           ) : (
@@ -1627,7 +1627,7 @@ export default function Thread({
                     : selectedThread.member_user_ids
                 }
                 currentUserId={currentUserId}
-                alt="Group photo"
+                alt="Chat photo"
               />
             </div>
           )}

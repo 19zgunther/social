@@ -160,7 +160,7 @@ export default function ThreadPictureEditor({
       canvas.height = OUTPUT_SIZE_PX;
       const context = canvas.getContext("2d");
       if (!context) {
-        setStatusMessage("Failed to prepare group image.");
+        setStatusMessage("Failed to prepare chat image.");
         return;
       }
       context.drawImage(imageElement, drawX, drawY, drawWidth, drawHeight);
@@ -168,7 +168,7 @@ export default function ThreadPictureEditor({
       const outputDataUrl = canvas.toDataURL("image/jpeg", 0.9);
       const base64Data = outputDataUrl.split(",")[1];
       if (!base64Data) {
-        setStatusMessage("Failed to encode group image.");
+        setStatusMessage("Failed to encode chat image.");
         return;
       }
 
@@ -183,7 +183,7 @@ export default function ThreadPictureEditor({
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-        setStatusMessage(body.error?.message ?? "Failed to save group image.");
+        setStatusMessage(body.error?.message ?? "Failed to save chat image.");
         return;
       }
 
@@ -191,7 +191,7 @@ export default function ThreadPictureEditor({
       onSaved(payload.image_id, payload.image_url, payload.image_access_grant);
       onClose();
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to save group image.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to save chat image.");
     } finally {
       setIsSaving(false);
     }
@@ -208,7 +208,7 @@ export default function ThreadPictureEditor({
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-        setStatusMessage(body.error?.message ?? "Failed to remove group image.");
+        setStatusMessage(body.error?.message ?? "Failed to remove chat image.");
         return;
       }
 
@@ -216,7 +216,7 @@ export default function ThreadPictureEditor({
       onSaved(payload.image_id, payload.image_url, null);
       onClose();
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to remove group image.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to remove chat image.");
     } finally {
       setIsSaving(false);
     }
@@ -230,7 +230,7 @@ export default function ThreadPictureEditor({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-3 shadow-xl shadow-black/35">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Edit Group Photo</h2>
+          <h2 className="text-sm font-semibold text-foreground">Edit Chat Photo</h2>
           <Button
             type="button"
             variant="secondary"
@@ -270,7 +270,7 @@ export default function ThreadPictureEditor({
               className="flex h-20 w-full flex-col items-center justify-center gap-1 rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted hover:text-foreground disabled:opacity-50"
             >
               <DeleteIcon className="h-5 w-5" />
-              {isSaving ? "Removing..." : "Remove Group Photo"}
+              {isSaving ? "Removing..." : "Remove Chat Photo"}
             </button>
           </div>
         ) : (
@@ -285,7 +285,7 @@ export default function ThreadPictureEditor({
             >
               <img
                 src={sourceDataUrl}
-                alt="Group photo crop preview"
+                alt="Chat photo crop preview"
                 draggable={false}
                 className="pointer-events-none absolute left-1/2 top-1/2 max-w-none select-none"
                 style={{

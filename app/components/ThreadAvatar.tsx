@@ -161,7 +161,7 @@ export default function ThreadAvatar({
   imageAccessGrant,
   memberUserIds,
   currentUserId,
-  alt = "Group photo",
+  alt = "Chat photo",
   className,
 }: ThreadAvatarProps) {
   const hasThreadImage = Boolean(imageId && (imageUrl || imageAccessGrant));

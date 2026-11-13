@@ -7,7 +7,7 @@ import {
 import { prisma } from "@/app/lib/prisma";
 import { directPeerUsernameFromMembers } from "@/app/lib/threadDirect";
 import {
-  GroupsListResponse,
+  MessagesListResponse,
   ImageOverlayData,
   ThreadItem,
 } from "@/app/types/interfaces";
@@ -154,7 +154,7 @@ async function loadLatestMessageByThreadId(
 export async function POST(request: Request) {
   const authResult = authCheck(request);
   if (authResult.error) {
-    console.error("groups_list_auth_failed", authResult.error);
+    console.error("messages_list_auth_failed", authResult.error);
     return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
 
@@ -206,7 +206,7 @@ export async function POST(request: Request) {
         });
         return [thread.id, grant] as const;
       } catch (error) {
-        console.error("groups_list_thread_image_grant_failed", thread.id, error);
+        console.error("messages_list_thread_image_grant_failed", thread.id, error);
         return [thread.id, null] as const;
       }
     });
@@ -215,7 +215,7 @@ export async function POST(request: Request) {
     const threadIds = threads.map((thread) => thread.id);
     const latestByThreadId = await loadLatestMessageByThreadId(threadIds);
 
-    const payload: GroupsListResponse = {
+    const payload: MessagesListResponse = {
       threads: threads.map((thread) => {
         const latest = latestByThreadId.get(thread.id);
         const last_message_at = latest ? latest.created_at.toISOString() : null;
@@ -265,7 +265,7 @@ export async function POST(request: Request) {
                 image_overlay: overlay,
               };
             } catch (error) {
-              console.error("groups_list_last_photo_grant_failed", thread.id, error);
+              console.error("messages_list_last_photo_grant_failed", thread.id, error);
             }
           } else if (latest.text?.trim()) {
             last_photo_preview = {
@@ -299,9 +299,9 @@ export async function POST(request: Request) {
     };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
-    console.error("groups_list_failed", error);
+    console.error("messages_list_failed", error);
     return NextResponse.json(
-      { error: { code: "groups_list_failed", message: "Failed to load groups." } },
+      { error: { code: "messages_list_failed", message: "Failed to load messages." } },
       { status: 500 },
     );
   }

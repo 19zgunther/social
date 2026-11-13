@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import Feed from "@/app/components/Feed";
-import Groups from "@/app/components/Groups";
+import Messages from "@/app/components/Messages";
 import {
   NavFeedIcon,
   NavEventsIcon,
   NavFeedbackIcon,
   NavProfileIcon,
-  NavGroupsIcon,
+  NavMessagesIcon,
 } from "@/app/components/Icons";
 import { Profile, ProfileOtherUser } from "@/app/components/Profile";
 import ProfileSettings from "@/app/components/ProfileSettings";
@@ -48,10 +48,10 @@ import {
 const TAB_TO_BACK_BASE: { [key in AppTab]: { forward: AppTab | null; back: AppTab | null } } = {
   thread_event: { forward: null, back: "thread_settings" },
   thread_settings: { forward: null, back: "thread" },
-  thread: { forward: null, back: "groups" },
-  groups: { forward: "events", back: "feed" },
-  events: { forward: "profile", back: "groups" },
-  feed: { forward: "groups", back: null },
+  thread: { forward: null, back: "messages" },
+  messages: { forward: "events", back: "feed" },
+  events: { forward: "profile", back: "messages" },
+  feed: { forward: "messages", back: null },
   profile: { forward: null, back: "events" },
   feedback: { forward: "profile_settings", back: "profile" },
   profile_settings: { forward: null, back: "profile" },
@@ -66,7 +66,7 @@ export default function Home() {
   useDevActiveTabPersistence(activeTab, setActiveTab);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [pendingDeepLinkThreadId, setPendingDeepLinkThreadId] = useState<string | null>(null);
-  const [groupsUnreadCount, setGroupsUnreadCount] = useState(0);
+  const [messagesUnreadCount, setMessagesUnreadCount] = useState(0);
   const [profileIncomingRequestCount, setProfileIncomingRequestCount] = useState(0);
   const [showNotificationsPrompt, setShowNotificationsPrompt] = useState(false);
   const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
@@ -75,10 +75,10 @@ export default function Home() {
     "thread_settings",
   );
   const [threadReturnTab, setThreadReturnTab] = useState<
-    "groups" | "thread_event" | "other_user_profile"
-  >("groups");
+    "messages" | "thread_event" | "other_user_profile"
+  >("messages");
   const [eventsRefreshNonce, setEventsRefreshNonce] = useState(0); // events tab hidden; nonce kept for thread_event delete refresh
-  const [groupsListRefreshNonce, setGroupsListRefreshNonce] = useState(0);
+  const [messagesListRefreshNonce, setMessagesListRefreshNonce] = useState(0);
   const [profileReloadSignal, setProfileReloadSignal] = useState(0);
   const {
     isPresented: isCreatePostPresented,
@@ -122,7 +122,7 @@ export default function Home() {
     setViewingUserId(null);
     setPendingDeepLinkThreadId(null);
     setShowNotificationsPrompt(false);
-    setGroupsUnreadCount(0);
+    setMessagesUnreadCount(0);
     setProfileIncomingRequestCount(0);
   };
 
@@ -135,9 +135,9 @@ export default function Home() {
     setActiveTab("other_user_profile");
   }, [authUser]);
 
-  const refreshGroupsUnreadCount = useCallback(async () => {
+  const refreshMessagesUnreadCount = useCallback(async () => {
     try {
-      const response = await fetch("/api/groups-unread-count", {
+      const response = await fetch("/api/messages-unread-count", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -151,7 +151,7 @@ export default function Home() {
       const payload = (await response.json()) as {
         unread_threads_count?: number;
       };
-      setGroupsUnreadCount(payload.unread_threads_count ?? 0);
+      setMessagesUnreadCount(payload.unread_threads_count ?? 0);
     } catch {
       // Silent failure keeps last known unread count.
     }
@@ -161,7 +161,7 @@ export default function Home() {
     setPendingDeepLinkThreadId(null);
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("thread_id");
-    nextParams.set("tab", "groups");
+    nextParams.set("tab", "messages");
     const nextQuery = nextParams.toString();
     window.history.replaceState(
       null,
@@ -248,10 +248,10 @@ export default function Home() {
     };
   }, [openCreatePost]);
 
-  // Poll groups unread count at an interval while user is authenticated.
+  // Poll messages unread count at an interval while user is authenticated.
   useEffect(() => {
     if (!authUser) {
-      setGroupsUnreadCount(0);
+      setMessagesUnreadCount(0);
       return;
     }
 
@@ -260,7 +260,7 @@ export default function Home() {
       if (cancelled) {
         return;
       }
-      await refreshGroupsUnreadCount();
+      await refreshMessagesUnreadCount();
     };
 
     void run();
@@ -272,7 +272,7 @@ export default function Home() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [authUser, refreshGroupsUnreadCount]);
+  }, [authUser, refreshMessagesUnreadCount]);
 
   // Poll incoming friend request count at an interval while user is authenticated.
   useEffect(() => {
@@ -333,7 +333,7 @@ export default function Home() {
       return;
     }
     setSelectedThread(null);
-    setActiveTab("groups");
+    setActiveTab("messages");
   }, [threadEventFocus, threadReturnTab]);
 
   // Early return for loading state if session is still being checked.
@@ -360,7 +360,7 @@ export default function Home() {
 
   let TAB_TO_STYLE: { [key in AppTab]: React.CSSProperties } = {
     feed: DEFAULT_TAB,
-    groups: DEFAULT_TAB,
+    messages: DEFAULT_TAB,
     events: DEFAULT_TAB,
     thread: DEFAULT_TAB,
     thread_settings: DEFAULT_TAB,
@@ -396,7 +396,7 @@ export default function Home() {
   };
 
   const feedStyle = TAB_TO_STYLE["feed"];
-  const groupsStyle = TAB_TO_STYLE["groups"];
+  const messagesStyle = TAB_TO_STYLE["messages"];
   const eventsStyle = TAB_TO_STYLE["events"];
   const threadStyle = TAB_TO_STYLE["thread"];
   const threadSettingsStyle = TAB_TO_STYLE["thread_settings"];
@@ -452,19 +452,19 @@ export default function Home() {
           onTouchMove={onTouchMove}
           onTouchCancel={onTouchCancel}
         >
-          <div className="absolute w-full h-full" style={groupsStyle}>
-            <Groups
+          <div className="absolute w-full h-full" style={messagesStyle}>
+            <Messages
               currentUserId={authUser.user_id}
               deepLinkThreadId={pendingDeepLinkThreadId}
               onDeepLinkThreadHandled={onDeepLinkThreadHandled}
-              onThreadRead={refreshGroupsUnreadCount}
+              onThreadRead={refreshMessagesUnreadCount}
               selectedThread={selectedThread}
               setSelectedThread={setSelectedThread}
               setActiveTab={setActiveTab}
-              isActiveTab={activeTab === "groups"}
-              groupsListRefreshNonce={groupsListRefreshNonce}
-              onOpenThreadFromGroups={() => {
-                setThreadReturnTab("groups");
+              isActiveTab={activeTab === "messages"}
+              messagesListRefreshNonce={messagesListRefreshNonce}
+              onOpenThreadFromMessages={() => {
+                setThreadReturnTab("messages");
               }}
             />
           </div>
@@ -520,16 +520,16 @@ export default function Home() {
                 }));
               }}
               onThreadDeleted={() => {
-                setGroupsListRefreshNonce((previous) => previous + 1);
+                setMessagesListRefreshNonce((previous) => previous + 1);
                 setSelectedThread(null);
                 setThreadEventFocus(null);
-                setActiveTab("groups");
+                setActiveTab("messages");
               }}
               onThreadPinnedChange={(pinned) => {
                 setSelectedThread((previous) =>
                   previous ? { ...previous, user_pinned_thread: pinned } : previous,
                 );
-                setGroupsListRefreshNonce((previous) => previous + 1);
+                setMessagesListRefreshNonce((previous) => previous + 1);
               }}
             />
           </div>}
@@ -609,7 +609,7 @@ export default function Home() {
               onOpenDirectThread={(thread) => {
                 setSelectedThread(thread);
                 setThreadReturnTab("other_user_profile");
-                setGroupsListRefreshNonce((previous) => previous + 1);
+                setMessagesListRefreshNonce((previous) => previous + 1);
                 setActiveTab("thread");
               }}
             />
@@ -627,10 +627,10 @@ export default function Home() {
               onClick={() => setActiveTab("feed")}
             />
             <NavRowButton
-              icon={<NavGroupsIcon active={activeTab === "groups"} />}
-              active={activeTab === "groups"}
-              showCircle={groupsUnreadCount > 0}
-              onClick={() => setActiveTab("groups")}
+              icon={<NavMessagesIcon active={activeTab === "messages"} />}
+              active={activeTab === "messages"}
+              showCircle={messagesUnreadCount > 0}
+              onClick={() => setActiveTab("messages")}
             />
             <NavRowButton
               icon={<NavEventsIcon active={activeTab === "events"} />}

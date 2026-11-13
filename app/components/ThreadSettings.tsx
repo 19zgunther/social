@@ -327,14 +327,14 @@ export default function ThreadSettings({
 
       onThreadDeleted();
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to delete group.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to delete chat.");
       setConfirmDeleteThread(false);
     } finally {
       setIsDeletingThread(false);
     }
   };
 
-  const onRenameGroup = async () => {
+  const onRenameChat = async () => {
     const nextName = localName.trim();
     if (!nextName || nextName === thread.name || isRenaming) {
       return;
@@ -353,11 +353,11 @@ export default function ThreadSettings({
         return;
       }
 
-      setStatusMessage("Group name updated.");
+      setStatusMessage("Chat name updated.");
       onThreadRenamed(nextName);
       setIsEditingName(false);
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to rename group.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to rename chat.");
     } finally {
       setIsRenaming(false);
     }
@@ -376,14 +376,14 @@ export default function ThreadSettings({
           setLocalImageUrl(nextImageUrl);
           setLocalImageAccessGrant(nextGrant);
           onThreadImageUpdated(nextImageId, nextImageUrl, nextGrant);
-          setStatusMessage(nextImageId ? "Group photo updated." : "Group photo removed.");
+          setStatusMessage(nextImageId ? "Chat photo updated." : "Chat photo removed.");
         }}
       />
 
       <div className="flex items-center justify-between border-b border-border bg-surface px-3 py-3">
         <BackButton onBack={onBack} />
         <div className="min-w-0 text-center">
-          <p className="truncate text-sm font-semibold text-foreground">Group SettingsIcon</p>
+          <p className="truncate text-sm font-semibold text-foreground">Chat settings</p>
         </div>
         <div className="w-[72px]" />
       </div>
@@ -397,7 +397,7 @@ export default function ThreadSettings({
                 setIsPictureEditorOpen(true);
               }}
               className="overflow-hidden rounded-full border border-border bg-bg"
-              aria-label="Edit group photo"
+              aria-label="Edit chat photo"
             >
               <ThreadAvatar
                 sizePx={64}
@@ -411,7 +411,7 @@ export default function ThreadSettings({
                     : thread.member_user_ids
                 }
                 currentUserId={currentUserId}
-                alt="Group photo"
+                alt="Chat photo"
                 className="border-0"
               />
             </button>
@@ -422,7 +422,7 @@ export default function ThreadSettings({
                 <form
                   onSubmit={(event) => {
                     event.preventDefault();
-                    void onRenameGroup();
+                    void onRenameChat();
                   }}
                   className="relative block w-full"
                 >
@@ -431,7 +431,7 @@ export default function ThreadSettings({
                     value={localName}
                     onChange={(event) => setLocalName(event.target.value)}
                     className="min-w-0"
-                    placeholder="Group name"
+                    placeholder="Chat name"
                     autoFocus
                   />
 
@@ -632,7 +632,7 @@ export default function ThreadSettings({
                         }
                         disabled={isUpdatingMembers}
                         className="h-8 w-8 shrink-0"
-                        aria-label={`Remove ${member.username} from group`}
+                        aria-label={`Remove ${member.username} from chat`}
                       >
                         <DeleteIcon className="h-4 w-4" aria-hidden />
                       </IconButton>
@@ -648,7 +648,7 @@ export default function ThreadSettings({
           <section className="rounded-xl border border-border border-danger/40 bg-surface p-3 mt-[10rem]">
             <p className="text-xs font-semibold text-foreground">Admin</p>
             <p className="mt-1 text-xs text-muted">
-              Permanently delete this group and all of its messages. This cannot be undone.
+              Permanently delete this chat and all of its messages. This cannot be undone.
             </p>
             <Button
               type="button"
@@ -664,7 +664,7 @@ export default function ThreadSettings({
                 ? "Deleting…"
                 : confirmDeleteThread
                   ? "Tap again to confirm — cannot be undone"
-                  : "Delete group"}
+                  : "Delete chat"}
             </Button>
             {confirmDeleteThread && !isDeletingThread ? (
               <Button

@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         {
           error: {
             code: "forbidden",
-            message: "Only the group owner can delete this thread.",
+            message: "Only the chat owner can delete this thread.",
           },
         },
         { status: 403 },

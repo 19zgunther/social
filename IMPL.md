@@ -19,18 +19,18 @@ Auth (Frontend)
 - User should only see an Login/Signup page if not logged in
 
 Pages:
-- Feed (leftmost icon in bar), Groups
+- Feed (leftmost icon in bar), Messages
 
 Navigation:
-- Bottom navigation row/bar when on 'Feed', 'Groups'  (First icon in row, leftmost)
+- Bottom navigation row/bar when on 'Feed', 'Messages'  (First icon in row, leftmost)
 
 Feed Page:
 - Should
 
-Groups Page:
+Messages Page:
 - Should open up to a list of threads the user has access to
 - User should be able to create a new thread
-- Tapping a thread list item should open the thread Thread page, replacing the list/groups page (but there should be a back button)
+- Tapping a thread list item should open the thread Thread page, replacing the list/messages page (but there should be a back button)
 - Should have a loading indication while the threads load
 
 Thread page:

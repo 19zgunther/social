@@ -225,7 +225,7 @@ export async function POST(request: Request) {
         payload: {
           title: `${authResult.username} in ${thread.name}`,
           body: previewText,
-          url: `/?tab=groups&thread_id=${encodeURIComponent(thread.id)}`,
+          url: `/?tab=messages&thread_id=${encodeURIComponent(thread.id)}`,
           thread_id: thread.id,
         },
       }).catch((error) => {

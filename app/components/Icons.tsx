@@ -34,6 +34,7 @@ import {
   ListChecks,
   Lock,
   LogOut,
+  MessageCircle,
   MessageCirclePlus,
   MessageSquare,
   MoreHorizontal,
@@ -97,6 +98,8 @@ export const LikeIcon = Heart;
 export const UserPlaceholderIcon = CircleUserRound;
 /** Messages / feedback entry */
 export const MessageIcon = MessageSquare;
+/** Message bubble (chats list / messaging) */
+export const MessagesIcon = MessageCircle;
 /** Poll content indicator */
 export const PollIcon = ListChecks;
 /** Tier list content indicator */
@@ -241,8 +244,8 @@ type NavRgbIconProps = {
 const HOUSE_MASK =
   `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8'/%3E%3Cpath d='M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E")`;
 
-const USERS_MASK =
-  `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Cpath d='M16 3.128a4 4 0 0 1 0 7.744'/%3E%3Cpath d='M22 21v-2a4 4 0 0 0-3-3.87'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3C/svg%3E")`;
+const MESSAGE_CIRCLE_MASK =
+  `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7.9 20A9 9 0 1 0 4 16.1L2 22Z'/%3E%3C/svg%3E")`;
 
 const IMAGES_MASK =
   `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16'/%3E%3Cpath d='M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2'/%3E%3Ccircle cx='13' cy='7' r='1' fill='white'/%3E%3Crect x='8' y='2' width='14' height='14' rx='2'/%3E%3C/svg%3E")`;
@@ -275,9 +278,9 @@ export function NavFeedIcon(props: NavRgbIconProps) {
   return <NavRgbIcon mask={HOUSE_MASK} {...props} />;
 }
 
-/** Bottom nav: Groups */
-export function NavGroupsIcon(props: NavRgbIconProps) {
-  return <NavRgbIcon mask={USERS_MASK} {...props} />;
+/** Bottom nav: Messages */
+export function NavMessagesIcon(props: NavRgbIconProps) {
+  return <NavRgbIcon mask={MESSAGE_CIRCLE_MASK} {...props} />;
 }
 
 /** Bottom nav: Shared event posts */

@@ -13,7 +13,7 @@ import { createPortal } from "react-dom";
 import {
   ApiError,
   FriendSearchResponse,
-  GroupsListResponse,
+  MessagesListResponse,
   ImageOverlayData,
   MessageData,
   ThreadItem,
@@ -38,7 +38,7 @@ import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/Animated
 import { Button, IconButton, TextField } from "@/app/ui-components";
 import { AppTab } from "./utils";
 
-type GroupsProps = {
+type MessagesProps = {
   currentUserId: string;
   onThreadRead?: () => void;
   deepLinkThreadId?: string | null;
@@ -46,13 +46,15 @@ type GroupsProps = {
   selectedThread: ThreadItem | null;
   setSelectedThread: (thread: ThreadItem | null) => void;
   setActiveTab: (tab: AppTab) => void;
-  onOpenThreadFromGroups?: () => void;
+  onOpenThreadFromMessages?: () => void;
   isActiveTab: boolean;
-  /** Increment to refetch the groups list (e.g. after a thread is deleted elsewhere). */
-  groupsListRefreshNonce?: number;
+  /** Increment to refetch the messages list (e.g. after a thread is deleted elsewhere). */
+  messagesListRefreshNonce?: number;
 };
 
-const GROUPS_CACHE_KEY = "groups_list_v1";
+const MESSAGES_CACHE_KEY = "messages_list_v1";
+/** Pre-rebrand cache key; read once as a fallback, then rewritten under `MESSAGES_CACHE_KEY`. */
+const LEGACY_GROUPS_CACHE_KEY = "groups_list_v1";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
 const PIN_LONG_PRESS_MS = 500;
@@ -72,7 +74,7 @@ const threadMatchesSearch = (thread: ThreadItem, rawQuery: string): boolean => {
   );
 };
 
-type GroupsCachePayload = {
+type MessagesCachePayload = {
   threads: ThreadItem[];
   cached_at: number;
 };
@@ -113,7 +115,7 @@ const formatThreadListTime = (iso: string | null | undefined): string => {
   return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
-export default function Groups({
+export default function Messages({
   currentUserId,
   onThreadRead,
   deepLinkThreadId,
@@ -121,30 +123,30 @@ export default function Groups({
   selectedThread,
   setSelectedThread,
   setActiveTab,
-  onOpenThreadFromGroups,
+  onOpenThreadFromMessages,
   isActiveTab,
-  groupsListRefreshNonce = 0,
-}: GroupsProps) {
+  messagesListRefreshNonce = 0,
+}: MessagesProps) {
   const [threads, setThreads] = useState<ThreadItem[]>([]);
   const [unreadThreadIds, setUnreadThreadIds] = useState<Set<string>>(new Set());
-  const [createGroupTitle, setCreateGroupTitle] = useState("");
-  const [createGroupSearchQuery, setCreateGroupSearchQuery] = useState("");
-  const [createGroupSelectedMembers, setCreateGroupSelectedMembers] = useState<UserSearchOption[]>(
+  const [createChatTitle, setCreateChatTitle] = useState("");
+  const [createChatSearchQuery, setCreateChatSearchQuery] = useState("");
+  const [createChatSelectedMembers, setCreateChatSelectedMembers] = useState<UserSearchOption[]>(
     [],
   );
-  const [createGroupError, setCreateGroupError] = useState("");
+  const [createChatError, setCreateChatError] = useState("");
   const [isLoadingThreads, setIsLoadingThreads] = useState(true);
   const [isRefreshingList, setIsRefreshingList] = useState(false);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const {
-    isPresented: isCreateGroupPresented,
-    isClosing: isCreateGroupClosing,
-    open: openCreateGroupModal,
-    close: closeCreateGroupModal,
-    dismiss: dismissCreateGroupModal,
+    isPresented: isCreateChatPresented,
+    isClosing: isCreateChatClosing,
+    open: openCreateChatModal,
+    close: closeCreateChatModal,
+    dismiss: dismissCreateChatModal,
   } = useAnimatedModal();
-  const [groupsPhotoViewer, setGroupsPhotoViewer] = useState<{
+  const [messagesPhotoViewer, setMessagesPhotoViewer] = useState<{
     threadId: string;
     signedUrl: string | null;
     imageId: string | null;
@@ -163,7 +165,7 @@ export default function Groups({
   const [isLoadingSearchFriends, setIsLoadingSearchFriends] = useState(false);
   const [pinActionThreadId, setPinActionThreadId] = useState<string | null>(null);
   const [isPinningThread, setIsPinningThread] = useState(false);
-  const groupsContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const pullStartYRef = useRef<number | null>(null);
   const pullRefreshTriggeredRef = useRef(false);
   const lastTopRefreshAtRef = useRef(0);
@@ -179,24 +181,28 @@ export default function Groups({
     }
   };
 
-  const readGroupsCache = useCallback(async (): Promise<GroupsCachePayload | null> => {
+  const readMessagesCache = useCallback(async (): Promise<MessagesCachePayload | null> => {
     try {
-      const cached = await readCacheValue<GroupsCachePayload>(GROUPS_CACHE_KEY);
-      if (!cached || !Array.isArray(cached.threads)) {
-        return null;
+      const cached = await readCacheValue<MessagesCachePayload>(MESSAGES_CACHE_KEY);
+      if (cached && Array.isArray(cached.threads)) {
+        return cached;
       }
-      return cached;
+      const legacy = await readCacheValue<MessagesCachePayload>(LEGACY_GROUPS_CACHE_KEY);
+      if (legacy && Array.isArray(legacy.threads)) {
+        return legacy;
+      }
+      return null;
     } catch {
       return null;
     }
   }, []);
 
-  const writeGroupsCache = useCallback(async (threadsToCache: ThreadItem[]): Promise<void> => {
+  const writeMessagesCache = useCallback(async (threadsToCache: ThreadItem[]): Promise<void> => {
     try {
-      await writeCacheValue(GROUPS_CACHE_KEY, {
+      await writeCacheValue(MESSAGES_CACHE_KEY, {
         threads: threadsToCache,
         cached_at: Date.now(),
-      } satisfies GroupsCachePayload);
+      } satisfies MessagesCachePayload);
     } catch {
       // Best effort only.
     }
@@ -204,7 +210,7 @@ export default function Groups({
 
   const loadUnreadThreads = useCallback(async () => {
     try {
-      const response = await postWithAuth("/api/groups-unread-count", {});
+      const response = await postWithAuth("/api/messages-unread-count", {});
       if (!response.ok) {
         return;
       }
@@ -216,41 +222,41 @@ export default function Groups({
     }
   }, []);
 
-  const refreshGroupsListSilent = useCallback(async () => {
+  const refreshMessagesListSilent = useCallback(async () => {
     try {
-      const response = await postWithAuth("/api/groups-list", {});
+      const response = await postWithAuth("/api/messages-list", {});
       if (!response.ok) {
         return;
       }
 
-      const payload = (await response.json()) as GroupsListResponse;
+      const payload = (await response.json()) as MessagesListResponse;
       setThreads(payload.threads);
-      void writeGroupsCache(payload.threads);
+      void writeMessagesCache(payload.threads);
       void loadUnreadThreads();
     } catch {
       // Keep showing the last known list on transient failures.
     }
-  }, [loadUnreadThreads, writeGroupsCache]);
+  }, [loadUnreadThreads, writeMessagesCache]);
 
-  const onRefreshGroupsList = useCallback(async () => {
+  const onRefreshMessagesList = useCallback(async () => {
     setIsRefreshingList(true);
     setStatusMessage("");
     try {
-      const response = await postWithAuth("/api/groups-list", {});
+      const response = await postWithAuth("/api/messages-list", {});
       if (!response.ok) {
         setStatusMessage(await readErrorMessage(response));
         return;
       }
-      const payload = (await response.json()) as GroupsListResponse;
+      const payload = (await response.json()) as MessagesListResponse;
       setThreads(payload.threads);
-      void writeGroupsCache(payload.threads);
+      void writeMessagesCache(payload.threads);
       void loadUnreadThreads();
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to refresh groups.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to refresh messages.");
     } finally {
       setIsRefreshingList(false);
     }
-  }, [loadUnreadThreads, writeGroupsCache]);
+  }, [loadUnreadThreads, writeMessagesCache]);
 
   const triggerTopRefresh = useCallback(() => {
     const now = Date.now();
@@ -262,21 +268,21 @@ export default function Groups({
       return;
     }
     lastTopRefreshAtRef.current = now;
-    void onRefreshGroupsList();
-  }, [isLoadingThreads, isRefreshingList, onRefreshGroupsList]);
+    void onRefreshMessagesList();
+  }, [isLoadingThreads, isRefreshingList, onRefreshMessagesList]);
 
-  const onGroupsTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+  const onMessagesTouchStart = (event: TouchEvent<HTMLDivElement>) => {
     pullStartYRef.current = event.touches[0]?.clientY ?? null;
     pullRefreshTriggeredRef.current = false;
   };
 
-  const onGroupsTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+  const onMessagesTouchMove = (event: TouchEvent<HTMLDivElement>) => {
     if (pullRefreshTriggeredRef.current) {
       return;
     }
     const startY = pullStartYRef.current;
     const currentY = event.touches[0]?.clientY;
-    const container = groupsContainerRef.current;
+    const container = messagesContainerRef.current;
     if (startY === null || currentY === undefined || !container) {
       return;
     }
@@ -295,8 +301,8 @@ export default function Groups({
     pullRefreshTriggeredRef.current = false;
   };
 
-  const onGroupsWheel = (event: WheelEvent<HTMLDivElement>) => {
-    const container = groupsContainerRef.current;
+  const onMessagesWheel = (event: WheelEvent<HTMLDivElement>) => {
+    const container = messagesContainerRef.current;
     if (!container) {
       return;
     }
@@ -312,15 +318,15 @@ export default function Groups({
     if (!becameActive) {
       return;
     }
-    void refreshGroupsListSilent();
-  }, [isActiveTab, refreshGroupsListSilent]);
+    void refreshMessagesListSilent();
+  }, [isActiveTab, refreshMessagesListSilent]);
 
   useEffect(() => {
-    if (groupsListRefreshNonce === 0) {
+    if (messagesListRefreshNonce === 0) {
       return;
     }
-    void refreshGroupsListSilent();
-  }, [groupsListRefreshNonce, refreshGroupsListSilent]);
+    void refreshMessagesListSilent();
+  }, [messagesListRefreshNonce, refreshMessagesListSilent]);
 
   useEffect(() => {
     if (!isActiveTab) {
@@ -332,14 +338,14 @@ export default function Groups({
       if (cancelled) {
         return;
       }
-      void refreshGroupsListSilent();
+      void refreshMessagesListSilent();
     }, 45_000);
 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isActiveTab, refreshGroupsListSilent]);
+  }, [isActiveTab, refreshMessagesListSilent]);
 
   useEffect(() => {
     const run = async () => {
@@ -347,25 +353,25 @@ export default function Groups({
       setStatusMessage("");
 
       try {
-        const cached = await readGroupsCache();
+        const cached = await readMessagesCache();
         if (cached) {
           setThreads(cached.threads);
           setIsLoadingThreads(false);
         }
 
-        const response = await postWithAuth("/api/groups-list", {});
+        const response = await postWithAuth("/api/messages-list", {});
         if (!response.ok) {
           setStatusMessage(await readErrorMessage(response));
           setThreads([]);
           return;
         }
 
-        const payload = (await response.json()) as GroupsListResponse;
+        const payload = (await response.json()) as MessagesListResponse;
         setThreads(payload.threads);
-        void writeGroupsCache(payload.threads);
+        void writeMessagesCache(payload.threads);
         void loadUnreadThreads();
       } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : "Failed to load groups.");
+        setStatusMessage(error instanceof Error ? error.message : "Failed to load messages.");
         setThreads([]);
       } finally {
         setIsLoadingThreads(false);
@@ -373,7 +379,7 @@ export default function Groups({
     };
 
     void run();
-  }, [loadUnreadThreads, readGroupsCache, writeGroupsCache]);
+  }, [loadUnreadThreads, readMessagesCache, writeMessagesCache]);
 
   useEffect(() => {
     if (selectedThread) {
@@ -405,34 +411,34 @@ export default function Groups({
     }
   }, [loadUnreadThreads, isActiveTab])
 
-  const resetCreateGroupState = useCallback(() => {
-    setCreateGroupTitle("");
-    setCreateGroupSearchQuery("");
-    setCreateGroupSelectedMembers([]);
-    setCreateGroupError("");
+  const resetCreateChatState = useCallback(() => {
+    setCreateChatTitle("");
+    setCreateChatSearchQuery("");
+    setCreateChatSelectedMembers([]);
+    setCreateChatError("");
   }, []);
 
-  const onOpenCreateGroup = useCallback(
+  const onOpenCreateChat = useCallback(
     (preselectedMembers?: UserSearchOption[]) => {
-      resetCreateGroupState();
+      resetCreateChatState();
       if (preselectedMembers && preselectedMembers.length > 0) {
-        setCreateGroupSelectedMembers(preselectedMembers);
+        setCreateChatSelectedMembers(preselectedMembers);
       }
-      openCreateGroupModal();
+      openCreateChatModal();
     },
-    [openCreateGroupModal, resetCreateGroupState],
+    [openCreateChatModal, resetCreateChatState],
   );
 
-  const onCloseCreateGroup = useCallback(() => {
+  const onCloseCreateChat = useCallback(() => {
     if (isCreatingThread) {
       return;
     }
-    closeCreateGroupModal({
-      onClosed: resetCreateGroupState,
+    closeCreateChatModal({
+      onClosed: resetCreateChatState,
     });
-  }, [closeCreateGroupModal, isCreatingThread, resetCreateGroupState]);
+  }, [closeCreateChatModal, isCreatingThread, resetCreateChatState]);
 
-  const searchCreateGroupMembers = useCallback(
+  const searchCreateChatMembers = useCallback(
     async (query: string): Promise<UserSearchOption[]> => {
       try {
         const response = await postWithAuth("/api/friend-search", {
@@ -442,7 +448,7 @@ export default function Groups({
           return [];
         }
         const payload = (await response.json()) as FriendSearchResponse;
-        const selectedIds = new Set(createGroupSelectedMembers.map((member) => member.id));
+        const selectedIds = new Set(createChatSelectedMembers.map((member) => member.id));
         return payload.users
           .filter((user) => user.id !== currentUserId && !selectedIds.has(user.id))
           .map((user) => {
@@ -476,52 +482,52 @@ export default function Groups({
         return [];
       }
     },
-    [createGroupSelectedMembers, currentUserId],
+    [createChatSelectedMembers, currentUserId],
   );
 
-  const onSelectCreateGroupMember = useCallback((option: UserSearchOption) => {
-    setCreateGroupSelectedMembers((previous) => {
+  const onSelectCreateChatMember = useCallback((option: UserSearchOption) => {
+    setCreateChatSelectedMembers((previous) => {
       if (previous.some((member) => member.id === option.id)) {
         return previous;
       }
       return [...previous, option];
     });
-    setCreateGroupSearchQuery("");
-    setCreateGroupError("");
+    setCreateChatSearchQuery("");
+    setCreateChatError("");
   }, []);
 
-  const onRemoveCreateGroupMember = useCallback((userId: string) => {
-    setCreateGroupSelectedMembers((previous) =>
+  const onRemoveCreateChatMember = useCallback((userId: string) => {
+    setCreateChatSelectedMembers((previous) =>
       previous.filter((member) => member.id !== userId),
     );
   }, []);
 
   const onCreateThread = async () => {
-    const name = createGroupTitle.trim();
+    const name = createChatTitle.trim();
     if (!name || isCreatingThread) {
       return;
     }
 
     setIsCreatingThread(true);
-    setCreateGroupError("");
+    setCreateChatError("");
     setStatusMessage("");
 
     try {
       const response = await postWithAuth("/api/thread-create", {
         name,
-        member_user_ids: createGroupSelectedMembers.map((member) => member.id),
+        member_user_ids: createChatSelectedMembers.map((member) => member.id),
       });
       if (!response.ok) {
-        setCreateGroupError(await readErrorMessage(response));
+        setCreateChatError(await readErrorMessage(response));
         return;
       }
 
       const payload = (await response.json()) as { thread: ThreadItem };
       setThreads((previous) => [payload.thread, ...previous]);
-      dismissCreateGroupModal();
-      resetCreateGroupState();
+      dismissCreateChatModal();
+      resetCreateChatState();
     } catch (error) {
-      setCreateGroupError(error instanceof Error ? error.message : "Failed to create thread.");
+      setCreateChatError(error instanceof Error ? error.message : "Failed to create thread.");
     } finally {
       setIsCreatingThread(false);
     }
@@ -540,12 +546,12 @@ export default function Groups({
 
   const onOpenThread = useCallback(
     (thread: ThreadItem) => {
-      onOpenThreadFromGroups?.();
+      onOpenThreadFromMessages?.();
       setSelectedThread(thread);
       setActiveTab("thread");
       markThreadRead(thread);
     },
-    [markThreadRead, onOpenThreadFromGroups, setActiveTab, setSelectedThread],
+    [markThreadRead, onOpenThreadFromMessages, setActiveTab, setSelectedThread],
   );
 
   const applyPinnedLocally = useCallback(
@@ -554,14 +560,14 @@ export default function Groups({
         const next = previous.map((thread) =>
           thread.id === threadId ? { ...thread, user_pinned_thread: pinned } : thread,
         );
-        void writeGroupsCache(next);
+        void writeMessagesCache(next);
         return next;
       });
       if (selectedThread?.id === threadId) {
         setSelectedThread({ ...selectedThread, user_pinned_thread: pinned });
       }
     },
-    [selectedThread, setSelectedThread, writeGroupsCache],
+    [selectedThread, setSelectedThread, writeMessagesCache],
   );
 
   const setThreadPinned = useCallback(
@@ -724,7 +730,7 @@ export default function Groups({
         (preview.image_url ||
           (preview.image_access_grant && preview.image_storage_user_id))
       ) {
-        setGroupsPhotoViewer({
+        setMessagesPhotoViewer({
           threadId: thread.id,
           signedUrl: preview.image_url,
           imageId: preview.image_id,
@@ -780,7 +786,7 @@ export default function Groups({
 
       await response.json();
       setReplyCamera(null);
-      void refreshGroupsListSilent();
+      void refreshMessagesListSilent();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to send photo.");
     } finally {
@@ -807,17 +813,17 @@ export default function Groups({
       <div>
         <header className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold text-foreground">Groups</h1>
+            <h1 className="text-lg font-semibold text-foreground">Messages</h1>
             {isLoadingThreads || isRefreshingList ? (
               <Loader scale={0.55} className="shrink-0" />
             ) : (
               <button
                 type="button"
                 onClick={() => {
-                  void onRefreshGroupsList();
+                  void onRefreshMessagesList();
                 }}
                 className="rounded-md p-0.5 text-muted transition hover:text-foreground"
-                aria-label="Refresh groups"
+                aria-label="Refresh messages"
               >
                 <RefreshIcon className="h-5 w-5 shrink-0" aria-hidden />
               </button>
@@ -825,8 +831,8 @@ export default function Groups({
           </div>
           <button
             type="button"
-            onClick={() => onOpenCreateGroup()}
-            aria-label="Create group"
+            onClick={() => onOpenCreateChat()}
+            aria-label="New message"
           >
             <NewChatIcon className="h-6 w-6 text-accent" />
           </button>
@@ -834,11 +840,11 @@ export default function Groups({
       </div>
 
       <AnimatedModal
-        isPresented={isCreateGroupPresented}
-        isClosing={isCreateGroupClosing}
-        onClose={onCloseCreateGroup}
-        ariaLabel="Create group"
-        title="Create Group"
+        isPresented={isCreateChatPresented}
+        isClosing={isCreateChatClosing}
+        onClose={onCloseCreateChat}
+        ariaLabel="New message"
+        title="New message"
         closeDisabled={isCreatingThread}
         rootClassName="z-[2200] items-start px-3 pt-10"
         panelClassName="flex h-[min(92vh,40rem)] max-w-lg flex-col overflow-hidden bg-bg shadow-xl"
@@ -846,16 +852,16 @@ export default function Groups({
         <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pt-3 pb-4">
           <TextField
             type="text"
-            value={createGroupTitle}
-            onChange={(event) => setCreateGroupTitle(event.target.value)}
+            value={createChatTitle}
+            onChange={(event) => setCreateChatTitle(event.target.value)}
             placeholder="Title..."
             disabled={isCreatingThread}
-            aria-label="Group title"
+            aria-label="Chat title"
           />
 
-          {createGroupSelectedMembers.length > 0 ? (
+          {createChatSelectedMembers.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {createGroupSelectedMembers.map((member) => (
+              {createChatSelectedMembers.map((member) => (
                 <div
                   key={member.id}
                   className="flex items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1 pr-1.5"
@@ -874,7 +880,7 @@ export default function Groups({
                     className="h-6 w-6 shrink-0"
                     disabled={isCreatingThread}
                     aria-label={`Remove ${member.username}`}
-                    onClick={() => onRemoveCreateGroupMember(member.id)}
+                    onClick={() => onRemoveCreateChatMember(member.id)}
                   >
                     <CloseIcon className="h-3.5 w-3.5" />
                   </IconButton>
@@ -886,10 +892,10 @@ export default function Groups({
           <div className="min-h-0 flex-1">
             <UserSearch
               variant="panel"
-              value={createGroupSearchQuery}
-              onValueChange={setCreateGroupSearchQuery}
-              onSelect={onSelectCreateGroupMember}
-              searchUsers={searchCreateGroupMembers}
+              value={createChatSearchQuery}
+              onValueChange={setCreateChatSearchQuery}
+              onSelect={onSelectCreateChatMember}
+              searchUsers={searchCreateChatMembers}
               placeholder="Search to add friends..."
               autoFocus
               disabled={isCreatingThread}
@@ -897,15 +903,15 @@ export default function Groups({
             />
           </div>
 
-          {createGroupError ? (
-            <p className="text-xs text-muted">{createGroupError}</p>
+          {createChatError ? (
+            <p className="text-xs text-muted">{createChatError}</p>
           ) : null}
 
           <Button
             type="button"
             variant="primary"
             className="w-full shrink-0"
-            disabled={isCreatingThread || !createGroupTitle.trim()}
+            disabled={isCreatingThread || !createChatTitle.trim()}
             onClick={() => {
               void onCreateThread();
             }}
@@ -926,7 +932,7 @@ export default function Groups({
           onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="Search"
           className="w-full rounded-xl border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground outline-none placeholder:text-muted focus:border-muted"
-          aria-label="Search groups"
+          aria-label="Search messages"
         />
       </div>
 
@@ -938,16 +944,28 @@ export default function Groups({
       ) : null}
 
       <div
-        ref={groupsContainerRef}
-        onTouchStart={onGroupsTouchStart}
-        onTouchMove={onGroupsTouchMove}
+        ref={messagesContainerRef}
+        onTouchStart={onMessagesTouchStart}
+        onTouchMove={onMessagesTouchMove}
         onTouchEnd={resetPullGesture}
         onTouchCancel={resetPullGesture}
-        onWheel={onGroupsWheel}
+        onWheel={onMessagesWheel}
         className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y"
       >
         {!isLoadingThreads && threads.length === 0 && !searchQuery.trim() ? (
-          <p className="text-xs text-muted px-4">No threads yet. Create your first one.</p>
+          <div className="flex flex-col items-start gap-3 px-4 py-2">
+            <p className="text-xs text-muted">No messages yet. Start a new chat.</p>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => onOpenCreateChat()}
+              className="inline-flex items-center gap-1.5"
+            >
+              <NewChatIcon className="h-4 w-4" aria-hidden />
+              New message
+            </Button>
+          </div>
         ) : null}
 
         {!isLoadingThreads &&
@@ -955,7 +973,7 @@ export default function Groups({
         searchFriendSuggestions.length === 0 &&
         !isLoadingSearchFriends &&
         searchQuery.trim() ? (
-          <p className="text-xs text-muted px-4">No groups match your search.</p>
+          <p className="text-xs text-muted px-4">No messages match your search.</p>
         ) : null}
 
         {pinnedThreads.length > 0 ? (
@@ -1015,7 +1033,7 @@ export default function Groups({
         ) : null}
 
         {unpinnedThreads.map((thread) => (
-          <GroupThreadRow
+          <MessageThreadRow
             key={thread.id}
             thread={thread}
             currentUserId={currentUserId}
@@ -1048,7 +1066,7 @@ export default function Groups({
               >
                 <button
                   type="button"
-                  onClick={() => onOpenCreateGroup([friend])}
+                  onClick={() => onOpenCreateChat([friend])}
                   className="flex min-w-0 flex-1 items-center gap-3 text-left transition hover:opacity-90"
                 >
                   <UserProfileImage
@@ -1070,9 +1088,9 @@ export default function Groups({
                   variant="primary"
                   size="sm"
                   className="shrink-0"
-                  onClick={() => onOpenCreateGroup([friend])}
+                  onClick={() => onOpenCreateChat([friend])}
                 >
-                  Create thread
+                  New message
                 </Button>
               </div>
             ))}
@@ -1133,21 +1151,21 @@ export default function Groups({
         : null}
 
       <ImageViewerModal
-        open={groupsPhotoViewer !== null}
+        open={messagesPhotoViewer !== null}
         onClose={() => {
-          setGroupsPhotoViewer(null);
+          setMessagesPhotoViewer(null);
         }}
-        signedUrl={groupsPhotoViewer?.signedUrl ?? null}
-        imageId={groupsPhotoViewer?.imageId ?? null}
-        imageAccessGrant={groupsPhotoViewer?.imageAccessGrant ?? null}
-        imageStorageUserId={groupsPhotoViewer?.imageStorageUserId ?? null}
-        imageOverlay={groupsPhotoViewer?.imageOverlay ?? null}
+        signedUrl={messagesPhotoViewer?.signedUrl ?? null}
+        imageId={messagesPhotoViewer?.imageId ?? null}
+        imageAccessGrant={messagesPhotoViewer?.imageAccessGrant ?? null}
+        imageStorageUserId={messagesPhotoViewer?.imageStorageUserId ?? null}
+        imageOverlay={messagesPhotoViewer?.imageOverlay ?? null}
         onReply={() => {
-          if (!groupsPhotoViewer) {
+          if (!messagesPhotoViewer) {
             return;
           }
-          const { threadId, replyToMessageId } = groupsPhotoViewer;
-          setGroupsPhotoViewer(null);
+          const { threadId, replyToMessageId } = messagesPhotoViewer;
+          setMessagesPhotoViewer(null);
           setReplyCamera({ threadId, replyToMessageId });
         }}
       />
@@ -1166,7 +1184,7 @@ export default function Groups({
 }
 
 
-function GroupThreadRow({
+function MessageThreadRow({
   thread,
   currentUserId,
   unreadThreadIds,

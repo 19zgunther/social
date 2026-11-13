@@ -173,7 +173,7 @@ export type ImageOverlayData = {
   y_ratio: number;
 };
 
-/** Latest incoming message from someone else when it is the most recent in the thread (Groups list: tap for preview or photo reply). */
+/** Latest incoming message from someone else when it is the most recent in the thread (Messages list: tap for preview or photo reply). */
 export type ThreadLastPhotoPreview = {
   message_id: string;
   image_id: string | null;
@@ -196,7 +196,7 @@ export type ThreadItem = {
   participant_count?: number;
   /** Member user ids for avatar collage when the thread has no group photo. */
   member_user_ids?: string[];
-  /** Member usernames for Groups search. */
+  /** Member usernames for Messages search. */
   member_usernames?: string[];
   /** Whether the current user has pinned this thread. */
   user_pinned_thread?: boolean;
@@ -206,7 +206,7 @@ export type ThreadItem = {
   image_access_grant?: string | null;
   /** ISO time of the chronologically latest message in the thread, if any. */
   last_message_at?: string | null;
-  /** True when `last_message_at` refers to a message you sent (Groups list affordance). */
+  /** True when `last_message_at` refers to a message you sent (Messages list affordance). */
   last_message_from_self?: boolean;
   /** Present when the latest message is from someone else: image (tap to preview) or text-only (tap to reply with a photo). */
   last_photo_preview?: ThreadLastPhotoPreview | null;
@@ -452,7 +452,7 @@ export type ImageUploadResponse = {
   image_url: string;
 };
 
-export type GroupsListResponse = { threads: ThreadItem[] };
+export type MessagesListResponse = { threads: ThreadItem[] };
 
 export type ThreadMessagesRequest = {
   thread_id?: string;

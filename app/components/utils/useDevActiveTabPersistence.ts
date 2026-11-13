@@ -14,7 +14,7 @@ const DEV_ACTIVE_TAB_STORAGE_KEY = "dev_active_tab_v1";
 
 const RESTORABLE_TABS = new Set<AppTab>([
   "feed",
-  "groups",
+  "messages",
   "events",
   "profile",
   "feedback",
@@ -53,9 +53,11 @@ export function useDevActiveTabPersistence(
     }
     try {
       const saved = window.localStorage.getItem(DEV_ACTIVE_TAB_STORAGE_KEY);
-      if (isRestorableTab(saved)) {
+      // Legacy: messaging tab was previously persisted as "groups".
+      const normalized = saved === "groups" ? "messages" : saved;
+      if (isRestorableTab(normalized)) {
         skipNextPersistRef.current = true;
-        setActiveTab(saved);
+        setActiveTab(normalized);
       }
     } catch {
       // Ignore localStorage read failures.

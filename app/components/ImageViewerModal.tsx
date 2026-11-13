@@ -66,7 +66,7 @@ export type ImageViewerModalProps = {
   alt?: string;
   /** Banner-style text overlay (same semantics as thread photo messages). */
   imageOverlay?: ImageOverlayData | null;
-  /** When set, shows a bottom-left Reply control (e.g. Groups photo preview). */
+  /** When set, shows a bottom-left Reply control (e.g. Messages photo preview). */
   onReply?: () => void;
   /** Photo queue to swipe through; takes precedence over the single-image props.
    * On a zoomed image, dragging past its edge pulls in the neighbouring photo. */

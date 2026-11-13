@@ -91,7 +91,7 @@ const getLatestMessageByThreadId = async (
 export async function POST(request: Request) {
   const authResult = authCheck(request);
   if (authResult.error) {
-    console.error("groups_unread_count_auth_failed", authResult.error);
+    console.error("messages_unread_count_auth_failed", authResult.error);
     return NextResponse.json({ error: authResult.error }, { status: 401 });
   }
 
@@ -148,9 +148,9 @@ export async function POST(request: Request) {
       { status: 200 },
     );
   } catch (error) {
-    console.error("groups_unread_count_failed", error);
+    console.error("messages_unread_count_failed", error);
     return NextResponse.json(
-      { error: { code: "groups_unread_count_failed", message: "Failed to compute unread threads." } },
+      { error: { code: "messages_unread_count_failed", message: "Failed to compute unread threads." } },
       { status: 500 },
     );
   }
