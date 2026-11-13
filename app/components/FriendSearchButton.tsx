@@ -5,6 +5,7 @@ import { CloseIcon } from "@/app/components/Icons";
 import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import { IconButton } from "@/app/ui-components";
+import { cancelFriendRequest } from "@/app/lib/cancelFriendRequest";
 import {
   ApiError,
   FriendSearchResponse,
@@ -106,6 +107,7 @@ export default function FriendSearchButton({
           email: user.email,
           hint,
           friendshipStatus,
+          friendshipId: relation?.id ?? null,
         };
       });
     },
@@ -131,7 +133,6 @@ export default function FriendSearchButton({
       if (
         option.friendshipStatus === "self" ||
         option.friendshipStatus === "friends" ||
-        option.friendshipStatus === "pending_sent" ||
         option.friendshipStatus === "pending_received"
       ) {
         return option;
@@ -140,6 +141,35 @@ export default function FriendSearchButton({
       setActiveFriendUserId(option.id);
       onStatusMessage?.("");
       try {
+        if (option.friendshipStatus === "pending_sent") {
+          if (!option.friendshipId) {
+            onStatusMessage?.("Friend request not found.");
+            return option;
+          }
+
+          const cancelResult = await cancelFriendRequest({ friendId: option.friendshipId });
+          onStatusMessage?.(cancelResult.message);
+          if (!cancelResult.ok) {
+            return;
+          }
+
+          onFriendRequestSent?.();
+          if (!cancelResult.cancelled) {
+            return {
+              ...option,
+              hint: "Friends",
+              friendshipStatus: "friends",
+            };
+          }
+
+          return {
+            ...option,
+            hint: "Not friends",
+            friendshipStatus: "none",
+            friendshipId: null,
+          };
+        }
+
         const response = await postWithAuth("/api/friend-request-create", {
           other_user_id: option.id,
         });
@@ -148,12 +178,14 @@ export default function FriendSearchButton({
           return;
         }
 
+        const payload = (await response.json()) as { friend?: { id?: string } };
         onFriendRequestSent?.();
         onStatusMessage?.("Friend request sent.");
         return {
           ...option,
           hint: "Pending request",
           friendshipStatus: "pending_sent",
+          friendshipId: payload.friend?.id ?? null,
         };
       } catch (error) {
         onStatusMessage?.(
@@ -209,13 +241,15 @@ export default function FriendSearchButton({
                 return "Request to Follow";
               }
               if (option.friendshipStatus === "pending_sent") {
-                return "Pending";
+                return "Cancel";
               }
               return null;
             }}
             isOptionActionDisabled={(option) =>
               activeFriendUserId === option.id ||
-              (option.friendshipStatus !== "none" && option.friendshipStatus !== "rejected")
+              (option.friendshipStatus !== "none" &&
+                option.friendshipStatus !== "rejected" &&
+                option.friendshipStatus !== "pending_sent")
             }
             onOptionAction={onRequestFollowFromSearch}
           />

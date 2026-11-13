@@ -10,6 +10,7 @@ import BackButton from "@/app/components/utils/BackButton";
 import DestructiveConfirmAnimatedModal from "@/app/components/utils/DestructiveConfirmAnimatedModal";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import { Button, IconButton, TextField } from "@/app/ui-components";
+import { cancelFriendRequest } from "@/app/lib/cancelFriendRequest";
 import {
   ApiError,
   FriendSearchResponse,
@@ -241,6 +242,22 @@ export default function ThreadSettings({
       setStatusMessage("Friend request sent.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to send friend request.");
+    } finally {
+      setSendingFriendUserId(null);
+    }
+  };
+
+  const onCancelFriendRequest = async (userId: string) => {
+    setSendingFriendUserId(userId);
+    setStatusMessage("");
+    try {
+      const result = await cancelFriendRequest({ otherUserId: userId });
+      if (!result.ok) {
+        setStatusMessage(result.message);
+      } else {
+        setStatusMessage(result.message);
+      }
+      await loadMembers();
     } finally {
       setSendingFriendUserId(null);
     }
@@ -615,9 +632,19 @@ export default function ThreadSettings({
                           {sendingFriendUserId === member.user_id ? "Sending…" : "Add Friend"}
                         </Button>
                       ) : member.friendship_status === "pending_sent" ? (
-                        <span className="max-w-[5.5rem] text-center text-[11px] text-muted">
-                          Request sent
-                        </span>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            void onCancelFriendRequest(member.user_id);
+                          }}
+                          disabled={
+                            sendingFriendUserId === member.user_id || isUpdatingMembers
+                          }
+                        >
+                          {sendingFriendUserId === member.user_id ? "Cancelling…" : "Cancel"}
+                        </Button>
                       ) : member.friendship_status === "pending_received" ? (
                         <span className="max-w-[6rem] text-center text-[11px] text-muted">
                           Respond in Profile

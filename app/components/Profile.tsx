@@ -26,6 +26,7 @@ import PostGroupsTab from "@/app/components/PostGroupsTab";
 import GamesTab from "@/app/components/games/GamesTab";
 import { getPollViewerState } from "@/app/components/PollBlock";
 import { getTierListViewerState } from "@/app/components/TierListBlock";
+import { cancelFriendRequest } from "@/app/lib/cancelFriendRequest";
 import { getPostCoverObject } from "@/app/lib/postMedia";
 import {
   AcceptedFriend,
@@ -640,6 +641,7 @@ function ProfileOtherUser({
 
   const [removeFriendConfirmed, setRemoveFriendConfirmed] = useState(false);
   const [isRemovingFriend, setIsRemovingFriend] = useState(false);
+  const [isCancellingRequest, setIsCancellingRequest] = useState(false);
 
   const onRemoveFriend = async () => {
     if (!profileData || !profileData.friendship_id) {
@@ -816,6 +818,22 @@ function ProfileOtherUser({
       setStatusMessage(error instanceof Error ? error.message : "Failed to send friend request.");
     } finally {
       setIsSendingRequest(false);
+    }
+  };
+
+  const onCancelFriendRequest = async () => {
+    if (!profileData?.friendship_id) { return; }
+
+    setIsCancellingRequest(true);
+    setStatusMessage("");
+    try {
+      const result = await cancelFriendRequest({ friendId: profileData.friendship_id });
+      if (result.ok) {
+        await loadProfile();
+      }
+      setStatusMessage(result.message);
+    } finally {
+      setIsCancellingRequest(false);
     }
   };
 
@@ -1034,9 +1052,21 @@ function ProfileOtherUser({
               </Button>
             </>
           ) : profileData.friendship_status === "pending_sent" ? (
-            <p className="text-sm text-muted text-center">
-              Friend request sent. Waiting for {profileData.user.username} to accept.
-            </p>
+            <>
+              <p className="text-sm text-muted text-center">
+                Friend request sent. Waiting for {profileData.user.username} to accept.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                className="px-6"
+                onClick={() => { void onCancelFriendRequest(); }}
+                disabled={isCancellingRequest}
+              >
+                {isCancellingRequest ? "Cancelling..." : "Cancel Request"}
+              </Button>
+            </>
           ) : profileData.friendship_status === "pending_received" ? (
             <p className="text-sm text-muted text-center">
               {profileData.user.username} has sent you a friend request. Check your Profile tab to respond.

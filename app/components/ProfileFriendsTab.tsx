@@ -5,6 +5,7 @@ import { ChevronRightIcon } from "@/app/components/Icons";
 import FriendSearchButton from "@/app/components/FriendSearchButton";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import { Button } from "@/app/ui-components";
+import { cancelFriendRequest } from "@/app/lib/cancelFriendRequest";
 import {
   AcceptedFriend,
   ApiError,
@@ -47,6 +48,7 @@ export default function ProfileFriendsTab({
   const [acceptedFriends, setAcceptedFriends] = useState<AcceptedFriend[]>([]);
   const [isLoadingFriendRows, setIsLoadingFriendRows] = useState(true);
   const [activeIncomingRequestId, setActiveIncomingRequestId] = useState<string | null>(null);
+  const [activeOutgoingRequestId, setActiveOutgoingRequestId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
 
   const pendingOutgoingRequests = outgoingRequests.filter((row) => row.accepted === null);
@@ -98,6 +100,20 @@ export default function ProfileFriendsTab({
       setStatusMessage(error instanceof Error ? error.message : "Failed to respond to request.");
     } finally {
       setActiveIncomingRequestId(null);
+    }
+  };
+
+  const onCancelFriendRequest = async (friendId: string) => {
+    setActiveOutgoingRequestId(friendId);
+    setStatusMessage("");
+    try {
+      const result = await cancelFriendRequest({ friendId });
+      if (result.ok) {
+        await loadFriendRows();
+      }
+      setStatusMessage(result.message);
+    } finally {
+      setActiveOutgoingRequestId(null);
     }
   };
 
@@ -235,6 +251,17 @@ export default function ProfileFriendsTab({
                   ) : null}
                   <p className="mt-0.5 text-xs text-muted">Pending</p>
                 </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    void onCancelFriendRequest(row.id);
+                  }}
+                  disabled={activeOutgoingRequestId === row.id}
+                >
+                  {activeOutgoingRequestId === row.id ? "Cancelling..." : "Cancel"}
+                </Button>
               </div>
             ))}
           </div>

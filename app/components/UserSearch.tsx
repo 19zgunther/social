@@ -11,6 +11,7 @@ export type UserSearchOption = {
   email: string | null;
   hint?: string;
   friendshipStatus?: "self" | "friends" | "none" | "pending_sent" | "pending_received" | "rejected";
+  friendshipId?: string | null;
 };
 
 type UserSearchProps = {
