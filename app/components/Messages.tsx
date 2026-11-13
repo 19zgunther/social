@@ -1109,7 +1109,7 @@ function MessageThreadRow({
         : "bg-bg hover:bg-surface/20"
         }`}
     >
-      <div className="flex min-h-[4.125rem] items-center gap-3">
+      <div className="flex min-h-[3rem] items-center gap-3">
         <ThreadAvatar
           sizePx={48}
           threadId={thread.id}
@@ -1134,7 +1134,7 @@ function MessageThreadRow({
             ) : null}
           </div>
           {thread.last_message_preview ? (
-            <p className="mt-0.5 h-10 line-clamp-2 text-sm leading-5 text-muted">
+            <p className="mt-0.5 line-clamp-2 text-sm leading-5 text-muted">
               {thread.last_message_preview}
             </p>
           ) : null}
