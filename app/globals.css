@@ -1647,7 +1647,7 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   animation: create-post-preview-in 0.28s ease-out both;
 }
 
-@keyframes attach-menu-in {
+@keyframes blur-options-list-in {
   from {
     opacity: 0;
     transform: translateY(8px) scale(0.96);
@@ -1658,8 +1658,9 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   }
 }
 
+.blur-options-list-in,
 .attach-menu-in {
-  animation: attach-menu-in 0.18s ease-out both;
+  animation: blur-options-list-in 0.18s ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1668,6 +1669,7 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   .emoji-picker-panel-in,
   .emoji-picker-panel-out,
   .create-post-preview-in,
+  .blur-options-list-in,
   .attach-menu-in {
     animation: none;
   }

@@ -2,7 +2,7 @@ import { BackIcon } from "@/app/components/Icons";
 
 export default function BackButton({
   onBack,
-  backLabel = "Back",
+  backLabel = "",
 }: {
   onBack: () => void;
   backLabel?: string;
@@ -11,9 +11,10 @@ export default function BackButton({
     <button
       type="button"
       onClick={onBack}
-      className="inline-flex items-center gap-1.5 text-sm text-muted transition hover:text-foreground"
+      aria-label={backLabel || "Back"}
+      className="inline-flex items-center gap-1.5 px-3 text-sm text-muted transition hover:text-foreground"
     >
-      <BackIcon className="h-4 w-4 shrink-0" />
+      <BackIcon className="h-5 w-5 shrink-0" />
       {backLabel}
     </button>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { DeleteIcon, PinIcon } from "@/app/components/Icons";
+import { AddIcon, DeleteIcon, EditIcon, PinIcon } from "@/app/components/Icons";
 import ThreadAvatar from "@/app/components/ThreadAvatar";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import ThreadPictureEditor from "@/app/components/ThreadPictureEditor";
@@ -380,7 +380,7 @@ export default function ThreadSettings({
         }}
       />
 
-      <div className="flex items-center justify-between border-b border-border bg-surface px-3 py-3">
+      <div className="flex items-center justify-between border-b border-border bg-surface px-3 pb-3 pt-[calc(2rem+0.75rem)]">
         <BackButton onBack={onBack} />
         <div className="min-w-0 text-center">
           <p className="truncate text-sm font-semibold text-foreground">Chat settings</p>
@@ -389,7 +389,7 @@ export default function ThreadSettings({
       </div>
 
       <div className="flex-1 min-h-0 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 touch-pan-y">
-        <section className="rounded-xl border border-border bg-surface p-3">
+        <section className="p-3">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -435,7 +435,7 @@ export default function ThreadSettings({
                     autoFocus
                   />
 
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center gap-2 mt-2 absolute bottom-[-2rem] right-0 w-full bg-bg">
                     <Button
                       type="button"
                       variant="secondary"
@@ -472,13 +472,13 @@ export default function ThreadSettings({
                     type="button"
                     variant="secondary"
                     size="sm"
-                    className="shrink-0"
+                    className="shrink-0 border-none"
                     onClick={() => {
                       setLocalName(thread.name);
                       setIsEditingName(true);
                     }}
                   >
-                    Edit
+                    <EditIcon className="h-4 w-4" aria-hidden />
                   </Button>
                 </div>
               )}
@@ -490,7 +490,7 @@ export default function ThreadSettings({
           </div>
         </section>
 
-        <section className="rounded-xl border border-border bg-surface p-3">
+        <section className="p-3">
           <button
             type="button"
             disabled={isUpdatingPin}
@@ -518,7 +518,7 @@ export default function ThreadSettings({
           </button>
         </section>
 
-        <section className="rounded-xl border border-border bg-surface p-3">
+        <section className="p-3">
           <div className="space-y-3">
             {!isDirect ? (
               <form
@@ -545,7 +545,7 @@ export default function ThreadSettings({
                     }}
                     searchUsers={searchThreadMemberOptions}
                     placeholder="Username or email"
-                    inputClassName="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
+                    inputClassName="w-full rounded-xl border border-border px-3 py-2 text-sm text-foreground outline-none focus:border-muted"
                   />
                   {memberFormError ? (
                     <p className="mt-1 text-xs text-muted">{memberFormError}</p>
@@ -555,9 +555,10 @@ export default function ThreadSettings({
                   type="submit"
                   variant="primary"
                   size="sm"
+                  className="py-2.5"
                   disabled={isUpdatingMembers}
                 >
-                  Add
+                  <AddIcon className="h-4 w-4" aria-hidden />
                 </Button>
               </form>
             ) : null}
@@ -572,7 +573,7 @@ export default function ThreadSettings({
               {members.map((member) => (
                 <div
                   key={member.user_id}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface py-2 pl-3 pr-2"
+                  className="flex items-center justify-between gap-2 rounded-lg py-2 pl-3 pr-2"
                 >
                   <button
                     type="button"

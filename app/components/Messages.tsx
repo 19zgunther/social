@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import {
   ApiError,
   FriendSearchResponse,
@@ -27,11 +26,11 @@ import {
   CloseIcon,
   ForwardIcon,
   NewChatIcon,
-  PinIcon,
   RefreshIcon,
   SearchIcon,
 } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
+import MessagesThreadOptionsMenu from "@/app/components/MessagesThreadOptionsMenu";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
@@ -58,7 +57,6 @@ const LEGACY_GROUPS_CACHE_KEY = "groups_list_v1";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
 const PIN_LONG_PRESS_MS = 500;
-const PIN_ACTIONS_OVERLAY_Z = 1950;
 const PINNED_AVATAR_SIZE_PX = 72;
 
 const threadMatchesSearch = (thread: ThreadItem, rawQuery: string): boolean => {
@@ -163,7 +161,10 @@ export default function Messages({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFriendSuggestions, setSearchFriendSuggestions] = useState<UserSearchOption[]>([]);
   const [isLoadingSearchFriends, setIsLoadingSearchFriends] = useState(false);
-  const [pinActionThreadId, setPinActionThreadId] = useState<string | null>(null);
+  const [optionsMenu, setOptionsMenu] = useState<{
+    threadId: string;
+    anchorEl: HTMLElement;
+  } | null>(null);
   const [isPinningThread, setIsPinningThread] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const pullStartYRef = useRef<number | null>(null);
@@ -171,6 +172,8 @@ export default function Messages({
   const lastTopRefreshAtRef = useRef(0);
   const pinLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinLongPressTriggeredRef = useRef(false);
+  /** Suppress browser context menu after long-press opens our options menu. */
+  const suppressBrowserContextMenuUntilRef = useRef(0);
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -570,11 +573,24 @@ export default function Messages({
     [selectedThread, setSelectedThread, writeMessagesCache],
   );
 
+  const closeOptionsMenu = useCallback(() => {
+    if (isPinningThread) {
+      return;
+    }
+    setOptionsMenu(null);
+  }, [isPinningThread]);
+
+  const openOptionsMenu = useCallback((threadId: string, anchorEl: HTMLElement) => {
+    // Browser often fires `contextmenu` right after a long-press; block it briefly.
+    suppressBrowserContextMenuUntilRef.current = Date.now() + 1500;
+    setOptionsMenu({ threadId, anchorEl });
+  }, []);
+
   const setThreadPinned = useCallback(
     async (thread: ThreadItem, pinned: boolean) => {
       const previousPinned = thread.user_pinned_thread === true;
       if (previousPinned === pinned) {
-        setPinActionThreadId(null);
+        setOptionsMenu(null);
         return;
       }
 
@@ -592,7 +608,7 @@ export default function Messages({
           setStatusMessage(await readErrorMessage(response));
           return;
         }
-        setPinActionThreadId(null);
+        setOptionsMenu(null);
       } catch (error) {
         applyPinnedLocally(thread.id, previousPinned);
         setStatusMessage(error instanceof Error ? error.message : "Failed to update pin.");
@@ -610,12 +626,12 @@ export default function Messages({
     }
   };
 
-  const startPinLongPress = (threadId: string) => {
+  const startPinLongPress = (threadId: string, target: HTMLElement) => {
     clearPinLongPressTimer();
     pinLongPressTriggeredRef.current = false;
     pinLongPressTimerRef.current = setTimeout(() => {
       pinLongPressTriggeredRef.current = true;
-      setPinActionThreadId(threadId);
+      openOptionsMenu(threadId, target);
       pinLongPressTimerRef.current = null;
     }, PIN_LONG_PRESS_MS);
   };
@@ -704,12 +720,12 @@ export default function Messages({
     () => filteredThreads.filter((thread) => thread.user_pinned_thread !== true),
     [filteredThreads],
   );
-  const pinActionThread = useMemo(
+  const optionsMenuThread = useMemo(
     () =>
-      pinActionThreadId
-        ? threads.find((thread) => thread.id === pinActionThreadId) ?? null
+      optionsMenu
+        ? threads.find((thread) => thread.id === optionsMenu.threadId) ?? null
         : null,
-    [pinActionThreadId, threads],
+    [optionsMenu, threads],
   );
 
   useEffect(() => {
@@ -717,6 +733,18 @@ export default function Messages({
       clearPinLongPressTimer();
     };
   }, []);
+
+  useEffect(() => {
+    const onContextMenuCapture = (event: Event) => {
+      if (optionsMenu || Date.now() < suppressBrowserContextMenuUntilRef.current) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener("contextmenu", onContextMenuCapture, true);
+    return () => {
+      document.removeEventListener("contextmenu", onContextMenuCapture, true);
+    };
+  }, [optionsMenu]);
 
   const onLastMessagePreviewClick = useCallback(
     (thread: ThreadItem) => {
@@ -991,18 +1019,19 @@ export default function Messages({
                     }
                     onOpenThread(thread);
                   }}
-                  onMouseDown={() => startPinLongPress(thread.id)}
+                  onMouseDown={(event) => startPinLongPress(thread.id, event.currentTarget)}
                   onMouseUp={cancelPinLongPress}
                   onMouseLeave={cancelPinLongPress}
-                  onTouchStart={() => startPinLongPress(thread.id)}
+                  onTouchStart={(event) => startPinLongPress(thread.id, event.currentTarget)}
                   onTouchEnd={cancelPinLongPress}
                   onTouchMove={cancelPinLongPress}
                   onTouchCancel={cancelPinLongPress}
                   onContextMenu={(event) => {
                     event.preventDefault();
-                    setPinActionThreadId(thread.id);
+                    event.stopPropagation();
+                    openOptionsMenu(thread.id, event.currentTarget);
                   }}
-                  className="flex flex-col items-center gap-1.5 border-0 bg-transparent p-1 text-center"
+                  className="flex select-none flex-col items-center gap-1.5 border-0 bg-transparent p-1 text-center [-webkit-touch-callout:none]"
                   aria-label={`Open ${thread.name}`}
                 >
                   <div className="relative">
@@ -1046,9 +1075,9 @@ export default function Messages({
               onOpenThread(nextThread);
             }}
             onLastMessagePreviewClick={onLastMessagePreviewClick}
-            onLongPressStart={() => startPinLongPress(thread.id)}
+            onLongPressStart={(target) => startPinLongPress(thread.id, target)}
             onLongPressCancel={cancelPinLongPress}
-            onOpenPinActions={() => setPinActionThreadId(thread.id)}
+            onOpenPinActions={(target) => openOptionsMenu(thread.id, target)}
           />
         ))}
 
@@ -1100,55 +1129,18 @@ export default function Messages({
 
       {statusMessage ? <p className="text-xs text-muted">{statusMessage}</p> : null}
 
-      {pinActionThread
-        ? createPortal(
-            <div
-              className="fixed inset-0 flex items-end justify-center sm:items-center"
-              style={{ zIndex: PIN_ACTIONS_OVERLAY_Z }}
-              onClick={() => {
-                if (!isPinningThread) {
-                  setPinActionThreadId(null);
-                }
-              }}
-            >
-              <div className="absolute inset-0 bg-black/35 backdrop-blur-sm" aria-hidden />
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-label="Chat actions"
-                className="relative z-10 mb-6 w-[min(100%,22rem)] rounded-2xl border border-border bg-surface p-2 shadow-lg"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <p className="truncate px-3 py-2 text-sm font-semibold text-foreground">
-                  {pinActionThread.name}
-                </p>
-                <button
-                  type="button"
-                  disabled={isPinningThread}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-sm font-medium text-foreground hover:bg-bg disabled:opacity-60"
-                  onClick={() => {
-                    void setThreadPinned(
-                      pinActionThread,
-                      pinActionThread.user_pinned_thread !== true,
-                    );
-                  }}
-                >
-                  <PinIcon className="h-4 w-4 text-muted" aria-hidden />
-                  {pinActionThread.user_pinned_thread === true ? "Unpin" : "Pin"}
-                </button>
-                <button
-                  type="button"
-                  disabled={isPinningThread}
-                  className="mt-1 w-full rounded-xl px-3 py-2 text-sm text-muted hover:bg-bg disabled:opacity-60"
-                  onClick={() => setPinActionThreadId(null)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+      <MessagesThreadOptionsMenu
+        thread={optionsMenuThread}
+        anchorEl={optionsMenu?.anchorEl ?? null}
+        isUpdatingPin={isPinningThread}
+        onClose={closeOptionsMenu}
+        onTogglePinned={(pinned) => {
+          if (!optionsMenuThread) {
+            return;
+          }
+          void setThreadPinned(optionsMenuThread, pinned);
+        }}
+      />
 
       <ImageViewerModal
         open={messagesPhotoViewer !== null}
@@ -1199,9 +1191,9 @@ function MessageThreadRow({
   unreadThreadIds: Set<string>;
   onOpenThread: (thread: ThreadItem) => void;
   onLastMessagePreviewClick: (thread: ThreadItem) => void;
-  onLongPressStart: () => void;
+  onLongPressStart: (target: HTMLElement) => void;
   onLongPressCancel: () => void;
-  onOpenPinActions: () => void;
+  onOpenPinActions: (target: HTMLElement) => void;
 }) {
   const preview = thread.last_photo_preview;
   const listTime = formatThreadListTime(thread.last_message_at);
@@ -1230,18 +1222,19 @@ function MessageThreadRow({
           onOpenThread(thread);
         }
       }}
-      onMouseDown={onLongPressStart}
+      onMouseDown={(event) => onLongPressStart(event.currentTarget)}
       onMouseUp={onLongPressCancel}
       onMouseLeave={onLongPressCancel}
-      onTouchStart={onLongPressStart}
+      onTouchStart={(event) => onLongPressStart(event.currentTarget)}
       onTouchEnd={onLongPressCancel}
       onTouchMove={onLongPressCancel}
       onTouchCancel={onLongPressCancel}
       onContextMenu={(event) => {
         event.preventDefault();
-        onOpenPinActions();
+        event.stopPropagation();
+        onOpenPinActions(event.currentTarget);
       }}
-      className={`relative w-full cursor-pointer px-4 py-3 text-left transition border-b border-border/30 outline-none focus-visible:ring-2 focus-visible:ring-muted/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${isUnread
+      className={`relative w-full cursor-pointer select-none px-4 py-3 text-left transition border-b border-border/30 outline-none [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-muted/50 focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${isUnread
         ? "bg-surface/50"
         : "bg-bg hover:bg-surface/20"
         }`}

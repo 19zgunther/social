@@ -1481,7 +1481,7 @@ export default function Thread({
   }
 
   const messageComposerForm = (
-    <form onSubmit={onSendMessage} className="relative mx-2 mb-2 mt-1 flex items-end gap-2">
+    <form onSubmit={onSendMessage} className="relative mx-2 mb-6 mt-1 flex items-end gap-2">
       <ThreadComposerAttachMenu
         disabled={Boolean(editTargetMessageId || activeOptionsMessageId)}
         onTakePhoto={() => {
@@ -1577,7 +1577,7 @@ export default function Thread({
       ) : null}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-border bg-surface px-3 pb-3 pt-[calc(2rem+0.75rem)]">
-        <BackButton onBack={onBack} />
+        <BackButton onBack={onBack} backLabel="" />
         <div
           className="min-w-0 text-center flex items-center gap-2"
           onClick={setThreadSettingsOpen}
@@ -1640,9 +1640,9 @@ export default function Thread({
           variant="ghost"
           aria-label="Start video call"
           onClick={() => setIsVideoCallOpen(true)}
-          className="flex h-8 w-8 items-center justify-center hover:bg-border/30"
+          className="flex h-12 w-12 items-center justify-center hover:bg-border/30"
         >
-          <VideoIcon className="h-4 w-4" />
+          <VideoIcon className="h-8 w-8" />
         </IconButton>
       </div>
 

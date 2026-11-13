@@ -24,44 +24,37 @@ type ThreadAvatarProps = {
   className?: string;
 };
 
-/** Absolute positions as % of the container, plus face diameter as a fraction of sizePx. */
-type FaceLayout = {
+/** Absolute positions as % of the container; faceFrac is diameter as a fraction of sizePx. */
+type FaceSlot = {
+  left: number;
+  top: number;
   faceFrac: number;
-  slots: { left: number; top: number }[];
 };
 
-function collageLayout(faceCount: number): FaceLayout {
+function collageSlots(faceCount: number): FaceSlot[] {
   if (faceCount <= 1) {
-    return { faceFrac: 1, slots: [{ left: 0, top: 0 }] };
+    return [{ left: 0, top: 0, faceFrac: 1 }];
   }
   if (faceCount === 2) {
-    return {
-      faceFrac: 0.68,
-      slots: [
-        { left: 0, top: 2 },
-        { left: 32, top: 30 },
-      ],
-    };
+    return [
+      { left: 0, top: 2, faceFrac: 0.68 },
+      { left: 32, top: 30, faceFrac: 0.68 },
+    ];
   }
   if (faceCount === 3) {
-    return {
-      faceFrac: 0.56,
-      slots: [
-        { left: 22, top: 0 },
-        { left: 0, top: 42 },
-        { left: 44, top: 42 },
-      ],
-    };
+    return [
+      { left: 20, top: 0, faceFrac: 0.58 },
+      { left: 0, top: 40, faceFrac: 0.52 },
+      { left: 46, top: 42, faceFrac: 0.5 },
+    ];
   }
-  return {
-    faceFrac: 0.52,
-    slots: [
-      { left: 0, top: 0 },
-      { left: 48, top: 0 },
-      { left: 0, top: 48 },
-      { left: 48, top: 48 },
-    ],
-  };
+  // Organic cluster: one large anchor + smaller faces overlapping off-grid.
+  return [
+    { left: -2, top: 16, faceFrac: 0.66 },
+    { left: 40, top: -4, faceFrac: 0.5 },
+    { left: 52, top: 38, faceFrac: 0.44 },
+    { left: 18, top: 52, faceFrac: 0.38 },
+  ];
 }
 
 function MemberFace({
@@ -120,8 +113,7 @@ function MemberCollage({
 }) {
   const faces = memberUserIds.slice(0, MAX_COLLAGE_FACES);
   const faceKey = faces.join("|");
-  const layout = collageLayout(faces.length);
-  const faceSizePx = Math.max(12, Math.round(sizePx * layout.faceFrac));
+  const slots = collageSlots(faces.length);
 
   useEffect(() => {
     if (faces.length === 0) {
@@ -135,7 +127,8 @@ function MemberCollage({
   return (
     <div className="relative h-full w-full">
       {faces.map((userId, index) => {
-        const slot = layout.slots[index] ?? layout.slots[0];
+        const slot = slots[index] ?? slots[0];
+        const faceSizePx = Math.max(12, Math.round(sizePx * slot.faceFrac));
         return (
           <MemberFace
             key={userId}

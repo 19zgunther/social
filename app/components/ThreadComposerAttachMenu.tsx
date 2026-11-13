@@ -1,11 +1,9 @@
 "use client";
 
 import { ChangeEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { AddIcon, AddImageIcon, CameraIcon, EmojiIcon } from "@/app/components/Icons";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
-import { IconButton } from "@/app/ui-components";
+import { BlurOptionsList, BlurOptionsListItem, IconButton } from "@/app/ui-components";
 
 /** Below message-options overlay (1950); above thread chrome. Below EmojiPicker (2000). */
 const ATTACH_MENU_OVERLAY_Z = 1900;
@@ -47,21 +45,6 @@ export default function ThreadComposerAttachMenu({
       setIsOpen(false);
     }
   }, [disabled]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const onKeyDown = (event: WindowEventMap["keydown"]) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isOpen]);
 
   useLayoutEffect(() => {
     if (!isOpen) {
@@ -155,56 +138,30 @@ export default function ThreadComposerAttachMenu({
         onSelectEmoji={onSendEmoji}
       />
 
-      {isOpen && menuAnchor
-        ? createPortal(
-          <div
-            className={`${DONT_SWIPE_TABS_CLASSNAME} pointer-events-none fixed inset-0`}
-            style={{ zIndex: ATTACH_MENU_OVERLAY_Z }}
-          >
-            {/** Backdrop stops at the top of the + so a second tap closes without hitting a menu row. */}
-            <button
-              type="button"
-              className="pointer-events-auto absolute inset-x-0 top-0 bg-black/35 backdrop-blur-md"
-              style={{ bottom: menuAnchor.backdropBottom }}
-              aria-label="Close attach menu"
-              onClick={closeMenu}
-            />
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Attach options"
-              className="attach-menu-in pointer-events-auto absolute flex w-56 origin-bottom-left flex-col gap-1 rounded-2xl p-2 shadow-lg"
-              style={{ left: menuAnchor.left, bottom: menuAnchor.bottom }}
-            >
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-foreground transition hover:bg-bg"
-                onClick={onSelectSendEmoji}
-              >
-                <EmojiIcon className="h-5 w-5 shrink-0 text-muted" />
-                Send Emoji
-              </button>
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-foreground transition hover:bg-bg"
-                onClick={onSelectTakePhoto}
-              >
-                <CameraIcon className="h-5 w-5 shrink-0 text-muted" />
-                Take Photo
-              </button>
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-foreground transition hover:bg-bg"
-                onClick={onSelectUploadPhoto}
-              >
-                <AddImageIcon className="h-5 w-5 shrink-0 text-muted" />
-                Upload Photo
-              </button>
-            </div>
-          </div>,
-          document.body,
-        )
-        : null}
+      {menuAnchor ? (
+        <BlurOptionsList
+          open={isOpen}
+          onClose={closeMenu}
+          ariaLabel="Attach options"
+          zIndex={ATTACH_MENU_OVERLAY_Z}
+          left={menuAnchor.left}
+          bottom={menuAnchor.bottom}
+          backdropBottom={menuAnchor.backdropBottom}
+        >
+          <BlurOptionsListItem onClick={onSelectSendEmoji}>
+            <EmojiIcon className="h-5 w-5 shrink-0 text-muted" />
+            Send Emoji
+          </BlurOptionsListItem>
+          <BlurOptionsListItem onClick={onSelectTakePhoto}>
+            <CameraIcon className="h-5 w-5 shrink-0 text-muted" />
+            Take Photo
+          </BlurOptionsListItem>
+          <BlurOptionsListItem onClick={onSelectUploadPhoto}>
+            <AddImageIcon className="h-5 w-5 shrink-0 text-muted" />
+            Upload Photo
+          </BlurOptionsListItem>
+        </BlurOptionsList>
+      ) : null}
     </>
   );
 }

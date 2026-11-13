@@ -434,7 +434,11 @@ export default function Home() {
     <main
       style={APP_VIEWPORT_STYLE}
       className={`flex w-screen justify-center p-0 ${
-        activeTab === "thread" || activeTab === "thread_event" ? "pt-0" : "pt-[2rem]"
+        activeTab === "thread" ||
+        activeTab === "thread_settings" ||
+        activeTab === "thread_event"
+          ? "pt-0"
+          : "pt-[2rem]"
       }`}
     >
       <UserSessionSyncProvider currentUserId={authUser.user_id}>
@@ -619,7 +623,14 @@ export default function Home() {
 
         {createPostModal}
 
-        <div className="nav-rgb-row w-full h-fit flex justify-between border-t border-border bg-bg z-[1000]" style={{boxShadow: "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)"}}>
+        {activeTab === "thread" || activeTab === "thread_settings" ? null : (
+          <div
+            className="nav-rgb-row z-[1000] flex h-fit w-full justify-between border-t border-border bg-bg"
+            style={{
+              boxShadow:
+                "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)",
+            }}
+          >
             <NavRowButton
               icon={<NavFeedIcon active={activeTab === "feed"} />}
               active={activeTab === "feed"}
@@ -654,6 +665,7 @@ export default function Home() {
               className="max-w-[2rem] opacity-30"
             />
           </div>
+        )}
       </section>
       </UserSessionSyncProvider>
     </main>
