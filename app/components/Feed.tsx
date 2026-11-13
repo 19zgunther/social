@@ -1,6 +1,7 @@
 "use client";
 
 import { TouchEvent, WheelEvent, useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import FriendSearchButton from "@/app/components/FriendSearchButton";
 import { PostSection} from "@/app/components/PostSection";
 import PostOptionsPane from "@/app/components/PostOptionsPane";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
@@ -298,7 +299,24 @@ export default function Feed({
         </div>
 
         {!isLoading && posts.length === 0 ? (
-          <div className="px-3 py-3 text-xs text-muted">No posts yet.</div>
+          <div className="px-3 py-3">
+            <div className="create-post-rgb-border rounded-2xl px-5 py-8 text-center shadow-sm">
+              <h2 className="create-post-rgb-text text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
+                Welcome to Social
+              </h2>
+              <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed text-foreground">
+                This is an app designed for you to be able to communicate with your friends
+              </p>
+              <p className="mt-5 text-base font-semibold text-foreground">Find your group now!</p>
+              {viewerUserId && onViewUserProfile ? (
+                <FriendSearchButton
+                  userId={viewerUserId}
+                  onViewUserProfile={onViewUserProfile}
+                  className="mx-auto mt-5 w-full max-w-sm"
+                />
+              ) : null}
+            </div>
+          </div>
         ) : null}
 
         {showTopRefreshIndicator ? (

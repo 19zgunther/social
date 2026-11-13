@@ -1,17 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronRightIcon, CloseIcon } from "@/app/components/Icons";
+import { ChevronRightIcon } from "@/app/components/Icons";
+import FriendSearchButton from "@/app/components/FriendSearchButton";
 import UserProfileImage from "@/app/components/UserProfileImage";
-import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
-import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
-import { Button, IconButton } from "@/app/ui-components";
+import { Button } from "@/app/ui-components";
 import {
   AcceptedFriend,
   ApiError,
   FriendRequestsListResponse,
-  FriendSearchResponse,
-  FriendSearchResult,
   IncomingFriendRequest,
   OutgoingFriendRequest,
 } from "@/app/types/interfaces";
@@ -45,20 +42,12 @@ export default function ProfileFriendsTab({
   onViewUserProfile,
   onAcceptedFriendsChange,
 }: ProfileFriendsTabProps) {
-  const [friendSearchQuery, setFriendSearchQuery] = useState("");
   const [incomingRequests, setIncomingRequests] = useState<IncomingFriendRequest[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<OutgoingFriendRequest[]>([]);
   const [acceptedFriends, setAcceptedFriends] = useState<AcceptedFriend[]>([]);
   const [isLoadingFriendRows, setIsLoadingFriendRows] = useState(true);
-  const [activeFriendUserId, setActiveFriendUserId] = useState<string | null>(null);
   const [activeIncomingRequestId, setActiveIncomingRequestId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
-  const {
-    isPresented: isFriendSearchPresented,
-    isClosing: isFriendSearchClosing,
-    open: openFriendSearch,
-    close: closeFriendSearch,
-  } = useAnimatedModal();
 
   const pendingOutgoingRequests = outgoingRequests.filter((row) => row.accepted === null);
 
@@ -90,81 +79,6 @@ export default function ProfileFriendsTab({
     onAcceptedFriendsChange(acceptedFriends, isLoadingFriendRows);
   }, [acceptedFriends, isLoadingFriendRows, onAcceptedFriendsChange]);
 
-  const runFriendSearch = useCallback(async (rawQuery: string): Promise<FriendSearchResult[]> => {
-    const query = rawQuery.trim();
-
-    try {
-      const response = await postWithAuth("/api/friend-search", {
-        query: query || undefined,
-      });
-      if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
-        return [];
-      }
-
-      const payload = (await response.json()) as FriendSearchResponse;
-      return payload.users;
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to search users.");
-      return [];
-    }
-  }, []);
-
-  const searchFriendOptions = useCallback(
-    async (query: string): Promise<UserSearchOption[]> => {
-      const users = await runFriendSearch(query);
-      return users.map((user) => {
-        const relation = user.relation;
-        const friendshipStatus: UserSearchOption["friendshipStatus"] =
-          user.id === userId
-            ? "self"
-            : relation
-              ? relation.accepted === true
-                ? "friends"
-                : relation.accepted === false
-                  ? "rejected"
-                  : relation.direction === "incoming"
-                    ? "pending_received"
-                    : "pending_sent"
-              : "none";
-
-        const hint =
-          friendshipStatus === "friends"
-            ? "Friends"
-            : friendshipStatus === "pending_sent"
-              ? "Pending request"
-              : friendshipStatus === "pending_received"
-                ? "Incoming request"
-                : friendshipStatus === "self"
-                  ? "You"
-                  : "Not friends";
-
-        return {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          hint,
-          friendshipStatus,
-        };
-      });
-    },
-    [runFriendSearch, userId],
-  );
-
-  const onSelectUserFromSearch = useCallback(
-    (option: UserSearchOption) => {
-      setFriendSearchQuery(option.username);
-      if (option.hint) {
-        setStatusMessage(option.hint);
-      }
-      closeFriendSearch();
-      if (option.id !== userId) {
-        onViewUserProfile(option.id);
-      }
-    },
-    [userId, onViewUserProfile, closeFriendSearch],
-  );
-
   const onRespondToFriendRequest = async (friendId: string, accept: boolean) => {
     setActiveIncomingRequestId(friendId);
     setStatusMessage("");
@@ -178,7 +92,7 @@ export default function ProfileFriendsTab({
         return;
       }
 
-      await Promise.all([loadFriendRows(), runFriendSearch(friendSearchQuery)]);
+      await loadFriendRows();
       setStatusMessage(accept ? "Friend request accepted." : "Friend request rejected.");
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to respond to request.");
@@ -187,44 +101,6 @@ export default function ProfileFriendsTab({
     }
   };
 
-  const onRequestFollowFromSearch = useCallback(
-    async (option: UserSearchOption): Promise<UserSearchOption | void> => {
-      if (
-        option.friendshipStatus === "self" ||
-        option.friendshipStatus === "friends" ||
-        option.friendshipStatus === "pending_sent" ||
-        option.friendshipStatus === "pending_received"
-      ) {
-        return option;
-      }
-
-      setActiveFriendUserId(option.id);
-      setStatusMessage("");
-      try {
-        const response = await postWithAuth("/api/friend-request-create", {
-          other_user_id: option.id,
-        });
-        if (!response.ok) {
-          setStatusMessage(await readErrorMessage(response));
-          return;
-        }
-
-        await loadFriendRows();
-        setStatusMessage("Friend request sent.");
-        return {
-          ...option,
-          hint: "Pending request",
-          friendshipStatus: "pending_sent",
-        };
-      } catch (error) {
-        setStatusMessage(error instanceof Error ? error.message : "Failed to send friend request.");
-      } finally {
-        setActiveFriendUserId(null);
-      }
-    },
-    [loadFriendRows],
-  );
-
   if (!isActive) {
     return null;
   }
@@ -232,59 +108,14 @@ export default function ProfileFriendsTab({
   return (
     <section className="w-full border-b border-border px-3">
       <div className="mt-3 w-full">
-        <button
-          type="button"
-          onClick={() => openFriendSearch()}
-          className="w-full rounded-xl border border-border bg-bg px-3 py-2 text-left text-sm text-muted transition hover:border-muted hover:text-foreground"
-        >
-          Search to add or find friends...
-        </button>
-        <AnimatedModal
-          isPresented={isFriendSearchPresented}
-          isClosing={isFriendSearchClosing}
-          onClose={() => closeFriendSearch()}
-          ariaLabel="Search friends"
-          hideHeader
-          rootClassName="z-[2200] items-start px-3"
-          panelClassName="h-full max-w-lg border-0 bg-transparent shadow-none"
-          backdropClassName="bg-black/35 backdrop-blur-xl"
-        >
-          <div className="flex h-full min-h-0 flex-col pt-10">
-            <UserSearch
-              variant="panel"
-              value={friendSearchQuery}
-              onValueChange={setFriendSearchQuery}
-              onSelect={onSelectUserFromSearch}
-              searchUsers={searchFriendOptions}
-              placeholder="Search to add or find friends..."
-              autoFocus
-              trailingAction={
-                <IconButton
-                  type="button"
-                  variant="ghost"
-                  aria-label="Close search"
-                  onClick={() => closeFriendSearch()}
-                >
-                  <CloseIcon className="h-5 w-5" />
-                </IconButton>
-              }
-              getOptionActionLabel={(option) => {
-                if (option.friendshipStatus === "none" || option.friendshipStatus === "rejected") {
-                  return "Request to Follow";
-                }
-                if (option.friendshipStatus === "pending_sent") {
-                  return "Pending";
-                }
-                return null;
-              }}
-              isOptionActionDisabled={(option) =>
-                activeFriendUserId === option.id ||
-                (option.friendshipStatus !== "none" && option.friendshipStatus !== "rejected")
-              }
-              onOptionAction={onRequestFollowFromSearch}
-            />
-          </div>
-        </AnimatedModal>
+        <FriendSearchButton
+          userId={userId}
+          onViewUserProfile={onViewUserProfile}
+          onFriendRequestSent={() => {
+            void loadFriendRows();
+          }}
+          onStatusMessage={setStatusMessage}
+        />
       </div>
 
       <div className="mt-5">
