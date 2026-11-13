@@ -161,6 +161,7 @@ export default function Messages({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFriendSuggestions, setSearchFriendSuggestions] = useState<UserSearchOption[]>([]);
   const [isLoadingSearchFriends, setIsLoadingSearchFriends] = useState(false);
+  const [openingDirectChatUserId, setOpeningDirectChatUserId] = useState<string | null>(null);
   const [optionsMenu, setOptionsMenu] = useState<{
     threadId: string;
     anchorEl: HTMLElement;
@@ -557,6 +558,44 @@ export default function Messages({
     [markThreadRead, onOpenThreadFromMessages, setActiveTab, setSelectedThread],
   );
 
+  const onOpenDirectChatWithFriend = useCallback(
+    async (friend: UserSearchOption) => {
+      if (openingDirectChatUserId) {
+        return;
+      }
+
+      setOpeningDirectChatUserId(friend.id);
+      setStatusMessage("");
+      try {
+        const response = await postWithAuth("/api/thread-direct-open", {
+          other_user_id: friend.id,
+        });
+        if (!response.ok) {
+          setStatusMessage(await readErrorMessage(response));
+          return;
+        }
+
+        const payload = (await response.json()) as { thread: ThreadItem };
+        setThreads((previous) => {
+          if (previous.some((thread) => thread.id === payload.thread.id)) {
+            return previous;
+          }
+          return [payload.thread, ...previous];
+        });
+        setSearchQuery("");
+        setSearchFriendSuggestions([]);
+        onOpenThread(payload.thread);
+      } catch (error) {
+        setStatusMessage(
+          error instanceof Error ? error.message : "Could not open message thread.",
+        );
+      } finally {
+        setOpeningDirectChatUserId(null);
+      }
+    },
+    [onOpenThread, openingDirectChatUserId],
+  );
+
   const applyPinnedLocally = useCallback(
     (threadId: string, pinned: boolean) => {
       setThreads((previous) => {
@@ -640,19 +679,14 @@ export default function Messages({
     clearPinLongPressTimer();
   };
 
-  const threadMemberUserIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const thread of threads) {
-      for (const userId of thread.member_user_ids ?? []) {
-        ids.add(userId);
-      }
-    }
-    return ids;
-  }, [threads]);
+  const filteredThreads = useMemo(
+    () => threads.filter((thread) => threadMatchesSearch(thread, searchQuery)),
+    [threads, searchQuery],
+  );
 
   useEffect(() => {
     const query = searchQuery.trim();
-    if (!query) {
+    if (!query || filteredThreads.length > 0) {
       setSearchFriendSuggestions([]);
       setIsLoadingSearchFriends(false);
       return;
@@ -676,12 +710,9 @@ export default function Messages({
             return;
           }
           const suggestions = payload.users
-            .filter((user) => {
-              if (user.id === currentUserId || threadMemberUserIds.has(user.id)) {
-                return false;
-              }
-              return user.relation?.accepted === true;
-            })
+            .filter(
+              (user) => user.id !== currentUserId && user.relation?.accepted === true,
+            )
             .map((user) => ({
               id: user.id,
               username: user.username,
@@ -706,12 +737,7 @@ export default function Messages({
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [currentUserId, searchQuery, threadMemberUserIds]);
-
-  const filteredThreads = useMemo(
-    () => threads.filter((thread) => threadMatchesSearch(thread, searchQuery)),
-    [threads, searchQuery],
-  );
+  }, [currentUserId, filteredThreads.length, searchQuery]);
   const pinnedThreads = useMemo(
     () => filteredThreads.filter((thread) => thread.user_pinned_thread === true),
     [filteredThreads],
@@ -1083,48 +1109,58 @@ export default function Messages({
         ))}
 
         {searchQuery.trim() &&
+        filteredThreads.length === 0 &&
         (isLoadingSearchFriends || searchFriendSuggestions.length > 0) ? (
           <div className="mt-2 border-t border-border/40 pt-2">
             <p className="px-4 pb-2 text-xs font-semibold text-muted">Friends</p>
             {isLoadingSearchFriends && searchFriendSuggestions.length === 0 ? (
               <p className="px-4 py-2 text-xs text-muted">Searching friends...</p>
             ) : null}
-            {searchFriendSuggestions.map((friend) => (
-              <div
-                key={friend.id}
-                className="flex w-full items-center gap-3 border-b border-border/30 px-4 py-3"
-              >
-                <button
-                  type="button"
-                  onClick={() => onOpenCreateChat([friend])}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left transition hover:opacity-90"
+            {searchFriendSuggestions.map((friend) => {
+              const isOpening = openingDirectChatUserId === friend.id;
+              return (
+                <div
+                  key={friend.id}
+                  className="flex w-full items-center gap-3 border-b border-border/30 px-4 py-3"
                 >
-                  <UserProfileImage
-                    userId={friend.id}
-                    sizePx={48}
-                    alt={`${friend.username} profile`}
-                    username={friend.username}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-base font-semibold text-foreground">
-                      {friend.username}
-                    </p>
-                    {friend.email ? (
-                      <p className="truncate text-sm text-muted">{friend.email}</p>
-                    ) : null}
-                  </div>
-                </button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => onOpenCreateChat([friend])}
-                >
-                  New message
-                </Button>
-              </div>
-            ))}
+                  <button
+                    type="button"
+                    disabled={openingDirectChatUserId !== null}
+                    onClick={() => {
+                      void onOpenDirectChatWithFriend(friend);
+                    }}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left transition hover:opacity-90 disabled:opacity-60"
+                  >
+                    <UserProfileImage
+                      userId={friend.id}
+                      sizePx={48}
+                      alt={`${friend.username} profile`}
+                      username={friend.username}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-base font-semibold text-foreground">
+                        {friend.username}
+                      </p>
+                      {friend.email ? (
+                        <p className="truncate text-sm text-muted">{friend.email}</p>
+                      ) : null}
+                    </div>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    className="shrink-0"
+                    disabled={openingDirectChatUserId !== null}
+                    onClick={() => {
+                      void onOpenDirectChatWithFriend(friend);
+                    }}
+                  >
+                    {isOpening ? "Opening..." : "Message"}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         ) : null}
       </div>
