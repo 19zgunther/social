@@ -301,13 +301,16 @@ export default function Feed({
         {!isLoading && posts.length === 0 ? (
           <div className="px-3 py-3">
             <div className="create-post-rgb-border rounded-2xl px-5 py-8 text-center shadow-sm">
-              <h2 className="create-post-rgb-text text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
+              <h2
+                className="create-post-rgb-text text-6xl font-bold leading-tight tracking-tight"
+                style={{ fontFamily: '"Cherry Swash", cursive' }}
+              >
                 Welcome to Social
               </h2>
               <p className="mx-auto mt-4 max-w-sm text-sm leading-relaxed text-foreground">
                 This is an app designed for you to be able to communicate with your friends
               </p>
-              <p className="mt-5 text-base font-semibold text-foreground">Find your group now!</p>
+              <p className="mt-5 text-base font-semibold text-foreground" style={{ fontFamily: '"Cherry Swash", cursive' }}>Find your group now!</p>
               {viewerUserId && onViewUserProfile ? (
                 <FriendSearchButton
                   userId={viewerUserId}

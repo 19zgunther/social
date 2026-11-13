@@ -17,3 +17,6 @@ export type {
   BlurOptionsListProps,
   BlurOptionsListItemProps,
 } from "./BlurOptionsList";
+
+export { default as CollagePromptButton } from "./CollagePromptButton";
+export type { CollagePromptButtonProps } from "./CollagePromptButton";

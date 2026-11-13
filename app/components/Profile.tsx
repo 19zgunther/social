@@ -14,6 +14,7 @@ import {
 import UserProfileImage from "@/app/components/UserProfileImage";
 import CachedImage from "@/app/components/utils/CachedImage";
 import BackButton from "@/app/components/utils/BackButton";
+import CreatePostButton from "@/app/components/CreatePostButton";
 import { Button, IconButton } from "@/app/ui-components";
 import { PostSection } from "@/app/components/PostSection";
 import PostOptionsPane from "@/app/components/PostOptionsPane";
@@ -217,9 +218,16 @@ function ProfilePostsSection({
 
       {isLoadingPosts ? <p className="px-3 py-3 text-xs text-muted">Loading posts...</p> : null}
       {!isLoadingPosts && posts.length === 0 ? (
-        <p className="px-3 py-3 text-xs text-muted">
-          {showCreateButton ? "No posts yet. Create your first post." : "No posts yet."}
-        </p>
+        showCreateButton && onOpenCreatePost ? (
+          <div className="flex flex-col items-center gap-4 px-3 py-6">
+            <p className="max-w-sm text-center text-lg font-semibold leading-snug text-foreground">
+              Create your first post to show your friends what you're up to
+            </p>
+            <CreatePostButton onClick={onOpenCreatePost} />
+          </div>
+        ) : (
+          <p className="px-3 py-3 text-xs text-muted">No posts yet.</p>
+        )
       ) : null}
 
       <div className="grid grid-cols-3">

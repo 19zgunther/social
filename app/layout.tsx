@@ -97,11 +97,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
-        {/* Redaction 50 is not in this Next.js font catalog yet — load from Google Fonts. */}
+        {/* Fonts not in this Next.js font catalog — load from Google Fonts. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Redaction+50:wght@700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Cherry+Swash:wght@400;700&family=Redaction+50:wght@700&display=swap"
           rel="stylesheet"
         />
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
