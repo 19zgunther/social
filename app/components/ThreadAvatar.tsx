@@ -158,13 +158,13 @@ export default function ThreadAvatar({
   className,
 }: ThreadAvatarProps) {
   const hasThreadImage = Boolean(imageId && (imageUrl || imageAccessGrant));
-  const members = [
-    ...new Set(
-      (memberUserIds ?? []).filter(
-        (userId) => Boolean(userId) && userId !== currentUserId,
-      ),
-    ),
+  // Prefer other members for the collage; if you're the only member (e.g. solo
+  // event threads), fall back to your own profile photo instead of the empty icon.
+  const allMembers = [
+    ...new Set((memberUserIds ?? []).filter((userId) => Boolean(userId))),
   ];
+  const otherMembers = allMembers.filter((userId) => userId !== currentUserId);
+  const members = otherMembers.length > 0 ? otherMembers : allMembers;
   const showCollage = !hasThreadImage && members.length > 0;
 
   return (
