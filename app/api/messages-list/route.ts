@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { resolveStorageBackends } from "@/app/lib/storageObjects";
 import { isEmojiOnlyText, sanitizeNotificationText } from "@/app/lib/notification_text";
 import { prisma } from "@/app/lib/prisma";
 import { directPeerUsernameFromMembers } from "@/app/lib/threadDirect";
@@ -176,6 +177,7 @@ export async function POST(request: Request) {
       },
     });
 
+    const threadImageBackends = await resolveStorageBackends(threads.map((thread) => thread.image_id));
     const threadImageGrantEntries = threads.map((thread) => {
       if (!thread.image_id) {
         return [thread.id, null] as const;
@@ -185,6 +187,7 @@ export async function POST(request: Request) {
           imageId: thread.image_id,
           threadId: thread.id,
           viewerUserId: authResult.user_id,
+          backend: threadImageBackends.get(thread.image_id) ?? "supabase",
         });
         return [thread.id, grant] as const;
       } catch (error) {

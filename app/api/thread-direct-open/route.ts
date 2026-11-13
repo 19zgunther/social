@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
-import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { createThreadBucketImageAccessGrantAsync } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import {
   directPeerUsernameFromMembers,
@@ -12,7 +12,7 @@ type ThreadDirectOpenBody = {
   other_user_id?: string;
 };
 
-function toThreadItemPayload(input: {
+async function toThreadItemPayload(input: {
   thread: {
     id: string;
     name: string;
@@ -24,12 +24,12 @@ function toThreadItemPayload(input: {
   };
   viewerUserId: string;
   peerUsername?: string | null;
-}): ThreadItem {
+}): Promise<ThreadItem> {
   const { thread, viewerUserId } = input;
   let image_access_grant: string | null = null;
   if (thread.image_id) {
     try {
-      image_access_grant = createThreadBucketImageAccessGrant({
+      image_access_grant = await createThreadBucketImageAccessGrantAsync({
         imageId: thread.image_id,
         threadId: thread.id,
         viewerUserId,
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
 
     const existing = await findDirectThreadBetweenUsers(prisma, authResult.user_id, otherUser.id);
     if (existing) {
-      const thread = toThreadItemPayload({
+      const thread = await toThreadItemPayload({
         thread: existing,
         viewerUserId: authResult.user_id,
         peerUsername: otherUser.username,
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
       return withAccess;
     });
 
-    const thread = toThreadItemPayload({
+    const thread = await toThreadItemPayload({
       thread: created,
       viewerUserId: authResult.user_id,
       peerUsername: otherUser.username,

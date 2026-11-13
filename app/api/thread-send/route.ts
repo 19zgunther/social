@@ -6,7 +6,7 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { publishThreadMessagePosted } from "@/app/lib/sync";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
-import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { createMainBucketImageAccessGrantAsync } from "@/app/api/image_access_grant";
 import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import {
   MessageData,
@@ -242,10 +242,11 @@ export async function POST(request: Request) {
     let image_access_grant: string | null = null;
     if (message.image_id) {
       try {
-        image_access_grant = createMainBucketImageAccessGrant({
+        image_access_grant = await createMainBucketImageAccessGrantAsync({
           imageId: message.image_id,
           storageUserId: message.created_by,
           viewerUserId: authResult.user_id,
+          backend: "s3",
         });
       } catch (error) {
         console.error("thread_send_image_grant_failed", message.id, error);

@@ -16,6 +16,7 @@ import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { canViewerAccessPost } from "@/app/lib/postVisibility";
+import { resolveStorageBackends } from "@/app/lib/storageObjects";
 import {
   asEventSharedPostData,
   findSharedMediaOwnerUserId,
@@ -64,6 +65,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const backends = await resolveStorageBackends(imageIds);
+
     // --- Mode 1: event album (multi-contributor; owners on event.shared_post_data.media) ---
     const eventId = body.event_id?.trim() ?? "";
     if (eventId) {
@@ -94,6 +97,7 @@ export async function POST(request: Request) {
             imageId,
             storageUserId,
             viewerUserId: authResult.user_id,
+            backend: backends.get(imageId) ?? "supabase",
           });
         } catch (error) {
           console.error("image_access_grant_failed", storageUserId, imageId, error);
@@ -144,6 +148,7 @@ export async function POST(request: Request) {
             imageId,
             storageUserId,
             viewerUserId: authResult.user_id,
+            backend: backends.get(imageId) ?? "supabase",
           });
         } catch (error) {
           console.error("image_access_grant_failed", storageUserId, imageId, error);
@@ -173,6 +178,7 @@ export async function POST(request: Request) {
           imageId,
           storageUserId,
           viewerUserId: authResult.user_id,
+          backend: backends.get(imageId) ?? "supabase",
         });
       } catch (error) {
         console.error("image_access_grant_failed", storageUserId, imageId, error);

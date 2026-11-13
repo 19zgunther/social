@@ -12,6 +12,8 @@
     "migrate:post-media": "tsx scripts/migratePostMediaFromLegacy.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1169.0",
+    "@aws-sdk/s3-request-presigner": "^3.1169.0",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "@supabase/supabase-js": "^2.100.0",

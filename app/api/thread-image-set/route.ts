@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { createThreadBucketImageAccessGrantAsync } from "@/app/api/image_access_grant";
 import { uploadThreadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import { ThreadImageSetResponse } from "@/app/types/interfaces";
 
@@ -82,10 +82,11 @@ export async function POST(request: Request) {
       },
     });
 
-    const image_access_grant = createThreadBucketImageAccessGrant({
+    const image_access_grant = await createThreadBucketImageAccessGrantAsync({
       threadId,
       imageId,
       viewerUserId: authResult.user_id,
+      backend: "s3",
     });
 
     const payload: ThreadImageSetResponse = {

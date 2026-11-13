@@ -1,7 +1,7 @@
 import type { PostData, PostMediaItem, PostMediaKind } from "@/app/types/interfaces";
 
-export const MAX_POST_MEDIA_ITEMS = 10;
-export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+export const MAX_POST_MEDIA_ITEMS = 20;
+export const MAX_VIDEO_BYTES = 500 * 1024 * 1024; // 500MB
 export const MAX_VIDEO_DURATION_SECONDS = 60;
 export const ALLOWED_VIDEO_MIME_TYPES = ["video/mp4", "video/webm", "video/quicktime"] as const;
 

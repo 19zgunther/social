@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
-import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { createThreadBucketImageAccessGrantAsync } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import {
   finalizeThreadEventItem,
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       let image_access_grant: string | null = null;
       if (tr.image_id) {
         try {
-          image_access_grant = createThreadBucketImageAccessGrant({
+          image_access_grant = await createThreadBucketImageAccessGrantAsync({
             threadId: tr.id,
             imageId: tr.image_id,
             viewerUserId: userId,

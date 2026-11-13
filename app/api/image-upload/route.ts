@@ -4,8 +4,10 @@ import { authCheck } from "@/app/api/auth_utils";
 import {
   createSignedMainBucketUploadUrl,
   getSignedMainBucketImageUrl,
+  mainBucketUserObjectExists,
   uploadImageToMainBucket,
 } from "@/app/api/server_file_storage_utils";
+import { registerStorageObject } from "@/app/lib/storageObjects";
 import type {
   ImageUploadCompleteRequest,
   ImageUploadRequest,
@@ -55,6 +57,7 @@ export async function POST(request: Request) {
       const signed = await createSignedMainBucketUploadUrl({
         userId: authResult.user_id,
         imageId,
+        mimeType: imageMimeType,
       });
 
       const payload: ImageUploadSignResponse = {
@@ -75,9 +78,50 @@ export async function POST(request: Request) {
         );
       }
 
+      // Bind complete to a real object under this caller's prefix so a random
+      // UUID cannot poison the registry (missing row ⇒ Supabase) for others.
+      const uploaded = await mainBucketUserObjectExists({
+        userId: authResult.user_id,
+        imageId,
+      });
+      if (!uploaded) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "upload_incomplete",
+              message: "No uploaded object found for this image_id.",
+            },
+          },
+          { status: 400 },
+        );
+      }
+
+      try {
+        await registerStorageObject({
+          id: imageId,
+          backend: "s3",
+          pathKind: "user",
+          ownerId: authResult.user_id,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === "storage_object_conflict") {
+          return NextResponse.json(
+            {
+              error: {
+                code: "storage_object_conflict",
+                message: "image_id is already registered to a different owner.",
+              },
+            },
+            { status: 409 },
+          );
+        }
+        throw error;
+      }
+
       const imageUrl = await getSignedMainBucketImageUrl({
         userId: authResult.user_id,
         imageId,
+        backend: "s3",
       });
 
       const payload: ImageUploadResponse = {
@@ -112,6 +156,7 @@ export async function POST(request: Request) {
     const imageUrl = await getSignedMainBucketImageUrl({
       userId: authResult.user_id,
       imageId,
+      backend: "s3",
     });
 
     const payload: ImageUploadResponse = {

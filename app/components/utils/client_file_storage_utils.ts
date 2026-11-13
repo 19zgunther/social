@@ -101,21 +101,18 @@ export const prepareImageForUpload = async (file: File): Promise<PreparedImageUp
   };
 };
 
-/** Matches Supabase storage-js `uploadToSignedUrl` (FormData + PUT). */
-export const uploadBlobToSupabaseSignedUploadUrl = async (
+/** Presigned S3 PUT — Content-Type must match the type used when the URL was signed. */
+export const uploadBlobToSignedUploadUrl = async (
   signedUploadUrl: string,
   blob: Blob,
-  options?: { cacheControl?: string; signal?: AbortSignal },
+  mimeType: string,
+  options?: { signal?: AbortSignal },
 ): Promise<void> => {
-  const formData = new FormData();
-  formData.append("cacheControl", options?.cacheControl ?? "3600");
-  formData.append("", blob);
-
   const response = await fetch(signedUploadUrl, {
     method: "PUT",
-    body: formData,
+    body: blob,
     headers: {
-      "x-upsert": "true",
+      "Content-Type": mimeType,
     },
     signal: options?.signal,
   });
@@ -145,7 +142,7 @@ const uploadBlobWithSignedFlow = async (
     throw new Error("Invalid sign response from server.");
   }
 
-  await uploadBlobToSupabaseSignedUploadUrl(signPayload.signed_upload_url, blob);
+  await uploadBlobToSignedUploadUrl(signPayload.signed_upload_url, blob, mimeType);
 
   const completeResponse = await postWithAuth("/api/image-upload", {
     phase: "complete",

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
+import { resolveStorageBackends } from "@/app/lib/storageObjects";
 import type {
   UserProfileImageEntry,
   UserProfileImagesRequest,
@@ -49,6 +50,8 @@ export async function POST(request: Request) {
       };
     }
 
+    const backends = await resolveStorageBackends(users.map((user) => user.profile_image_id));
+
     for (const user of users) {
       let grant: string | null = null;
       if (user.profile_image_id) {
@@ -57,6 +60,7 @@ export async function POST(request: Request) {
             imageId: user.profile_image_id,
             storageUserId: user.id,
             viewerUserId: authResult.user_id,
+            backend: backends.get(user.profile_image_id) ?? "supabase",
           });
         } catch (error) {
           console.error("user_profile_images_grant_failed", user.id, error);

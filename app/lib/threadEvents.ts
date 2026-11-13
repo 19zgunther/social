@@ -1,4 +1,4 @@
-import { createThreadBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { createThreadBucketImageAccessGrantAsync } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import type { Prisma } from "@/app/generated/prisma/client";
 import {
@@ -170,7 +170,7 @@ export async function finalizeThreadEventItem(
     return base;
   }
   try {
-    const background_image_access_grant = createThreadBucketImageAccessGrant({
+    const background_image_access_grant = await createThreadBucketImageAccessGrantAsync({
       threadId: row.thread_id,
       imageId: row.background_image_id,
       viewerUserId,

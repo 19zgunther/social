@@ -4,7 +4,7 @@ import { prisma } from "@/app/lib/prisma";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { resolvePostAudience } from "@/app/lib/postVisibility";
-import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { createMainBucketImageAccessGrantAsync } from "@/app/api/image_access_grant";
 import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
 import {
   parsePollCreateInput,
@@ -211,6 +211,7 @@ export async function createPostForUser(
   const isPermanent = audience.mode === "permanent";
 
   // Prefer explicit data.media; otherwise fold legacy create image fields into media.
+  let freshlyUploadedImageId: string | null = null;
   if (!mediaItems || mediaItems.length === 0) {
     if (providedImageId) {
       mediaItems = [{ id: providedImageId, kind: "image" }];
@@ -222,6 +223,7 @@ export async function createPostForUser(
         base64Data: imageBase64Data,
         mimeType: imageMimeType,
       });
+      freshlyUploadedImageId = uploadedImageId;
       mediaItems = [{ id: uploadedImageId, kind: "image" }];
     }
   }
@@ -307,7 +309,7 @@ export async function createPostForUser(
   let authorProfileImageAccessGrant: string | null = null;
   if (author?.profile_image_id) {
     try {
-      authorProfileImageAccessGrant = createMainBucketImageAccessGrant({
+      authorProfileImageAccessGrant = await createMainBucketImageAccessGrantAsync({
         imageId: author.profile_image_id,
         storageUserId: authorUserId,
         viewerUserId: authorUserId,
@@ -326,10 +328,11 @@ export async function createPostForUser(
   let coverImageAccessGrant: string | null = null;
   if (cover) {
     try {
-      coverImageAccessGrant = createMainBucketImageAccessGrant({
+      coverImageAccessGrant = await createMainBucketImageAccessGrantAsync({
         imageId: cover.objectId,
         storageUserId: cover.ownerUserId ?? post.created_by,
         viewerUserId: authorUserId,
+        ...(cover.objectId === freshlyUploadedImageId ? { backend: "s3" as const } : {}),
       });
     } catch (error) {
       console.error("post_create_cover_image_grant_failed", post.id, error);

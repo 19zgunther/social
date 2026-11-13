@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
-import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import {
+  createMainBucketImageAccessGrant,
+  createMainBucketImageAccessGrantAsync,
+} from "@/app/api/image_access_grant";
 import { getPostCoverObject } from "@/app/lib/postMedia";
+import { resolveStorageBackends } from "@/app/lib/storageObjects";
 import { sanitizePostDataForViewer } from "@/app/lib/polls";
 import { visibleAuthorPostsWhereForViewer } from "@/app/lib/postVisibility";
 import { PostData, PostItem } from "@/app/types/interfaces";
@@ -125,7 +129,7 @@ export async function POST(request: Request) {
     let profileImageAccessGrant: string | null = null;
     if (isFriends && targetUser.profile_image_id) {
       try {
-        profileImageAccessGrant = createMainBucketImageAccessGrant({
+        profileImageAccessGrant = await createMainBucketImageAccessGrantAsync({
           imageId: targetUser.profile_image_id,
           storageUserId: targetUserId,
           viewerUserId: authResult.user_id,
@@ -175,6 +179,18 @@ export async function POST(request: Request) {
       hasMore = postsDesc.length > PAGE_SIZE;
       const pagedPosts = postsDesc.slice(0, PAGE_SIZE);
 
+      const sanitizedPosts = pagedPosts.map((post) => {
+        const data = sanitizePostDataForViewer({
+          data: post.data,
+          viewerUserId: authResult.user_id,
+          authorUserId: post.created_by,
+        });
+        return { post, data, cover: getPostCoverObject(data) };
+      });
+      const backends = await resolveStorageBackends(
+        sanitizedPosts.flatMap(({ post, cover }) => [cover?.objectId, post.users.profile_image_id]),
+      );
+
       const mintGrant = (
         imageId: string | null | undefined,
         storageUserId: string,
@@ -187,6 +203,7 @@ export async function POST(request: Request) {
             imageId,
             storageUserId,
             viewerUserId: authResult.user_id,
+            backend: backends.get(imageId) ?? "supabase",
           });
         } catch (error) {
           console.error("user_profile_post_image_grant_failed", imageId, error);
@@ -194,14 +211,8 @@ export async function POST(request: Request) {
         }
       };
 
-      posts = pagedPosts.map((post) => {
+      posts = sanitizedPosts.map(({ post, data, cover }) => {
         const likesInfo = getLikesInfo(post.data, authResult.user_id);
-        const data = sanitizePostDataForViewer({
-          data: post.data,
-          viewerUserId: authResult.user_id,
-          authorUserId: post.created_by,
-        });
-        const cover = getPostCoverObject(data);
         return {
           like_count: likesInfo.likeCount,
           is_liked_by_viewer: likesInfo.isLikedByViewer,

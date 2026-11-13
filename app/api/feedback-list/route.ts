@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
+import { resolveStorageBackends } from "@/app/lib/storageObjects";
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -26,6 +27,8 @@ export async function POST(request: Request) {
       },
     });
 
+    const backends = await resolveStorageBackends(rows.map((row) => row.image_id));
+
     const items = rows.map((row) => {
       let image_access_grant: string | null = null;
       if (row.image_id) {
@@ -34,6 +37,7 @@ export async function POST(request: Request) {
             imageId: row.image_id,
             storageUserId: row.created_by,
             viewerUserId: authResult.user_id,
+            backend: backends.get(row.image_id) ?? "supabase",
           });
         } catch (error) {
           console.error("feedback_list_image_grant_failed", row.id, error);

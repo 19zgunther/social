@@ -65,6 +65,7 @@ export async function POST(request: Request) {
       const signedUrl = await getSignedMainBucketImageUrl({
         userId: storageUserId,
         imageId,
+        backend: mainPayload.backend,
       });
       return NextResponse.json({ signed_url: signedUrl }, { status: 200 });
     }
@@ -98,6 +99,7 @@ export async function POST(request: Request) {
       const signedUrl = await getSignedMainBucketThreadImageUrl({
         threadId,
         imageId,
+        backend: threadPayload.backend,
       });
       return NextResponse.json({ signed_url: signedUrl }, { status: 200 });
     }

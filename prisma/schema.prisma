@@ -307,3 +307,14 @@ model webrtc_signalling {
   payload         Json?
   users           users    @relation(fields: [from_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
+
+/// Tracks which object store owns a media UUID. Missing row ⇒ historical Supabase Storage.
+model storage_objects {
+  id         String   @id @db.Uuid
+  backend    String
+  path_kind  String
+  owner_id   String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([owner_id])
+}

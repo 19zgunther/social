@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@/app/generated/prisma/client";
 import { authCheck } from "@/app/api/auth_utils";
-import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { createMainBucketImageAccessGrantAsync } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { resolvePostAudience } from "@/app/lib/postVisibility";
@@ -189,7 +189,7 @@ export async function POST(request: Request) {
     let authorProfileImageAccessGrant: string | null = null;
     if (author?.profile_image_id) {
       try {
-        authorProfileImageAccessGrant = createMainBucketImageAccessGrant({
+        authorProfileImageAccessGrant = await createMainBucketImageAccessGrantAsync({
           imageId: author.profile_image_id,
           storageUserId: authResult.user_id,
           viewerUserId: authResult.user_id,
@@ -208,7 +208,7 @@ export async function POST(request: Request) {
     let coverImageAccessGrant: string | null = null;
     if (cover) {
       try {
-        coverImageAccessGrant = createMainBucketImageAccessGrant({
+        coverImageAccessGrant = await createMainBucketImageAccessGrantAsync({
           imageId: cover.objectId,
           storageUserId: cover.ownerUserId ?? post.created_by,
           viewerUserId: authResult.user_id,

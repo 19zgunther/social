@@ -3,6 +3,7 @@ import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { getPostCoverObject } from "@/app/lib/postMedia";
+import { resolveStorageBackends, type StorageBackend } from "@/app/lib/storageObjects";
 import { visiblePostsWhereForViewer } from "@/app/lib/postVisibility";
 import { sanitizePostDataForViewer } from "@/app/lib/polls";
 import {
@@ -26,12 +27,18 @@ const mintGrant = (
   imageId: string | null | undefined,
   storageUserId: string,
   viewerUserId: string,
+  backends: Map<string, StorageBackend>,
 ): string | null => {
   if (!imageId) {
     return null;
   }
   try {
-    return createMainBucketImageAccessGrant({ imageId, storageUserId, viewerUserId });
+    return createMainBucketImageAccessGrant({
+      imageId,
+      storageUserId,
+      viewerUserId,
+      backend: backends.get(imageId) ?? "supabase",
+    });
   } catch (error) {
     console.error("feed_image_grant_failed", imageId, error);
     return null;
@@ -103,14 +110,20 @@ export async function POST(request: Request) {
     const paged = postsDesc.slice(0, PAGE_SIZE);
     const last = paged[paged.length - 1] ?? null;
 
-    const posts: PostItem[] = paged.map((post) => {
-      const likesInfo = getLikesInfo(post.data, authResult.user_id);
+    const sanitizedPosts = paged.map((post) => {
       const data = sanitizePostDataForViewer({
         data: post.data,
         viewerUserId: authResult.user_id,
         authorUserId: post.created_by,
       });
-      const cover = getPostCoverObject(data);
+      return { post, data, cover: getPostCoverObject(data) };
+    });
+    const backends = await resolveStorageBackends(
+      sanitizedPosts.flatMap(({ post, cover }) => [cover?.objectId, post.users.profile_image_id]),
+    );
+
+    const posts: PostItem[] = sanitizedPosts.map(({ post, data, cover }) => {
+      const likesInfo = getLikesInfo(post.data, authResult.user_id);
       const coverStorageUserId = cover?.ownerUserId ?? post.created_by;
       return {
         id: post.id,
@@ -123,6 +136,7 @@ export async function POST(request: Request) {
           cover?.objectId,
           coverStorageUserId,
           authResult.user_id,
+          backends,
         ),
         like_count: likesInfo.likeCount,
         is_liked_by_viewer: likesInfo.isLikedByViewer,
@@ -138,6 +152,7 @@ export async function POST(request: Request) {
           post.users.profile_image_id,
           post.created_by,
           authResult.user_id,
+          backends,
         ),
       };
     });

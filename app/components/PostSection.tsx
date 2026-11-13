@@ -670,12 +670,15 @@ function PostSectionComponent({
               username={comment.username || comment.user_id}
               onClick={() => onViewUserProfile?.(comment.user_id)}
             />
-            <span className="shrink-0 font-semibold text-foreground/90">{comment.username || comment.user_id}</span>
-            <span className="min-w-0 flex-1 break-words whitespace-pre-wrap">{formatPostText(comment.text)}</span>
+            <div className="min-w-0 flex-1 break-words">
+              <span className="font-semibold text-foreground/90">{comment.username || comment.user_id}</span>
+              {" "}
+              <span className="whitespace-pre-wrap">{formatPostText(comment.text)}</span>
+            </div>
             {canDeleteComment ? (
               <button
                 type="button"
-                className="ml-auto shrink-0"
+                className="shrink-0"
                 onClick={() => {
                   void onDeleteComment(path);
                 }}

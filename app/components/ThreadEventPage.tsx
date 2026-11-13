@@ -542,7 +542,11 @@ export default function ThreadEventPage({
           if (!imageUpload.image_id) {
             throw new Error("Image upload failed.");
           }
-          uploaded.push({ id: imageUpload.image_id, kind: "image", owner_user_id: currentUserId });
+          uploaded.push({
+            id: imageUpload.image_id,
+            kind: "image",
+            owner_user_id: currentUserId,
+          });
           continue;
         }
         const preparedVideo = await prepareVideoForUpload(file);

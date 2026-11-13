@@ -5,6 +5,7 @@ import {
   createThreadBucketImageAccessGrant,
 } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
+import { resolveStorageBackends } from "@/app/lib/storageObjects";
 import { directPeerUsernameForViewer } from "@/app/lib/threadDirect";
 import { MessageData, ThreadMessagesRequest, ThreadMessagesResponse } from "@/app/types/interfaces";
 
@@ -154,19 +155,6 @@ export async function POST(request: Request) {
       );
     }
 
-    let threadImageAccessGrant: string | null = null;
-    if (thread.image_id) {
-      try {
-        threadImageAccessGrant = createThreadBucketImageAccessGrant({
-          imageId: thread.image_id,
-          threadId: thread.id,
-          viewerUserId: authResult.user_id,
-        });
-      } catch (error) {
-        console.error("thread_image_grant_failed", thread.id, error);
-      }
-    }
-
     let eventBackgroundImageId: string | null = null;
     let eventBackgroundImageAccessGrant: string | null = null;
     if (thread.created_by_event) {
@@ -180,16 +168,38 @@ export async function POST(request: Request) {
         },
       });
       eventBackgroundImageId = creatorEvent?.background_image_id ?? null;
-      if (eventBackgroundImageId) {
-        try {
-          eventBackgroundImageAccessGrant = createThreadBucketImageAccessGrant({
-            imageId: eventBackgroundImageId,
-            threadId: thread.id,
-            viewerUserId: authResult.user_id,
-          });
-        } catch (error) {
-          console.error("thread_event_background_grant_failed", thread.id, error);
-        }
+    }
+
+    const backends = await resolveStorageBackends([
+      thread.image_id,
+      eventBackgroundImageId,
+      ...allMessages.map((message) => message.image_id),
+    ]);
+
+    let threadImageAccessGrant: string | null = null;
+    if (thread.image_id) {
+      try {
+        threadImageAccessGrant = createThreadBucketImageAccessGrant({
+          imageId: thread.image_id,
+          threadId: thread.id,
+          viewerUserId: authResult.user_id,
+          backend: backends.get(thread.image_id) ?? "supabase",
+        });
+      } catch (error) {
+        console.error("thread_image_grant_failed", thread.id, error);
+      }
+    }
+
+    if (eventBackgroundImageId) {
+      try {
+        eventBackgroundImageAccessGrant = createThreadBucketImageAccessGrant({
+          imageId: eventBackgroundImageId,
+          threadId: thread.id,
+          viewerUserId: authResult.user_id,
+          backend: backends.get(eventBackgroundImageId) ?? "supabase",
+        });
+      } catch (error) {
+        console.error("thread_event_background_grant_failed", thread.id, error);
       }
     }
 
@@ -202,6 +212,7 @@ export async function POST(request: Request) {
           imageId: message.image_id,
           storageUserId: message.created_by,
           viewerUserId: authResult.user_id,
+          backend: backends.get(message.image_id) ?? "supabase",
         });
         return [message.id, grant] as const;
       } catch (error) {
