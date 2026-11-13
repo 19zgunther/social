@@ -11,9 +11,8 @@ import {
   toBotDetail,
 } from "@/app/lib/bots/botHelpers";
 import { prisma } from "@/app/lib/prisma";
+import { USERNAME_RE, USERNAME_RULES_MESSAGE } from "@/app/lib/usernames";
 import { BotUpdateRequest, BotUpdateResponse } from "@/app/types/interfaces";
-
-const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
@@ -53,7 +52,7 @@ export async function POST(request: Request) {
         {
           error: {
             code: "invalid_username",
-            message: "Username must be 3–32 characters: letters, numbers, or underscores.",
+            message: USERNAME_RULES_MESSAGE,
           },
         },
         { status: 400 },

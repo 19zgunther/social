@@ -20,6 +20,42 @@ export type AuthUser = {
   profile_image_url: string | null;
   minted_at: number;
   theme_info?: ThemeInfo | null;
+  /** When set, this is a child/dev account linked to the primary user. */
+  primary_user_id?: string | null;
+  /** Server-computed: family root is a developer (do not infer from a client allowlist). */
+  can_use_dev_account_switcher?: boolean;
+};
+
+/** One row in Profile → Settings → Dev Account Switcher. */
+export type DevAccountListItem = {
+  user_id: string;
+  username: string;
+  profile_image_id: string | null;
+  profile_image_url: string | null;
+  is_current: boolean;
+  is_primary: boolean;
+};
+
+export type DevAccountsListResponse = {
+  accounts: DevAccountListItem[];
+};
+
+/** Username suffix only — server composes `{primary}_{suffix}`; email/password null. */
+export type DevAccountCreateRequest = {
+  username?: string;
+};
+
+export type DevAccountSwitchRequest = {
+  target_user_id?: string;
+};
+
+/** Omit target_user_id to reset the currently authenticated child account. */
+export type DevAccountResetRequest = {
+  target_user_id?: string;
+};
+
+export type DevAccountResetResponse = {
+  ok: true;
 };
 
 export type PostCommentNode = {

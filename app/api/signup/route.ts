@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hashPassword, mintUserToken } from "@/app/api/auth_utils";
 import { notifyDevelopers } from "@/app/lib/developerUserIds";
+import { canUseDevAccountSwitcher } from "@/app/lib/devAccounts";
 import { prisma } from "@/app/lib/prisma";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
 import { SignupRequest, SignupResponse } from "@/app/types/interfaces";
@@ -94,6 +95,11 @@ export async function POST(request: Request) {
         profile_image_url: profileImageUrl,
         minted_at: Date.now(),
         theme_info: null,
+        primary_user_id: null,
+        can_use_dev_account_switcher: canUseDevAccountSwitcher({
+          id: createdUser.id,
+          primary_user_id: null,
+        }),
       },
     };
     const response = NextResponse.json(payload, { status: 200 });

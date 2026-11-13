@@ -269,6 +269,8 @@ model users {
   profile_image_id                                                      String?                     @db.Uuid
   post_groups_data                                                      Json?                       @db.Json
   theme_info                                                            Json?                       @db.Json
+  /// When set, this user is a child/dev account owned by the primary developer user.
+  primary_user_id                                                       String?                     @db.Uuid
   bots_bots_owner_idTousers                                             bots[]                      @relation("bots_owner_idTousers")
   bots_bots_user_idTousers                                              bots[]                      @relation("bots_user_idTousers")
   emojis                                                                emojis[]
@@ -289,6 +291,10 @@ model users {
   user_thread_event_role_user_thread_event_role_created_byTousers       user_thread_event_role[]    @relation("user_thread_event_role_created_byTousers")
   user_thread_last_read_at                                              user_thread_last_read_at[]
   webrtc_signalling                                                     webrtc_signalling[]
+  users_primary                                                         users?                      @relation("users_primary_user_idTousers", fields: [primary_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_children                                                        users[]                     @relation("users_primary_user_idTousers")
+
+  @@index([primary_user_id])
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

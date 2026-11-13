@@ -142,6 +142,8 @@ export const ImageIcon = Image;
 export const AddImageIcon = ImagePlus;
 /** People / contributors */
 export const PeopleIcon = Users;
+/** Switch between linked developer accounts */
+export const DevAccountsIcon = Users;
 /** Sealed / locked shared event */
 export const LockIcon = Lock;
 /** Start a new chat/thread */

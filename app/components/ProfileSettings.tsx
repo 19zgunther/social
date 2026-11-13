@@ -10,12 +10,16 @@ import {
   ThemeIcon,
   AddIcon,
   UserPlaceholderIcon,
+  DevAccountsIcon,
   type LucideIcon,
 } from "@/app/components/Icons";
 import { useState, useEffect, useRef, type MutableRefObject } from "react";
 import BackButton from "@/app/components/utils/BackButton";
 import { useSwipeBackOverride } from "@/app/components/utils/useTabNavigation";
 import EditBot from "@/app/components/bots/EditBot";
+import DevAccountSwitcher, {
+  shouldShowDevAccountSwitcher,
+} from "@/app/components/DevAccountSwitcher";
 import { Button, TextField } from "@/app/ui-components";
 import { clearAllCachedCustomEmojis, getCustomEmojiCacheStats, type CustomEmojiCacheStats } from "@/app/lib/customEmojiCache";
 import { clearAllCachedImages, getImageCacheStats, type ImageCacheStats } from "@/app/lib/imageCache";
@@ -35,6 +39,7 @@ import {
   type ThemeInfo,
 } from "@/app/lib/theme";
 import {
+  AuthUser,
   BotCreateResponse,
   BotListItem,
   BotsListResponse,
@@ -61,16 +66,18 @@ type SettingsView =
   | "storage"
   | "debug"
   | "bots"
-  | "edit_bot";
+  | "edit_bot"
+  | "dev_account_switcher";
 
 type ProfileSettingsProps = {
+  authUser: AuthUser;
   onBack: () => void;
   onLogout: () => void;
   swipeBackOverrideRef: MutableRefObject<(() => void) | null>;
 };
 
 const SETTINGS_MENU_ITEMS: {
-  view: Exclude<SettingsView, "root" | "edit_bot">;
+  view: Exclude<SettingsView, "root" | "edit_bot" | "dev_account_switcher">;
   label: string;
   icon: LucideIcon;
 }[] = [
@@ -91,6 +98,7 @@ async function postTheme(themeToSave: ThemeInfo): Promise<boolean> {
 }
 
 export default function ProfileSettings({
+  authUser,
   onBack,
   onLogout,
   swipeBackOverrideRef,
@@ -118,6 +126,7 @@ export default function ProfileSettings({
   const [isCreatingBot, setIsCreatingBot] = useState(false);
   const [newBotUsername, setNewBotUsername] = useState("");
   const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
+  const showDevAccountSwitcher = shouldShowDevAccountSwitcher(authUser);
 
   const onSettingsBack = () => {
     if (settingsView === "edit_bot") {
@@ -461,7 +470,9 @@ export default function ProfileSettings({
   const headerTitle =
     settingsView === "root"
       ? "Settings"
-      : SETTINGS_MENU_ITEMS.find((item) => item.view === settingsView)?.label ?? "Settings";
+      : settingsView === "dev_account_switcher"
+        ? "Dev Account Switcher"
+        : SETTINGS_MENU_ITEMS.find((item) => item.view === settingsView)?.label ?? "Settings";
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg">
@@ -493,6 +504,23 @@ export default function ProfileSettings({
                 </button>
               );
             })}
+
+            {/* Developer-only: create/switch linked accounts without re-logging in. */}
+            {showDevAccountSwitcher ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsView("dev_account_switcher");
+                }}
+                className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left text-sm text-foreground hover:bg-border/30 transition"
+              >
+                <span className="flex items-center gap-3">
+                  <DevAccountsIcon className="h-4 w-4 shrink-0 text-muted" />
+                  <span className="font-medium">Dev Account Switcher</span>
+                </span>
+                <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
+              </button>
+            ) : null}
 
             <Button
               type="button"
@@ -761,6 +789,10 @@ export default function ProfileSettings({
               </p>
             </button>
           </section>
+        ) : null}
+
+        {settingsView === "dev_account_switcher" ? (
+          <DevAccountSwitcher authUser={authUser} setStatusMessage={setStatusMessage} />
         ) : null}
 
         {settingsView === "debug" ? (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { mintUserToken, verifyPassword } from "@/app/api/auth_utils";
 import { getSignedMainBucketImageUrl } from "@/app/api/server_file_storage_utils";
+import { canUseDevAccountSwitcher } from "@/app/lib/devAccounts";
 import { parseThemeInfo } from "@/app/lib/theme";
 import { LoginRequest, LoginResponse, ThemeInfo } from "@/app/types/interfaces";
 
@@ -12,6 +13,7 @@ type LoginUser = {
   password_hash: string | null;
   profile_image_id: string | null;
   theme_info: ThemeInfo | null;
+  primary_user_id: string | null;
 };
 
 async function jsonLoginSuccess(user: LoginUser): Promise<NextResponse> {
@@ -43,6 +45,12 @@ async function jsonLoginSuccess(user: LoginUser): Promise<NextResponse> {
       profile_image_url: profileImageUrl,
       minted_at: Date.now(),
       theme_info: user.theme_info,
+      // Login path only allows primary accounts (children blocked below).
+      primary_user_id: null,
+      can_use_dev_account_switcher: canUseDevAccountSwitcher({
+        id: user.id,
+        primary_user_id: null,
+      }),
     },
   };
   const response = NextResponse.json(payload, { status: 200 });
@@ -82,6 +90,7 @@ export async function POST(request: Request) {
         password_hash: true,
         profile_image_id: true,
         theme_info: true,
+        primary_user_id: true,
       },
     });
 
@@ -117,9 +126,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // Child/dev accounts must be entered via the account switcher, never password login.
+    if (user.primary_user_id) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "dev_account_login_blocked",
+            message: "Dev accounts cannot be logged into directly. Log into the primary account and use the account switcher.",
+          },
+        },
+        { status: 403 },
+      );
+    }
+
     return jsonLoginSuccess({
       ...user,
       theme_info: parseThemeInfo(user.theme_info),
+      primary_user_id: user.primary_user_id,
     });
   } catch (error) {
     console.error("login_failed", error);

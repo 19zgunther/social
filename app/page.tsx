@@ -525,6 +525,7 @@ export default function Home() {
 
           <div className="absolute h-full w-full" style={profileSettingsStyle}>
             <ProfileSettings
+              authUser={authUser}
               onBack={() => goToTab("profile", { mode: "uncover" })}
               onLogout={onLogout}
               swipeBackOverrideRef={swipeBackOverrideRef}
