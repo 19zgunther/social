@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { cn } from "./cn";
 
 const DEFAULT_OVERLAY_Z = 1900;
-/** Must match `DONT_SWIPE_TABS_CLASSNAME` in useSwipeBack. */
+/** Must match `DONT_SWIPE_TABS_CLASSNAME` in useTabNavigation. */
 const DONT_SWIPE_TABS_CLASSNAME = "dont-swipe-tabs";
 
 export type BlurOptionsListProps = {

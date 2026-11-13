@@ -2,7 +2,7 @@
 
 import { PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, PostData, TierListViewerState } from "@/app/types/interfaces";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import { Button } from "@/app/ui-components";
 
 type TierListBlockProps = {

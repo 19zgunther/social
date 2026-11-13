@@ -3,7 +3,7 @@
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProfileImageRemoveResponse, ProfileImageSetResponse } from "@/app/types/interfaces";
 import { AddImageIcon, CloseIcon, DeleteIcon } from "@/app/components/Icons";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import { Button } from "@/app/ui-components";
 
 type ProfilePictureEditorProps = {

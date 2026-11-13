@@ -14,7 +14,7 @@ import {
 } from "@/app/components/Icons";
 import { useState, useEffect, useRef, type MutableRefObject } from "react";
 import BackButton from "@/app/components/utils/BackButton";
-import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
+import { useSwipeBackOverride } from "@/app/components/utils/useTabNavigation";
 import EditBot from "@/app/components/bots/EditBot";
 import { Button, TextField } from "@/app/ui-components";
 import { clearAllCachedCustomEmojis, getCustomEmojiCacheStats, type CustomEmojiCacheStats } from "@/app/lib/customEmojiCache";

@@ -22,7 +22,7 @@ import {
   type LucideIcon,
 } from "@/app/components/Icons";
 import type { GameScoreScope, GameScoresLeaderboardResponse } from "@/app/types/interfaces";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import {
   BEER_DURATION,
   CLUBS,

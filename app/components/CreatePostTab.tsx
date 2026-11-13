@@ -34,7 +34,7 @@ import {
   TierListViewerState,
 } from "@/app/types/interfaces";
 import { MAX_POST_MEDIA_ITEMS } from "@/app/lib/postMedia";
-import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useTabNavigation";
 import { IconButton, TextField } from "@/app/ui-components";
 import { PostSection } from "@/app/components/PostSection";
 import type { PostPreviewMedia } from "@/app/components/PostSection";

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { CloseIcon } from "@/app/components/Icons";
 import CachedImage from "@/app/components/utils/CachedImage";
 import type { ImageOverlayData } from "@/app/types/interfaces";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;

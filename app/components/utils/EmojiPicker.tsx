@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackIcon, EmojiIcon, CloseIcon } from "@/app/components/Icons";
 import emojiKeywordsByEmoji from "emojilib";
 import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
-import { DONT_SWIPE_TABS_CLASSNAME } from "./useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "./useTabNavigation";
 import { loadAllCustomEmojis, resolveEmojisByUuid } from "@/app/lib/customEmojiCache";
 import { EmojiItem } from "@/app/types/interfaces";
 import { CustomEmoji } from "@/app/lib/customEmojiCanvas";

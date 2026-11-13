@@ -17,7 +17,7 @@ import { createPortal } from "react-dom";
 import { VideoIcon } from "@/app/components/Icons";
 import CameraModal from "@/app/components/Camera";
 import ThreadComposerAttachMenu from "@/app/components/ThreadComposerAttachMenu";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import TetrisGame from "@/app/components/games/tetris/TetrisGame";
 import WorkGolfGame from "@/app/components/games/workGolf/WorkGolfGame";
 

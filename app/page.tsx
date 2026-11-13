@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+} from "react";
 import Feed from "@/app/components/Feed";
 import Messages from "@/app/components/Messages";
 import {
@@ -33,7 +39,7 @@ import Thread from "./components/Thread";
 import ThreadSettings from "./components/ThreadSettings";
 import ThreadEventPage from "./components/ThreadEventPage";
 import UpcomingEventsTab from "./components/UpcomingEventsTab";
-import useSwipeBack from "./components/utils/useSwipeBack";
+import { useTabNavigation } from "./components/utils/useTabNavigation";
 import { useDevActiveTabPersistence } from "./components/utils/useDevActiveTabPersistence";
 import AnimatedModal, { useAnimatedModal } from "./components/utils/AnimatedModal";
 import CreatePostTab from "./components/CreatePostTab";
@@ -58,6 +64,8 @@ const TAB_TO_BACK_BASE: { [key in AppTab]: { forward: AppTab | null; back: AppTa
   other_user_profile: { forward: null, back: "profile" },
 };
 
+/** Main top pad; stack overlays extend upward by this so Thread stays full-bleed. */
+const CHROME_TOP_PAD = "2rem";
 
 export default function Home() {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -125,15 +133,6 @@ export default function Home() {
     setMessagesUnreadCount(0);
     setProfileIncomingRequestCount(0);
   };
-
-  const onViewUserProfile = useCallback((userId: string) => {
-    if (authUser && userId === authUser.user_id) {
-      setActiveTab("profile");
-      return;
-    }
-    setViewingUserId(userId);
-    setActiveTab("other_user_profile");
-  }, [authUser]);
 
   const refreshMessagesUnreadCount = useCallback(async () => {
     try {
@@ -320,21 +319,47 @@ export default function Home() {
   const onBackRef = useRef<() => void>(() => { console.error("onBackRef not set"); });
   const onForwardRef = useRef<() => void>(() => { console.error("onForwardRef not set"); });
   const swipeBackOverrideRef = useRef<(() => void) | null>(null);
-  const { onTouchStart, onTouchEnd, onTouchMove, onTouchCancel, swipingBackPercent, swipingForwardPercent } =
-    useSwipeBack({ onBack: onBackRef.current, onForward: onForwardRef.current });
+  const tabNeighbors = tabNavigation[activeTab] ?? { forward: null, back: null };
+  const {
+    goToTab,
+    getTabStyle,
+    onTouchStart,
+    onTouchEnd,
+    onTouchMove,
+    onTouchCancel,
+  } = useTabNavigation({
+    activeTab,
+    setActiveTab,
+    neighbors: tabNeighbors,
+    onEdgeBack: () => onBackRef.current(),
+    onEdgeForward: () => onForwardRef.current(),
+  });
+
+  const onViewUserProfile = useCallback((userId: string) => {
+    if (authUser && userId === authUser.user_id) {
+      goToTab("profile");
+      return;
+    }
+    setViewingUserId(userId);
+    goToTab("other_user_profile");
+  }, [authUser, goToTab]);
 
   const onThreadBack = useCallback(() => {
     if (threadReturnTab === "thread_event" && threadEventFocus) {
-      setActiveTab("thread_event");
+      goToTab("thread_event");
       return;
     }
     if (threadReturnTab === "other_user_profile") {
-      setActiveTab("other_user_profile");
+      goToTab("other_user_profile");
       return;
     }
-    setSelectedThread(null);
-    setActiveTab("messages");
-  }, [threadEventFocus, threadReturnTab]);
+    goToTab("messages", {
+      mode: "uncover",
+      onSettled: () => {
+        setSelectedThread(null);
+      },
+    });
+  }, [goToTab, threadEventFocus, threadReturnTab]);
 
   // Early return for loading state if session is still being checked.
   if (isCheckingSession) {
@@ -344,45 +369,36 @@ export default function Home() {
   // Early return for signup page if user is not authenticated.
   if (!authUser) { return (<SignUpPage setAuthUser={setAuthUser} />); }
 
-  const isSwipingForward = !!swipingForwardPercent;
-  const isSwipingBack = !!swipingBackPercent;
-
-  const { forward, back } = tabNavigation[activeTab] ?? { forward: null, back: null };
-
-  const ACTIVE_STYLE = {
-    zIndex: 1000,
-    left: isSwipingBack && back ? (swipingBackPercent ?? 0) * 100 + "%" : undefined,
-    right: isSwipingForward && forward ? (swipingForwardPercent ?? 0) * 100 + "%" : undefined,
-  }
-  const BACK_SWIPE_TAB: React.CSSProperties = { zIndex: isSwipingBack ? 999 : 998 };
-  const FORWARD_SWIPE_TAB: React.CSSProperties = { zIndex: isSwipingForward ? 999 : 998 };
-  const DEFAULT_TAB: React.CSSProperties = { display: "none" };
-
-  let TAB_TO_STYLE: { [key in AppTab]: React.CSSProperties } = {
-    feed: DEFAULT_TAB,
-    messages: DEFAULT_TAB,
-    events: DEFAULT_TAB,
-    thread: DEFAULT_TAB,
-    thread_settings: DEFAULT_TAB,
-    thread_event: DEFAULT_TAB,
-    profile: DEFAULT_TAB,
-    profile_settings: DEFAULT_TAB,
-    other_user_profile: DEFAULT_TAB,
-    feedback: DEFAULT_TAB,
-  }
-
-  if (forward) { TAB_TO_STYLE[forward] = FORWARD_SWIPE_TAB; }
-  if (back) { TAB_TO_STYLE[back] = BACK_SWIPE_TAB; }
-  TAB_TO_STYLE[activeTab] = ACTIVE_STYLE;
+  const { forward, back } = tabNeighbors;
 
   onBackRef.current = () => {
     if (swipeBackOverrideRef.current) {
       swipeBackOverrideRef.current();
       return;
     }
-    if (back) { setActiveTab(back); }
-  }
-  onForwardRef.current = () => { if (forward) {setActiveTab(forward);} }
+    // Edge-swipe already dragged the panel; finish without a second animation.
+    if (activeTab === "thread") {
+      if (threadReturnTab === "thread_event" && threadEventFocus) {
+        goToTab("thread_event", { immediate: true });
+        return;
+      }
+      if (threadReturnTab === "other_user_profile") {
+        goToTab("other_user_profile", { immediate: true });
+        return;
+      }
+      setSelectedThread(null);
+      goToTab("messages", { immediate: true });
+      return;
+    }
+    if (back) {
+      goToTab(back, { immediate: true });
+    }
+  };
+  onForwardRef.current = () => {
+    if (forward) {
+      goToTab(forward, { immediate: true });
+    }
+  };
 
   const onOpenUpcomingEvent = (item: UserUpcomingEventListItem) => {
     setSelectedThread({
@@ -392,19 +408,21 @@ export default function Home() {
     });
     setThreadEventFocus(item.event);
     setThreadEventReturnTab("events");
-    setActiveTab("thread_event");
+    goToTab("thread_event");
   };
 
-  const feedStyle = TAB_TO_STYLE["feed"];
-  const messagesStyle = TAB_TO_STYLE["messages"];
-  const eventsStyle = TAB_TO_STYLE["events"];
-  const threadStyle = TAB_TO_STYLE["thread"];
-  const threadSettingsStyle = TAB_TO_STYLE["thread_settings"];
-  const threadEventStyle = TAB_TO_STYLE["thread_event"];
-  const profileStyle = TAB_TO_STYLE["profile"];
-  const profileSettingsStyle = TAB_TO_STYLE["profile_settings"];
-  const otherUserProfileStyle = TAB_TO_STYLE["other_user_profile"];
-  const feedbackStyle = TAB_TO_STYLE["feedback"];
+  const feedStyle = getTabStyle("feed");
+  const messagesStyle = getTabStyle("messages");
+  const eventsStyle = getTabStyle("events");
+  // Stack screens sit on the section (over nav + into top pad) so underlays never resize.
+  const stackFrameStyle = { top: `-${CHROME_TOP_PAD}`, bottom: 0, height: "auto" as const };
+  const threadStyle = { ...getTabStyle("thread"), ...stackFrameStyle };
+  const threadSettingsStyle = { ...getTabStyle("thread_settings"), ...stackFrameStyle };
+  const threadEventStyle = { ...getTabStyle("thread_event"), ...stackFrameStyle };
+  const profileStyle = getTabStyle("profile");
+  const profileSettingsStyle = getTabStyle("profile_settings");
+  const otherUserProfileStyle = getTabStyle("other_user_profile");
+  const feedbackStyle = getTabStyle("feedback");
 
   const createPostModal = (
     <AnimatedModal
@@ -433,30 +451,22 @@ export default function Home() {
   return (
     <main
       style={APP_VIEWPORT_STYLE}
-      className={`flex w-screen justify-center p-0 ${
-        activeTab === "thread" ||
-        activeTab === "thread_settings" ||
-        activeTab === "thread_event"
-          ? "pt-0"
-          : "pt-[2rem]"
-      }`}
+      className="flex w-screen justify-center p-0 pt-[2rem]"
     >
       <UserSessionSyncProvider currentUserId={authUser.user_id}>
       <section
         style={MOBILE_FRAME_STYLE}
-        className="flex h-full max-h-dvh flex-col overflow-hidden shadow-xl shadow-black/25 relative"
+        className="relative flex h-full max-h-dvh flex-col overflow-hidden shadow-xl shadow-black/25"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onTouchMove={onTouchMove}
+        onTouchCancel={onTouchCancel}
       >
         <AutoNotificationPrompt authUser={authUser} showNotificationsPrompt={showNotificationsPrompt} setShowNotificationsPrompt={setShowNotificationsPrompt} />
 
-        {/** Main Content Container */}
-        <div
-          className="relative flex-1 min-h-0 overflow-hidden px-0 py-0"
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
-          onTouchMove={onTouchMove}
-          onTouchCancel={onTouchCancel}
-        >
-          <div className="absolute w-full h-full" style={messagesStyle}>
+        {/** Primary tabs — layout size stays fixed; stack screens overlay below. */}
+        <div className="relative min-h-0 flex-1 overflow-hidden px-0 py-0">
+          <div className="absolute h-full w-full" style={messagesStyle}>
             <Messages
               currentUserId={authUser.user_id}
               deepLinkThreadId={pendingDeepLinkThreadId}
@@ -464,7 +474,9 @@ export default function Home() {
               onThreadRead={refreshMessagesUnreadCount}
               selectedThread={selectedThread}
               setSelectedThread={setSelectedThread}
-              setActiveTab={setActiveTab}
+              setActiveTab={(tab) => {
+                goToTab(tab);
+              }}
               isActiveTab={activeTab === "messages"}
               messagesListRefreshNonce={messagesListRefreshNonce}
               onOpenThreadFromMessages={() => {
@@ -473,7 +485,7 @@ export default function Home() {
             />
           </div>
 
-          <div className="absolute w-full h-full" style={feedStyle}>
+          <div className="absolute h-full w-full" style={feedStyle}>
             <Feed
               onViewUserProfile={onViewUserProfile}
               onOpenCreatePost={openCreatePost}
@@ -481,7 +493,7 @@ export default function Home() {
             />
           </div>
 
-          <div className="absolute w-full h-full" style={eventsStyle}>
+          <div className="absolute h-full w-full" style={eventsStyle}>
             <UpcomingEventsTab
               currentUserId={authUser.user_id}
               isActive={activeTab === "events"}
@@ -491,7 +503,96 @@ export default function Home() {
             />
           </div>
 
-          {selectedThread && <div className="absolute w-full h-full" style={threadStyle}>
+          <div className="absolute h-full w-full" style={feedbackStyle}>
+            <Feedback currentUserId={authUser.user_id} isActive={activeTab === "feedback"} />
+          </div>
+
+          <div className="absolute h-full w-full" style={profileStyle}>
+            <Profile
+              userId={authUser.user_id}
+              username={authUser.username}
+              email={authUser.email}
+              profileImageId={authUser.profile_image_id}
+              profileImageUrl={authUser.profile_image_url}
+              reloadSignal={profileReloadSignal}
+              onProfileImageUpdated={onProfileImageUpdated}
+              onOpenSettings={() => goToTab("profile_settings")}
+              onViewUserProfile={onViewUserProfile}
+              onOpenCreatePost={openCreatePost}
+              swipeBackOverrideRef={swipeBackOverrideRef}
+            />
+          </div>
+
+          <div className="absolute h-full w-full" style={profileSettingsStyle}>
+            <ProfileSettings
+              onBack={() => goToTab("profile", { mode: "uncover" })}
+              onLogout={onLogout}
+              swipeBackOverrideRef={swipeBackOverrideRef}
+            />
+          </div>
+
+          {viewingUserId && <div className="absolute h-full w-full" style={otherUserProfileStyle}>
+            <ProfileOtherUser
+              isActive={activeTab === "other_user_profile"}
+              userId={viewingUserId}
+              currentUserId={authUser.user_id}
+              onBack={() => goToTab("profile", { mode: "uncover" })}
+              swipeBackOverrideRef={swipeBackOverrideRef}
+              onViewUserProfile={onViewUserProfile}
+              onOpenDirectThread={(thread) => {
+                setSelectedThread(thread);
+                setThreadReturnTab("other_user_profile");
+                setMessagesListRefreshNonce((previous) => previous + 1);
+                goToTab("thread");
+              }}
+            />
+          </div>}
+        </div>
+
+        {createPostModal}
+
+        <div
+          className="nav-rgb-row relative z-[500] flex h-fit w-full justify-between border-t border-border bg-bg"
+          style={{
+            boxShadow:
+              "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)",
+          }}
+        >
+          <NavRowButton
+            icon={<NavFeedIcon active={activeTab === "feed"} />}
+            active={activeTab === "feed"}
+            showCircle={false}
+            onClick={() => goToTab("feed")}
+          />
+          <NavRowButton
+            icon={<NavMessagesIcon active={activeTab === "messages"} />}
+            active={activeTab === "messages"}
+            showCircle={messagesUnreadCount > 0}
+            onClick={() => goToTab("messages")}
+          />
+          <NavRowButton
+            icon={<NavEventsIcon active={activeTab === "events"} />}
+            active={activeTab === "events"}
+            showCircle={false}
+            onClick={() => goToTab("events")}
+          />
+          <NavRowButton
+            icon={<NavProfileIcon active={activeTab === "profile"} />}
+            active={activeTab === "profile"}
+            showCircle={profileIncomingRequestCount > 0}
+            onClick={() => goToTab("profile")}
+          />
+          <NavRowButton
+            icon={<NavFeedbackIcon active={activeTab === "feedback"} />}
+            active={activeTab === "feedback"}
+            showCircle={false}
+            onClick={() => goToTab("feedback")}
+            className="max-w-[2rem] opacity-30"
+          />
+        </div>
+
+        {selectedThread && (
+          <div className="absolute left-0 right-0" style={threadStyle}>
             <Thread
               key={selectedThread.id}
               selectedThread={selectedThread}
@@ -499,15 +600,19 @@ export default function Home() {
               currentUserId={authUser.user_id}
               currentUsername={authUser.username}
               onBack={onThreadBack}
-              setThreadSettingsOpen={() => { setActiveTab("thread_settings") }}
+              setThreadSettingsOpen={() => {
+                goToTab("thread_settings");
+              }}
             />
-          </div>}
+          </div>
+        )}
 
-          {selectedThread && <div className="absolute w-full h-full" style={threadSettingsStyle}>
+        {selectedThread && (
+          <div className="absolute left-0 right-0" style={threadSettingsStyle}>
             <ThreadSettings
               thread={selectedThread}
               currentUserId={authUser.user_id}
-              onBack={() => setActiveTab("thread")}
+              onBack={() => goToTab("thread", { mode: "uncover" })}
               onViewUserProfile={onViewUserProfile}
               onThreadImageUpdated={(imageId, imageUrl, imageAccessGrant) => {
                 setSelectedThread((previous) => ({
@@ -527,7 +632,7 @@ export default function Home() {
                 setMessagesListRefreshNonce((previous) => previous + 1);
                 setSelectedThread(null);
                 setThreadEventFocus(null);
-                setActiveTab("messages");
+                goToTab("messages", { immediate: true });
               }}
               onThreadPinnedChange={(pinned) => {
                 setSelectedThread((previous) =>
@@ -536,136 +641,44 @@ export default function Home() {
                 setMessagesListRefreshNonce((previous) => previous + 1);
               }}
             />
-          </div>}
-
-          {selectedThread && threadEventFocus ? (
-            <div className="absolute h-full w-full" style={threadEventStyle}>
-              <ThreadEventPage
-                thread={selectedThread}
-                event={threadEventFocus}
-                currentUserId={authUser.user_id}
-                onBack={() => {
-                  setThreadEventFocus(null);
-                  setActiveTab(threadEventReturnTab);
-                }}
-                onOpenThread={() => {
-                  setSelectedThread((previous) =>
-                    previous
-                      ? {
-                          ...previous,
-                          event_background_image_id: threadEventFocus.background_image_id,
-                          event_background_image_access_grant:
-                            threadEventFocus.background_image_access_grant ?? null,
-                        }
-                      : previous,
-                  );
-                  setThreadReturnTab("thread_event");
-                  setActiveTab("thread");
-                }}
-                onEventUpdated={(next) => {
-                  setThreadEventFocus(next);
-                }}
-                onEventDeleted={() => {
-                  setThreadEventFocus(null);
-                  setEventsRefreshNonce((previous) => previous + 1);
-                  setActiveTab(threadEventReturnTab);
-                }}
-              />
-            </div>
-          ) : null}
-
-          <div className="absolute w-full h-full" style={feedbackStyle}>
-            <Feedback currentUserId={authUser.user_id} isActive={activeTab === "feedback"} />
-          </div>
-
-          <div className="absolute w-full h-full" style={profileStyle}>
-            <Profile
-              userId={authUser.user_id}
-              username={authUser.username}
-              email={authUser.email}
-              profileImageId={authUser.profile_image_id}
-              profileImageUrl={authUser.profile_image_url}
-              reloadSignal={profileReloadSignal}
-              onProfileImageUpdated={onProfileImageUpdated}
-              onOpenSettings={() => setActiveTab("profile_settings")}
-              onViewUserProfile={onViewUserProfile}
-              onOpenCreatePost={openCreatePost}
-              swipeBackOverrideRef={swipeBackOverrideRef}
-            />
-          </div>
-
-          <div className="absolute w-full h-full" style={profileSettingsStyle}>
-            <ProfileSettings
-              onBack={() => setActiveTab("profile")}
-              onLogout={onLogout}
-              swipeBackOverrideRef={swipeBackOverrideRef}
-            />
-          </div>
-
-          {viewingUserId && <div className="absolute w-full h-full" style={otherUserProfileStyle}>
-            <ProfileOtherUser
-              isActive={activeTab === "other_user_profile"}
-              userId={viewingUserId}
-              currentUserId={authUser.user_id}
-              onBack={() => setActiveTab("profile")}
-              swipeBackOverrideRef={swipeBackOverrideRef}
-              onViewUserProfile={onViewUserProfile}
-              onOpenDirectThread={(thread) => {
-                setSelectedThread(thread);
-                setThreadReturnTab("other_user_profile");
-                setMessagesListRefreshNonce((previous) => previous + 1);
-                setActiveTab("thread");
-              }}
-            />
-          </div>}
-
-        </div>
-
-        {createPostModal}
-
-        {activeTab === "thread" || activeTab === "thread_settings" ? null : (
-          <div
-            className="nav-rgb-row z-[1000] flex h-fit w-full justify-between border-t border-border bg-bg"
-            style={{
-              boxShadow:
-                "0 0 20px 10px color-mix(in srgb, var(--black) 60%, transparent)",
-            }}
-          >
-            <NavRowButton
-              icon={<NavFeedIcon active={activeTab === "feed"} />}
-              active={activeTab === "feed"}
-              showCircle={false}
-              onClick={() => setActiveTab("feed")}
-            />
-            <NavRowButton
-              icon={<NavMessagesIcon active={activeTab === "messages"} />}
-              active={activeTab === "messages"}
-              showCircle={messagesUnreadCount > 0}
-              onClick={() => setActiveTab("messages")}
-            />
-            <NavRowButton
-              icon={<NavEventsIcon active={activeTab === "events"} />}
-              active={activeTab === "events"}
-              showCircle={false}
-              onClick={() => setActiveTab("events")}
-            />
-            <NavRowButton
-              icon={<NavProfileIcon active={activeTab === "profile"} />}
-              active={activeTab === "profile"}
-              showCircle={profileIncomingRequestCount > 0}
-              onClick={() => {
-                setActiveTab("profile");
-              }}
-            />
-            <NavRowButton
-              icon={<NavFeedbackIcon active={activeTab === "feedback"} />}
-              active={activeTab === "feedback"}
-              showCircle={false}
-              onClick={() => setActiveTab("feedback")}
-              className="max-w-[2rem] opacity-30"
-            />
           </div>
         )}
+
+        {selectedThread && threadEventFocus ? (
+          <div className="absolute left-0 right-0" style={threadEventStyle}>
+            <ThreadEventPage
+              thread={selectedThread}
+              event={threadEventFocus}
+              currentUserId={authUser.user_id}
+              onBack={() => {
+                setThreadEventFocus(null);
+                goToTab(threadEventReturnTab, { mode: "uncover" });
+              }}
+              onOpenThread={() => {
+                setSelectedThread((previous) =>
+                  previous
+                    ? {
+                        ...previous,
+                        event_background_image_id: threadEventFocus.background_image_id,
+                        event_background_image_access_grant:
+                          threadEventFocus.background_image_access_grant ?? null,
+                      }
+                    : previous,
+                );
+                setThreadReturnTab("thread_event");
+                goToTab("thread");
+              }}
+              onEventUpdated={(next) => {
+                setThreadEventFocus(next);
+              }}
+              onEventDeleted={() => {
+                setThreadEventFocus(null);
+                setEventsRefreshNonce((previous) => previous + 1);
+                goToTab(threadEventReturnTab, { immediate: true });
+              }}
+            />
+          </div>
+        ) : null}
       </section>
       </UserSessionSyncProvider>
     </main>

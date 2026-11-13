@@ -6,7 +6,7 @@ import Loader from "@/app/components/Loader";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import { Button, IconButton, TextField } from "@/app/ui-components";
 import { ApiError } from "@/app/types/interfaces";
 

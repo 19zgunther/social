@@ -3,7 +3,7 @@
 import { ChangeEvent, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ShutterIcon, RotateIcon, SendIcon, UndoIcon, CloseIcon } from "@/app/components/Icons";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 
 type CameraFacingMode = "environment" | "user";
 

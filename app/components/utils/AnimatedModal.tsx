@@ -10,7 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon } from "@/app/components/Icons";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import { IconButton, cn } from "@/app/ui-components";
 
 const ANIMATED_MODAL_CLOSE_MS = 200;

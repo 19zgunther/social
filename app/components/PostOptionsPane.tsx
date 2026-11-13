@@ -6,7 +6,7 @@ import UserProfileImage from "@/app/components/UserProfileImage";
 import { getPollViewerState } from "@/app/components/PollBlock";
 import { getTierListViewerState } from "@/app/components/TierListBlock";
 import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
-import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
+import { useSwipeBackOverride } from "@/app/components/utils/useTabNavigation";
 import {
   CustomEmoji,
   customEmojiUuidFromToken,

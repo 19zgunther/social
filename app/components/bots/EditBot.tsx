@@ -11,7 +11,7 @@ import {
 import BotRssEdit from "@/app/components/bots/BotRssEdit";
 import ProfilePictureEditor from "@/app/components/ProfilePictureEditor";
 import BackButton from "@/app/components/utils/BackButton";
-import { useSwipeBackOverride } from "@/app/components/utils/useSwipeBack";
+import { useSwipeBackOverride } from "@/app/components/utils/useTabNavigation";
 import { Button, TextField } from "@/app/ui-components";
 import {
   BotDetail,

@@ -20,7 +20,7 @@ import {
   getPostMediaSlides,
   seedCoverImageGrant,
 } from "@/app/lib/postMedia";
-import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useTabNavigation";
 import { Button, IconButton, TextField } from "@/app/ui-components";
 import { formatPostText } from "@/app/components/utils/formatPostText";
 import { hasCongratsComment } from "@/app/lib/congratsComment";
@@ -770,7 +770,7 @@ function PostSectionComponent({
 
   return (
     <article
-      className={`w-full post-rgb-top-border mb-10 rounded-t-2xl bg-bg ${className ?? ""} ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}
+      className={`w-full post-rgb-top-border mb-10 rounded-t-2xl bg-bg ${className ?? ""}`}
     >
       <div className="post-top-fade" aria-hidden />
       <header className="px-2 py-2">
@@ -830,7 +830,7 @@ function PostSectionComponent({
       </header>
 
       {mediaSlides.length > 0 ? (
-        <div ref={imageAreaRef} className="relative aspect-square w-full overflow-hidden rounded-xl">
+        <div ref={imageAreaRef} className={`relative aspect-square w-full overflow-hidden rounded-xl ${hasMultipleImages ? DONT_SWIPE_TABS_CLASSNAME : ""}`}>
           {balloonSessionKey !== null ? (
             <CongratsBalloonOverlay
               sessionKey={balloonSessionKey}

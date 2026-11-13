@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadAllCustomEmojis, putEmojiInCache } from "@/app/lib/customEmojiCache";
 import { ApiError, EmojiItem, EmojiSaveResponse } from "@/app/types/interfaces";
 import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
-import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useSwipeBack";
+import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import { PixelGradientSlider } from "@/app/components/utils/PixelGradientSlider";
 import { TriangleThicknessSlider } from "@/app/components/utils/TriangleThicknessSlider";
 import { BrushIcon, EraserIcon, PanIcon, AddImageIcon, AddIcon, RedoIcon, UndoIcon, ZoomInIcon, ZoomOutIcon } from "@/app/components/Icons";
