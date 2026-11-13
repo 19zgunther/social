@@ -128,9 +128,12 @@ export type PostMediaItem = {
 export type PostData = {
   comments?: Record<string, PostCommentNode>;
   likes?: Record<string, boolean>;
-  /** Ordered slides (images + videos). Source of truth when present. */
+  /** Ordered slides (images + videos). Active source of truth for post media. */
   media?: PostMediaItem[];
-  /** Legacy additional image ids; still written for backward compat. */
+  /**
+   * DEAD / legacy — do not read or write. Historical extra image ids before `media`.
+   * Kept in stored JSON only; use `media` instead.
+   */
   other_image_ids?: string[];
   /** Storage uses PollData; API responses replace with PollViewerState. */
   poll?: PollData | PollViewerState;
@@ -142,13 +145,15 @@ export type PostItem = {
   id: string;
   created_at: string;
   created_by: string;
-  image_id: string | null;
-  /** Always null from list/create APIs; use `image_access_grant` and `/api/image-resolve` via image cache. */
-  image_url: string | null;
-  /** Encrypted grant (viewer-bound, expiring); use with `image_id` and `created_by` as storage owner for resolve. */
-  image_access_grant?: string | null;
   text: string;
   data: PostData | null;
+  /**
+   * First-paint cover still from `data.media[0]` (image id or video poster).
+   * Not `posts.image_id` — derived for list/create responses only.
+   */
+  cover_image_id?: string | null;
+  /** Viewer-bound grant for `cover_image_id`; remaining media via `/api/image-access-grants`. */
+  cover_image_access_grant?: string | null;
   like_count?: number;
   is_liked_by_viewer?: boolean;
   username: string;
@@ -363,6 +368,7 @@ export type PostAudienceRequest = {
 
 export type PostCreateRequest = {
   text?: string;
+  /** Optional single image; folded into `data.media` on create. Prefer `data.media`. */
   image_id?: string;
   image_base64_data?: string;
   image_mime_type?: string;

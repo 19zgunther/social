@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { getPostCoverObject } from "@/app/lib/postMedia";
 import { sanitizePostDataForViewer } from "@/app/lib/polls";
 import {
   PostData,
@@ -48,7 +49,6 @@ export async function POST(request: Request) {
         id: true,
         created_at: true,
         created_by: true,
-        image_id: true,
         text: true,
         data: true,
         users: {
@@ -68,74 +68,61 @@ export async function POST(request: Request) {
     const hasMore = postsDesc.length > PAGE_SIZE;
     const pagedPosts = postsDesc.slice(0, PAGE_SIZE);
 
-    const postImageGrantEntries = pagedPosts.map((post) => {
-      if (!post.image_id) {
-        return [post.id, null] as const;
+    const mintGrant = (
+      imageId: string | null | undefined,
+      storageUserId: string,
+    ): string | null => {
+      if (!imageId) {
+        return null;
       }
       try {
-        const grant = createMainBucketImageAccessGrant({
-          imageId: post.image_id,
-          storageUserId: post.created_by,
+        return createMainBucketImageAccessGrant({
+          imageId,
+          storageUserId,
           viewerUserId: authResult.user_id,
         });
-        return [post.id, grant] as const;
       } catch (error) {
-        console.error("profile_post_image_grant_failed", post.id, error);
-        return [post.id, null] as const;
+        console.error("profile_post_image_grant_failed", imageId, error);
+        return null;
       }
-    });
-    const imageAccessGrantByPostId = new Map(postImageGrantEntries);
-
-    const authorProfileImageGrantEntries = pagedPosts.map((post) => {
-      if (!post.users.profile_image_id) {
-        return [post.id, null] as const;
-      }
-      try {
-        const grant = createMainBucketImageAccessGrant({
-          imageId: post.users.profile_image_id,
-          storageUserId: post.created_by,
-          viewerUserId: authResult.user_id,
-        });
-        return [post.id, grant] as const;
-      } catch (error) {
-        console.error("profile_post_author_profile_image_grant_failed", post.id, error);
-        return [post.id, null] as const;
-      }
-    });
-    const authorProfileImageAccessGrantByPostId = new Map(authorProfileImageGrantEntries);
+    };
 
     const payload: ProfilePostsListResponse = {
       has_more: hasMore,
       next_cursor_post_id: pagedPosts.length > 0 ? pagedPosts[pagedPosts.length - 1].id : null,
-      posts: pagedPosts.map((post) => ({
-        ...(() => {
-          const likesInfo = getLikesInfo(post.data, authResult.user_id);
-          return {
-            like_count: likesInfo.likeCount,
-            is_liked_by_viewer: likesInfo.isLikedByViewer,
-          };
-        })(),
-        id: post.id,
-        created_at: post.created_at.toISOString(),
-        created_by: post.created_by,
-        image_id: post.image_id,
-        image_url: null,
-        image_access_grant: imageAccessGrantByPostId.get(post.id) ?? null,
-        text: post.text ?? "",
-        data: sanitizePostDataForViewer({
+      posts: pagedPosts.map((post) => {
+        const likesInfo = getLikesInfo(post.data, authResult.user_id);
+        const data = sanitizePostDataForViewer({
           data: post.data,
           viewerUserId: authResult.user_id,
           authorUserId: post.created_by,
-        }),
-        username: post.users.username,
-        email: post.users.email,
-        is_bot: post.users.bots_bots_user_idTousers.length > 0,
-        viewer_can_delete: true,
-        author_profile_image_id: post.users.profile_image_id,
-        author_profile_image_url: null,
-        author_profile_image_access_grant:
-          authorProfileImageAccessGrantByPostId.get(post.id) ?? null,
-      })),
+        });
+        const cover = getPostCoverObject(data);
+        return {
+          like_count: likesInfo.likeCount,
+          is_liked_by_viewer: likesInfo.isLikedByViewer,
+          id: post.id,
+          created_at: post.created_at.toISOString(),
+          created_by: post.created_by,
+          text: post.text ?? "",
+          data,
+          cover_image_id: cover?.objectId ?? null,
+          cover_image_access_grant: mintGrant(
+            cover?.objectId,
+            cover?.ownerUserId ?? post.created_by,
+          ),
+          username: post.users.username,
+          email: post.users.email,
+          is_bot: post.users.bots_bots_user_idTousers.length > 0,
+          viewer_can_delete: true,
+          author_profile_image_id: post.users.profile_image_id,
+          author_profile_image_url: null,
+          author_profile_image_access_grant: mintGrant(
+            post.users.profile_image_id,
+            post.created_by,
+          ),
+        };
+      }),
     };
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {

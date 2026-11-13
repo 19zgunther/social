@@ -2,12 +2,9 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { prisma } from "@/app/lib/prisma";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
+import { getPostCoverObject } from "@/app/lib/postMedia";
 import { visiblePostsWhereForViewer } from "@/app/lib/postVisibility";
 import { sanitizePostDataForViewer } from "@/app/lib/polls";
-import {
-  asEventSharedPostData,
-  findSharedMediaOwnerUserId,
-} from "@/app/lib/sharedPosts";
 import {
   FeedPostsListRequest,
   FeedPostsListResponse,
@@ -86,7 +83,6 @@ export async function POST(request: Request) {
         id: true,
         created_at: true,
         created_by: true,
-        image_id: true,
         text: true,
         data: true,
         users: {
@@ -109,22 +105,25 @@ export async function POST(request: Request) {
 
     const posts: PostItem[] = paged.map((post) => {
       const likesInfo = getLikesInfo(post.data, authResult.user_id);
-      const coverOwner =
-        findSharedMediaOwnerUserId(asEventSharedPostData(post.data), post.image_id ?? "") ??
-        post.created_by;
+      const data = sanitizePostDataForViewer({
+        data: post.data,
+        viewerUserId: authResult.user_id,
+        authorUserId: post.created_by,
+      });
+      const cover = getPostCoverObject(data);
+      const coverStorageUserId = cover?.ownerUserId ?? post.created_by;
       return {
         id: post.id,
         created_at: post.created_at.toISOString(),
         created_by: post.created_by,
-        image_id: post.image_id,
-        image_url: null,
-        image_access_grant: mintGrant(post.image_id, coverOwner, authResult.user_id),
         text: post.text ?? "",
-        data: sanitizePostDataForViewer({
-          data: post.data,
-          viewerUserId: authResult.user_id,
-          authorUserId: post.created_by,
-        }),
+        data,
+        cover_image_id: cover?.objectId ?? null,
+        cover_image_access_grant: mintGrant(
+          cover?.objectId,
+          coverStorageUserId,
+          authResult.user_id,
+        ),
         like_count: likesInfo.likeCount,
         is_liked_by_viewer: likesInfo.isLikedByViewer,
         username: post.users.username,

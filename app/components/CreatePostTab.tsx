@@ -660,8 +660,6 @@ export default function CreatePostTab({
       id: "create-post-preview",
       created_at: new Date().toISOString(),
       created_by: currentUserId,
-      image_id: mediaItems.length > 0 ? "preview-0" : null,
-      image_url: null,
       text: comment,
       data: {
         ...(previewMedia.length > 0 ? { media: previewMedia } : {}),
@@ -1057,18 +1055,9 @@ export default function CreatePostTab({
         bumpStepProgress();
       }
 
-      const primaryStillId =
-        uploadedMedia[0]?.kind === "video"
-          ? uploadedMedia[0].poster_id
-          : uploadedMedia[0]?.id;
-      const otherImageIds = uploadedMedia
-        .filter((item) => item.kind === "image")
-        .map((item) => item.id)
-        .filter((id) => id !== primaryStillId);
       const hasCommentText = comment.trim().length > 0;
       const dataPayload = {
         ...(uploadedMedia.length > 0 ? { media: uploadedMedia } : {}),
-        ...(otherImageIds.length > 0 ? { other_image_ids: otherImageIds } : {}),
         ...(postKind === "poll"
           ? {
               poll: {
@@ -1092,7 +1081,6 @@ export default function CreatePostTab({
 
       const createResponse = await postWithAuth("/api/post-create", {
         ...(hasCommentText ? { text: comment } : {}),
-        ...(primaryStillId ? { image_id: primaryStillId } : {}),
         ...(hasDataPayload ? { data: dataPayload } : {}),
         audience:
           audience.mode === "group"

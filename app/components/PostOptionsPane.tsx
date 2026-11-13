@@ -13,7 +13,7 @@ import {
 } from "@/app/lib/customEmojiCanvas";
 import { downloadImageBlobWithExtension, getImageBlob } from "@/app/lib/imageCache";
 import { isEmojiOnlyText } from "@/app/lib/notification_text";
-import { collectPostMediaObjectIds } from "@/app/lib/postMedia";
+import { collectPostMediaObjectIds, seedCoverImageGrant } from "@/app/lib/postMedia";
 import {
   ApiError,
   FeedPostPollVotersOption,
@@ -130,7 +130,7 @@ const collectReactions = (
 };
 
 const buildImageIds = (post: PostItem): string[] =>
-  collectPostMediaObjectIds({ imageId: post.image_id, data: post.data });
+  collectPostMediaObjectIds({ data: post.data });
 
 export default function PostOptionsPane({
   post,
@@ -140,13 +140,9 @@ export default function PostOptionsPane({
   swipeBackOverrideRef,
 }: PostOptionsPaneProps) {
   const { isPresented, isClosing, isActive, close: closeModal } = useAnimatedModal(true);
-  const [imageGrantById, setImageGrantById] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {};
-    if (post.image_id && post.image_access_grant) {
-      initial[post.image_id] = post.image_access_grant;
-    }
-    return initial;
-  });
+  const [imageGrantById, setImageGrantById] = useState<Record<string, string>>(() =>
+    seedCoverImageGrant(post),
+  );
   const [isLoadingImageGrants, setIsLoadingImageGrants] = useState(false);
   const [downloadingImageId, setDownloadingImageId] = useState<string | null>(null);
   const [downloadStatusMessage, setDownloadStatusMessage] = useState("");
@@ -173,20 +169,14 @@ export default function PostOptionsPane({
   const canViewTierListSubmissions = Boolean(tierList?.has_submitted);
 
   useEffect(() => {
-    setImageGrantById(() => {
-      const next: Record<string, string> = {};
-      if (post.image_id && post.image_access_grant) {
-        next[post.image_id] = post.image_access_grant;
-      }
-      return next;
-    });
+    setImageGrantById(seedCoverImageGrant(post));
     setDownloadStatusMessage("");
     setDownloadingImageId(null);
-  }, [post.id, post.image_id, post.image_access_grant]);
+  }, [post.cover_image_access_grant, post.cover_image_id, post.id]);
 
   useEffect(() => {
     const missingImageIds = imageIds.filter((imageId) => {
-      if (imageId === post.image_id && post.image_access_grant) {
+      if (imageId === post.cover_image_id && post.cover_image_access_grant) {
         return false;
       }
       return true;
@@ -230,7 +220,7 @@ export default function PostOptionsPane({
     return () => {
       cancelled = true;
     };
-  }, [imageIds, post.created_by, post.id, post.image_access_grant, post.image_id]);
+  }, [imageIds, post.cover_image_access_grant, post.cover_image_id, post.id]);
 
   useEffect(() => {
     if (!canViewPollVoters) {

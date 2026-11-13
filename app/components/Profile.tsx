@@ -26,6 +26,7 @@ import PostGroupsTab from "@/app/components/PostGroupsTab";
 import GamesTab from "@/app/components/games/GamesTab";
 import { getPollViewerState } from "@/app/components/PollBlock";
 import { getTierListViewerState } from "@/app/components/TierListBlock";
+import { getPostCoverObject } from "@/app/lib/postMedia";
 import {
   AcceptedFriend,
   ApiError,
@@ -234,10 +235,13 @@ function ProfilePostsSection({
       ) : null}
 
       <div className="grid grid-cols-3">
-        {posts.map((post, index) => {
-          const showRightBorder = index % 3 !== 2;
-          const hasImageAttachment = Boolean(post.image_id);
-          const hasPostImageSource = Boolean(post.image_id && post.image_access_grant);
+        {posts.map((post) => {
+          const cover = getPostCoverObject(post.data);
+          const coverImageId = post.cover_image_id ?? cover?.objectId ?? null;
+          const coverGrant = post.cover_image_access_grant ?? null;
+          const coverStorageUserId = cover?.ownerUserId ?? post.created_by;
+          const hasImageAttachment = Boolean(coverImageId);
+          const hasPostImageSource = Boolean(coverImageId && coverGrant);
           const trimmedPostText = post.text.trim();
           const poll = getPollViewerState(post.data);
           const tierList = getTierListViewerState(post.data);
@@ -250,12 +254,12 @@ function ProfilePostsSection({
               onClick={() => setSelectedPostId(post.id)}
               className={`relative rounded-lg p-0.25 aspect-square min-h-0 overflow-hidden bg-bg`}
             >
-              {hasPostImageSource ? (
+              {hasPostImageSource && coverImageId ? (
                 <>
                 <CachedImage
-                  imageAccessGrant={post.image_access_grant ?? null}
-                  imageStorageUserId={post.created_by}
-                  imageId={post.image_id}
+                  imageAccessGrant={coverGrant}
+                  imageStorageUserId={coverStorageUserId}
+                  imageId={coverImageId}
                   alt="Profile post"
                   className="pointer-events-none h-full w-full object-cover"
                 />
@@ -351,7 +355,7 @@ function Profile({
   onOpenCreatePost,
   swipeBackOverrideRef,
 }: ProfileProps) {
-  const [posts, setPosts] = useStateCached<PostItem[]>([], "user_profile_posts_cache_v2");
+  const [posts, setPosts] = useStateCached<PostItem[]>([], "user_profile_posts_cache_v3");
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [hasMorePosts, setHasMorePosts] = useState(false);

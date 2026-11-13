@@ -209,6 +209,7 @@ export const stripSharedPostMediaForBlindView = (data: PostData | null): PostDat
   if (!data) {
     return null;
   }
+  // Strip active media and dead legacy other_image_ids so blind views leak neither.
   const { media: _media, other_image_ids: _other, ...rest } = data;
   return rest;
 };

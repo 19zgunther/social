@@ -6,7 +6,7 @@ import PostOptionsPane from "@/app/components/PostOptionsPane";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
 import { useStateCached } from "./useStateCached";
 import Loader from "@/app/components/Loader";
-const FEED_CACHE_KEY = "feed_cache_v3";
+const FEED_CACHE_KEY = "feed_cache_v4";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
 

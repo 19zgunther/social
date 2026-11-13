@@ -35,6 +35,7 @@ model posts {
   id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at       DateTime           @default(now()) @db.Timestamptz(6)
   created_by       String             @db.Uuid
+  /// DEAD / legacy — do not read or write. Historical primary image before posts.data.media. Kept in DB; use data.media instead.
   image_id         String?            @db.Uuid
   text             String?
   data             Json?              @db.Json

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "migrate:post-media": "tsx scripts/migratePostMediaFromLegacy.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.5.0",
@@ -35,10 +36,12 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.186.0",
     "@types/web-push": "^3.6.4",
+    "dotenv": "^18.0.10",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "prisma": "^7.5.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }

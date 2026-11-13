@@ -19,6 +19,12 @@ export type PostMediaSlide = {
   ownerUserId?: string;
 };
 
+export type PostCoverObject = {
+  objectId: string;
+  /** Present when media item sets owner_user_id (shared-event albums). */
+  ownerUserId?: string;
+};
+
 export const parsePostMediaItems = (raw: unknown): PostMediaItem[] | null => {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_POST_MEDIA_ITEMS) {
     return null;
@@ -48,51 +54,90 @@ export const parsePostMediaItems = (raw: unknown): PostMediaItem[] | null => {
   return items;
 };
 
-/** Derive ordered slides from `data.media`, or legacy image_id + other_image_ids. */
-export const getPostMediaSlides = (input: {
+/** True when `data.media` already has at least one slide. */
+export const postDataHasMedia = (data: PostData | null | undefined): boolean =>
+  Array.isArray(data?.media) && data.media.length > 0;
+
+/**
+ * Build `data.media` from dead legacy fields (`posts.image_id` + `other_image_ids`).
+ * Used by the one-off backfill script only — app code should not read those fields.
+ */
+export const buildMediaFromLegacyFields = (input: {
   imageId: string | null | undefined;
+  otherImageIds?: unknown;
+}): PostMediaItem[] => {
+  const media: PostMediaItem[] = [];
+  const pushImage = (id: string | null | undefined) => {
+    const trimmed = typeof id === "string" ? id.trim() : "";
+    if (!trimmed || media.some((item) => item.id === trimmed)) {
+      return;
+    }
+    media.push({ id: trimmed, kind: "image" });
+  };
+
+  pushImage(input.imageId);
+  if (Array.isArray(input.otherImageIds)) {
+    for (const entry of input.otherImageIds) {
+      if (typeof entry === "string") {
+        pushImage(entry);
+      }
+    }
+  }
+  return media;
+};
+
+/** Cover still for grids: first image id, or first video poster. */
+export const getPostCoverObject = (data: PostData | null | undefined): PostCoverObject | null => {
+  const first = data?.media?.[0];
+  if (!first) {
+    return null;
+  }
+  if (first.kind === "video") {
+    const posterId = first.poster_id?.trim();
+    if (!posterId) {
+      return null;
+    }
+    return {
+      objectId: posterId,
+      ...(first.owner_user_id ? { ownerUserId: first.owner_user_id } : {}),
+    };
+  }
+  return {
+    objectId: first.id,
+    ...(first.owner_user_id ? { ownerUserId: first.owner_user_id } : {}),
+  };
+};
+
+/** Seed client grant maps from list/create cover fields for first paint. */
+export const seedCoverImageGrant = (post: {
+  cover_image_id?: string | null;
+  cover_image_access_grant?: string | null;
+}): Record<string, string> => {
+  if (post.cover_image_id && post.cover_image_access_grant) {
+    return { [post.cover_image_id]: post.cover_image_access_grant };
+  }
+  return {};
+};
+
+/** Ordered slides from `data.media` only (legacy image_id / other_image_ids are dead). */
+export const getPostMediaSlides = (input: {
   data: PostData | null | undefined;
 }): PostMediaSlide[] => {
   const media = input.data?.media;
-  if (Array.isArray(media) && media.length > 0) {
-    return media.map((item, index) => ({
-      key: `${item.kind}-${item.id}-${index}`,
-      kind: item.kind,
-      mediaId: item.id,
-      posterId: item.kind === "video" ? item.poster_id : undefined,
-      ownerUserId: item.owner_user_id,
-    }));
+  if (!Array.isArray(media) || media.length === 0) {
+    return [];
   }
-
-  const slides: PostMediaSlide[] = [];
-  if (input.imageId) {
-    slides.push({ key: `image-${input.imageId}`, kind: "image", mediaId: input.imageId });
-  }
-  for (const imageId of input.data?.other_image_ids ?? []) {
-    if (!imageId || slides.some((slide) => slide.mediaId === imageId)) {
-      continue;
-    }
-    slides.push({ key: `image-${imageId}`, kind: "image", mediaId: imageId });
-  }
-  return slides;
-};
-
-/** Primary still + legacy other_image_ids for grids / older readers. */
-export const buildCompatFieldsFromMedia = (
-  media: PostMediaItem[],
-): { image_id: string | null; other_image_ids: string[] } => {
-  const first = media[0];
-  const imageId =
-    !first ? null : first.kind === "video" ? (first.poster_id ?? null) : first.id;
-  const otherImageIds = media
-    .filter((item) => item.kind === "image" && item.id !== imageId)
-    .map((item) => item.id);
-  return { image_id: imageId, other_image_ids: otherImageIds };
+  return media.map((item, index) => ({
+    key: `${item.kind}-${item.id}-${index}`,
+    kind: item.kind,
+    mediaId: item.id,
+    posterId: item.kind === "video" ? item.poster_id : undefined,
+    ownerUserId: item.owner_user_id,
+  }));
 };
 
 /** Storage object ids that need access grants (media + posters). */
 export const collectPostMediaObjectIds = (input: {
-  imageId: string | null | undefined;
   data: PostData | null | undefined;
 }): string[] => {
   const ids: string[] = [];
@@ -103,19 +148,14 @@ export const collectPostMediaObjectIds = (input: {
   };
 
   const media = input.data?.media;
-  if (Array.isArray(media) && media.length > 0) {
-    for (const item of media) {
-      push(item.id);
-      if (item.kind === "video") {
-        push(item.poster_id);
-      }
-    }
+  if (!Array.isArray(media) || media.length === 0) {
     return ids;
   }
-
-  push(input.imageId);
-  for (const imageId of input.data?.other_image_ids ?? []) {
-    push(imageId);
+  for (const item of media) {
+    push(item.id);
+    if (item.kind === "video") {
+      push(item.poster_id);
+    }
   }
   return ids;
 };

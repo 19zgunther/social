@@ -24,7 +24,7 @@ import {
   TierListData,
 } from "@/app/types/interfaces";
 import {
-  buildCompatFieldsFromMedia,
+  getPostCoverObject,
   parsePostMediaItems,
   validatePostMediaForCreate,
 } from "@/app/lib/postMedia";
@@ -107,12 +107,6 @@ export async function createPostForUser(
     };
   }
 
-  const otherImageIds = Array.isArray(rawData.other_image_ids)
-    ? rawData.other_image_ids.filter(
-        (id): id is string => typeof id === "string" && id.trim().length > 0,
-      )
-    : [];
-
   let builtPoll: PollData | null = null;
   if (rawData.poll !== undefined) {
     const pollInput = parsePollCreateInput(rawData.poll);
@@ -173,29 +167,7 @@ export async function createPostForUser(
       error: { code: mediaValidation.code, message: mediaValidation.message },
     };
   }
-  const mediaItems: PostMediaItem[] | null = mediaValidation.media;
-
-  if (builtPoll && !mediaItems && otherImageIds.length > 0) {
-    return {
-      ok: false,
-      status: 400,
-      error: {
-        code: "invalid_poll",
-        message: "Poll posts can include at most one image.",
-      },
-    };
-  }
-
-  if (builtTierList && !mediaItems && otherImageIds.length > 0) {
-    return {
-      ok: false,
-      status: 400,
-      error: {
-        code: "invalid_tier_list",
-        message: "Tier list posts can include at most one image.",
-      },
-    };
-  }
+  let mediaItems: PostMediaItem[] | null = mediaValidation.media;
 
   const hasMedia = Boolean(mediaItems && mediaItems.length > 0);
   if (
@@ -238,28 +210,25 @@ export async function createPostForUser(
   const { audience } = resolved;
   const isPermanent = audience.mode === "permanent";
 
-  let imageId: string | null = providedImageId ?? null;
-  let resolvedOtherImageIds = otherImageIds;
-  if (mediaItems && mediaItems.length > 0) {
-    const compat = buildCompatFieldsFromMedia(mediaItems);
-    imageId = compat.image_id;
-    resolvedOtherImageIds = compat.other_image_ids;
-  } else if (!providedImageId && imageBase64Data && imageMimeType) {
-    imageId = randomUUID();
-    await uploadImageToMainBucket({
-      userId: authorUserId,
-      imageId,
-      base64Data: imageBase64Data,
-      mimeType: imageMimeType,
-    });
+  // Prefer explicit data.media; otherwise fold legacy create image fields into media.
+  if (!mediaItems || mediaItems.length === 0) {
+    if (providedImageId) {
+      mediaItems = [{ id: providedImageId, kind: "image" }];
+    } else if (imageBase64Data && imageMimeType) {
+      const uploadedImageId = randomUUID();
+      await uploadImageToMainBucket({
+        userId: authorUserId,
+        imageId: uploadedImageId,
+        base64Data: imageBase64Data,
+        mimeType: imageMimeType,
+      });
+      mediaItems = [{ id: uploadedImageId, kind: "image" }];
+    }
   }
 
   const postData: PostData = {};
   if (mediaItems && mediaItems.length > 0) {
     postData.media = mediaItems;
-  }
-  if (resolvedOtherImageIds.length > 0) {
-    postData.other_image_ids = resolvedOtherImageIds;
   }
   if (builtPoll) {
     postData.poll = builtPoll;
@@ -273,7 +242,7 @@ export async function createPostForUser(
     const created = await tx.posts.create({
       data: {
         created_by: authorUserId,
-        image_id: imageId,
+        // posts.image_id is dead — do not write; media lives in data.media
         text: text ?? null,
         permanent: isPermanent,
         ...(hasPostData ? { data: postData as Prisma.InputJsonValue } : {}),
@@ -282,7 +251,6 @@ export async function createPostForUser(
         id: true,
         created_at: true,
         created_by: true,
-        image_id: true,
         text: true,
         data: true,
         permanent: true,
@@ -306,9 +274,7 @@ export async function createPostForUser(
   const recipientUserIds = audience.viewerIds.filter((userId) => userId !== authorUserId);
   if (recipientUserIds.length > 0) {
     const hasVideo = Boolean(mediaItems?.some((item) => item.kind === "video"));
-    const hasImageSlide = Boolean(
-      mediaItems?.some((item) => item.kind === "image") || (!hasVideo && post.image_id),
-    );
+    const hasImageSlide = Boolean(mediaItems?.some((item) => item.kind === "image"));
     const previewText = getPostPushPreviewText(
       post.text,
       hasImageSlide,
@@ -326,19 +292,6 @@ export async function createPostForUser(
     }).catch((error) => {
       console.error("post_create_push_dispatch_failed", error);
     });
-  }
-
-  let imageAccessGrant: string | null = null;
-  if (post.image_id) {
-    try {
-      imageAccessGrant = createMainBucketImageAccessGrant({
-        imageId: post.image_id,
-        storageUserId: post.created_by,
-        viewerUserId: authorUserId,
-      });
-    } catch (error) {
-      console.error("post_create_image_grant_failed", post.id, error);
-    }
   }
 
   const author = await prisma.users.findFirst({
@@ -369,6 +322,19 @@ export async function createPostForUser(
     viewerUserId: authorUserId,
     authorUserId: post.created_by,
   });
+  const cover = getPostCoverObject(sanitizedData);
+  let coverImageAccessGrant: string | null = null;
+  if (cover) {
+    try {
+      coverImageAccessGrant = createMainBucketImageAccessGrant({
+        imageId: cover.objectId,
+        storageUserId: cover.ownerUserId ?? post.created_by,
+        viewerUserId: authorUserId,
+      });
+    } catch (error) {
+      console.error("post_create_cover_image_grant_failed", post.id, error);
+    }
+  }
 
   return {
     ok: true,
@@ -377,11 +343,10 @@ export async function createPostForUser(
         id: post.id,
         created_at: post.created_at.toISOString(),
         created_by: post.created_by,
-        image_id: post.image_id,
-        image_url: null,
-        image_access_grant: imageAccessGrant,
         text: post.text ?? "",
         data: sanitizedData,
+        cover_image_id: cover?.objectId ?? null,
+        cover_image_access_grant: coverImageAccessGrant,
         like_count: 0,
         is_liked_by_viewer: false,
         username: authorUsername,

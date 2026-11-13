@@ -15,7 +15,11 @@ import {
 } from "@/app/components/ReactionFly";
 import { isEmojiOnlyText } from "@/app/lib/notification_text";
 import { ApiError, PostCommentNode, PostData, PostEditResponse, PostItem } from "@/app/types/interfaces";
-import { collectPostMediaObjectIds, getPostMediaSlides } from "@/app/lib/postMedia";
+import {
+  collectPostMediaObjectIds,
+  getPostMediaSlides,
+  seedCoverImageGrant,
+} from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useSwipeBack";
 import { Button, IconButton, TextField } from "@/app/ui-components";
 import { formatPostText } from "@/app/components/utils/formatPostText";
@@ -121,13 +125,9 @@ function PostSectionComponent({
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isLoadingAdditionalImages, setIsLoadingAdditionalImages] = useState(false);
   const [hasLoadedAdditionalImages, setHasLoadedAdditionalImages] = useState(false);
-  const [imageGrantById, setImageGrantById] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {};
-    if (post.image_id && post.image_access_grant) {
-      initial[post.image_id] = post.image_access_grant;
-    }
-    return initial;
-  });
+  const [imageGrantById, setImageGrantById] = useState<Record<string, string>>(() =>
+    seedCoverImageGrant(post),
+  );
   const resolvedPreviewMedia = useMemo((): PostPreviewMedia[] | null => {
     if (previewMedia && previewMedia.length > 0) {
       return previewMedia;
@@ -209,18 +209,18 @@ function PostSectionComponent({
         previewPosterUrl: item.posterUrl,
       }));
     }
-    return getPostMediaSlides({ imageId: post.image_id, data: postData }).map((slide) => ({
+    return getPostMediaSlides({ data: postData }).map((slide) => ({
       ...slide,
       previewUrl: undefined as string | undefined,
       previewPosterUrl: undefined as string | undefined,
     }));
-  }, [post.image_id, postData, resolvedPreviewMedia]);
+  }, [postData, resolvedPreviewMedia]);
   const allMediaObjectIds = useMemo(() => {
     if (resolvedPreviewMedia) {
       return [];
     }
-    return collectPostMediaObjectIds({ imageId: post.image_id, data: postData });
-  }, [post.image_id, postData, resolvedPreviewMedia]);
+    return collectPostMediaObjectIds({ data: postData });
+  }, [postData, resolvedPreviewMedia]);
   const hasMultipleImages = mediaSlides.length > 1;
   const imageSlides = useMemo(
     () =>
@@ -294,13 +294,7 @@ function PostSectionComponent({
     setActiveImageIndex(0);
     setIsLoadingAdditionalImages(false);
     setHasLoadedAdditionalImages(false);
-    setImageGrantById(() => {
-      const next: Record<string, string> = {};
-      if (post.image_id && post.image_access_grant) {
-        next[post.image_id] = post.image_access_grant;
-      }
-      return next;
-    });
+    setImageGrantById(seedCoverImageGrant(post));
     setRootCommentDraft("");
     setReplyDraftByPath({});
     setActiveReplyPath(null);
@@ -309,7 +303,7 @@ function PostSectionComponent({
     setPostTextDraft(post.text);
     setPostTextStatusMessage("");
     setImageViewer(null);
-  }, [post.data, post.id, post.image_id, post.image_access_grant, post.text]);
+  }, [post.cover_image_access_grant, post.cover_image_id, post.data, post.id, post.text]);
 
   useEffect(() => {
     const fallbackLikeCount = Object.values(initialLikes).filter(Boolean).length;
@@ -370,6 +364,8 @@ function PostSectionComponent({
     if (resolvedPreviewMedia) {
       return;
     }
+    // Cover grant seeds first paint; only eagerly fetch the rest for video (needs media + poster).
+    // Extra image slides wait for carousel scroll / touch / options.
     if (mediaSlides.some((slide) => slide.kind === "video")) {
       void loadAdditionalImages();
     }

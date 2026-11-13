@@ -4,10 +4,10 @@ import { authCheck } from "@/app/api/auth_utils";
 import { createMainBucketImageAccessGrant } from "@/app/api/image_access_grant";
 import { prisma } from "@/app/lib/prisma";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
-import { buildCompatFieldsFromMedia } from "@/app/lib/postMedia";
 import { resolvePostAudience } from "@/app/lib/postVisibility";
 import { sanitizePostDataForViewer } from "@/app/lib/polls";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
+import { getPostCoverObject } from "@/app/lib/postMedia";
 import {
   asEventSharedPostData,
   isEventAlbumMediaVisible,
@@ -127,11 +127,8 @@ export async function POST(request: Request) {
     }
     const friendViewerIds = resolved.audience.viewerIds;
 
-    const compat = buildCompatFieldsFromMedia(media);
-    const postData: PostData = {
-      media,
-      ...(compat.other_image_ids.length > 0 ? { other_image_ids: compat.other_image_ids } : {}),
-    };
+    // posts.image_id / other_image_ids are dead — store media only.
+    const postData: PostData = { media };
 
     const caption =
       [existing.name.trim(), existing.description?.trim()].filter(Boolean).join("\n\n") || existing.name;
@@ -141,7 +138,6 @@ export async function POST(request: Request) {
       const createdPost = await tx.posts.create({
         data: {
           created_by: authResult.user_id,
-          image_id: compat.image_id,
           text: caption,
           permanent: true,
           data: postData as Prisma.InputJsonValue,
@@ -150,7 +146,6 @@ export async function POST(request: Request) {
           id: true,
           created_at: true,
           created_by: true,
-          image_id: true,
           text: true,
           data: true,
         },
@@ -170,7 +165,7 @@ export async function POST(request: Request) {
     const recipientUserIds = friendViewerIds.filter((id) => id !== authResult.user_id);
     if (recipientUserIds.length > 0) {
       const hasVideo = media.some((item) => item.kind === "video");
-      const hasImage = media.some((item) => item.kind === "image") || Boolean(post.image_id);
+      const hasImage = media.some((item) => item.kind === "image");
       void sendPushToUsers({
         recipientUserIds,
         payload: {
@@ -181,21 +176,6 @@ export async function POST(request: Request) {
       }).catch((error) => {
         console.error("event_publish_post_push_failed", error);
       });
-    }
-
-    const coverOwner = media[0]?.owner_user_id?.trim() || post.created_by;
-
-    let imageAccessGrant: string | null = null;
-    if (post.image_id) {
-      try {
-        imageAccessGrant = createMainBucketImageAccessGrant({
-          imageId: post.image_id,
-          storageUserId: coverOwner,
-          viewerUserId: authResult.user_id,
-        });
-      } catch (error) {
-        console.error("event_publish_post_image_grant_failed", post.id, error);
-      }
     }
 
     const author = await prisma.users.findFirst({
@@ -219,19 +199,33 @@ export async function POST(request: Request) {
       }
     }
 
+    const data = sanitizePostDataForViewer({
+      data: post.data,
+      viewerUserId: authResult.user_id,
+      authorUserId: post.created_by,
+    });
+    const cover = getPostCoverObject(data);
+    let coverImageAccessGrant: string | null = null;
+    if (cover) {
+      try {
+        coverImageAccessGrant = createMainBucketImageAccessGrant({
+          imageId: cover.objectId,
+          storageUserId: cover.ownerUserId ?? post.created_by,
+          viewerUserId: authResult.user_id,
+        });
+      } catch (error) {
+        console.error("event_publish_post_cover_grant_failed", post.id, error);
+      }
+    }
+
     const postItem: PostItem = {
       id: post.id,
       created_at: post.created_at.toISOString(),
       created_by: post.created_by,
-      image_id: post.image_id,
-      image_url: null,
-      image_access_grant: imageAccessGrant,
       text: post.text ?? "",
-      data: sanitizePostDataForViewer({
-        data: post.data,
-        viewerUserId: authResult.user_id,
-        authorUserId: post.created_by,
-      }),
+      data,
+      cover_image_id: cover?.objectId ?? null,
+      cover_image_access_grant: coverImageAccessGrant,
       like_count: 0,
       is_liked_by_viewer: false,
       username: authResult.username,

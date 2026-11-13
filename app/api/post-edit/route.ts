@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       select: {
         id: true,
         created_by: true,
-        image_id: true,
+        data: true,
       },
     });
     if (!post) {
@@ -42,7 +42,12 @@ export async function POST(request: Request) {
     }
 
     const nextText = body.text ?? "";
-    if (!post.image_id && !nextText.trim()) {
+    const postData =
+      post.data && typeof post.data === "object" && !Array.isArray(post.data)
+        ? (post.data as { media?: unknown })
+        : null;
+    const hasMedia = Array.isArray(postData?.media) && postData.media.length > 0;
+    if (!hasMedia && !nextText.trim()) {
       return NextResponse.json(
         { error: { code: "invalid_request", message: "Post text cannot be empty." } },
         { status: 400 },
