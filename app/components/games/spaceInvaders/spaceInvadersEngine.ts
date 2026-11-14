@@ -24,7 +24,7 @@ export const BULLET_H = 8;
 export const PLAYER_BULLET_SPEED = 280;
 export const ALIEN_BULLET_SPEED = 120;
 
-export const BARRIER_COUNT = 5;
+export const BARRIER_COUNT = 3;
 export const BARRIER_COLS = 7;
 export const BARRIER_ROWS = 5;
 export const BARRIER_CELL = 4;

@@ -244,6 +244,17 @@ export default function SpaceInvadersGame({ onExit }: SpaceInvadersGameProps) {
     })();
   }, []);
 
+  // iOS: kill text selection / callouts / magnifier while the game is open.
+  useEffect(() => {
+    const block = (e: Event) => e.preventDefault();
+    document.addEventListener("selectstart", block, true);
+    document.addEventListener("gesturestart", block, true);
+    return () => {
+      document.removeEventListener("selectstart", block, true);
+      document.removeEventListener("gesturestart", block, true);
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       stopLoop();
@@ -365,8 +376,22 @@ export default function SpaceInvadersGame({ onExit }: SpaceInvadersGameProps) {
   };
 
   return (
-    <div className="si-root relative flex h-full w-full flex-col">
-      <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
+    <div
+      className="si-root relative flex h-full w-full flex-col select-none"
+      style={{
+        WebkitUserSelect: "none",
+        userSelect: "none",
+        WebkitTouchCallout: "none",
+        WebkitTapHighlightColor: "transparent",
+        touchAction: "manipulation",
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <canvas
+        ref={canvasRef}
+        className="pointer-events-none absolute inset-0 h-full w-full select-none"
+        style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}
+      />
 
       {screen === "title" ? (
         <button

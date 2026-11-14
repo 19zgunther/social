@@ -105,8 +105,16 @@ export default function GamesTab({ isActive }: { isActive: boolean }) {
     portalReady && activeGame
       ? createPortal(
           <div
-            className={`fixed inset-0 z-[2200] bg-black ${DONT_SWIPE_TABS_CLASSNAME}`}
-            style={{ width: "100vw", height: "100dvh" }}
+            className={`fixed inset-0 z-[2200] bg-black select-none ${DONT_SWIPE_TABS_CLASSNAME}`}
+            style={{
+              width: "100vw",
+              height: "100dvh",
+              WebkitUserSelect: "none",
+              userSelect: "none",
+              WebkitTouchCallout: "none",
+              WebkitTapHighlightColor: "transparent",
+            }}
+            onContextMenu={(e) => e.preventDefault()}
             role="dialog"
             aria-modal="true"
             aria-label={

@@ -1046,6 +1046,19 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
 .si-root {
   background: #05070d;
   color: #e2e8f0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
+.si-root,
+.si-root * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-touch-callout: none !important;
 }
 
 .si-games-row {
@@ -1206,8 +1219,10 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
     3px 3px 0 #000,
     0 0 10px color-mix(in srgb, var(--si-ctrl-color, #34d399) 35%, transparent);
   user-select: none;
+  -webkit-user-select: none;
   touch-action: none;
   -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
   transition: transform 60ms steps(1), box-shadow 60ms steps(1);
 }
 
