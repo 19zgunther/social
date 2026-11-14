@@ -374,6 +374,13 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   }
 };
 
+const reportPostError = (message: string) => {
+  void postWithAuth("/api/error-log", {
+    key: "post_create_client",
+    message,
+  }).catch(() => {});
+};
+
 export default function CreatePostTab({
   isActive,
   currentUserId,
@@ -1026,7 +1033,9 @@ export default function CreatePostTab({
             postWithAuth,
           );
           if (!payload.image_id) {
-            setStatusMessage("Image upload failed.");
+            const message = "Image upload failed.";
+            reportPostError(message);
+            setStatusMessage(message);
             return;
           }
           uploadedMedia.push({ id: payload.image_id, kind: "image" });
@@ -1088,7 +1097,9 @@ export default function CreatePostTab({
             : { mode: audience.mode },
       });
       if (!createResponse.ok) {
-        setStatusMessage(await readErrorMessage(createResponse));
+        const message = await readErrorMessage(createResponse);
+        reportPostError(`post-create ${createResponse.status}: ${message}`);
+        setStatusMessage(message);
         return;
       }
       bumpStepProgress();
@@ -1126,7 +1137,9 @@ export default function CreatePostTab({
       setStatusMessage("");
       onPosted();
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to create post.");
+      const message = error instanceof Error ? error.message : "Failed to create post.";
+      reportPostError(message);
+      setStatusMessage(message);
     } finally {
       window.clearInterval(progressTickId);
       setIsPosting(false);

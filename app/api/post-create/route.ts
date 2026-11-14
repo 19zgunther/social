@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { createPostForUser } from "@/app/lib/createPostForUser";
+import { logError } from "@/app/lib/errorLog";
 import { PostCreateRequest } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -19,11 +20,23 @@ export async function POST(request: Request) {
       body,
     });
     if (!result.ok) {
+      void logError({
+        userId: authResult.user_id,
+        userName: authResult.username,
+        key: "post_create",
+        message: `${result.error.code}: ${result.error.message}`,
+      });
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
     return NextResponse.json(result.response, { status: 200 });
   } catch (error) {
     console.error("post_create_failed", error);
+    void logError({
+      userId: authResult.user_id,
+      userName: authResult.username,
+      key: "post_create",
+      message: error instanceof Error ? error.message : "Failed to create post.",
+    });
     return NextResponse.json(
       { error: { code: "post_create_failed", message: "Failed to create post." } },
       { status: 500 },
