@@ -11,6 +11,8 @@ import {
 import {
   BackIcon,
   CloseIcon,
+  DailyChallengeIcon,
+  FlagIcon,
   ForwardIcon,
   GlobeIcon,
   HomeIcon,
@@ -18,10 +20,19 @@ import {
   PeopleIcon,
   PlayIcon,
   RefreshIcon,
+  StreakIcon,
   TrophyIcon,
   type LucideIcon,
 } from "@/app/components/Icons";
-import type { GameScoreScope, GameScoresLeaderboardResponse } from "@/app/types/interfaces";
+import type {
+  GameDailyLeaderboardResponse,
+  GameDailyStatusResponse,
+  GameScoreScope,
+  GameScoresLeaderboardResponse,
+  GameStreakInfo,
+  GameStreakKind,
+  GameStreaksLeaderboardResponse,
+} from "@/app/types/interfaces";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import {
   BEER_DURATION,
@@ -35,13 +46,19 @@ import {
 import { createWorkGolfScene, type WorkGolfSceneHandle } from "./workGolfScene";
 import {
   computeUnlockedMax,
+  fetchWorkGolfDailyLeaderboard,
+  fetchWorkGolfDailyStatus,
   fetchWorkGolfLeaderboard,
   fetchWorkGolfPlayedLevels,
+  fetchWorkGolfStreakLeaderboard,
   isLevelUnlocked,
+  submitWorkGolfDailyScore,
   submitWorkGolfScore,
+  workGolfDailyLevelNumber,
 } from "./workGolfScores";
 
 type MenuScreen = "title" | "levels" | "playing" | "paused" | "complete" | "highscores";
+type HighScoresTab = "level" | "daily" | "streaks";
 
 type WorkGolfGameProps = {
   onExit: () => void;
@@ -55,6 +72,8 @@ type CompleteInfo = {
   runRank: number | null;
   personalBest: number | null;
   personalBestRank: number | null;
+  isDaily: boolean;
+  streak: GameStreakInfo | null;
 };
 
 const LEVEL_LIST_COUNT = 30;
@@ -74,6 +93,7 @@ function formatRankLabel(
 
 type WorkGolfBtnTone =
   | "play"
+  | "daily"
   | "scores"
   | "exit"
   | "back"
@@ -187,14 +207,15 @@ function GrapesBoostIndicator({
 }
 
 function WorkGolfLeaderboardPanel(props: {
-  leaderboard: GameScoresLeaderboardResponse | null;
+  leaderboard: GameScoresLeaderboardResponse | GameDailyLeaderboardResponse | null;
   loading: boolean;
   scope: GameScoreScope;
   onScope: (scope: GameScoreScope) => void;
   /** Tighter layout for the post-round card. */
   compact?: boolean;
+  boardLabel?: string;
 }) {
-  const { leaderboard, loading, scope, onScope, compact } = props;
+  const { leaderboard, loading, scope, onScope, compact, boardLabel } = props;
   const meInTop =
     leaderboard?.top.some((row) => row.user_id === leaderboard.me.user_id) ?? false;
 
@@ -230,7 +251,7 @@ function WorkGolfLeaderboardPanel(props: {
               You
             </p>
             {leaderboard.me.personal_best == null ? (
-              <p className="workgolf-sub mt-0.5 text-[0.7rem]">No score on this level yet.</p>
+              <p className="workgolf-sub mt-0.5 text-[0.7rem]">No score yet.</p>
             ) : (
               <p className="mt-0.5 text-[0.78rem] font-semibold text-white">
                 {formatRankLabel(leaderboard.me.rank, leaderboard.total, scope)}
@@ -247,7 +268,8 @@ function WorkGolfLeaderboardPanel(props: {
           </div>
 
           <p className="mb-1 text-[0.55rem] font-semibold uppercase tracking-wide text-white/55">
-            {scope === "friends" ? "Friends" : "Everyone"} · Level board
+            {scope === "friends" ? "Friends" : "Everyone"}
+            {boardLabel ? ` · ${boardLabel}` : ""}
           </p>
           {leaderboard.top.length === 0 ? (
             <p className="workgolf-sub text-center text-[0.7rem]">No scores yet.</p>
@@ -301,6 +323,126 @@ function WorkGolfLeaderboardPanel(props: {
   );
 }
 
+function WorkGolfStreakLeaderboardPanel(props: {
+  leaderboard: GameStreaksLeaderboardResponse | null;
+  loading: boolean;
+  scope: GameScoreScope;
+  kind: GameStreakKind;
+  onScope: (scope: GameScoreScope) => void;
+  onKind: (kind: GameStreakKind) => void;
+}) {
+  const { leaderboard, loading, scope, kind, onScope, onKind } = props;
+  const meInTop =
+    leaderboard?.top.some((row) => row.user_id === leaderboard.me.user_id) ?? false;
+
+  return (
+    <div className="w-full">
+      <div className="workgolf-lb-scope mb-2">
+        <WorkGolfBtn
+          tone="all"
+          icon={StreakIcon}
+          className={kind === "current" ? "" : "!opacity-45"}
+          onClick={() => onKind("current")}
+        >
+          Current
+        </WorkGolfBtn>
+        <WorkGolfBtn
+          tone="scores"
+          icon={TrophyIcon}
+          className={kind === "all_time" ? "" : "!opacity-45"}
+          onClick={() => onKind("all_time")}
+        >
+          All-time
+        </WorkGolfBtn>
+      </div>
+      <div className="workgolf-lb-scope mb-2">
+        <WorkGolfBtn
+          tone="all"
+          icon={GlobeIcon}
+          className={scope === "all" ? "" : "!opacity-45"}
+          onClick={() => onScope("all")}
+        >
+          All
+        </WorkGolfBtn>
+        <WorkGolfBtn
+          tone="friends"
+          icon={PeopleIcon}
+          className={scope === "friends" ? "" : "!opacity-45"}
+          onClick={() => onScope("friends")}
+        >
+          Friends
+        </WorkGolfBtn>
+      </div>
+
+      {loading ? (
+        <p className="workgolf-sub text-center">Loading streaks...</p>
+      ) : !leaderboard ? (
+        <p className="workgolf-sub text-center">Could not load streaks.</p>
+      ) : (
+        <>
+          <div className="workgolf-lb-you">
+            <p className="text-[0.55rem] font-semibold uppercase tracking-wide text-amber-200/90">
+              Your streak
+            </p>
+            <p className="mt-0.5 text-[0.78rem] font-semibold text-white">
+              {leaderboard.me.rank > 0
+                ? formatRankLabel(leaderboard.me.rank, leaderboard.total, scope)
+                : "Unranked"}
+              <span className="ml-2 font-normal text-amber-200">
+                {kind === "current" ? leaderboard.me.day_streak : leaderboard.me.max_day_streak}d
+              </span>
+            </p>
+          </div>
+          {leaderboard.top.length === 0 ? (
+            <p className="workgolf-sub text-center text-[0.7rem]">No streaks yet.</p>
+          ) : (
+            <ul className="space-y-1">
+              {leaderboard.top.map((row) => {
+                const isMe = row.user_id === leaderboard.me.user_id;
+                return (
+                  <li
+                    key={`${row.user_id}-${row.streak}`}
+                    className={`workgolf-lb-row ${isMe ? "is-me" : ""}`}
+                  >
+                    <span className="w-7 shrink-0 text-[0.68rem] font-semibold text-white/55">
+                      #{row.rank}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[0.75rem] text-white">
+                      {row.username}
+                      {isMe ? " · you" : ""}
+                    </span>
+                    <span className="shrink-0 text-[0.75rem] font-semibold text-amber-200">
+                      {row.streak}d
+                    </span>
+                  </li>
+                );
+              })}
+              {!meInTop && leaderboard.me.rank > 0 ? (
+                <>
+                  <li className="py-0.5 text-center text-[0.55rem] text-white/35" aria-hidden>
+                    ···
+                  </li>
+                  <li className="workgolf-lb-row is-me">
+                    <span className="w-7 shrink-0 text-[0.68rem] font-semibold text-amber-200/90">
+                      #{leaderboard.me.rank}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[0.75rem] text-white">
+                      {leaderboard.me.username} · you
+                    </span>
+                    <span className="shrink-0 text-[0.75rem] font-semibold text-amber-200">
+                      {leaderboard.me.streak}d
+                    </span>
+                  </li>
+                </>
+              ) : null}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<WorkGolfSceneHandle | null>(null);
@@ -309,6 +451,7 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
   const screenRef = useRef<MenuScreen>("title");
   const runRecordedRef = useRef(false);
   const completingRef = useRef(false);
+  const isDailyRunRef = useRef(false);
   const highScoresBackRef = useRef<MenuScreen>("title");
   const hudAccRef = useRef(0);
   const pointerRef = useRef<{
@@ -326,10 +469,19 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
   const [selectedLevel, setSelectedLevel] = useState(1);
   const [completeInfo, setCompleteInfo] = useState<CompleteInfo | null>(null);
   const [leaderboard, setLeaderboard] = useState<GameScoresLeaderboardResponse | null>(null);
+  const [dailyLeaderboard, setDailyLeaderboard] = useState<GameDailyLeaderboardResponse | null>(
+    null,
+  );
+  const [streakLeaderboard, setStreakLeaderboard] =
+    useState<GameStreaksLeaderboardResponse | null>(null);
+  const [dailyStatus, setDailyStatus] = useState<GameDailyStatusResponse | null>(null);
   const [leaderboardScope, setLeaderboardScope] = useState<GameScoreScope>("all");
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardLevel, setLeaderboardLevel] = useState(1);
+  const [highScoresTab, setHighScoresTab] = useState<HighScoresTab>("level");
+  const [streakKind, setStreakKind] = useState<GameStreakKind>("current");
   const [displayedScore, setDisplayedScore] = useState(0);
+  const [dailyStarting, setDailyStarting] = useState(false);
 
   const setMenuScreen = (next: MenuScreen) => {
     screenRef.current = next;
@@ -353,7 +505,31 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
     setLeaderboardLoading(false);
   });
 
+  const loadDailyBoard = useEffectEvent(async (scope: GameScoreScope) => {
+    setLeaderboardLoading(true);
+    const board = await fetchWorkGolfDailyLeaderboard(scope);
+    setDailyLeaderboard(board);
+    if (board?.streak) {
+      setDailyStatus((prev) =>
+        prev
+          ? { ...prev, streak: board.streak, my_score: board.me.personal_best }
+          : prev,
+      );
+    }
+    setLeaderboardLoading(false);
+  });
+
+  const loadStreakBoard = useEffectEvent(
+    async (kind: GameStreakKind, scope: GameScoreScope) => {
+      setLeaderboardLoading(true);
+      const board = await fetchWorkGolfStreakLeaderboard(kind, scope);
+      setStreakLeaderboard(board);
+      setLeaderboardLoading(false);
+    },
+  );
+
   const recordRun = useEffectEvent(async (engine: WorkGolfEngine): Promise<CompleteInfo> => {
+    const isDaily = isDailyRunRef.current;
     const base: CompleteInfo = {
       levelNumber: engine.level.levelNumber,
       score: engine.scoreTotal,
@@ -362,23 +538,29 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
       runRank: null,
       personalBest: null,
       personalBestRank: null,
+      isDaily,
+      streak: null,
     };
     if (runRecordedRef.current || engine.status !== "complete") return base;
     runRecordedRef.current = true;
-    const result = await submitWorkGolfScore(engine.level.levelNumber, engine.scoreTotal);
+    const result = isDaily
+      ? await submitWorkGolfDailyScore(engine.scoreTotal)
+      : await submitWorkGolfScore(engine.level.levelNumber, engine.scoreTotal);
     if (!result) return base;
-    void refreshPlayed();
+    if (!isDaily) void refreshPlayed();
     return {
       ...base,
       runRank: result.run_rank,
       personalBest: result.personal_best,
       personalBestRank: result.personal_best_rank,
+      streak: result.streak ?? null,
     };
   });
 
   const startLevel = useEffectEvent((levelNumber: number, playedOverride?: number[]) => {
     const played = playedOverride ?? playedLevels;
     if (!isLevelUnlocked(levelNumber, played)) return;
+    isDailyRunRef.current = false;
     runRecordedRef.current = false;
     completingRef.current = false;
     sceneRef.current?.setMenuPreview(false);
@@ -389,8 +571,56 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
     setMenuScreen("playing");
   });
 
+  const startDailyLevel = useEffectEvent((levelNumber: number) => {
+    isDailyRunRef.current = true;
+    runRecordedRef.current = false;
+    completingRef.current = false;
+    sceneRef.current?.setMenuPreview(false);
+    engineRef.current = new WorkGolfEngine(levelNumber);
+    snapRef.current = engineRef.current.snapshot();
+    setHud(snapRef.current);
+    setCompleteInfo(null);
+    setMenuScreen("playing");
+  });
+
+  const openDailyChallenge = useEffectEvent(async () => {
+    if (dailyStarting) return;
+    setDailyStarting(true);
+    const status = await fetchWorkGolfDailyStatus();
+    setDailyStatus(status);
+    if (!status) {
+      setDailyStarting(false);
+      return;
+    }
+    if (status.already_played) {
+      isDailyRunRef.current = true;
+      setCompleteInfo({
+        levelNumber: workGolfDailyLevelNumber(status.today),
+        score: status.my_score ?? 0,
+        strokesTotal: 0,
+        holeScores: [],
+        runRank: null,
+        personalBest: status.my_score,
+        personalBestRank: null,
+        isDaily: true,
+        streak: status.streak,
+      });
+      setLeaderboardScope("friends");
+      setMenuScreen("complete");
+      void loadDailyBoard("friends");
+      setDailyStarting(false);
+      return;
+    }
+    startDailyLevel(workGolfDailyLevelNumber(status.today));
+    setDailyStarting(false);
+  });
+
   useEffect(() => {
     void refreshPlayed();
+    void (async () => {
+      const status = await fetchWorkGolfDailyStatus();
+      setDailyStatus(status);
+    })();
   }, []);
 
   useEffect(() => {
@@ -463,13 +693,21 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
           completingRef.current = true;
           void (async () => {
             const info = await recordRun(engine);
-            setPlayedLevels((prev) =>
-              prev.includes(info.levelNumber) ? prev : [...prev, info.levelNumber],
-            );
+            if (!info.isDaily) {
+              setPlayedLevels((prev) =>
+                prev.includes(info.levelNumber) ? prev : [...prev, info.levelNumber],
+              );
+            }
             setCompleteInfo(info);
-            setLeaderboardScope("all");
-            setMenuScreen("complete");
-            void loadLeaderboard(info.levelNumber, "all");
+            if (info.isDaily) {
+              setLeaderboardScope("friends");
+              setMenuScreen("complete");
+              void loadDailyBoard("friends");
+            } else {
+              setLeaderboardScope("all");
+              setMenuScreen("complete");
+              void loadLeaderboard(info.levelNumber, "all");
+            }
           })();
         }
       } else if (snapRef.current) {
@@ -555,16 +793,51 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
     setMenuScreen("levels");
   };
 
-  const openHighScores = (from: MenuScreen, level: number) => {
+  const openHighScores = (from: MenuScreen, level: number, tab: HighScoresTab = "level") => {
     highScoresBackRef.current = from;
-    setLeaderboardScope("all");
-    void loadLeaderboard(level, "all");
+    setLeaderboardScope(tab === "daily" ? "friends" : "all");
+    setHighScoresTab(tab);
+    setStreakKind("current");
+    if (tab === "daily") {
+      void loadDailyBoard("friends");
+    } else if (tab === "streaks") {
+      void loadStreakBoard("current", "all");
+    } else {
+      void loadLeaderboard(level, "all");
+    }
     setMenuScreen("highscores");
   };
 
   const setLeaderboardScopeAndLoad = (scope: GameScoreScope) => {
     setLeaderboardScope(scope);
+    if (highScoresTab === "daily" || (screen === "complete" && completeInfo?.isDaily)) {
+      void loadDailyBoard(scope);
+      return;
+    }
+    if (highScoresTab === "streaks") {
+      void loadStreakBoard(streakKind, scope);
+      return;
+    }
     void loadLeaderboard(leaderboardLevel, scope);
+  };
+
+  const setHighScoresTabAndLoad = (tab: HighScoresTab) => {
+    setHighScoresTab(tab);
+    if (tab === "daily") {
+      setLeaderboardScope("friends");
+      void loadDailyBoard("friends");
+    } else if (tab === "streaks") {
+      setLeaderboardScope("all");
+      void loadStreakBoard(streakKind, "all");
+    } else {
+      setLeaderboardScope("all");
+      void loadLeaderboard(leaderboardLevel, "all");
+    }
+  };
+
+  const setStreakKindAndLoad = (kind: GameStreakKind) => {
+    setStreakKind(kind);
+    void loadStreakBoard(kind, leaderboardScope);
   };
 
   const ensurePreviewLevel = () => {
@@ -631,14 +904,30 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
         <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-4 px-6">
           <p className="workgolf-title">Work Golf</p>
           <p className="workgolf-sub">Low-poly links. Five flags. Fewer strokes.</p>
+          {dailyStatus?.streak && dailyStatus.streak.day_streak > 0 ? (
+            <p className="text-[0.75rem] font-semibold text-amber-200">
+              Streak {dailyStatus.streak.day_streak} day
+              {dailyStatus.streak.day_streak === 1 ? "" : "s"}
+            </p>
+          ) : null}
           <div className="workgolf-btns mt-2 flex w-full max-w-sm flex-col items-center gap-3">
+            <WorkGolfBtn
+              tone="daily"
+              icon={DailyChallengeIcon}
+              disabled={dailyStarting}
+              onClick={() => {
+                void openDailyChallenge();
+              }}
+            >
+              {dailyStarting ? "Loading..." : "Daily Challenge"}
+            </WorkGolfBtn>
             <WorkGolfBtn tone="play" icon={PlayIcon} onClick={openLevels}>
-              Play
+              Free Play
             </WorkGolfBtn>
             <WorkGolfBtn
               tone="scores"
               icon={TrophyIcon}
-              onClick={() => openHighScores("title", selectedLevel)}
+              onClick={() => openHighScores("title", selectedLevel, "daily")}
             >
               High Scores
             </WorkGolfBtn>
@@ -708,8 +997,8 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
           <div className="pointer-events-none absolute left-0 right-0 top-[max(3.25rem,calc(env(safe-area-inset-top)+2.5rem))] z-20 flex justify-center px-3">
             <div className="workgolf-hud rounded-2xl bg-black/40 px-4 py-2 text-center backdrop-blur-sm">
               <p className="text-[0.7rem] font-semibold tracking-wide text-white">
-                Lvl {hud.levelNumber} · Hole {hud.holesCompleted + 1}/5 · Strokes{" "}
-                {hud.strokesTotal}
+                {isDailyRunRef.current ? "Daily" : `Lvl ${hud.levelNumber}`} · Hole{" "}
+                {hud.holesCompleted + 1}/5 · Strokes {hud.strokesTotal}
               </p>
               <p className="mt-0.5 text-[0.65rem] text-emerald-200">
                 Score {hud.scoreTotal}
@@ -833,23 +1122,38 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
         <div className="workgolf-complete relative z-20 flex flex-1 flex-col items-center justify-center px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(3rem,env(safe-area-inset-top))]">
           <div className="workgolf-complete-card w-full max-w-sm">
             <p className="workgolf-title workgolf-complete-item workgolf-complete-d1 text-center">
-              Round Done!
+              {completeInfo.isDaily ? "Daily Done!" : "Round Done!"}
             </p>
             <p className="workgolf-complete-score workgolf-complete-item workgolf-complete-d2">
               <span className="workgolf-complete-score-label">Score</span>
               <span className="workgolf-complete-score-value">{displayedScore}</span>
             </p>
             <p className="workgolf-sub workgolf-complete-item workgolf-complete-d3 text-center">
-              Level {completeInfo.levelNumber} · {completeInfo.strokesTotal} strokes
+              {completeInfo.isDaily
+                ? "Today's challenge"
+                : `Level ${completeInfo.levelNumber}`}
+              {completeInfo.strokesTotal > 0
+                ? ` · ${completeInfo.strokesTotal} strokes`
+                : ""}
             </p>
-            <p className="workgolf-complete-cups workgolf-complete-item workgolf-complete-d4">
-              {completeInfo.holeScores.map((s, i) => (
-                <span key={i} className="workgolf-complete-cup">
-                  {s}
-                </span>
-              ))}
-            </p>
-            {completeInfo.runRank != null ? (
+            {completeInfo.holeScores.length > 0 ? (
+              <p className="workgolf-complete-cups workgolf-complete-item workgolf-complete-d4">
+                {completeInfo.holeScores.map((s, i) => (
+                  <span key={i} className="workgolf-complete-cup">
+                    {s}
+                  </span>
+                ))}
+              </p>
+            ) : null}
+            {completeInfo.isDaily && completeInfo.streak ? (
+              <p className="workgolf-complete-rank workgolf-complete-item workgolf-complete-d5">
+                Streak {completeInfo.streak.day_streak} day
+                {completeInfo.streak.day_streak === 1 ? "" : "s"}
+                {completeInfo.streak.max_day_streak > completeInfo.streak.day_streak
+                  ? ` · Best ${completeInfo.streak.max_day_streak}`
+                  : ""}
+              </p>
+            ) : completeInfo.runRank != null ? (
               <p className="workgolf-complete-rank workgolf-complete-item workgolf-complete-d5">
                 This run #{completeInfo.runRank}
                 {completeInfo.personalBest != null
@@ -864,42 +1168,64 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
 
             <div className="workgolf-complete-board workgolf-complete-item workgolf-complete-d7">
               <WorkGolfLeaderboardPanel
-                leaderboard={leaderboard}
+                leaderboard={completeInfo.isDaily ? dailyLeaderboard : leaderboard}
                 loading={leaderboardLoading}
                 scope={leaderboardScope}
                 onScope={setLeaderboardScopeAndLoad}
                 compact
+                boardLabel={completeInfo.isDaily ? "Today" : "Level board"}
               />
             </div>
 
             <div className="workgolf-btns mt-3 flex w-full flex-col items-center gap-2">
-              <WorkGolfBtn
-                tone="next"
-                icon={ForwardIcon}
-                className="workgolf-complete-item workgolf-complete-d8"
-                onClick={() => {
-                  const finished = completeInfo.levelNumber;
-                  const nextPlayed = playedLevels.includes(finished)
-                    ? playedLevels
-                    : [...playedLevels, finished];
-                  startLevel(finished + 1, nextPlayed);
-                }}
-              >
-                Next Level
-              </WorkGolfBtn>
-              <WorkGolfBtn
-                tone="replay"
-                icon={RefreshIcon}
-                className="workgolf-complete-item workgolf-complete-d9"
-                onClick={() => startLevel(completeInfo.levelNumber)}
-              >
-                Replay
-              </WorkGolfBtn>
+              {!completeInfo.isDaily ? (
+                <>
+                  <WorkGolfBtn
+                    tone="next"
+                    icon={ForwardIcon}
+                    className="workgolf-complete-item workgolf-complete-d8"
+                    onClick={() => {
+                      const finished = completeInfo.levelNumber;
+                      const nextPlayed = playedLevels.includes(finished)
+                        ? playedLevels
+                        : [...playedLevels, finished];
+                      startLevel(finished + 1, nextPlayed);
+                    }}
+                  >
+                    Next Level
+                  </WorkGolfBtn>
+                  <WorkGolfBtn
+                    tone="replay"
+                    icon={RefreshIcon}
+                    className="workgolf-complete-item workgolf-complete-d9"
+                    onClick={() => startLevel(completeInfo.levelNumber)}
+                  >
+                    Replay
+                  </WorkGolfBtn>
+                </>
+              ) : (
+                <WorkGolfBtn
+                  tone="board"
+                  icon={StreakIcon}
+                  className="workgolf-complete-item workgolf-complete-d8"
+                  onClick={() =>
+                    openHighScores("complete", completeInfo.levelNumber, "streaks")
+                  }
+                >
+                  Streak Boards
+                </WorkGolfBtn>
+              )}
               <WorkGolfBtn
                 tone="board"
                 icon={TrophyIcon}
                 className="workgolf-complete-item workgolf-complete-d10"
-                onClick={() => openHighScores("complete", completeInfo.levelNumber)}
+                onClick={() =>
+                  openHighScores(
+                    "complete",
+                    completeInfo.levelNumber,
+                    completeInfo.isDaily ? "daily" : "level",
+                  )
+                }
               >
                 Full Leaderboard
               </WorkGolfBtn>
@@ -921,14 +1247,60 @@ export default function WorkGolfGame({ onExit }: WorkGolfGameProps) {
           <p className="workgolf-title mb-1 text-center" style={{ fontSize: "1.25rem" }}>
             High Scores
           </p>
-          <p className="workgolf-sub mb-3 text-center">Level {leaderboardLevel}</p>
+          <div className="workgolf-lb-scope mb-2 mx-auto w-full max-w-sm">
+            <WorkGolfBtn
+              tone="daily"
+              icon={DailyChallengeIcon}
+              className={highScoresTab === "daily" ? "" : "!opacity-45"}
+              onClick={() => setHighScoresTabAndLoad("daily")}
+            >
+              Daily
+            </WorkGolfBtn>
+            <WorkGolfBtn
+              tone="play"
+              icon={FlagIcon}
+              className={highScoresTab === "level" ? "" : "!opacity-45"}
+              onClick={() => setHighScoresTabAndLoad("level")}
+            >
+              Levels
+            </WorkGolfBtn>
+            <WorkGolfBtn
+              tone="scores"
+              icon={StreakIcon}
+              className={highScoresTab === "streaks" ? "" : "!opacity-45"}
+              onClick={() => setHighScoresTabAndLoad("streaks")}
+            >
+              Streaks
+            </WorkGolfBtn>
+          </div>
+          <p className="workgolf-sub mb-3 text-center">
+            {highScoresTab === "daily"
+              ? "Today's challenge"
+              : highScoresTab === "streaks"
+                ? streakKind === "current"
+                  ? "Current streaks"
+                  : "All-time streaks"
+                : `Level ${leaderboardLevel}`}
+          </p>
           <div className="mx-auto w-full max-w-sm flex-1 overflow-y-auto rounded-2xl border border-white/20 bg-black/45 p-3">
-            <WorkGolfLeaderboardPanel
-              leaderboard={leaderboard}
-              loading={leaderboardLoading}
-              scope={leaderboardScope}
-              onScope={setLeaderboardScopeAndLoad}
-            />
+            {highScoresTab === "streaks" ? (
+              <WorkGolfStreakLeaderboardPanel
+                leaderboard={streakLeaderboard}
+                loading={leaderboardLoading}
+                scope={leaderboardScope}
+                kind={streakKind}
+                onScope={setLeaderboardScopeAndLoad}
+                onKind={setStreakKindAndLoad}
+              />
+            ) : (
+              <WorkGolfLeaderboardPanel
+                leaderboard={highScoresTab === "daily" ? dailyLeaderboard : leaderboard}
+                loading={leaderboardLoading}
+                scope={leaderboardScope}
+                onScope={setLeaderboardScopeAndLoad}
+                boardLabel={highScoresTab === "daily" ? "Today" : "Level board"}
+              />
+            )}
           </div>
           <div className="workgolf-btns mx-auto mt-3 flex w-full max-w-sm flex-col items-center">
             <WorkGolfBtn

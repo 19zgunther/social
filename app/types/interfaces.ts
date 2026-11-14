@@ -926,10 +926,21 @@ export type BotLogGetResponse = {
 /** Leaderboard partition within a game (e.g. tetris uses "global"). */
 export type GameScoreScope = "all" | "friends";
 
+export type GameStreakKind = "current" | "all_time";
+
+export type GameStreakInfo = {
+  day_streak: number;
+  max_day_streak: number;
+  first_day_in_streak: string | null;
+  most_recent_day_in_streak: string | null;
+};
+
 export type GameScoreSubmitRequest = {
   game?: string;
   level?: string;
   score?: number;
+  /** When true, records today's Daily Challenge (server sets daily_day in ET). */
+  daily?: boolean;
 };
 
 export type GameScoreSubmitResponse = {
@@ -944,6 +955,9 @@ export type GameScoreSubmitResponse = {
   personal_best: number;
   /** 1-based rank of your personal best among users' bests (all players). */
   personal_best_rank: number;
+  /** Set when this was a daily submit (YYYY-MM-DD ET). */
+  daily_day?: string | null;
+  streak?: GameStreakInfo | null;
 };
 
 export type GameScoresLeaderboardRequest = {
@@ -988,4 +1002,69 @@ export type GameScoresPlayedResponse = {
   game: string;
   /** Distinct level ids the user has finished (has at least one score row). */
   levels: string[];
+};
+
+export type GameDailyStatusRequest = {
+  game?: string;
+};
+
+export type GameDailyStatusResponse = {
+  game: string;
+  /** YYYY-MM-DD in America/New_York. */
+  today: string;
+  already_played: boolean;
+  my_score: number | null;
+  streak: GameStreakInfo;
+  friends_played_today: number;
+};
+
+export type GameDailyLeaderboardRequest = {
+  game?: string;
+  /** YYYY-MM-DD; defaults to today ET. */
+  daily_day?: string;
+  scope?: GameScoreScope;
+  limit?: number;
+};
+
+export type GameDailyLeaderboardResponse = {
+  game: string;
+  daily_day: string;
+  scope: GameScoreScope;
+  top: GameScoreLeaderboardEntry[];
+  total: number;
+  me: {
+    user_id: string;
+    username: string;
+    personal_best: number | null;
+    rank: number | null;
+  };
+  streak: GameStreakInfo;
+};
+
+export type GameStreaksLeaderboardRequest = {
+  game?: string;
+  kind?: GameStreakKind;
+  scope?: GameScoreScope;
+  limit?: number;
+};
+
+export type GameStreakLeaderboardEntry = {
+  user_id: string;
+  username: string;
+  /** Value used for ranking (current or max depending on kind). */
+  streak: number;
+  day_streak: number;
+  max_day_streak: number;
+  most_recent_day_in_streak: string | null;
+  /** 1-based rank; 0 means unranked / no streak. */
+  rank: number;
+};
+
+export type GameStreaksLeaderboardResponse = {
+  game: string;
+  kind: GameStreakKind;
+  scope: GameScoreScope;
+  top: GameStreakLeaderboardEntry[];
+  total: number;
+  me: GameStreakLeaderboardEntry;
 };

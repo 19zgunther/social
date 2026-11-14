@@ -4,6 +4,10 @@
     {
       "path": "/api/bot-cron",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/game-daily-nudge-cron",
+      "schedule": "0 16,17 * * *"
     }
   ]
 }

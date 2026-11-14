@@ -1,11 +1,27 @@
 import type {
+  GameDailyLeaderboardResponse,
+  GameDailyStatusResponse,
   GameScoreScope,
   GameScoreSubmitResponse,
   GameScoresLeaderboardResponse,
+  GameStreakKind,
+  GameStreaksLeaderboardResponse,
 } from "@/app/types/interfaces";
+import {
+  dailyLevelNumberForDate,
+  easternDateString,
+} from "@/app/lib/easternDate";
 import { WORK_GOLF_GAME, levelIdForNumber } from "./workGolfEngine";
 
 export { WORK_GOLF_GAME };
+
+export function workGolfTodayEt(): string {
+  return easternDateString();
+}
+
+export function workGolfDailyLevelNumber(dateStr: string = easternDateString()): number {
+  return dailyLevelNumberForDate(dateStr);
+}
 
 export async function submitWorkGolfScore(
   levelNumber: number,
@@ -20,6 +36,29 @@ export async function submitWorkGolfScore(
         game: WORK_GOLF_GAME,
         level: levelIdForNumber(levelNumber),
         score,
+      }),
+      keepalive: true,
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as GameScoreSubmitResponse;
+  } catch {
+    return null;
+  }
+}
+
+export async function submitWorkGolfDailyScore(
+  score: number,
+): Promise<GameScoreSubmitResponse | null> {
+  if (!Number.isInteger(score) || score < 0) return null;
+  try {
+    const response = await fetch("/api/game-score-submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        game: WORK_GOLF_GAME,
+        level: "daily",
+        score,
+        daily: true,
       }),
       keepalive: true,
     });
@@ -48,6 +87,66 @@ export async function fetchWorkGolfLeaderboard(
     });
     if (!response.ok) return null;
     return (await response.json()) as GameScoresLeaderboardResponse;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchWorkGolfDailyStatus(): Promise<GameDailyStatusResponse | null> {
+  try {
+    const response = await fetch("/api/game-daily-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game: WORK_GOLF_GAME }),
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as GameDailyStatusResponse;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchWorkGolfDailyLeaderboard(
+  scope: GameScoreScope,
+  limit = 25,
+  dailyDay?: string,
+): Promise<GameDailyLeaderboardResponse | null> {
+  try {
+    const response = await fetch("/api/game-daily-leaderboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        game: WORK_GOLF_GAME,
+        scope,
+        limit,
+        ...(dailyDay ? { daily_day: dailyDay } : {}),
+      }),
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as GameDailyLeaderboardResponse;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchWorkGolfStreakLeaderboard(
+  kind: GameStreakKind,
+  scope: GameScoreScope,
+  limit = 25,
+): Promise<GameStreaksLeaderboardResponse | null> {
+  try {
+    const response = await fetch("/api/game-streaks-leaderboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        game: WORK_GOLF_GAME,
+        kind,
+        scope,
+        limit,
+      }),
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as GameStreaksLeaderboardResponse;
   } catch {
     return null;
   }

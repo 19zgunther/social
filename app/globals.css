@@ -1345,6 +1345,10 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   background: #3f9e42;
   box-shadow: 0 3px 0 #1f5a22;
 }
+.workgolf-btn--daily {
+  background: #2d8f9a;
+  box-shadow: 0 3px 0 #18555c;
+}
 .workgolf-btn--scores {
   background: #2f8f6e;
   box-shadow: 0 3px 0 #1a5a45;

@@ -245,17 +245,36 @@ model bot_logs {
 }
 
 /// Generic per-run game scores (tetris and future games). `level` is a board/mode key (e.g. "global"), not an in-run difficulty.
+/// When `daily_day` is set, the row is that user's official Daily Challenge score for the America/New_York calendar day.
 model game_scores {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id    String   @db.Uuid
-  created_at DateTime @default(now()) @db.Timestamptz(6)
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String    @db.Uuid
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
   game       String
   level      String
   score      Int
-  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  /// Null = free play. Set = Daily Challenge for that ET calendar day (one per user/game/day).
+  daily_day  DateTime? @db.Date
+  users      users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([game, level, score(sort: Desc)])
   @@index([user_id, game, level, score(sort: Desc)])
+  @@index([game, daily_day, score(sort: Desc)])
+}
+
+/// Per-user, per-game daily-challenge streak progress (denormalized from game_scores.daily_day).
+model game_streaks {
+  user_id                   String    @db.Uuid
+  game                      String
+  day_streak                Int       @default(0)
+  max_day_streak            Int       @default(0)
+  first_day_in_streak       DateTime? @db.Date
+  most_recent_day_in_streak DateTime? @db.Date
+  users                     users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([user_id, game])
+  @@index([game, day_streak(sort: Desc)])
+  @@index([game, max_day_streak(sort: Desc)])
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -277,6 +296,7 @@ model users {
   friends_friends_other_userTousers                                     friends[]                   @relation("friends_other_userTousers")
   friends_friends_requesting_userTousers                                friends[]                   @relation("friends_requesting_userTousers")
   game_scores                                                           game_scores[]
+  game_streaks                                                          game_streaks[]
   posts                                                                 posts[]
   push_subscriptions                                                    push_subscriptions[]
   shared_feedback                                                       shared_feedback[]

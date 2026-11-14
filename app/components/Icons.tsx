@@ -23,6 +23,7 @@ import {
   Droplets,
   Eraser,
   Flag,
+  Flame,
   Gamepad2,
   Globe,
   Hand,
@@ -115,6 +116,10 @@ export const GamepadIcon = Gamepad2;
 export const TrophyIcon = Trophy;
 /** Course / hole flag */
 export const FlagIcon = Flag;
+/** Daily challenge streak */
+export const StreakIcon = Flame;
+/** Daily challenge / calendar day */
+export const DailyChallengeIcon = Calendar;
 /** Home / title screen */
 export const HomeIcon = Home;
 /** Everyone / global board */

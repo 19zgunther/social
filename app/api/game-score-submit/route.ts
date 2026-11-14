@@ -5,6 +5,7 @@ import {
   normalizeGameId,
   normalizeLevelId,
   normalizeScore,
+  WORK_GOLF_DAILY_LEVEL_ID,
 } from "@/app/lib/gameScores";
 import type { GameScoreSubmitRequest, GameScoreSubmitResponse } from "@/app/types/interfaces";
 
@@ -17,7 +18,10 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as GameScoreSubmitRequest;
     const game = normalizeGameId(body.game);
-    const level = normalizeLevelId(body.level);
+    const daily = body.daily === true;
+    const level = daily
+      ? WORK_GOLF_DAILY_LEVEL_ID
+      : normalizeLevelId(body.level);
     const score = normalizeScore(body.score);
 
     if (!game || !level || score === null) {
@@ -37,20 +41,34 @@ export async function POST(request: Request) {
       game,
       level,
       score,
+      daily,
     });
 
     const payload: GameScoreSubmitResponse = {
       id: inserted.id,
       game,
-      level,
+      level: inserted.daily_day ? WORK_GOLF_DAILY_LEVEL_ID : level,
       score,
       created_at: inserted.created_at.toISOString(),
       run_rank: inserted.run_rank,
       personal_best: inserted.personal_best,
       personal_best_rank: inserted.personal_best_rank,
+      daily_day: inserted.daily_day,
+      streak: inserted.streak,
     };
     return NextResponse.json(payload);
   } catch (error) {
+    if (error instanceof Error && error.name === "DailyAlreadyPlayedError") {
+      return NextResponse.json(
+        {
+          error: {
+            code: "daily_already_played",
+            message: "You already completed today's Daily Challenge.",
+          },
+        },
+        { status: 409 },
+      );
+    }
     console.error("game_score_submit_failed", error);
     return NextResponse.json(
       { error: { code: "internal_error", message: "Failed to save score." } },
