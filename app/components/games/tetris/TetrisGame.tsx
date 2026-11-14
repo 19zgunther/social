@@ -743,7 +743,7 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
           onContextMenu={(e) => e.preventDefault()}
         >
           <div
-            className="pointer-events-auto absolute flex flex-col justify-between gap-2"
+            className="pointer-events-auto absolute"
             style={{
               left: 6,
               top: playLayout.playY,
@@ -751,22 +751,24 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
               height: playLayout.playH,
             }}
           >
-            <button
-              type="button"
-              aria-label="Hold"
-              className="tetris-ctrl tetris-ctrl-side tetris-ctrl-hold"
-              onContextMenu={(e) => e.preventDefault()}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                onControl("hold");
-              }}
-            >
-              HOLD
-            </button>
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2">
+              <button
+                type="button"
+                aria-label="Hold"
+                className="tetris-ctrl tetris-ctrl-side tetris-ctrl-hold w-full"
+                onContextMenu={(e) => e.preventDefault()}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  onControl("hold");
+                }}
+              >
+                HOLD
+              </button>
+            </div>
             <button
               type="button"
               aria-label="Hard drop"
-              className="tetris-ctrl tetris-ctrl-side tetris-ctrl-drop"
+              className="tetris-ctrl tetris-ctrl-side tetris-ctrl-drop absolute bottom-0 left-0 right-0"
               onContextMenu={(e) => e.preventDefault()}
               onPointerDown={(e) => {
                 e.preventDefault();
@@ -777,7 +779,7 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
             </button>
           </div>
           <div
-            className="pointer-events-auto absolute flex flex-col justify-between gap-2"
+            className="pointer-events-auto absolute"
             style={{
               left: playLayout.playX + playLayout.playW + 6,
               top: playLayout.playY,
@@ -785,22 +787,24 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
               height: playLayout.playH,
             }}
           >
-            <button
-              type="button"
-              aria-label="Rotate counter-clockwise"
-              className="tetris-ctrl tetris-ctrl-side tetris-ctrl-rotccw"
-              onContextMenu={(e) => e.preventDefault()}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                onControl("rotccw");
-              }}
-            >
-              ↺
-            </button>
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2">
+              <button
+                type="button"
+                aria-label="Rotate counter-clockwise"
+                className="tetris-ctrl tetris-ctrl-side tetris-ctrl-rotccw w-full"
+                onContextMenu={(e) => e.preventDefault()}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  onControl("rotccw");
+                }}
+              >
+                ↺
+              </button>
+            </div>
             <button
               type="button"
               aria-label="Rotate clockwise"
-              className="tetris-ctrl tetris-ctrl-side tetris-ctrl-rotcw"
+              className="tetris-ctrl tetris-ctrl-side tetris-ctrl-rotcw absolute bottom-0 left-0 right-0"
               onContextMenu={(e) => e.preventDefault()}
               onPointerDown={(e) => {
                 e.preventDefault();

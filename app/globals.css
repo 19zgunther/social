@@ -661,7 +661,13 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
   .tetris-menu-sub,
   .tetris-ctrl,
   .tetris-ctrl-pause,
-  .tetris-games-row {
+  .tetris-games-row,
+  .si-title-mark,
+  .si-menu-btn,
+  .si-menu-sub,
+  .si-ctrl,
+  .si-ctrl-pause,
+  .si-games-row {
     animation: none;
   }
 }
@@ -1034,6 +1040,226 @@ button:hover .nav-rgb-icon:not(.nav-rgb-icon-active) {
       3px 3px 0 #000,
       0 0 16px rgba(232, 121, 249, 0.55);
   }
+}
+
+/* —— Space Invaders (dark retro) —— */
+.si-root {
+  background: #05070d;
+  color: #e2e8f0;
+}
+
+.si-games-row {
+  background: #05070d;
+  border: 3px solid #34d399;
+  border-radius: 0;
+  box-shadow:
+    4px 4px 0 #000,
+    0 0 12px rgba(52, 211, 153, 0.2);
+  animation: si-btn-pulse 2.6s steps(4) infinite;
+  transition: transform 60ms steps(1);
+}
+
+.si-games-row:active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 #000;
+}
+
+.si-games-row .si-title-mark {
+  font-size: 0.95rem;
+}
+
+.si-pixel-font {
+  font-family: var(--font-logo-press-start), monospace;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  image-rendering: pixelated;
+}
+
+.si-title-mark {
+  font-family: var(--font-logo-press-start), monospace;
+  font-weight: 400;
+  font-size: clamp(1.85rem, 8.5vw, 2.6rem);
+  line-height: 1.25;
+  letter-spacing: 0.1em;
+  color: #a3e635;
+  text-shadow:
+    3px 3px 0 #14532d,
+    6px 6px 0 #000;
+  animation: si-title-glow 2.4s steps(4) infinite;
+}
+
+.si-menu-sub {
+  font-family: var(--font-logo-press-start), monospace;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  animation: si-sub-blink 1.5s steps(2) infinite;
+}
+
+.si-menu-btn {
+  font-family: var(--font-logo-press-start), monospace;
+  font-weight: 400;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  width: 100%;
+  max-width: 18rem;
+  padding: 0.95rem 1rem;
+  color: #bbf7d0;
+  background: #080c14;
+  border: 3px solid #34d399;
+  border-radius: 0;
+  box-shadow:
+    4px 4px 0 #000,
+    inset 0 0 0 1px rgba(163, 230, 53, 0.08);
+  image-rendering: pixelated;
+  transition: transform 60ms steps(1);
+  animation: si-btn-pulse 2.6s steps(4) infinite;
+}
+
+.si-menu-btns .si-menu-btn:nth-child(1) {
+  animation-delay: 0s;
+}
+.si-menu-btns .si-menu-btn:nth-child(2) {
+  animation-delay: 0.3s;
+}
+.si-menu-btns .si-menu-btn:nth-child(3) {
+  animation-delay: 0.6s;
+}
+.si-menu-btns .si-menu-btn:nth-child(4) {
+  animation-delay: 0.9s;
+}
+
+.si-menu-btn:active:not(:disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 #000;
+}
+
+.si-menu-btn:focus-visible {
+  outline: 2px solid #a3e635;
+  outline-offset: 3px;
+}
+
+@keyframes si-title-glow {
+  0%,
+  100% {
+    color: #a3e635;
+    text-shadow:
+      3px 3px 0 #14532d,
+      6px 6px 0 #000,
+      0 0 10px rgba(163, 230, 53, 0.25);
+  }
+  50% {
+    color: #67e8f9;
+    text-shadow:
+      3px 3px 0 #0e7490,
+      6px 6px 0 #000,
+      0 0 14px rgba(103, 232, 249, 0.3);
+  }
+}
+
+@keyframes si-btn-pulse {
+  0%,
+  100% {
+    border-color: #34d399;
+    color: #bbf7d0;
+    box-shadow:
+      4px 4px 0 #000,
+      0 0 0 0 rgba(52, 211, 153, 0);
+  }
+  50% {
+    border-color: #a3e635;
+    color: #d9f99d;
+    box-shadow:
+      4px 4px 0 #000,
+      0 0 12px 0 rgba(163, 230, 53, 0.28);
+  }
+}
+
+@keyframes si-sub-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.4;
+  }
+}
+
+.si-ctrl {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  border-radius: 0;
+  border: 3px solid var(--si-ctrl-color, #34d399);
+  background: #080c14;
+  color: var(--si-ctrl-color, #34d399);
+  font-family: var(--font-logo-press-start), monospace;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  image-rendering: pixelated;
+  box-shadow:
+    3px 3px 0 #000,
+    0 0 10px color-mix(in srgb, var(--si-ctrl-color, #34d399) 35%, transparent);
+  user-select: none;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  transition: transform 60ms steps(1), box-shadow 60ms steps(1);
+}
+
+.si-ctrl-lg {
+  min-height: 4rem;
+  font-size: 1.1rem;
+}
+
+.si-ctrl-left {
+  --si-ctrl-color: #67e8f9;
+}
+.si-ctrl-fire {
+  --si-ctrl-color: #f472b6;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+}
+.si-ctrl-right {
+  --si-ctrl-color: #a3e635;
+}
+
+.si-ctrl:active {
+  transform: translate(2px, 2px);
+  box-shadow:
+    1px 1px 0 #000,
+    0 0 14px color-mix(in srgb, var(--si-ctrl-color, #34d399) 55%, transparent);
+  filter: brightness(1.15);
+}
+
+.si-ctrl-pause {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  border: 3px solid #f472b6;
+  background: #080c14;
+  color: #fda4af;
+  font-family: var(--font-logo-press-start), monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  box-shadow:
+    3px 3px 0 #000,
+    0 0 10px rgba(244, 114, 182, 0.35);
+  user-select: none;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+.si-ctrl-pause:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 #000;
 }
 
 /* —— Work Golf —— */

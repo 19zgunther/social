@@ -5,8 +5,9 @@ import { createPortal } from "react-dom";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import TetrisGame from "@/app/components/games/tetris/TetrisGame";
 import WorkGolfGame from "@/app/components/games/workGolf/WorkGolfGame";
+import SpaceInvadersGame from "@/app/components/games/spaceInvaders/SpaceInvadersGame";
 
-type GameId = "tetris" | "work-golf";
+type GameId = "tetris" | "work-golf" | "space-invaders";
 
 const TETRIS_BLOCKS = [
   { color: "#22d3ee", rotate: "0deg", x: 2, y: 10 },
@@ -60,6 +61,25 @@ function WorkGolfRowIcon() {
   );
 }
 
+function SpaceInvadersRowIcon() {
+  return (
+    <span
+      className="relative h-12 w-12 shrink-0 border-[3px] border-[#39ff14]/80 bg-[#02040a] shadow-[3px_3px_0_#000]"
+      aria-hidden
+    >
+      <span className="absolute left-1.5 top-1.5 h-1.5 w-2 bg-[#39ff14]" />
+      <span className="absolute left-4.5 top-1.5 h-1.5 w-2 bg-[#1e90ff]" />
+      <span className="absolute left-7.5 top-1.5 h-1.5 w-2 bg-[#ff2bd6]" />
+      <span className="absolute left-3 top-4 h-1.5 w-2 bg-[#ff8a00]" />
+      <span className="absolute left-6 top-4 h-1.5 w-2 bg-[#ffe600]" />
+      <span className="absolute left-2 top-[1.65rem] h-2 w-2.5 bg-[#39ff14]" />
+      <span className="absolute left-[1.35rem] top-[1.65rem] h-2 w-2.5 bg-[#39ff14]" />
+      <span className="absolute bottom-1.5 left-[1.15rem] h-1 w-3.5 bg-[#39ff14]" />
+      <span className="absolute bottom-3 left-[1.45rem] h-1.5 w-1 bg-[#39ff14]" />
+    </span>
+  );
+}
+
 export default function GamesTab({ isActive }: { isActive: boolean }) {
   const [activeGame, setActiveGame] = useState<GameId | null>(null);
   const [portalReady, setPortalReady] = useState(false);
@@ -89,12 +109,20 @@ export default function GamesTab({ isActive }: { isActive: boolean }) {
             style={{ width: "100vw", height: "100dvh" }}
             role="dialog"
             aria-modal="true"
-            aria-label={activeGame === "tetris" ? "Tetris" : "Work Golf"}
+            aria-label={
+              activeGame === "tetris"
+                ? "Tetris"
+                : activeGame === "work-golf"
+                  ? "Work Golf"
+                  : "Space Invaders"
+            }
           >
             {activeGame === "tetris" ? (
               <TetrisGame onExit={() => setActiveGame(null)} />
-            ) : (
+            ) : activeGame === "work-golf" ? (
               <WorkGolfGame onExit={() => setActiveGame(null)} />
+            ) : (
+              <SpaceInvadersGame onExit={() => setActiveGame(null)} />
             )}
           </div>,
           document.body,
@@ -139,6 +167,24 @@ export default function GamesTab({ isActive }: { isActive: boolean }) {
               </span>
             </span>
             <span className="shrink-0 text-[0.85rem] text-[#2f7a28]" aria-hidden>
+              ▶
+            </span>
+          </button>
+        </li>
+        <li>
+          <button
+            type="button"
+            onClick={() => setActiveGame("space-invaders")}
+            className="si-games-row group flex w-full items-center gap-3 px-3 py-3 text-left"
+          >
+            <SpaceInvadersRowIcon />
+            <span className="min-w-0 flex-1">
+              <span className="si-title-mark block text-[0.95rem] leading-tight">INVADERS</span>
+              <span className="si-pixel-font mt-1.5 block text-[0.55rem] text-slate-400 group-hover:text-slate-300">
+                Shoot down. Don&apos;t get landed on.
+              </span>
+            </span>
+            <span className="si-pixel-font shrink-0 text-[0.7rem] text-lime-300" aria-hidden>
               ▶
             </span>
           </button>

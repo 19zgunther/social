@@ -6,6 +6,8 @@ import type { GameScoreLeaderboardEntry, GameScoreScope } from "@/app/types/inte
 export const TETRIS_GAME_ID = "tetris";
 export const TETRIS_LEVEL_ID = "global";
 export const WORK_GOLF_GAME_ID = "work-golf";
+export const SPACE_INVADERS_GAME_ID = "space-invaders";
+export const SPACE_INVADERS_LEVEL_ID = "global";
 
 const MAX_SCORE = 100_000_000;
 
