@@ -3,6 +3,7 @@ import {
   Aperture,
   ArrowLeft,
   ArrowRight,
+  ArrowUpDown,
   Bell,
   Bot,
   Brush,
@@ -87,6 +88,8 @@ export const CopyIcon = Copy;
 export const DeleteIcon = Trash2;
 /** Reload / refresh data */
 export const RefreshIcon = RefreshCw;
+/** Sort / reorder a list */
+export const SortIcon = ArrowUpDown;
 /** Overflow / more actions menu */
 export const MoreIcon = MoreHorizontal;
 /** Expand / collapse disclosure */

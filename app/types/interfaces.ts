@@ -229,6 +229,8 @@ export type ThreadItem = {
   image_access_grant?: string | null;
   /** Short preview of the latest message text (or photo fallback) for the Messages list. */
   last_message_preview?: string | null;
+  /** ISO timestamp of the latest message in the thread, if any. */
+  last_message_at?: string | null;
   /** Present when this thread was created by an event with a background image. */
   event_background_image_id?: string | null;
   /** Thread-scoped grant for the event background image; resolve with `imageThreadId` = this thread's `id`. */

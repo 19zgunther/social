@@ -5,6 +5,7 @@ import {
   WheelEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -19,17 +20,25 @@ import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
 import { reportClientError } from "@/app/lib/errorReport";
 import ThreadAvatar from "@/app/components/ThreadAvatar";
 import {
+  CheckIcon,
   CloseIcon,
   NewChatIcon,
   RefreshIcon,
   SearchIcon,
+  SortIcon,
 } from "@/app/components/Icons";
 import Loader from "@/app/components/Loader";
 import MessagesThreadOptionsMenu from "@/app/components/MessagesThreadOptionsMenu";
 import UserProfileImage from "@/app/components/UserProfileImage";
 import UserSearch, { UserSearchOption } from "@/app/components/UserSearch";
 import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
-import { Button, IconButton, TextField } from "@/app/ui-components";
+import {
+  BlurOptionsList,
+  BlurOptionsListItem,
+  Button,
+  IconButton,
+  TextField,
+} from "@/app/ui-components";
 import { AppTab } from "./utils";
 
 type MessagesProps = {
@@ -49,10 +58,53 @@ type MessagesProps = {
 const MESSAGES_CACHE_KEY = "messages_list_v1";
 /** Pre-rebrand cache key; read once as a fallback, then rewritten under `MESSAGES_CACHE_KEY`. */
 const LEGACY_GROUPS_CACHE_KEY = "groups_list_v1";
+const THREAD_SORT_STORAGE_KEY = "messages_thread_sort";
 const TOP_REFRESH_COOLDOWN_MS = 1500;
 const PULL_REFRESH_THRESHOLD_PX = 55;
 const PIN_LONG_PRESS_MS = 500;
 const PINNED_AVATAR_SIZE_PX = 72;
+const SORT_MENU_OVERLAY_Z = 1950;
+const SORT_MENU_WIDTH_PX = 224;
+const SORT_MENU_GAP_PX = 8;
+
+type ThreadSortMode = "last_updated" | "unread";
+
+const readThreadSortMode = (): ThreadSortMode => {
+  if (typeof window === "undefined") {
+    return "last_updated";
+  }
+  try {
+    const raw = window.localStorage.getItem(THREAD_SORT_STORAGE_KEY);
+    if (raw === "unread" || raw === "last_updated") {
+      return raw;
+    }
+  } catch {
+    // Ignore storage failures; fall back to default.
+  }
+  return "last_updated";
+};
+
+const writeThreadSortMode = (mode: ThreadSortMode): void => {
+  try {
+    window.localStorage.setItem(THREAD_SORT_STORAGE_KEY, mode);
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
+const compareThreadsByLastMessageAt = (a: ThreadItem, b: ThreadItem): number => {
+  const aTime = a.last_message_at ? Date.parse(a.last_message_at) : Number.NaN;
+  const bTime = b.last_message_at ? Date.parse(b.last_message_at) : Number.NaN;
+  const aValid = Number.isFinite(aTime);
+  const bValid = Number.isFinite(bTime);
+  if (aValid && bValid && aTime !== bTime) {
+    return bTime - aTime;
+  }
+  if (aValid !== bValid) {
+    return aValid ? -1 : 1;
+  }
+  return a.id.localeCompare(b.id);
+};
 
 const threadMatchesSearch = (thread: ThreadItem, rawQuery: string): boolean => {
   const query = rawQuery.trim().toLowerCase();
@@ -121,7 +173,13 @@ export default function Messages({
     anchorEl: HTMLElement;
   } | null>(null);
   const [isPinningThread, setIsPinningThread] = useState(false);
+  const [threadSortMode, setThreadSortMode] = useState<ThreadSortMode>("last_updated");
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const [sortMenuAnchor, setSortMenuAnchor] = useState<{ left: number; top: number } | null>(
+    null,
+  );
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const sortButtonRef = useRef<HTMLButtonElement | null>(null);
   const pullStartYRef = useRef<number | null>(null);
   const pullRefreshTriggeredRef = useRef(false);
   const lastTopRefreshAtRef = useRef(0);
@@ -129,6 +187,10 @@ export default function Messages({
   const pinLongPressTriggeredRef = useRef(false);
   /** Suppress browser context menu after long-press opens our options menu. */
   const suppressBrowserContextMenuUntilRef = useRef(0);
+
+  useEffect(() => {
+    setThreadSortMode(readThreadSortMode());
+  }, []);
 
   const readErrorMessage = async (response: Response): Promise<string> => {
     try {
@@ -710,10 +772,58 @@ export default function Messages({
     () => filteredThreads.filter((thread) => thread.user_pinned_thread === true),
     [filteredThreads],
   );
-  const unpinnedThreads = useMemo(
-    () => filteredThreads.filter((thread) => thread.user_pinned_thread !== true),
-    [filteredThreads],
-  );
+  const unpinnedThreads = useMemo(() => {
+    const next = filteredThreads.filter((thread) => thread.user_pinned_thread !== true);
+    next.sort((a, b) => {
+      if (threadSortMode === "unread") {
+        const aUnread = unreadThreadIds.has(a.id);
+        const bUnread = unreadThreadIds.has(b.id);
+        if (aUnread !== bUnread) {
+          return aUnread ? -1 : 1;
+        }
+      }
+      return compareThreadsByLastMessageAt(a, b);
+    });
+    return next;
+  }, [filteredThreads, threadSortMode, unreadThreadIds]);
+
+  const onSelectThreadSortMode = useCallback((mode: ThreadSortMode) => {
+    setThreadSortMode(mode);
+    writeThreadSortMode(mode);
+    setIsSortMenuOpen(false);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isSortMenuOpen) {
+      setSortMenuAnchor(null);
+      return;
+    }
+    const button = sortButtonRef.current;
+    if (!button) {
+      setSortMenuAnchor(null);
+      return;
+    }
+
+    const updateAnchor = () => {
+      const rect = button.getBoundingClientRect();
+      const left = Math.min(
+        Math.max(8, rect.right - SORT_MENU_WIDTH_PX),
+        Math.max(8, window.innerWidth - SORT_MENU_WIDTH_PX - 8),
+      );
+      setSortMenuAnchor({
+        left,
+        top: rect.bottom + SORT_MENU_GAP_PX,
+      });
+    };
+
+    updateAnchor();
+    window.addEventListener("resize", updateAnchor);
+    window.addEventListener("scroll", updateAnchor, true);
+    return () => {
+      window.removeEventListener("resize", updateAnchor);
+      window.removeEventListener("scroll", updateAnchor, true);
+    };
+  }, [isSortMenuOpen]);
   const optionsMenuThread = useMemo(
     () =>
       optionsMenu
@@ -775,13 +885,27 @@ export default function Messages({
               </button>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => onOpenCreateChat()}
-            aria-label="New message"
-          >
-            <NewChatIcon className="h-6 w-6 text-accent" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              ref={sortButtonRef}
+              type="button"
+              onClick={() => {
+                setIsSortMenuOpen((open) => !open);
+              }}
+              className="rounded-md p-0.5 text-muted transition hover:text-foreground"
+              aria-label="Sort chats"
+              aria-expanded={isSortMenuOpen}
+            >
+              <SortIcon className="h-5 w-5 shrink-0" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenCreateChat()}
+              aria-label="New message"
+            >
+              <NewChatIcon className="h-6 w-6 text-accent" />
+            </button>
+          </div>
         </header>
       </div>
 
@@ -1070,6 +1194,50 @@ export default function Messages({
           void setThreadPinned(optionsMenuThread, pinned);
         }}
       />
+
+      {sortMenuAnchor ? (
+        <BlurOptionsList
+          open={isSortMenuOpen}
+          onClose={() => {
+            setIsSortMenuOpen(false);
+          }}
+          ariaLabel="Sort chats"
+          zIndex={SORT_MENU_OVERLAY_Z}
+          left={sortMenuAnchor.left}
+          top={sortMenuAnchor.top}
+        >
+          <BlurOptionsListItem
+            className="justify-between"
+            aria-checked={threadSortMode === "unread"}
+            role="menuitemradio"
+            onClick={() => {
+              onSelectThreadSortMode("unread");
+            }}
+          >
+            Unread
+            {threadSortMode === "unread" ? (
+              <CheckIcon className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+            ) : (
+              <span className="h-4 w-4 shrink-0" aria-hidden />
+            )}
+          </BlurOptionsListItem>
+          <BlurOptionsListItem
+            className="justify-between"
+            aria-checked={threadSortMode === "last_updated"}
+            role="menuitemradio"
+            onClick={() => {
+              onSelectThreadSortMode("last_updated");
+            }}
+          >
+            Last Updated
+            {threadSortMode === "last_updated" ? (
+              <CheckIcon className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+            ) : (
+              <span className="h-4 w-4 shrink-0" aria-hidden />
+            )}
+          </BlurOptionsListItem>
+        </BlurOptionsList>
+      ) : null}
     </div>
   );
 }

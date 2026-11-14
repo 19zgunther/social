@@ -241,6 +241,7 @@ export async function POST(request: Request) {
           image_url: null,
           image_access_grant: imageAccessGrantByThreadId.get(thread.id) ?? null,
           last_message_preview,
+          last_message_at: latest ? latest.created_at.toISOString() : null,
         };
       }),
     };
