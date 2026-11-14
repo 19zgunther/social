@@ -8,6 +8,7 @@ import {
 } from "@/app/types/interfaces";
 import { useMemo } from "react";
 import { Mode, MOBILE_FRAME_STYLE, APP_VIEWPORT_STYLE } from "@/app/components/utils";
+import { reportClientError } from "@/app/lib/errorReport";
 import { DEFAULT_THEME, persistAndApplyTheme } from "@/app/lib/theme";
 import TetrisBackdrop from "@/app/components/games/tetris/TetrisBackdrop";
 import { Button, TextField } from "@/app/ui-components";
@@ -65,7 +66,15 @@ export default function SignUpPage({
             });
 
             if (!response.ok) {
-                setStatusMessage(await readApiError(response));
+                const message = await readApiError(response);
+                if (response.status >= 500) {
+                    reportClientError(
+                        "login_client",
+                        new Error(`login HTTP ${response.status}: ${message}`),
+                        { httpStatus: response.status, identifier },
+                    );
+                }
+                setStatusMessage(message);
                 return;
             }
 
@@ -73,6 +82,9 @@ export default function SignUpPage({
             persistAndApplyTheme(payload.user.theme_info ?? DEFAULT_THEME);
             setAuthUser(payload.user);
             setStatusMessage("");
+        } catch (error) {
+            reportClientError("login_client", error, { identifier });
+            setStatusMessage(error instanceof Error ? error.message : "Failed to log in.");
         } finally {
             setIsSubmitting(false);
         }
@@ -118,7 +130,15 @@ export default function SignUpPage({
             });
 
             if (!response.ok) {
-                setStatusMessage(await readApiError(response));
+                const message = await readApiError(response);
+                if (response.status >= 500) {
+                    reportClientError(
+                        "signup_client",
+                        new Error(`signup HTTP ${response.status}: ${message}`),
+                        { httpStatus: response.status, user_name: username, identifier: email },
+                    );
+                }
+                setStatusMessage(message);
                 return;
             }
 
@@ -126,6 +146,12 @@ export default function SignUpPage({
             persistAndApplyTheme(payload.user.theme_info ?? DEFAULT_THEME);
             setAuthUser(payload.user);
             setStatusMessage("");
+        } catch (error) {
+            reportClientError("signup_client", error, {
+                user_name: username,
+                identifier: email,
+            });
+            setStatusMessage(error instanceof Error ? error.message : "Failed to sign up.");
         } finally {
             setIsSubmitting(false);
         }

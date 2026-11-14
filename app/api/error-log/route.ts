@@ -2,16 +2,17 @@ import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { logError } from "@/app/lib/errorLog";
 
+/** Keys allowed without a session (pre-auth flows). */
+const UNAUTH_KEYS = new Set(["login_client", "signup_client"]);
+
 type Body = {
   key?: string;
   message?: string;
+  user_name?: string;
 };
 
 export async function POST(request: Request) {
   const authResult = authCheck(request);
-  if (authResult.error) {
-    return NextResponse.json({ error: authResult.error }, { status: 401 });
-  }
 
   try {
     const body = (await request.json()) as Body;
@@ -27,6 +28,19 @@ export async function POST(request: Request) {
         },
         { status: 400 },
       );
+    }
+
+    if (authResult.error) {
+      if (!UNAUTH_KEYS.has(key.trim())) {
+        return NextResponse.json({ error: authResult.error }, { status: 401 });
+      }
+      await logError({
+        userId: null,
+        userName: typeof body.user_name === "string" ? body.user_name : "anonymous",
+        key,
+        message,
+      });
+      return NextResponse.json({ ok: true }, { status: 200 });
     }
 
     await logError({

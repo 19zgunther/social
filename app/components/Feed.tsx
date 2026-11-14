@@ -5,6 +5,7 @@ import FriendSearchButton from "@/app/components/FriendSearchButton";
 import { PostSection} from "@/app/components/PostSection";
 import PostOptionsPane from "@/app/components/PostOptionsPane";
 import { ApiError, FeedPostsListResponse, PostItem, PostData } from "@/app/types/interfaces";
+import { reportClientError } from "@/app/lib/errorReport";
 import { useStateCached } from "./useStateCached";
 import Loader from "@/app/components/Loader";
 const FEED_CACHE_KEY = "feed_cache_v4";
@@ -85,7 +86,13 @@ export default function Feed({
           ...(cursor ? { cursor } : {}),
         });
         if (!response.ok) {
-          setStatusMessage(await readErrorMessage(response));
+          const message = await readErrorMessage(response);
+          reportClientError(
+            "feed_posts_client",
+            new Error(`feed-posts-list HTTP ${response.status}: ${message}`),
+            { cursor: cursor ?? null, httpStatus: response.status },
+          );
+          setStatusMessage(message);
           return;
         }
 
@@ -105,6 +112,7 @@ export default function Feed({
           setPosts(payload.posts);
         }
       } catch (error) {
+        reportClientError("feed_posts_client", error, { cursor: cursor ?? null });
         setStatusMessage(error instanceof Error ? error.message : "Failed to load feed.");
       } finally {
         isLoadingMoreRef.current = false;

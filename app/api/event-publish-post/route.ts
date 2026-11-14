@@ -18,6 +18,7 @@ import {
   userCanAdminThreadEvent,
   userIsEventCohost,
 } from "@/app/lib/threadEvents";
+import { logErrorDump } from "@/app/lib/errorLog";
 import type {
   EventPublishPostRequest,
   EventPublishPostResponse,
@@ -243,6 +244,12 @@ export async function POST(request: Request) {
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("event_publish_post_failed", error);
+    void logErrorDump({
+      userId: authResult.user_id,
+      userName: authResult.username,
+      key: "event_publish_post",
+      error,
+    });
     return NextResponse.json(
       { error: { code: "event_publish_post_failed", message: "Failed to publish event album." } },
       { status: 500 },

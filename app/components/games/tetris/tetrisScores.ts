@@ -3,6 +3,7 @@ import type {
   GameScoreSubmitResponse,
   GameScoresLeaderboardResponse,
 } from "@/app/types/interfaces";
+import { reportClientError } from "@/app/lib/errorReport";
 
 export const TETRIS_GAME = "tetris";
 export const TETRIS_LEVEL = "global";
@@ -28,9 +29,23 @@ export async function submitTetrisScore(score: number): Promise<GameScoreSubmitR
       body: JSON.stringify({ game: TETRIS_GAME, level: TETRIS_LEVEL, score }),
       keepalive: true,
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      if (response.status !== 409) {
+        reportClientError(
+          "game_score_submit_client",
+          new Error(`game-score-submit HTTP ${response.status}`),
+          { game: TETRIS_GAME, level: TETRIS_LEVEL, score, httpStatus: response.status },
+        );
+      }
+      return null;
+    }
     return (await response.json()) as GameScoreSubmitResponse;
-  } catch {
+  } catch (error) {
+    reportClientError("game_score_submit_client", error, {
+      game: TETRIS_GAME,
+      level: TETRIS_LEVEL,
+      score,
+    });
     return null;
   }
 }

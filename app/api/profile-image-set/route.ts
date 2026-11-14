@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { authCheck } from "@/app/api/auth_utils";
+import { logErrorDump } from "@/app/lib/errorLog";
 import { prisma } from "@/app/lib/prisma";
 import {
   getSignedMainBucketImageUrl,
@@ -70,6 +71,12 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("profile_image_set_failed", error);
+    void logErrorDump({
+      userId: authResult.user_id,
+      userName: authResult.username,
+      key: "profile_image_set",
+      error,
+    });
     return NextResponse.json(
       { error: { code: "profile_image_set_failed", message: "Failed to set profile image." } },
       { status: 500 },

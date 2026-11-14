@@ -11,6 +11,7 @@ import {
   dailyLevelNumberForDate,
   easternDateString,
 } from "@/app/lib/easternDate";
+import { reportClientError } from "@/app/lib/errorReport";
 import { WORK_GOLF_GAME, levelIdForNumber } from "./workGolfEngine";
 
 export { WORK_GOLF_GAME };
@@ -28,20 +29,35 @@ export async function submitWorkGolfScore(
   score: number,
 ): Promise<GameScoreSubmitResponse | null> {
   if (!Number.isInteger(score) || score < 0) return null;
+  const level = levelIdForNumber(levelNumber);
   try {
     const response = await fetch("/api/game-score-submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         game: WORK_GOLF_GAME,
-        level: levelIdForNumber(levelNumber),
+        level,
         score,
       }),
       keepalive: true,
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      if (response.status !== 409) {
+        reportClientError(
+          "game_score_submit_client",
+          new Error(`game-score-submit HTTP ${response.status}`),
+          { game: WORK_GOLF_GAME, level, score, httpStatus: response.status },
+        );
+      }
+      return null;
+    }
     return (await response.json()) as GameScoreSubmitResponse;
-  } catch {
+  } catch (error) {
+    reportClientError("game_score_submit_client", error, {
+      game: WORK_GOLF_GAME,
+      level,
+      score,
+    });
     return null;
   }
 }
@@ -62,9 +78,30 @@ export async function submitWorkGolfDailyScore(
       }),
       keepalive: true,
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      if (response.status !== 409) {
+        reportClientError(
+          "game_score_submit_client",
+          new Error(`game-score-submit HTTP ${response.status}`),
+          {
+            game: WORK_GOLF_GAME,
+            level: "daily",
+            score,
+            daily: true,
+            httpStatus: response.status,
+          },
+        );
+      }
+      return null;
+    }
     return (await response.json()) as GameScoreSubmitResponse;
-  } catch {
+  } catch (error) {
+    reportClientError("game_score_submit_client", error, {
+      game: WORK_GOLF_GAME,
+      level: "daily",
+      score,
+      daily: true,
+    });
     return null;
   }
 }

@@ -7,6 +7,7 @@ import {
   normalizeScore,
   WORK_GOLF_DAILY_LEVEL_ID,
 } from "@/app/lib/gameScores";
+import { logErrorDump } from "@/app/lib/errorLog";
 import type { GameScoreSubmitRequest, GameScoreSubmitResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -70,6 +71,12 @@ export async function POST(request: Request) {
       );
     }
     console.error("game_score_submit_failed", error);
+    void logErrorDump({
+      userId: authResult.user_id,
+      userName: authResult.username,
+      key: "game_score_submit",
+      error,
+    });
     return NextResponse.json(
       { error: { code: "internal_error", message: "Failed to save score." } },
       { status: 500 },

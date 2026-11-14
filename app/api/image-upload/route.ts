@@ -15,6 +15,7 @@ import type {
   ImageUploadSignRequest,
   ImageUploadSignResponse,
 } from "@/app/types/interfaces";
+import { logErrorDump } from "@/app/lib/errorLog";
 import { isAllowedVideoMimeType } from "@/app/lib/postMedia";
 
 const UUID_RE =
@@ -166,6 +167,12 @@ export async function POST(request: Request) {
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("image_upload_failed", error);
+    void logErrorDump({
+      userId: authResult.user_id,
+      userName: authResult.username,
+      key: "image_upload",
+      error,
+    });
     return NextResponse.json(
       { error: { code: "image_upload_failed", message: "Failed to upload image." } },
       { status: 500 },

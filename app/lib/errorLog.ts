@@ -1,10 +1,10 @@
+import { ERROR_LOG_MESSAGE_MAX, formatErrorDump } from "@/app/lib/errorReport";
 import { prisma } from "@/app/lib/prisma";
 
 const ERROR_LOG_KEY_MAX = 120;
-const ERROR_LOG_MESSAGE_MAX = 4000;
 
 export type LogErrorInput = {
-  userId: string;
+  userId: string | null;
   userName: string;
   key: string;
   message: string;
@@ -14,8 +14,8 @@ export type LogErrorInput = {
 export async function logError(input: LogErrorInput): Promise<void> {
   const key = input.key.trim().slice(0, ERROR_LOG_KEY_MAX);
   const message = input.message.trim().slice(0, ERROR_LOG_MESSAGE_MAX);
-  const userName = input.userName.trim().slice(0, 200);
-  if (!input.userId || !userName || !key || !message) {
+  const userName = (input.userName.trim() || "anonymous").slice(0, 200);
+  if (!key || !message) {
     return;
   }
 
@@ -31,4 +31,20 @@ export async function logError(input: LogErrorInput): Promise<void> {
   } catch (error) {
     console.error("error_log_insert_failed", key, error);
   }
+}
+
+/** Convenience: dump stack/context then insert. Never throws. */
+export async function logErrorDump(input: {
+  userId: string | null;
+  userName: string;
+  key: string;
+  error: unknown;
+  context?: Record<string, unknown>;
+}): Promise<void> {
+  await logError({
+    userId: input.userId,
+    userName: input.userName,
+    key: input.key,
+    message: formatErrorDump(input.error, input.context),
+  });
 }

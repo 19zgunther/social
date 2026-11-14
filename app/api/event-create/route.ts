@@ -9,6 +9,7 @@ import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { sendPushToUsers } from "@/app/lib/push_notifications";
 import { validateSharedPostDates } from "@/app/lib/sharedPosts";
 import { finalizeThreadEventItem } from "@/app/lib/threadEvents";
+import { logErrorDump } from "@/app/lib/errorLog";
 import type { EventCreateRequest, EventCreateResponse } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -294,6 +295,12 @@ export async function POST(request: Request) {
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("event_create_failed", error);
+    void logErrorDump({
+      userId: authResult.user_id,
+      userName: authResult.username,
+      key: "event_create",
+      error,
+    });
     return NextResponse.json(
       { error: { code: "event_create_failed", message: "Failed to create event." } },
       { status: 500 },

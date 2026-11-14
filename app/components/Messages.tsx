@@ -16,6 +16,7 @@ import {
   ThreadItem,
 } from "@/app/types/interfaces";
 import { readCacheValue, writeCacheValue } from "@/app/lib/cacheSystem";
+import { reportClientError } from "@/app/lib/errorReport";
 import ThreadAvatar from "@/app/components/ThreadAvatar";
 import {
   CloseIcon,
@@ -201,7 +202,13 @@ export default function Messages({
     try {
       const response = await postWithAuth("/api/messages-list", {});
       if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
+        const message = await readErrorMessage(response);
+        reportClientError(
+          "messages_list_client",
+          new Error(`messages-list refresh HTTP ${response.status}: ${message}`),
+          { httpStatus: response.status, refresh: true },
+        );
+        setStatusMessage(message);
         return;
       }
       const payload = (await response.json()) as MessagesListResponse;
@@ -209,6 +216,7 @@ export default function Messages({
       void writeMessagesCache(payload.threads);
       void loadUnreadThreads();
     } catch (error) {
+      reportClientError("messages_list_client", error, { refresh: true });
       setStatusMessage(error instanceof Error ? error.message : "Failed to refresh messages.");
     } finally {
       setIsRefreshingList(false);
@@ -318,7 +326,13 @@ export default function Messages({
 
         const response = await postWithAuth("/api/messages-list", {});
         if (!response.ok) {
-          setStatusMessage(await readErrorMessage(response));
+          const message = await readErrorMessage(response);
+          reportClientError(
+            "messages_list_client",
+            new Error(`messages-list HTTP ${response.status}: ${message}`),
+            { httpStatus: response.status },
+          );
+          setStatusMessage(message);
           setThreads([]);
           return;
         }
@@ -328,6 +342,7 @@ export default function Messages({
         void writeMessagesCache(payload.threads);
         void loadUnreadThreads();
       } catch (error) {
+        reportClientError("messages_list_client", error);
         setStatusMessage(error instanceof Error ? error.message : "Failed to load messages.");
         setThreads([]);
       } finally {

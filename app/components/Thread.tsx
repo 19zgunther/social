@@ -23,6 +23,7 @@ import CachedImage from "@/app/components/utils/CachedImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import VideoCall from "@/app/components/VideoCall";
+import { reportClientError } from "@/app/lib/errorReport";
 import {
   ThreadMessageBubbleContent,
   threadMessageBubbleShellClassName,
@@ -439,7 +440,13 @@ export default function Thread({
         const response = await postWithAuth("/api/thread-messages", { thread_id: thread.id });
         if (!response.ok) {
           if (!isCancelled) {
-            setStatusMessage(await readErrorMessage(response));
+            const message = await readErrorMessage(response);
+            reportClientError(
+              "thread_messages_client",
+              new Error(`thread-messages HTTP ${response.status}: ${message}`),
+              { thread_id: thread.id, httpStatus: response.status },
+            );
+            setStatusMessage(message);
             setMessages([]);
           }
         } else {
@@ -468,6 +475,7 @@ export default function Thread({
         }
       } catch (error) {
         if (!isCancelled) {
+          reportClientError("thread_messages_client", error, { thread_id: thread.id });
           setStatusMessage(error instanceof Error ? error.message : "Failed to load thread.");
           setMessages([]);
         }
@@ -541,7 +549,17 @@ export default function Thread({
       });
 
       if (!response.ok) {
-        setStatusMessage(await readErrorMessage(response));
+        const message = await readErrorMessage(response);
+        reportClientError(
+          "thread_messages_client",
+          new Error(`thread-messages older HTTP ${response.status}: ${message}`),
+          {
+            thread_id: selectedThread.id,
+            cursor_message_id: oldestLoadedMessageId,
+            httpStatus: response.status,
+          },
+        );
+        setStatusMessage(message);
         return;
       }
 
@@ -562,6 +580,11 @@ export default function Thread({
         activeContainer.scrollTop = newScrollHeight - previousScrollHeight + previousScrollTop;
       });
     } catch (error) {
+      reportClientError("thread_messages_client", error, {
+        thread_id: selectedThread.id,
+        cursor_message_id: oldestLoadedMessageId,
+        older: true,
+      });
       setStatusMessage(error instanceof Error ? error.message : "Failed to load older messages.");
     } finally {
       setIsLoadingOlderMessages(false);
@@ -931,6 +954,11 @@ export default function Thread({
         clearDraftOnSuccess: true,
       });
     } catch (error) {
+      reportClientError("thread_send_client", error, {
+        kind: "text",
+        thread_id: selectedThread.id,
+        textLength: messageDraft.trim().length,
+      });
       setStatusMessage(error instanceof Error ? error.message : "Failed to send message.");
     }
   };
@@ -960,6 +988,10 @@ export default function Thread({
         clearDraftOnSuccess: false,
       });
     } catch (error) {
+      reportClientError("thread_send_client", error, {
+        kind: "emoji",
+        thread_id: selectedThread.id,
+      });
       setStatusMessage(error instanceof Error ? error.message : "Failed to send emoji.");
     }
   };
@@ -985,6 +1017,12 @@ export default function Thread({
         clearDraftOnSuccess: false,
       });
     } catch (error) {
+      reportClientError("thread_send_client", error, {
+        kind: "photo",
+        thread_id: selectedThread.id,
+        fileType: payload.file.type,
+        fileSize: payload.file.size,
+      });
       setStatusMessage(error instanceof Error ? error.message : "Failed to send photo.");
       throw error;
     }

@@ -4,6 +4,7 @@ import { ChangeEvent, PointerEvent, useCallback, useEffect, useMemo, useRef, use
 import { ProfileImageRemoveResponse, ProfileImageSetResponse } from "@/app/types/interfaces";
 import { AddImageIcon, CloseIcon, DeleteIcon } from "@/app/components/Icons";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
+import { reportClientError } from "@/app/lib/errorReport";
 import { Button } from "@/app/ui-components";
 
 type ProfilePictureEditorProps = {
@@ -199,12 +200,23 @@ export default function ProfilePictureEditor({
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-        setStatusMessage(body.error?.message ?? "Failed to save profile image.");
+        const message = body.error?.message ?? "Failed to save profile image.";
+        reportClientError(
+          "profile_image_client",
+          new Error(`profile-image-set HTTP ${response.status}: ${message}`),
+          { httpStatus: response.status, setApiPath },
+        );
+        setStatusMessage(message);
         return;
       }
 
       const payload = (await response.json()) as Partial<ProfileImageSetResponse>;
       if (!payload.profile_image_id || !payload.profile_image_url) {
+        reportClientError(
+          "profile_image_client",
+          new Error("Profile image saved but URL was missing."),
+          { setApiPath },
+        );
         setStatusMessage("Profile image saved but URL was missing.");
         return;
       }
@@ -212,6 +224,7 @@ export default function ProfilePictureEditor({
       onSaved(payload.profile_image_id, payload.profile_image_url);
       onClose();
     } catch (error) {
+      reportClientError("profile_image_client", error, { setApiPath });
       setStatusMessage(error instanceof Error ? error.message : "Failed to save profile image.");
     } finally {
       setIsSaving(false);

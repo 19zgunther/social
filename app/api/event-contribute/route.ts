@@ -12,6 +12,7 @@ import {
   parseSharedPostMediaItems,
 } from "@/app/lib/sharedPosts";
 import { findThreadEventForMember } from "@/app/lib/threadEvents";
+import { logErrorDump } from "@/app/lib/errorLog";
 import type { EventContributeRequest, EventContributeResponse } from "@/app/types/interfaces";
 
 class ContributeFailureError extends Error {
@@ -159,6 +160,12 @@ export async function POST(request: Request) {
       return NextResponse.json(error.payload, { status: error.status });
     }
     console.error("event_contribute_failed", error);
+    void logErrorDump({
+      userId: authResult.user_id,
+      userName: authResult.username,
+      key: "event_contribute",
+      error,
+    });
     return NextResponse.json(
       { error: { code: "event_contribute_failed", message: "Failed to contribute to event." } },
       { status: 500 },

@@ -33,6 +33,7 @@ import {
   PostMediaItem,
   TierListViewerState,
 } from "@/app/types/interfaces";
+import { reportClientError } from "@/app/lib/errorReport";
 import { MAX_POST_MEDIA_ITEMS } from "@/app/lib/postMedia";
 import { DONT_SWIPE_TABS_CLASSNAME } from "./utils/useTabNavigation";
 import { IconButton, TextField } from "@/app/ui-components";
@@ -372,13 +373,6 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   } catch {
     return "Request failed.";
   }
-};
-
-const reportPostError = (message: string) => {
-  void postWithAuth("/api/error-log", {
-    key: "post_create_client",
-    message,
-  }).catch(() => {});
 };
 
 export default function CreatePostTab({
@@ -1018,6 +1012,19 @@ export default function CreatePostTab({
       setPostProgress((previous) => Math.max(previous ?? 0, timeProgress));
     }, 50);
 
+    const postDebugContext = () => ({
+      phase: "create" as string,
+      postKind,
+      mediaCount: mediaItems.length,
+      mediaKinds: mediaItems.map((item) => item.kind),
+      audienceMode: audience.mode,
+      hasText: comment.trim().length > 0,
+      completedSteps,
+      totalSteps,
+      elapsedMs: Date.now() - startedAt,
+      online: typeof navigator !== "undefined" ? navigator.onLine : null,
+    });
+
     try {
       const uploadedMedia: PostMediaItem[] = [];
       for (const item of mediaItems) {
@@ -1034,7 +1041,11 @@ export default function CreatePostTab({
           );
           if (!payload.image_id) {
             const message = "Image upload failed.";
-            reportPostError(message);
+            reportClientError("post_create_client", new Error(message), {
+              ...postDebugContext(),
+              phase: "upload_image",
+              mimeType: baked.mimeType,
+            });
             setStatusMessage(message);
             return;
           }
@@ -1098,7 +1109,16 @@ export default function CreatePostTab({
       });
       if (!createResponse.ok) {
         const message = await readErrorMessage(createResponse);
-        reportPostError(`post-create ${createResponse.status}: ${message}`);
+        reportClientError(
+          "post_create_client",
+          new Error(`post-create HTTP ${createResponse.status}: ${message}`),
+          {
+            ...postDebugContext(),
+            phase: "create",
+            httpStatus: createResponse.status,
+            uploadedMediaCount: uploadedMedia.length,
+          },
+        );
         setStatusMessage(message);
         return;
       }
@@ -1138,7 +1158,10 @@ export default function CreatePostTab({
       onPosted();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create post.";
-      reportPostError(message);
+      reportClientError("post_create_client", error, {
+        ...postDebugContext(),
+        phase: completedSteps < mediaItems.length ? "upload" : "create_or_unknown",
+      });
       setStatusMessage(message);
     } finally {
       window.clearInterval(progressTickId);

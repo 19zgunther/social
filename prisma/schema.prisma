@@ -245,14 +245,15 @@ model bot_logs {
 }
 
 /// App/client error reports (e.g. failed post create). `user_name` is a denormalized copy of users.username at insert time.
+/// `user_id` is null for pre-auth reports (login/signup client failures).
 model error_log {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at DateTime @default(now()) @db.Timestamptz(6)
-  user_id    String   @db.Uuid
+  user_id    String?  @db.Uuid
   user_name  String
   key        String
   message    String
-  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users      users?   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([created_at(sort: Desc)])
   @@index([user_id, created_at(sort: Desc)])

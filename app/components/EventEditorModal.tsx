@@ -16,6 +16,7 @@ import AnimatedModal, { useAnimatedModal } from "@/app/components/utils/Animated
 import CachedImage from "@/app/components/utils/CachedImage";
 import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
 import DestructiveConfirmAnimatedModal from "@/app/components/utils/DestructiveConfirmAnimatedModal";
+import { reportClientError } from "@/app/lib/errorReport";
 import { Button, IconButton } from "@/app/ui-components";
 import type {
   ApiError,
@@ -589,7 +590,18 @@ export default function EventEditorModal({
 
         const response = await postWithAuth("/api/event-create", requestBody);
         if (!response.ok) {
-          setError(await readErrorMessage(response));
+          const message = await readErrorMessage(response);
+          reportClientError(
+            "event_create_client",
+            new Error(`event-create HTTP ${response.status}: ${message}`),
+            {
+              httpStatus: response.status,
+              blindReveal,
+              inviteeCount: selectedInvitees.length,
+              backgroundKind: background.kind,
+            },
+          );
+          setError(message);
           return;
         }
         const payload = (await response.json()) as EventCreateResponse;
@@ -665,6 +677,12 @@ export default function EventEditorModal({
       onUpdated?.(updatedEvent);
       onClose();
     } catch (e) {
+      if (mode === "create") {
+        reportClientError("event_create_client", e, {
+          blindReveal,
+          inviteeCount: selectedInvitees.length,
+        });
+      }
       setError(
         e instanceof Error
           ? e.message

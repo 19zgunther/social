@@ -8,6 +8,7 @@ import { sendPushToUsers } from "@/app/lib/push_notifications";
 import { sanitizeNotificationText } from "@/app/lib/notification_text";
 import { createMainBucketImageAccessGrantAsync } from "@/app/api/image_access_grant";
 import { uploadImageToMainBucket } from "@/app/api/server_file_storage_utils";
+import { logErrorDump } from "@/app/lib/errorLog";
 import {
   MessageData,
   ThreadSendRequest,
@@ -271,6 +272,12 @@ export async function POST(request: Request) {
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("thread_send_failed", error);
+    void logErrorDump({
+      userId: authResult.user_id,
+      userName: authResult.username,
+      key: "thread_send",
+      error,
+    });
     return NextResponse.json(
       { error: { code: "thread_send_failed", message: "Failed to send message." } },
       { status: 500 },

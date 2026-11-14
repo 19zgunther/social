@@ -3,6 +3,7 @@ import type {
   ImageUploadResponse,
   ImageUploadSignResponse,
 } from "@/app/types/interfaces";
+import { reportClientError } from "@/app/lib/errorReport";
 import {
   isAllowedVideoMimeType,
   MAX_VIDEO_BYTES,
@@ -129,30 +130,52 @@ const uploadBlobWithSignedFlow = async (
   postWithAuth: (path: string, body: unknown) => Promise<Response>,
   failureLabels: { start: string; finalize: string },
 ): Promise<ImageUploadResponse> => {
-  const signResponse = await postWithAuth("/api/image-upload", {
-    phase: "sign",
-    image_mime_type: mimeType,
-  });
-  if (!signResponse.ok) {
-    throw new Error(await readApiErrorMessage(signResponse, failureLabels.start));
+  let phase: "sign" | "put" | "complete" = "sign";
+  let imageId: string | null = null;
+  try {
+    const signResponse = await postWithAuth("/api/image-upload", {
+      phase: "sign",
+      image_mime_type: mimeType,
+    });
+    if (!signResponse.ok) {
+      throw new Error(
+        await readApiErrorMessage(signResponse, `${failureLabels.start} (HTTP ${signResponse.status})`),
+      );
+    }
+
+    const signPayload = (await signResponse.json()) as ImageUploadSignResponse;
+    if (!signPayload.signed_upload_url || !signPayload.image_id) {
+      throw new Error("Invalid sign response from server.");
+    }
+    imageId = signPayload.image_id;
+
+    phase = "put";
+    await uploadBlobToSignedUploadUrl(signPayload.signed_upload_url, blob, mimeType);
+
+    phase = "complete";
+    const completeResponse = await postWithAuth("/api/image-upload", {
+      phase: "complete",
+      image_id: signPayload.image_id,
+    });
+    if (!completeResponse.ok) {
+      throw new Error(
+        await readApiErrorMessage(
+          completeResponse,
+          `${failureLabels.finalize} (HTTP ${completeResponse.status})`,
+        ),
+      );
+    }
+
+    return (await completeResponse.json()) as ImageUploadResponse;
+  } catch (error) {
+    reportClientError("media_upload_client", error, {
+      phase,
+      mimeType,
+      byteLength: blob.size,
+      image_id: imageId,
+    });
+    throw error;
   }
-
-  const signPayload = (await signResponse.json()) as ImageUploadSignResponse;
-  if (!signPayload.signed_upload_url || !signPayload.image_id) {
-    throw new Error("Invalid sign response from server.");
-  }
-
-  await uploadBlobToSignedUploadUrl(signPayload.signed_upload_url, blob, mimeType);
-
-  const completeResponse = await postWithAuth("/api/image-upload", {
-    phase: "complete",
-    image_id: signPayload.image_id,
-  });
-  if (!completeResponse.ok) {
-    throw new Error(await readApiErrorMessage(completeResponse, failureLabels.finalize));
-  }
-
-  return (await completeResponse.json()) as ImageUploadResponse;
 };
 
 /**

@@ -4,7 +4,8 @@
 CREATE TABLE IF NOT EXISTS "error_log" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
-  "user_id" UUID NOT NULL,
+  -- Nullable so login/signup client failures can be recorded before auth.
+  "user_id" UUID,
   "user_name" TEXT NOT NULL,
   "key" TEXT NOT NULL,
   "message" TEXT NOT NULL,

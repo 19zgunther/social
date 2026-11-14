@@ -21,6 +21,7 @@ import {
   uploadPreparedVideoToMainBucket,
 } from "@/app/components/utils/client_file_storage_utils";
 import { useAnimatedModal } from "@/app/components/utils/AnimatedModal";
+import { reportClientError } from "@/app/lib/errorReport";
 import {
   canContributeToEventAlbum,
   getEventAlbumPhase,
@@ -561,12 +562,27 @@ export default function ThreadEventPage({
       const requestBody: EventContributeRequest = { event_id: local.id, media: uploaded };
       const response = await postJson("/api/event-contribute", requestBody);
       if (!response.ok) {
-        onNotify?.(await readErrorMessage(response));
+        const message = await readErrorMessage(response);
+        reportClientError(
+          "event_contribute_client",
+          new Error(`event-contribute HTTP ${response.status}: ${message}`),
+          {
+            event_id: local.id,
+            httpStatus: response.status,
+            uploadedCount: uploaded.length,
+            fileCount: files.length,
+          },
+        );
+        onNotify?.(message);
         return;
       }
       onNotify?.("Added to the album.");
       await fetchEventPageData(true);
     } catch (err) {
+      reportClientError("event_contribute_client", err, {
+        event_id: local.id,
+        fileCount: files.length,
+      });
       onNotify?.(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setAlbumBusy(false);
@@ -583,7 +599,13 @@ export default function ThreadEventPage({
     try {
       const response = await postJson("/api/event-publish-post", { event_id: local.id });
       if (!response.ok) {
-        onNotify?.(await readErrorMessage(response));
+        const message = await readErrorMessage(response);
+        reportClientError(
+          "event_publish_post_client",
+          new Error(`event-publish-post HTTP ${response.status}: ${message}`),
+          { event_id: local.id, httpStatus: response.status },
+        );
+        onNotify?.(message);
         return;
       }
       const payload = (await response.json()) as EventPublishPostResponse;
@@ -592,6 +614,7 @@ export default function ThreadEventPage({
       writePageCache(payload.event.id, members, payload.event);
       onNotify?.("Published to the feed.");
     } catch (err) {
+      reportClientError("event_publish_post_client", err, { event_id: local.id });
       onNotify?.(err instanceof Error ? err.message : "Failed to publish.");
     } finally {
       setPublishBusy(false);

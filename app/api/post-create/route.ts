@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authCheck } from "@/app/api/auth_utils";
 import { createPostForUser } from "@/app/lib/createPostForUser";
-import { logError } from "@/app/lib/errorLog";
+import { logErrorDump } from "@/app/lib/errorLog";
 import { PostCreateRequest } from "@/app/types/interfaces";
 
 export async function POST(request: Request) {
@@ -20,22 +20,29 @@ export async function POST(request: Request) {
       body,
     });
     if (!result.ok) {
-      void logError({
+      void logErrorDump({
         userId: authResult.user_id,
         userName: authResult.username,
         key: "post_create",
-        message: `${result.error.code}: ${result.error.message}`,
+        error: new Error(`${result.error.code}: ${result.error.message}`),
+        context: {
+          status: result.status,
+          audience: body.audience ?? null,
+          has_text: Boolean(body.text?.trim()),
+          has_data: Boolean(body.data),
+          has_legacy_image: Boolean(body.image_id || body.image_base64_data),
+        },
       });
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
     return NextResponse.json(result.response, { status: 200 });
   } catch (error) {
     console.error("post_create_failed", error);
-    void logError({
+    void logErrorDump({
       userId: authResult.user_id,
       userName: authResult.username,
       key: "post_create",
-      message: error instanceof Error ? error.message : "Failed to create post.",
+      error,
     });
     return NextResponse.json(
       { error: { code: "post_create_failed", message: "Failed to create post." } },
