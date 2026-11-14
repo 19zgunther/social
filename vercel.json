@@ -2,10 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/bot-cron",
-      "schedule": "0 13 * * *"
-    },
-    {
       "path": "/api/game-daily-nudge-cron",
       "schedule": "0 16,17 * * *"
     }
