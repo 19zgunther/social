@@ -15,6 +15,13 @@ import {
   fetchTetrisLeaderboard,
   submitTetrisScore,
 } from "./tetrisScores";
+import {
+  addTetrisPlayTime,
+  formatTetrisPlayRemaining,
+  getTetrisPlayedMsToday,
+  isTetrisDailyLimitReached,
+  TETRIS_DAILY_LIMIT_MS,
+} from "./tetrisPlayTime";
 import TetrisBackdrop from "./TetrisBackdrop";
 
 type MenuScreen = "title" | "playing" | "paused" | "gameover" | "highscores" | "controls";
@@ -76,6 +83,13 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   const [confirmRestart, setConfirmRestart] = useState(false);
   const [playLayout, setPlayLayout] = useState<TetrisLayout | null>(null);
   const playLayoutRef = useRef<TetrisLayout | null>(null);
+  const [dailyLimitReached, setDailyLimitReached] = useState(false);
+  const [playRemainingLabel, setPlayRemainingLabel] = useState(() =>
+    typeof window === "undefined" ? "30 min" : formatTetrisPlayRemaining(),
+  );
+  /** Accrued since last localStorage flush (playing ticks only). */
+  const pendingPlayMsRef = useRef(0);
+  const playFlushAccRef = useRef(0);
 
   const syncPlayLayout = useEffectEvent((layout: TetrisLayout) => {
     const prev = playLayoutRef.current;
@@ -118,6 +132,47 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     }
   });
 
+  const refreshPlayBudget = useEffectEvent(() => {
+    const played = getTetrisPlayedMsToday();
+    setPlayRemainingLabel(formatTetrisPlayRemaining(played));
+    setDailyLimitReached(played >= TETRIS_DAILY_LIMIT_MS);
+  });
+
+  const flushPlayTime = useEffectEvent(() => {
+    const pending = pendingPlayMsRef.current;
+    if (pending <= 0) return getTetrisPlayedMsToday();
+    pendingPlayMsRef.current = 0;
+    playFlushAccRef.current = 0;
+    const total = addTetrisPlayTime(pending);
+    setPlayRemainingLabel(formatTetrisPlayRemaining(total));
+    setDailyLimitReached(total >= TETRIS_DAILY_LIMIT_MS);
+    return total;
+  });
+
+  /** Save score and kick the player out of the active round when the daily cap hits. */
+  const enforceDailyLimit = useEffectEvent(() => {
+    if (screenRef.current !== "playing" && screenRef.current !== "paused") {
+      refreshPlayBudget();
+      return;
+    }
+    flushPlayTime();
+    stopLoop();
+    softDropTouchRef.current = false;
+    touchLeftRef.current = false;
+    touchRightRef.current = false;
+    keysRef.current.clear();
+    void (async () => {
+      await recordCurrentRun();
+      setConfirmRestart(false);
+      setGameOverInfo(null);
+      screenRef.current = "title";
+      setScreen("title");
+      setDailyLimitReached(true);
+      setPlayRemainingLabel(formatTetrisPlayRemaining(TETRIS_DAILY_LIMIT_MS));
+      paint();
+    })();
+  });
+
   /** Persist the current run once (quit / restart / game over / unmount). */
   const recordCurrentRun = useEffectEvent(async (): Promise<GameOverInfo | null> => {
     const engine = engineRef.current;
@@ -138,6 +193,7 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   const handleGameOver = useEffectEvent(() => {
     // Flip screenRef sync so RAF / hard-drop cannot re-enter during score submit.
     if (screenRef.current !== "playing") return;
+    flushPlayTime();
     screenRef.current = "gameover";
     stopLoop();
     void (async () => {
@@ -161,6 +217,16 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     const last = lastTsRef.current ?? ts;
     const dt = Math.min(50, ts - last);
     lastTsRef.current = ts;
+
+    pendingPlayMsRef.current += dt;
+    playFlushAccRef.current += dt;
+    if (playFlushAccRef.current >= 1000) {
+      const total = flushPlayTime();
+      if (total >= TETRIS_DAILY_LIMIT_MS) {
+        enforceDailyLimit();
+        return;
+      }
+    }
 
     // DAS / ARR for left-right hold (keyboard + touch)
     const keys = keysRef.current;
@@ -213,6 +279,9 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   });
 
   const setMenuScreen = (next: MenuScreen) => {
+    if (screenRef.current === "playing" && next !== "playing") {
+      flushPlayTime();
+    }
     screenRef.current = next;
     setScreen(next);
     if (next === "playing") {
@@ -231,6 +300,17 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   });
 
   const startGame = useEffectEvent(() => {
+    flushPlayTime();
+    if (isTetrisDailyLimitReached()) {
+      setDailyLimitReached(true);
+      setPlayRemainingLabel(formatTetrisPlayRemaining(TETRIS_DAILY_LIMIT_MS));
+      if (screenRef.current === "playing" || screenRef.current === "paused") {
+        enforceDailyLimit();
+      } else {
+        setMenuScreen("title");
+      }
+      return;
+    }
     const engine = new TetrisEngine();
     engine.startNewGame();
     engineRef.current = engine;
@@ -242,12 +322,15 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
     keysRef.current.clear();
     dasRef.current = { key: null, charged: false, acc: 0 };
     lastTsRef.current = null;
+    pendingPlayMsRef.current = 0;
+    playFlushAccRef.current = 0;
     setGameOverInfo(null);
     setConfirmRestart(false);
     setMenuScreen("playing");
   });
 
   const quitToTitle = useEffectEvent(() => {
+    flushPlayTime();
     void recordCurrentRun();
     setConfirmRestart(false);
     setMenuScreen("title");
@@ -255,6 +338,7 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
 
   const restartAfterSaving = useEffectEvent(() => {
     void (async () => {
+      flushPlayTime();
       await recordCurrentRun();
       startGame();
     })();
@@ -262,12 +346,14 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
 
   useEffect(() => {
     clearLegacyLocalTetrisScores();
+    refreshPlayBudget();
   }, []);
 
   // If the fullscreen shell unmounts mid-run (e.g. leave Games tab), still save.
   useEffect(() => {
     return () => {
       stopLoop();
+      flushPlayTime();
       const engine = engineRef.current;
       const scr = screenRef.current;
       if (
@@ -285,11 +371,17 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
   useEffect(() => {
     const onVisibility = () => {
       if (document.hidden) {
+        flushPlayTime();
         stopLoop();
         lastTsRef.current = null;
       } else if (screenRef.current === "playing") {
+        if (isTetrisDailyLimitReached()) {
+          enforceDailyLimit();
+          return;
+        }
         ensureLoop();
       } else {
+        refreshPlayBudget();
         paint();
       }
     };
@@ -354,6 +446,12 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
 
       if (screenRef.current === "paused") {
         if (e.code === "KeyP" || e.code === "Escape") {
+          flushPlayTime();
+          if (isTetrisDailyLimitReached()) {
+            enforceDailyLimit();
+            e.preventDefault();
+            return;
+          }
           setConfirmRestart(false);
           setMenuScreen("playing");
           e.preventDefault();
@@ -487,9 +585,23 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
           <div className="mb-2 text-center">
             <h1 className="tetris-title-mark">TETRIS</h1>
             <p className="tetris-menu-sub mt-3">Clear lines. Don&apos;t top out.</p>
+            {dailyLimitReached ? (
+              <p className="tetris-menu-sub mt-3 max-w-xs text-amber-300">
+                Daily 30 min limit reached. Come back tomorrow.
+              </p>
+            ) : (
+              <p className="tetris-menu-sub mt-3 text-slate-400">
+                {playRemainingLabel} left today
+              </p>
+            )}
           </div>
           <div className="tetris-menu-btns flex w-full flex-col items-center gap-3">
-            <button type="button" className="tetris-menu-btn" onClick={startGame}>
+            <button
+              type="button"
+              className={`tetris-menu-btn ${dailyLimitReached ? "!opacity-40" : ""}`}
+              disabled={dailyLimitReached}
+              onClick={startGame}
+            >
               Play
             </button>
             <button type="button" className="tetris-menu-btn" onClick={openHighScores}>
@@ -533,7 +645,14 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
               <button
                 type="button"
                 className="tetris-menu-btn"
-                onClick={() => setMenuScreen("playing")}
+                onClick={() => {
+                  flushPlayTime();
+                  if (isTetrisDailyLimitReached()) {
+                    enforceDailyLimit();
+                    return;
+                  }
+                  setMenuScreen("playing");
+                }}
               >
                 Resume
               </button>
@@ -577,7 +696,17 @@ export default function TetrisGame({ onExit }: TetrisGameProps) {
             </p>
           ) : null}
           <div className="tetris-menu-btns mt-2 flex w-full flex-col items-center gap-3">
-            <button type="button" className="tetris-menu-btn" onClick={startGame}>
+            {dailyLimitReached ? (
+              <p className="tetris-menu-sub mb-1 max-w-xs text-center text-amber-300">
+                Daily 30 min limit reached. Come back tomorrow.
+              </p>
+            ) : null}
+            <button
+              type="button"
+              className={`tetris-menu-btn ${dailyLimitReached ? "!opacity-40" : ""}`}
+              disabled={dailyLimitReached}
+              onClick={startGame}
+            >
               Play Again
             </button>
             <button type="button" className="tetris-menu-btn" onClick={openHighScores}>
