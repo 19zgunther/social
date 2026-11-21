@@ -12,7 +12,7 @@ const MENU_GAP_ABOVE_TRIGGER_PX = 8;
 type ThreadComposerAttachMenuProps = {
   disabled?: boolean;
   onTakePhoto: () => void;
-  onUploadPhoto: (file: File) => void;
+  onUploadPhotos: (files: File[]) => void;
   onSendEmoji: (emoji: string) => void;
 };
 
@@ -27,7 +27,7 @@ type MenuAnchor = {
 export default function ThreadComposerAttachMenu({
   disabled = false,
   onTakePhoto,
-  onUploadPhoto,
+  onUploadPhotos,
   onSendEmoji,
 }: ThreadComposerAttachMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -98,12 +98,12 @@ export default function ThreadComposerAttachMenu({
   };
 
   const onPhotoInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!file) {
+    if (files.length === 0) {
       return;
     }
-    onUploadPhoto(file);
+    onUploadPhotos(files);
   };
 
   return (
@@ -128,6 +128,7 @@ export default function ThreadComposerAttachMenu({
         ref={photoInputRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
         onChange={onPhotoInputChange}
       />

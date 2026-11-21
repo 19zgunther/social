@@ -14,14 +14,17 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { CopyIcon, EditIcon, VideoIcon } from "@/app/components/Icons";
+import { CloseIcon, CopyIcon, EditIcon, VideoIcon } from "@/app/components/Icons";
 import CameraModal from "@/app/components/Camera";
 import ThreadComposerAttachMenu from "@/app/components/ThreadComposerAttachMenu";
 import { DONT_SWIPE_TABS_CLASSNAME } from "@/app/components/utils/useTabNavigation";
 import ImageViewerModal from "@/app/components/ImageViewerModal";
 import CachedImage from "@/app/components/utils/CachedImage";
 import EmojiPicker from "@/app/components/utils/EmojiPicker";
-import { prepareImageForUpload } from "@/app/components/utils/client_file_storage_utils";
+import {
+  prepareImageForUpload,
+  type PreparedImageUpload,
+} from "@/app/components/utils/client_file_storage_utils";
 import VideoCall from "@/app/components/VideoCall";
 import { reportClientError } from "@/app/lib/errorReport";
 import {
@@ -239,6 +242,9 @@ export default function Thread({
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [cameraInitialFile, setCameraInitialFile] = useState<File | null>(null);
+  const [pendingPhotos, setPendingPhotos] = useState<
+    Array<PreparedImageUpload & { id: string }>
+  >([]);
   const isFollowingBottomRef = useRef(true);
   const [showNewMessagesButton, setShowNewMessagesButton] = useState(false);
   const [replyTargetMessageId, setReplyTargetMessageId] = useState<string | null>(null);
@@ -407,6 +413,7 @@ export default function Thread({
     setIsLoadingOlderMessages(false);
     setIsCameraModalOpen(false);
     setCameraInitialFile(null);
+    setPendingPhotos([]);
     setImageViewer(null);
     setCollapsedReplyMessageIds([]);
 
@@ -939,7 +946,7 @@ export default function Thread({
 
   const onSendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!messageDraft.trim()) {
+    if (!messageDraft.trim() && pendingPhotos.length === 0) {
       return;
     }
 
@@ -948,16 +955,35 @@ export default function Thread({
       return;
     }
 
+    const photosToSend = [...pendingPhotos];
+    const caption = messageDraft;
+
     try {
-      await sendThreadMessage({
-        text: messageDraft,
-        clearDraftOnSuccess: true,
-      });
+      if (photosToSend.length === 0) {
+        await sendThreadMessage({
+          text: caption,
+          clearDraftOnSuccess: true,
+        });
+        return;
+      }
+
+      for (let index = 0; index < photosToSend.length; index += 1) {
+        const photo = photosToSend[index];
+        await sendThreadMessage({
+          text: index === 0 ? caption : "",
+          imageBase64Data: photo.base64Data,
+          imageMimeType: photo.mimeType,
+          imagePreviewDataUrl: photo.previewDataUrl,
+          clearDraftOnSuccess: index === 0,
+        });
+        setPendingPhotos((previous) => previous.filter((entry) => entry.id !== photo.id));
+      }
     } catch (error) {
       reportClientError("thread_send_client", error, {
-        kind: "text",
+        kind: photosToSend.length > 0 ? "photo" : "text",
         thread_id: selectedThread.id,
-        textLength: messageDraft.trim().length,
+        textLength: caption.trim().length,
+        photoCount: photosToSend.length,
       });
       setStatusMessage(error instanceof Error ? error.message : "Failed to send message.");
     }
@@ -967,8 +993,37 @@ export default function Thread({
     if (editTargetMessageId) {
       return;
     }
+    setPendingPhotos([]);
     setCameraInitialFile(initialFile);
     setIsCameraModalOpen(true);
+  };
+
+  const onAttachUploadedPhotos = async (files: File[]) => {
+    if (editTargetMessageId || files.length === 0) {
+      return;
+    }
+    try {
+      const preparedPhotos: Array<PreparedImageUpload & { id: string }> = [];
+      for (const file of files) {
+        const prepared = await prepareImageForUpload(file);
+        preparedPhotos.push({
+          ...prepared,
+          id: crypto.randomUUID(),
+        });
+      }
+      setPendingPhotos((previous) => [...previous, ...preparedPhotos]);
+      setIsComposerFocused(true);
+      requestAnimationFrame(() => {
+        composerTextareaRef.current?.focus();
+      });
+    } catch (error) {
+      reportClientError("thread_send_client", error, {
+        kind: "photo_attach",
+        thread_id: selectedThread.id,
+        fileCount: files.length,
+      });
+      setStatusMessage(error instanceof Error ? error.message : "Could not use that image.");
+    }
   };
 
   const closeCameraModal = () => {
@@ -1490,7 +1545,10 @@ export default function Thread({
   };
 
   const isComposerExpanded =
-    isComposerFocused || Boolean(editTargetMessageId) || messageDraft.trim().length > 0;
+    isComposerFocused ||
+    Boolean(editTargetMessageId) ||
+    messageDraft.trim().length > 0 ||
+    pendingPhotos.length > 0;
   const messagesRevealOffsetPx = Math.round(timestampRevealPercent * TIMESTAMP_REVEAL_MAX_PX);
 
   const handleMessageImageLoad = () => {
@@ -1519,63 +1577,94 @@ export default function Thread({
   }
 
   const messageComposerForm = (
-    <form onSubmit={onSendMessage} className="relative mx-2 mb-6 mt-1 flex items-end gap-2">
-      <ThreadComposerAttachMenu
-        disabled={Boolean(editTargetMessageId || activeOptionsMessageId)}
-        onTakePhoto={() => {
-          openCameraModal(null);
-        }}
-        onUploadPhoto={(file) => {
-          openCameraModal(file);
-        }}
-        onSendEmoji={(emoji) => {
-          void onSendComposerEmoji(emoji);
-        }}
-      />
-      <textarea
-        ref={composerTextareaRef}
-        rows={1}
-        className="min-h-10 flex-1 resize-none overflow-hidden rounded-2xl border border-border bg-surface px-4 py-2 text-sm leading-normal text-foreground break-words outline-none focus:border-muted transition-[border-color] duration-200"
-        placeholder={
-          editTargetMessageId
-            ? "Edit message..."
-            : activeOptionsMessageId
-              ? "Reply to message..."
-              : "Type a message..."
-        }
-        value={messageDraft}
-        onChange={(event) => setMessageDraft(event.target.value)}
-        onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
-          if (event.key !== "Enter" || (!event.metaKey && !event.ctrlKey)) {
-            return;
-          }
-          event.preventDefault();
-          const form = event.currentTarget.form;
-          if (!form || isSendingMessage || !messageDraft.trim()) {
-            return;
-          }
-          form.requestSubmit();
-        }}
-        onFocus={() => setIsComposerFocused(true)}
-        onBlur={() => {
-          if (!messageDraft.trim() && !editTargetMessageId) {
-            setIsComposerFocused(false);
-          }
-        }}
-      />
-
-      {isComposerExpanded ? (
-        <Button
-          type="submit"
-          variant="primary"
-          size="sm"
-          className="rounded-full py-3"
-          disabled={isSendingMessage || !messageDraft.trim()}
-        >
-          {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}
-        </Button>
+    <>
+      {pendingPhotos.length > 0 && !editTargetMessageId ? (
+        <div className="mx-2 mb-1 flex overflow-x-auto">
+          <div className="ml-auto flex items-start gap-2">
+            {pendingPhotos.map((photo) => (
+              <div key={photo.id} className="relative shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element -- local compose preview */}
+                <img
+                  src={photo.previewDataUrl}
+                  alt="Photo to send"
+                  className="h-20 max-w-[10rem] rounded-lg border border-border object-cover"
+                />
+                <IconButton
+                  type="button"
+                  variant="bordered"
+                  onClick={() => {
+                    setPendingPhotos((previous) =>
+                      previous.filter((entry) => entry.id !== photo.id),
+                    );
+                  }}
+                  className="absolute -right-1 -top-1 shadow"
+                  aria-label="Remove photo"
+                >
+                  <CloseIcon className="h-3.5 w-3.5" aria-hidden />
+                </IconButton>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
-    </form>
+      <form onSubmit={onSendMessage} className="relative mx-2 mb-6 mt-1 flex items-end gap-2">
+        <ThreadComposerAttachMenu
+          disabled={Boolean(editTargetMessageId || activeOptionsMessageId)}
+          onTakePhoto={() => {
+            openCameraModal(null);
+          }}
+          onUploadPhotos={(files) => {
+            void onAttachUploadedPhotos(files);
+          }}
+          onSendEmoji={(emoji) => {
+            void onSendComposerEmoji(emoji);
+          }}
+        />
+        <textarea
+          ref={composerTextareaRef}
+          rows={1}
+          className="min-h-10 flex-1 resize-none overflow-hidden rounded-2xl border border-border bg-surface px-4 py-2 text-sm leading-normal text-foreground break-words outline-none focus:border-muted transition-[border-color] duration-200"
+          placeholder={
+            editTargetMessageId
+              ? "Edit message..."
+              : activeOptionsMessageId
+                ? "Reply to message..."
+                : "Type a message..."
+          }
+          value={messageDraft}
+          onChange={(event) => setMessageDraft(event.target.value)}
+          onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
+            if (event.key !== "Enter" || (!event.metaKey && !event.ctrlKey)) {
+              return;
+            }
+            event.preventDefault();
+            const form = event.currentTarget.form;
+            if (!form || isSendingMessage || (!messageDraft.trim() && pendingPhotos.length === 0)) {
+              return;
+            }
+            form.requestSubmit();
+          }}
+          onFocus={() => setIsComposerFocused(true)}
+          onBlur={() => {
+            if (!messageDraft.trim() && !editTargetMessageId && pendingPhotos.length === 0) {
+              setIsComposerFocused(false);
+            }
+          }}
+        />
+
+        {isComposerExpanded ? (
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            className="rounded-full py-3"
+            disabled={isSendingMessage || (!messageDraft.trim() && pendingPhotos.length === 0)}
+          >
+            {isSendingMessage ? "Saving..." : editTargetMessageId ? "Save" : "Send"}
+          </Button>
+        ) : null}
+      </form>
+    </>
   );
 
   const activeOptionsTargetDepth = (() => {
@@ -1895,6 +1984,7 @@ export default function Thread({
                           type="button"
                           className="flex w-full items-center gap-3 px-4 py-1 text-left text-sm font-medium text-foreground"
                           onClick={() => {
+                            setPendingPhotos([]);
                             setMessageDraft(activeOptionsMessage.text);
                             setEditTargetMessageId(activeOptionsMessage.id);
                             setReplyTargetMessageId(null);
